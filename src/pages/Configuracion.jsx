@@ -82,7 +82,8 @@ export default function Configuracion() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const canManageUsers = profile?.role === 'admin';
+  // TODO: diferenciación gerencia vs admin
+  const canManageUsers = profile?.role === 'admin' || profile?.role === 'gerencia';
 
   useEffect(() => {
     const unsubscribeUsers = subscribeUsers(

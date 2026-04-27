@@ -26,6 +26,11 @@ service cloud.firestore {
       return isActiveUser() && currentUser().role == 'admin';
     }
 
+    function isGerencia() {
+      // TODO: diferenciación gerencia vs admin
+      return isActiveUser() && currentUser().role == 'gerencia';
+    }
+
     function isSupervisor() {
       return isActiveUser() && currentUser().role == 'supervisor';
     }
@@ -35,7 +40,8 @@ service cloud.firestore {
     }
 
     function isWorker() {
-      return isActiveUser() && currentUser().role == 'worker';
+      return isActiveUser()
+        && (currentUser().role == 'worker' || currentUser().role == 'trabajador');
     }
 
     function userHasCenterCost(centerCost) {
@@ -216,25 +222,25 @@ service cloud.firestore {
     }
 
     match /workers/{workerId} {
-      allow read: if isAdmin()
+      allow read: if isAdmin() || isGerencia()
         || isFinanceClerk()
         || (isWorker() && workerId == currentWorkerId())
         || userHasCenterCost(resource.data.centerCost);
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || ownWorkerProfileUpdateAllowed(workerId);
+      allow create, delete: if isAdmin() || isGerencia();
+      allow update: if isAdmin() || isGerencia() || ownWorkerProfileUpdateAllowed(workerId);
     }
 
     match /reimbursements/{requestId} {
-      allow read: if isAdmin()
+      allow read: if isAdmin() || isGerencia()
         || userHasCenterCost(resource.data.centerCost)
         || (isWorker() && resource.data.workerId == currentWorkerId())
         || (isFinanceClerk() && resource.data.status in ['approved', 'paid']);
       allow create: if workerReimbursementCreateAllowed() || reimbursementCreateIsValid();
-      allow update: if isAdmin()
+      allow update: if isAdmin() || isGerencia()
         || workerReimbursementUpdateAllowed()
         || supervisorReimbursementUpdateAllowed()
         || financeReimbursementUpdateAllowed();
-      allow delete: if isAdmin()
+      allow delete: if isAdmin() || isGerencia()
         || (isWorker()
           && resource.data.workerId == currentWorkerId()
           && resource.data.status == 'draft');
@@ -242,24 +248,24 @@ service cloud.firestore {
 
     match /costCenters/{costCenterId} {
       allow read: if isActiveUser();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin() || isGerencia();
     }
 
     match /paymentBatches/{batchId} {
-      allow read: if isAdmin() || isFinanceClerk();
-      allow create: if (isAdmin() || isFinanceClerk()) && paymentBatchCreateIsValid();
+      allow read: if isAdmin() || isGerencia() || isFinanceClerk();
+      allow create: if (isAdmin() || isGerencia() || isFinanceClerk()) && paymentBatchCreateIsValid();
       allow update, delete: if false;
     }
 
     match /users/{userId} {
-      allow read: if isAdmin() || (isActiveUser() && request.auth.uid == userId);
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || ownUserProfileUpdateAllowed(userId);
+      allow read: if isAdmin() || isGerencia() || (isActiveUser() && request.auth.uid == userId);
+      allow create, delete: if isAdmin() || isGerencia();
+      allow update: if isAdmin() || isGerencia() || ownUserProfileUpdateAllowed(userId);
     }
 
     match /dashboardRollups/{docId} {
       allow read: if isActiveUser();
-      allow write: if isAdmin() || isFinanceClerk() || isSupervisor();
+      allow write: if isAdmin() || isGerencia() || isFinanceClerk() || isSupervisor();
     }
   }
 }

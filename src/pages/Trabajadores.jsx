@@ -115,7 +115,8 @@ export default function Trabajadores() {
     [selectedWorkerId, workers],
   );
 
-  const isAdmin = profile?.role === 'admin';
+  // TODO: diferenciación gerencia vs admin
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'gerencia';
 
   const maskSensitiveValue = (value) => {
     if (!value) return '•••••••';

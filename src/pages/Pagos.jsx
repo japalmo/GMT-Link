@@ -130,7 +130,10 @@ export default function Pagos() {
   const selectedWorkerGroup = workerGroups.find((item) => item.workerId === activeWorkerId) ?? null;
   const selectedWorker = workers.find((item) => item.id === activeWorkerId) ?? null;
   const supervisorUser = users.find((item) => item.id === selectedWorker?.supervisorId) ?? null;
-  const adminEmails = users.filter((item) => item.role === 'admin').map((item) => item.email);
+  // TODO: diferenciación gerencia vs admin
+  const adminEmails = users
+    .filter((item) => item.role === 'admin' || item.role === 'gerencia')
+    .map((item) => item.email);
 
   const recipientOptions = useMemo(() => {
     if (!selectedWorker) return [];

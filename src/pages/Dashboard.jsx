@@ -115,7 +115,10 @@ export default function Dashboard() {
   const [paymentBatches, setPaymentBatches] = useState();
   const [error, setError] = useState('');
 
-  const canReadPaymentBatches = profile?.role === 'admin' || profile?.role === 'finance_clerk';
+  // TODO: diferenciación gerencia vs admin
+  const canReadPaymentBatches = profile?.role === 'admin'
+    || profile?.role === 'gerencia'
+    || profile?.role === 'finance_clerk';
   const reimbursementItems = useMemo(() => reimbursements ?? [], [reimbursements]);
   const workerItems = useMemo(() => workers ?? [], [workers]);
   const paymentBatchItems = useMemo(() => paymentBatches ?? [], [paymentBatches]);

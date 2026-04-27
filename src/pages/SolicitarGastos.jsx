@@ -94,13 +94,15 @@ export default function SolicitarGastos() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState('');
   const autosaveTimeoutRef = useRef(null);
+  const missingWorkerProfile = Boolean(profile && !profile.workerId);
 
   const editGroupId = searchParams.get('edit');
   const hasReceiptProcessing = receipts.some((r) => r.aiProcessing);
   const isBusy = loading || submitting || savingDraft || hasReceiptProcessing;
 
   useEffect(() => {
-    if (!profile?.workerId) return;
+    if (!profile) return;
+    if (!profile.workerId) return;
 
     // Redirigir si debe cambiar contraseña (lógica Gemini Prompt 5)
     if (profile?.mustChangePassword) {
@@ -288,6 +290,19 @@ export default function SolicitarGastos() {
       setSavingDraft(false);
     }
   };
+
+  if (missingWorkerProfile) {
+    return (
+      <Box sx={{ maxWidth: 800, mx: 'auto', py: 2 }}>
+        <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>
+          Nueva Solicitud de Reembolso
+        </Typography>
+        <Alert severity="warning">
+          Tu perfil no tiene un trabajador asociado — contacta a RRHH.
+        </Alert>
+      </Box>
+    );
+  }
 
   if (loading) {
     return (
