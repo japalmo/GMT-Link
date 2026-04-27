@@ -23,32 +23,17 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useAuth } from '../contexts/AuthContext';
 import {
   deleteUser,
   subscribeCostCenters,
   subscribeUsers,
-  subscribeWorkers,
   updateUser,
 } from '../lib/repository';
 
-const EMPTY_FORM = {
-  displayName: '',
-  email: '',
-  rut: '',
-  role: 'supervisor',
-  centerCosts: [],
-  bankName: '',
-  bankAccountType: '',
-  bankAccountNumber: '',
-};
-
 export default function Configuracion() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const [users, setUsers] = useState([]);
-  const [costCenters, setCostCenters] = useState([]);
-  const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -56,7 +41,6 @@ export default function Configuracion() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // TODO: diferenciación gerencia vs admin
   const canManageUsers = profile?.role === 'admin' || profile?.role === 'gerencia';
 
   useEffect(() => {
@@ -73,20 +57,13 @@ export default function Configuracion() {
     );
 
     const unsubscribeCostCenters = subscribeCostCenters(
-      setCostCenters,
-      (snapshotError) => setError(snapshotError.message),
-    );
-
-    const unsubscribeWorkers = subscribeWorkers(
-      { onlyActive: true },
-      setWorkers,
+      () => {},
       (snapshotError) => setError(snapshotError.message),
     );
 
     return () => {
       unsubscribeUsers();
       unsubscribeCostCenters();
-      unsubscribeWorkers();
     };
   }, []);
 
@@ -94,49 +71,6 @@ export default function Configuracion() {
     () => [...users].sort((left, right) => left.displayName.localeCompare(right.displayName, 'es-CL')),
     [users],
   );
-
-  const selectedWorker = useMemo(
-    () => workers.find((worker) => worker.id === formState.workerId) ?? null,
-    [formState.workerId, workers],
-  );
-
-  const resolvedRut = formState.role === 'worker'
-    ? (formState.workerMode === 'existing' ? (selectedWorker?.rut || '') : formState.rut)
-    : formState.rut;
-
-  const resolvedBankName = formState.role === 'worker'
-    ? (formState.workerMode === 'existing' ? (selectedWorker?.bankName || '') : formState.bankName)
-    : formState.bankName;
-
-  const resolvedBankAccountType = formState.role === 'worker'
-    ? (formState.workerMode === 'existing' ? (selectedWorker?.bankAccountType || '') : formState.bankAccountType)
-    : formState.bankAccountType;
-
-  const resolvedBankAccountNumber = formState.role === 'worker'
-    ? (formState.workerMode === 'existing' ? (selectedWorker?.bankAccountNumber || '') : formState.bankAccountNumber)
-    : formState.bankAccountNumber;
-
-  const normalizeCompanyEmail = (email) => email
-    .trim()
-    .toLowerCase()
-    .replace(/@gmt\.cl$/i, '@gmtingenieria.com')
-    .replace(/@gmt\.com$/i, '@gmtingenieria.com');
-
-  const resetModal = () => {
-    setModalOpen(false);
-    setModalMode('create');
-    setEditingUserId('');
-    setFormState(EMPTY_FORM);
-  };
-
-  const openCreateModal = () => {
-    setError('');
-    setSuccessMessage('');
-    setModalMode('create');
-    setEditingUserId('');
-    setFormState(EMPTY_FORM);
-    setModalOpen(true);
-  };
 
   const openDeleteConfirm = (target) => {
     setError('');
