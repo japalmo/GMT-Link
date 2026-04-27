@@ -35,7 +35,7 @@ export function hasLowConfidenceReceiptData(data) {
 export async function extractReceiptData(file) {
   const base64 = await fileToBase64(file);
   const mimeType = normalizeMimeType(file);
-  const model = getGenerativeModel(firebaseAI, { model: 'gemini-2.0-flash' });
+  const model = getGenerativeModel(firebaseAI, { model: 'gemini-2.5-flash' });
   const result = await model.generateContent([
     {
       inlineData: {
