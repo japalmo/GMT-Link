@@ -267,5 +267,9 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow write: if isAdmin() || isGerencia() || isFinanceClerk() || isSupervisor();
     }
+
+    match /meta/{docId} {
+      allow read, write: if isActiveUser();
+    }
   }
 }

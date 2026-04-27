@@ -27,24 +27,18 @@ function mapSnapshot(snapshot) {
 async function generateRequestNumber() {
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
-  const prefix = `R-${dateStr}-`;
+  const counterRef = doc(db, 'meta', 'counters');
+  const key = `req_${dateStr}`;
 
-  const q = query(
-    collection(db, 'reimbursements'),
-    where('requestNumber', '>=', prefix),
-    where('requestNumber', '<=', `${prefix}\uf8ff`),
-    orderBy('requestNumber', 'desc'),
-    limit(1),
-  );
+  const next = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(counterRef);
+    const current = snap.exists() ? (snap.data()[key] ?? 0) : 0;
+    const value = current + 1;
+    tx.set(counterRef, { [key]: value }, { merge: true });
+    return value;
+  });
 
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
-    return `${prefix}001`;
-  }
-
-  const lastNumber = snapshot.docs[0].data().requestNumber;
-  const sequence = parseInt(lastNumber.split('-')[2], 10);
-  return `${prefix}${String(sequence + 1).padStart(3, '0')}`;
+  return `R-${dateStr}-${String(next).padStart(3, '0')}`;
 }
 
 function incrementRequestNumber(requestNumber, offset = 0) {
@@ -130,24 +124,18 @@ export function subscribeDashboardRollup(onNext, onError) {
 async function generateGroupId() {
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
-  const prefix = `SOL-${dateStr}-`;
+  const counterRef = doc(db, 'meta', 'counters');
+  const key = `grp_${dateStr}`;
 
-  const q = query(
-    collection(db, 'reimbursements'),
-    where('groupId', '>=', prefix),
-    where('groupId', '<=', `${prefix}\uf8ff`),
-    orderBy('groupId', 'desc'),
-    limit(1),
-  );
+  const next = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(counterRef);
+    const current = snap.exists() ? (snap.data()[key] ?? 0) : 0;
+    const value = current + 1;
+    tx.set(counterRef, { [key]: value }, { merge: true });
+    return value;
+  });
 
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
-    return `${prefix}001`;
-  }
-
-  const lastId = snapshot.docs[0].data().groupId;
-  const sequence = parseInt(lastId.split('-')[2], 10);
-  return `${prefix}${String(sequence + 1).padStart(3, '0')}`;
+  return `SOL-${dateStr}-${String(next).padStart(3, '0')}`;
 }
 
 function buildDraftReceiptPayload(receipt, workerProfile, { status = 'draft', submittedAt = null } = {}) {
