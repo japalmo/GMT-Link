@@ -628,6 +628,14 @@ export function subscribeUsers({ onlyRole } = {}, onNext, onError) {
   return onSnapshot(usersQuery, (snapshot) => onNext(mapSnapshot(snapshot)), onError);
 }
 
+export async function createCostCenter(name) {
+  return addDoc(collection(db, 'costCenters'), { name: name.trim(), createdAt: new Date() });
+}
+
+export async function deleteCostCenter(id) {
+  return deleteDoc(doc(db, 'costCenters', id));
+}
+
 export function subscribeCostCenters(onNext, onError) {
   const costCentersQuery = query(
     collection(db, 'costCenters'),

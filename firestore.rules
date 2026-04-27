@@ -60,7 +60,8 @@ service cloud.firestore {
           'bankName',
           'bankAccountType',
           'bankAccountNumber',
-          'mustChangePassword'
+          'mustChangePassword',
+          'profileVerified'
         ])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
