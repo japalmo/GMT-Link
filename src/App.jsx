@@ -99,7 +99,7 @@ const router = createBrowserRouter([
   {
     path: '/solicitar',
     element: withSuspense(
-      <ProtectedRoute allowedRoles={['worker', 'trabajador']} redirectTo="/">
+      <ProtectedRoute redirectTo="/">
         <SolicitarGastos />
       </ProtectedRoute>
     ),

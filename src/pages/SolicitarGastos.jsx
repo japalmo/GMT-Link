@@ -94,15 +94,13 @@ export default function SolicitarGastos() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState('');
   const autosaveTimeoutRef = useRef(null);
-  const missingWorkerProfile = Boolean(profile && !profile.workerId);
-
+  const isInternalUser = profile && !profile.workerId;
   const editGroupId = searchParams.get('edit');
   const hasReceiptProcessing = receipts.some((r) => r.aiProcessing);
   const isBusy = loading || submitting || savingDraft || hasReceiptProcessing;
 
   useEffect(() => {
     if (!profile) return;
-    if (!profile.workerId) return;
 
     // Redirigir si debe cambiar contraseña (lógica Gemini Prompt 5)
     if (profile?.mustChangePassword) {
@@ -115,6 +113,12 @@ export default function SolicitarGastos() {
     async function init() {
       try {
         if (editGroupId) {
+          // Nota: El flujo de edición sigue requiriendo workerId por consistencia con repositorio
+          if (!profile.workerId) {
+             setError('Los borradores solo están disponibles para perfiles de trabajador.');
+             setLoading(false);
+             return;
+          }
           unsubscribe = subscribeWorkerReimbursements(
             profile.workerId,
             (items) => {
@@ -134,10 +138,17 @@ export default function SolicitarGastos() {
             }
           );
         } else {
-          const createdReceipt = await createDraftReceipt(profile);
-          setGroupId(createdReceipt.groupId);
-          setReceipts([normalizeReceipt(createdReceipt)]);
-          setLoading(false);
+          // Nuevo flujo sin workerId: trabajar en memoria
+          if (isInternalUser) {
+            setGroupId(`SOL-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-000`);
+            setReceipts([normalizeReceipt({})]);
+            setLoading(false);
+          } else {
+            const createdReceipt = await createDraftReceipt(profile);
+            setGroupId(createdReceipt.groupId);
+            setReceipts([normalizeReceipt(createdReceipt)]);
+            setLoading(false);
+          }
         }
       } catch (err) {
         setError(err.message);
@@ -153,10 +164,10 @@ export default function SolicitarGastos() {
         clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [profile, navigate, editGroupId]);
+  }, [profile, navigate, editGroupId, isInternalUser]);
 
   const flushDraft = async (nextReceipts) => {
-    if (!profile?.workerId || nextReceipts.length === 0) return;
+    if (isInternalUser || !profile?.workerId || nextReceipts.length === 0) return;
     await Promise.all(nextReceipts.map((receipt) => saveDraftReceipt(receipt, profile)));
   };
 
@@ -269,9 +280,15 @@ export default function SolicitarGastos() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      await flushDraft(receipts);
-      await submitDraftGroup(receipts, profile);
-      navigate('/mis-solicitudes');
+      const finalReceipts = receipts.map(r => ({
+        ...r,
+        workerId: profile.workerId ?? profile.uid,
+        workerName: profile.displayName ?? profile.email,
+        centerCost: profile.centerCosts?.[0] ?? 'N/A'
+      }));
+      await flushDraft(finalReceipts);
+      await submitDraftGroup(finalReceipts, profile);
+      navigate(isInternalUser ? '/reembolsos' : '/mis-solicitudes');
     } catch {
       setError('Error al enviar la solicitud.');
     } finally {
@@ -290,19 +307,6 @@ export default function SolicitarGastos() {
       setSavingDraft(false);
     }
   };
-
-  if (missingWorkerProfile) {
-    return (
-      <Box sx={{ maxWidth: 800, mx: 'auto', py: 2 }}>
-        <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>
-          Nueva Solicitud de Reembolso
-        </Typography>
-        <Alert severity="warning">
-          Tu perfil no tiene un trabajador asociado — contacta a RRHH.
-        </Alert>
-      </Box>
-    );
-  }
 
   if (loading) {
     return (
