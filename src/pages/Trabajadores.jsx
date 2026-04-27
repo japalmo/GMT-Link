@@ -415,11 +415,6 @@ export default function Trabajadores() {
                   Carga individual o masiva con validación automática de duplicados y asignación de supervisores.
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <Chip label="Alta individual" color="primary" variant="outlined" />
-                <Chip label="Asistente CSV" color="secondary" variant="outlined" />
-                <Chip label="Validación RUT" variant="outlined" />
-              </Stack>
             </Stack>
           </CardContent>
         </Card>

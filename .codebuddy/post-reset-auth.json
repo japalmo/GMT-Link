@@ -1,0 +1,67 @@
+{"users": [
+{
+  "localId": "12fhGBevnEaDT8jZoTHLEsaHPyw1",
+  "email": "mtapia@gmtingenieria.com",
+  "emailVerified": false,
+  "passwordHash": "w8bxCEeXwEleuZwgpAnPX3kSfkMreQcL/od5hKdZOipQ+p/EtzeHHtAywHubCD89Fds2dqn9BisETCG5YFKFxQ==",
+  "salt": "64lt6u1QMDyb6A==",
+  "displayName": "Mario Tapia",
+  "createdAt": "1777303362505",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "2ToT2oqrzZPzBu37mAR0BuYDzfO2",
+  "email": "gestion@gmtingenieria.com",
+  "emailVerified": false,
+  "passwordHash": "fWozFTdVJxC2vzIGs+7LoKxHbrFRItZNqFbUySFR5q0JJNMK+HHozJNGK7406OBEhuBu9fXWqM/QYucEeeWDDA==",
+  "salt": "5yYjejW1TlxBaQ==",
+  "displayName": "Juan Apalmo",
+  "createdAt": "1777303359791",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "6QEGggamBpg10NliQWq3yY3Q2Y93",
+  "email": "hleiva@gmtingenieria.com",
+  "emailVerified": false,
+  "passwordHash": "OxLwSh3azY69j7PPgD/oL0jHhxFMo4J9jid28XPXrRQN305dtJ7pjTez8yA/BZOxFKqXidFV4gfG3tNK6XBWYg==",
+  "salt": "jf3DhGN9saz5Pg==",
+  "displayName": "Humberto Leiva",
+  "createdAt": "1777303360771",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "E3hbi8vDMqgZU0qKBYNUEuBL0PG3",
+  "email": "jsanta@gmtingenieria.com",
+  "emailVerified": false,
+  "passwordHash": "Ekoqh4RsUa3Lc6GoaFNkL/TZ51NZEt3NCXF0SFF67G5WNc1KWNLqE3apau3HcjQaXsbbsTUCnHvk5nndXFp3rw==",
+  "salt": "bzqJrIs2GsmTeQ==",
+  "displayName": "John Santa",
+  "createdAt": "1777303358027",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "YtphzmD5EPg3F0itDlDdvNEyhoQ2",
+  "email": "mpoblete@gmtingenieria.com",
+  "emailVerified": false,
+  "passwordHash": "804oLvwuNKE03Xp1zH69P+jmmHk913loGQ8q3nWWlUDTesCbBy6XxJaYk+WHFYvBDnbKixS6yj5Frl85U+kRRw==",
+  "salt": "mK1AgibRGaRS2A==",
+  "displayName": "Marisol Poblete",
+  "createdAt": "1777303359000",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "mdV93vIPfAfAiXxaaX50tqHbYBm2",
+  "email": "bgil@gmtingenieria.com",
+  "emailVerified": false,
+  "passwordHash": "JTZBEYvOQD+uMHGnEP+1ItF4u4iaClIMgEgOjvAAMZBV+DPs2L+8bzUQcl4rIYozRZAubXz3Y3Glx+9kGhwq5g==",
+  "salt": "NCmTIYrWmLkaIQ==",
+  "displayName": "Bryan Gil",
+  "createdAt": "1777303361609",
+  "disabled": false,
+  "providerUserInfo": []
+}]}
