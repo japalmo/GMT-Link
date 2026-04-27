@@ -76,6 +76,7 @@ function normalizeReceipt(item) {
     file: null,
     fileName: item.fileName || getFileNameFromUrl(item.fileUrl || item.attachmentUrls?.[0]),
     fileUrl: item.fileUrl || item.attachmentUrls?.[0] || '',
+    previewUrl: '',
     attachmentUrls: item.attachmentUrls || [],
     aiProcessing: false,
     aiError: '',
@@ -232,9 +233,11 @@ export default function SolicitarGastos() {
   const handleFileChange = async (id, file) => {
     if (!file) return;
 
+    const previewUrl = URL.createObjectURL(file);
     updateReceipt(id, {
       file,
       fileName: file.name,
+      previewUrl,
       aiProcessing: true,
       aiError: '',
       aiWarning: '',
@@ -243,7 +246,7 @@ export default function SolicitarGastos() {
     try {
       const storageRef = ref(storage, `reimbursements/drafts/${groupId}/${id}_${file.name.replace(/\s+/g, '_')}`);
       const [extracted, snapshot] = await Promise.all([
-        extractReceiptData(file).catch(() => null),
+        extractReceiptData(file).catch((err) => { console.error('[OCR error]', err); return null; }),
         uploadBytes(storageRef, file),
       ]);
       const fileUrl = await getDownloadURL(snapshot.ref);
@@ -425,6 +428,22 @@ export default function SolicitarGastos() {
                         />
                         {receipt.aiProcessing ? (
                           <CircularProgress size={30} />
+                        ) : receipt.previewUrl ? (
+                          <>
+                            <Box
+                              component="img"
+                              src={receipt.previewUrl}
+                              alt="preview"
+                              sx={{
+                                width: '100%',
+                                height: 100,
+                                objectFit: 'cover',
+                                borderRadius: 1,
+                                mb: 0.5,
+                              }}
+                            />
+                            <Typography variant="caption">Cambiar archivo</Typography>
+                          </>
                         ) : receipt.fileUrl ? (
                           <>
                             <CheckCircleOutlinedIcon color="success" />
