@@ -1,0 +1,265 @@
+rules_version='2'
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDocPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasProfile() {
+      return isSignedIn() && exists(userDocPath());
+    }
+
+    function currentUser() {
+      return get(userDocPath()).data;
+    }
+
+    function isActiveUser() {
+      return hasProfile() && currentUser().active == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser() && currentUser().role == 'admin';
+    }
+
+    function isSupervisor() {
+      return isActiveUser() && currentUser().role == 'supervisor';
+    }
+
+    function isFinanceClerk() {
+      return isActiveUser() && currentUser().role == 'finance_clerk';
+    }
+
+    function isWorker() {
+      return isActiveUser() && currentUser().role == 'worker';
+    }
+
+    function userHasCenterCost(centerCost) {
+      return isSupervisor() && centerCost in currentUser().centerCosts;
+    }
+
+    function currentWorkerId() {
+      return hasProfile() ? currentUser().workerId : null;
+    }
+
+    function ownUserProfileUpdateAllowed(userId) {
+      return isActiveUser()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'displayName',
+          'bankName',
+          'bankAccountType',
+          'bankAccountNumber'
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.rut == resource.data.rut
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.workerId == resource.data.workerId
+        && request.resource.data.centerCosts == resource.data.centerCosts
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.lastLoginAt == resource.data.lastLoginAt;
+    }
+
+    function ownWorkerProfileUpdateAllowed(workerId) {
+      return isWorker()
+        && workerId == currentWorkerId()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'personalEmail',
+          'phone',
+          'address',
+          'emergencyContactName',
+          'emergencyContactPhone',
+          'updatedAt'
+        ]);
+    }
+
+    function reimbursementCreateIsValid() {
+      return request.resource.data.keys().hasAll([
+        'requestNumber',
+        'workerId',
+        'workerName',
+        'workerRut',
+        'centerCost',
+        'category',
+        'concept',
+        'amount',
+        'expenseDate',
+        'receiptNumber',
+        'merchantName',
+        'notes',
+        'attachmentUrls',
+        'status',
+        'paymentStatus',
+        'paymentBatchId',
+        'submittedAt',
+        'submittedByName',
+        'approvedAt',
+        'approvedBy',
+        'approvedByName',
+        'approvalComment',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectedByName',
+        'rejectionReason',
+        'paidAt',
+        'paidBy',
+        'groupId'
+      ])
+      && request.resource.data.status == 'pending_approval'
+      && request.resource.data.paymentStatus == 'unpaid'
+      && request.resource.data.paymentBatchId == null;
+    }
+
+    function workerReimbursementCreateAllowed() {
+      return isWorker()
+        && currentWorkerId() != null
+        && request.resource.data.workerId == currentWorkerId()
+        && request.resource.data.status in ['draft', 'pending_approval']
+        && request.resource.data.paymentBatchId == null
+        && request.resource.data.approvedAt == null
+        && request.resource.data.approvedBy == null
+        && request.resource.data.approvedByName == null
+        && request.resource.data.rejectedAt == null
+        && request.resource.data.rejectedBy == null
+        && request.resource.data.rejectedByName == null
+        && request.resource.data.paidAt == null
+        && request.resource.data.paidBy == null;
+    }
+
+    function workerReimbursementUpdateAllowed() {
+      return isWorker()
+        && currentWorkerId() != null
+        && resource.data.workerId == currentWorkerId()
+        && resource.data.status == 'draft'
+        && request.resource.data.workerId == currentWorkerId()
+        && request.resource.data.status in ['draft', 'pending_approval']
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'requestNumber',
+          'category',
+          'concept',
+          'amount',
+          'expenseDate',
+          'receiptNumber',
+          'merchantName',
+          'notes',
+          'attachmentUrls',
+          'status',
+          'paymentStatus',
+          'submittedAt',
+          'submittedByName',
+          'groupId'
+        ]);
+    }
+
+    function supervisorReimbursementUpdateAllowed() {
+      return userHasCenterCost(resource.data.centerCost)
+        && resource.data.status == 'pending_approval'
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'status',
+          'approvedAt',
+          'approvedBy',
+          'approvedByName',
+          'approvalComment',
+          'rejectedAt',
+          'rejectedBy',
+          'rejectedByName',
+          'rejectionReason'
+        ])
+        && request.resource.data.status in ['approved', 'rejected'];
+    }
+
+    function financeReimbursementUpdateAllowed() {
+      return isFinanceClerk()
+        && resource.data.status == 'approved'
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'status',
+          'paymentStatus',
+          'paymentBatchId',
+          'paidAt',
+          'paidBy'
+        ])
+        && request.resource.data.status == 'paid'
+        && request.resource.data.paymentStatus == 'paid'
+        && request.resource.data.paymentBatchId is string;
+    }
+
+    function paymentBatchCreateIsValid() {
+      return request.resource.data.keys().hasAll([
+        'batchNumber',
+        'workerId',
+        'workerName',
+        'workerRut',
+        'centerCost',
+        'requestIds',
+        'requestCount',
+        'totalAmount',
+        'bankName',
+        'bankAccountType',
+        'bankAccountNumber',
+        'paymentReference',
+        'voucherUrl',
+        'paidAt',
+        'paidBy',
+        'paidByName',
+        'emailSentTo',
+        'emailSentAt'
+      ])
+      && request.resource.data.requestIds.size() > 0
+      && request.resource.data.requestCount == request.resource.data.requestIds.size();
+    }
+
+    match /workers/{workerId} {
+      allow read: if isAdmin()
+        || isFinanceClerk()
+        || (isWorker() && workerId == currentWorkerId())
+        || userHasCenterCost(resource.data.centerCost);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || ownWorkerProfileUpdateAllowed(workerId);
+    }
+
+    match /reimbursements/{requestId} {
+      allow read: if isAdmin()
+        || userHasCenterCost(resource.data.centerCost)
+        || (isWorker() && resource.data.workerId == currentWorkerId())
+        || (isFinanceClerk() && resource.data.status in ['approved', 'paid']);
+      allow create: if workerReimbursementCreateAllowed() || reimbursementCreateIsValid();
+      allow update: if isAdmin()
+        || workerReimbursementUpdateAllowed()
+        || supervisorReimbursementUpdateAllowed()
+        || financeReimbursementUpdateAllowed();
+      allow delete: if isAdmin()
+        || (isWorker()
+          && resource.data.workerId == currentWorkerId()
+          && resource.data.status == 'draft');
+    }
+
+    match /costCenters/{costCenterId} {
+      allow read: if isActiveUser();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /paymentBatches/{batchId} {
+      allow read: if isAdmin() || isFinanceClerk();
+      allow create: if (isAdmin() || isFinanceClerk()) && paymentBatchCreateIsValid();
+      allow update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || (isActiveUser() && request.auth.uid == userId);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || ownUserProfileUpdateAllowed(userId);
+    }
+
+    match /dashboardRollups/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin() || isFinanceClerk() || isSupervisor();
+    }
+  }
+}
