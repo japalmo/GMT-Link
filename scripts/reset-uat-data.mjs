@@ -331,15 +331,35 @@ async function writeWorkerDocs(db, createdUsers) {
   const createdAt = Timestamp.now();
   const supervisor = createdUsers.get('hleiva@gmtingenieria.com');
 
-  batch.set(db.collection('workers').doc(BRYAN_WORKER.id), {
-    ...BRYAN_WORKER,
-    joinedAt: createdAt,
-    active: true,
-    supervisorId: supervisor.uid,
-    supervisorName: 'Humberto Leiva',
-    createdAt,
-    createdBy: 'uat_reset_script',
-  });
+  for (const user of UAT_USERS) {
+    const authRecord = createdUsers.get(user.email);
+    const workerId = user.workerId || `wkr-${authRecord.uid.slice(0, 8)}`;
+    
+    batch.set(db.collection('workers').doc(workerId), {
+      id: workerId,
+      fullName: user.displayName,
+      rut: user.rut,
+      email: user.email,
+      personalEmail: user.email,
+      phone: '',
+      address: '',
+      employeeCode: '',
+      department: '',
+      centerCost: user.centerCosts?.[0] || '',
+      location: '',
+      emergencyContactName: '',
+      emergencyContactPhone: '',
+      bankName: '',
+      bankAccountType: '',
+      bankAccountNumber: '',
+      joinedAt: createdAt,
+      active: true,
+      supervisorId: supervisor.uid,
+      supervisorName: 'Humberto Leiva',
+      createdAt,
+      createdBy: 'uat_reset_script',
+    });
+  }
 
   await batch.commit();
 }
