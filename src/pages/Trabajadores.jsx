@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createInternalUser } from '../lib/admin';
+import { createInternalUser, sendPasswordSetupEmail } from '../lib/admin';
 import {
   Alert,
   Box,
@@ -115,6 +115,20 @@ export default function Trabajadores() {
     () => workers.find((worker) => worker.id === selectedWorkerId) ?? null,
     [selectedWorkerId, workers],
   );
+
+  const linkedUser = useMemo(
+    () => users.find((user) => user.email === selectedWorker?.email || user.workerId === selectedWorker?.id) ?? null,
+    [selectedWorker, users],
+  );
+
+  const handleSendCredentials = async (type) => {
+    try {
+      await sendPasswordSetupEmail(linkedUser.email);
+      alert(`Enlace de ${type === 'setup' ? 'configuración' : 'cambio de contraseña'} enviado a ${linkedUser.email}`);
+    } catch (err) {
+      alert('Error enviando correo: ' + err.message);
+    }
+  };
 
   // TODO: diferenciación gerencia vs admin
   const isAdmin = profile?.role === 'admin' || profile?.role === 'gerencia';
@@ -512,18 +526,35 @@ export default function Trabajadores() {
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
                   <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" color="text.secondary">Nombre</Typography>
-                  <Typography variant="body1">{selectedWorker.fullName}</Typography>
-                  <Typography variant="caption" color="text.secondary">RUT</Typography>
-                  <Typography variant="body1" sx={sensitiveTextSx}>
-                    {showSensitive ? (selectedWorker.rut || '—') : maskSensitiveValue(selectedWorker.rut)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">Ubicación</Typography>
-                  <Typography variant="body1">{selectedWorker.location || 'N/A'}</Typography>
-                  <Typography variant="caption" color="text.secondary">Ingreso</Typography>
-                  <Typography variant="body1">{formatShortDate(selectedWorker.joinedAt)}</Typography>
+                    <Typography variant="caption" color="text.secondary">Nombre</Typography>
+                    <Typography variant="body1">{selectedWorker.fullName}</Typography>
+                    <Typography variant="caption" color="text.secondary">RUT</Typography>
+                    <Typography variant="body1" sx={sensitiveTextSx}>
+                      {showSensitive ? (selectedWorker.rut || '—') : maskSensitiveValue(selectedWorker.rut)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Ubicación</Typography>
+                    <Typography variant="body1">{selectedWorker.location || 'N/A'}</Typography>
+                    <Typography variant="caption" color="text.secondary">Ingreso</Typography>
+                    <Typography variant="body1">{formatShortDate(selectedWorker.joinedAt)}</Typography>
                   </Box>
-
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" color="text.secondary">Acceso al sistema</Typography>
+                    {linkedUser ? (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Chip label={`Con credenciales (${linkedUser.role})`} color="success" size="small" />
+                        <Button size="small" variant="outlined" onClick={() => handleSendCredentials('setup')}>
+                          Reenviar credenciales
+                        </Button>
+                        <Button size="small" variant="outlined" onClick={() => handleSendCredentials('reset')}>
+                          Enviar link cambio de contraseña
+                        </Button>
+                      </Stack>
+                    ) : (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Chip label="Sin credenciales" color="default" size="small" />
+                      </Stack>
+                    )}
+                  </Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">Correo corporativo</Typography>
                     <Typography variant="body1">{selectedWorker.email}</Typography>

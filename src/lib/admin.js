@@ -77,3 +77,10 @@ export async function createInternalUser({
     temporaryPassword,
   };
 }
+
+export async function sendPasswordSetupEmail(email) {
+  await postIdentityToolkit('accounts:sendOobCode', {
+    requestType: 'PASSWORD_RESET',
+    email: normalizeCompanyEmail(email),
+  });
+}
