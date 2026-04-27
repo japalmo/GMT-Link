@@ -16,6 +16,7 @@ const Configuracion = lazy(() => import('./pages/Configuracion'));
 const Perfil = lazy(() => import('./pages/Perfil'));
 const SolicitarGastos = lazy(() => import('./pages/SolicitarGastos'));
 const Login = lazy(() => import('./pages/Login'));
+const CambiarPassword = lazy(() => import('./pages/CambiarPassword'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 function withSuspense(element) {
@@ -96,6 +97,11 @@ const router = createBrowserRouter([
   },
   // Rutas públicas — sin auth
   { path: '/login',     element: withSuspense(<Login />) },
+  { path: '/cambiar-password', element: withSuspense(
+      <ProtectedRoute>
+        <CambiarPassword />
+      </ProtectedRoute>
+  )},
   {
     path: '/solicitar',
     element: withSuspense(

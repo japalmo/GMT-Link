@@ -60,6 +60,7 @@ export async function createInternalUser({
     bankAccountNumber: bankAccountNumber.trim(),
     workerId,
     active: true,
+    mustChangePassword: true,
     createdAt: new Date(),
     createdBy,
     lastLoginAt: null,

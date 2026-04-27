@@ -30,6 +30,11 @@ export default function ProtectedRoute({ children, allowedRoles, redirectTo = '/
     );
   }
 
+  // GMT-05: Redirigir siempre a cambiar contraseña si es necesario
+  if (profile?.mustChangePassword && location.pathname !== '/cambiar-password') {
+    return <Navigate to="/cambiar-password" replace />;
+  }
+
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return <Navigate to={redirectTo} replace />;
   }
