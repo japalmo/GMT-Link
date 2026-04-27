@@ -82,14 +82,27 @@ export default function Reembolsos() {
   const [actionComment, setActionComment] = useState('');
   const [processing, setProcessing] = useState(false);
 
+  const requestIdFromUrl = searchParams.get('request');
+
   useEffect(() => {
     const unsubscribe = subscribeReimbursements(
       { profile },
-      (items) => { setReimbursements(items); setLoading(false); },
+      (items) => {
+        setReimbursements(items);
+        setLoading(false);
+
+        // Si venimos del dashboard con un ID específico, abrirlo
+        if (requestIdFromUrl && !selectedRequest) {
+          const found = items.find((r) => r.id === requestIdFromUrl);
+          if (found) {
+            setSelectedRequest(found);
+          }
+        }
+      },
       (err) => { setError(err.message); setLoading(false); },
     );
     return unsubscribe;
-  }, [profile]);
+  }, [profile, requestIdFromUrl, selectedRequest]);
 
   const handleStatusUpdate = async (status) => {
     if (status === 'rejected' && !actionComment.trim()) {

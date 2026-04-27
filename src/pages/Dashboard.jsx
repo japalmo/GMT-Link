@@ -323,14 +323,15 @@ export default function Dashboard() {
                           <Paper
                             key={item.id}
                             variant="outlined"
-                            onClick={() => navigate('/reembolsos?status=pending_approval')}
+                            onClick={() => navigate(`/reembolsos?request=${item.id}`)}
                             sx={{
                               p: 1.5,
                               cursor: 'pointer',
-                              transition: 'transform 120ms ease, box-shadow 120ms ease',
+                              transition: 'all 120ms ease',
                               '&:hover': {
-                                transform: 'translateY(-1px)',
-                                boxShadow: 2,
+                                transform: 'translateY(-2px)',
+                                boxShadow: 3,
+                                backgroundColor: 'action.hover',
                               },
                             }}
                           >
@@ -372,10 +373,11 @@ export default function Dashboard() {
                             sx={{
                               p: 1.5,
                               cursor: 'pointer',
-                              transition: 'transform 120ms ease, box-shadow 120ms ease',
+                              transition: 'all 120ms ease',
                               '&:hover': {
-                                transform: 'translateY(-1px)',
-                                boxShadow: 2,
+                                transform: 'translateY(-2px)',
+                                boxShadow: 3,
+                                backgroundColor: 'action.hover',
                               },
                             }}
                           >
