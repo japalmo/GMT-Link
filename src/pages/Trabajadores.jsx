@@ -75,7 +75,7 @@ const INITIAL_MANUAL_FORM = {
 };
 
 export default function Trabajadores() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState(INITIAL_MANUAL_FORM);
   const [creating, setCreating] = useState(false);
@@ -184,6 +184,7 @@ export default function Trabajadores() {
         bankAccountType: manualForm.bankAccountType,
         bankAccountNumber: manualForm.bankAccountNumber,
         workerId: workerId,
+        createdBy: user?.uid || 'admin',
       });
 
       alert(`Se envió un correo a ${manualForm.email} para que el usuario configure su contraseña`);

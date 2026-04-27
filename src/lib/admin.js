@@ -38,7 +38,7 @@ export async function createInternalUser({
   bankAccountType = '',
   bankAccountNumber = '',
   workerId = null,
-  createdBy,
+  createdBy = 'system',
 }) {
   const normalizedEmail = normalizeCompanyEmail(email);
   const temporaryPassword = randomPassword();
