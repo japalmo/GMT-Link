@@ -35,6 +35,11 @@ export default function ProtectedRoute({ children, allowedRoles, redirectTo = '/
     return <Navigate to="/cambiar-password" replace />;
   }
 
+  // GMT-06A: Redirigir siempre a verificar datos si es necesario
+  if (profile?.profileVerified === false && location.pathname !== '/verificar-datos') {
+    return <Navigate to="/verificar-datos" replace />;
+  }
+
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return <Navigate to={redirectTo} replace />;
   }

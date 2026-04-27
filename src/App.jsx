@@ -17,6 +17,7 @@ const Perfil = lazy(() => import('./pages/Perfil'));
 const SolicitarGastos = lazy(() => import('./pages/SolicitarGastos'));
 const Login = lazy(() => import('./pages/Login'));
 const CambiarPassword = lazy(() => import('./pages/CambiarPassword'));
+const VerificarDatos = lazy(() => import('./pages/VerificarDatos'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 function withSuspense(element) {
@@ -101,6 +102,11 @@ const router = createBrowserRouter([
       <ProtectedRoute>
         <CambiarPassword />
       </ProtectedRoute>
+  )},
+  { path: '/verificar-datos', element: withSuspense(
+    <ProtectedRoute>
+      <VerificarDatos />
+    </ProtectedRoute>
   )},
   {
     path: '/solicitar',

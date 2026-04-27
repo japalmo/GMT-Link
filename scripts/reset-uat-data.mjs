@@ -355,6 +355,8 @@ async function writeWorkerDocs(db, createdUsers) {
       bankAccountNumber: '',
       joinedAt: createdAt,
       active: true,
+      mustChangePassword: false,
+      profileVerified: true,
       supervisorId: supervisor.uid,
       supervisorName: 'Humberto Leiva',
       createdAt,

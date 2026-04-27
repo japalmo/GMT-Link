@@ -61,6 +61,7 @@ export async function createInternalUser({
     workerId,
     active: true,
     mustChangePassword: true,
+    profileVerified: false,
     createdAt: new Date(),
     createdBy,
     lastLoginAt: null,
