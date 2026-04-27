@@ -31,7 +31,7 @@ import AddIcon from '@mui/icons-material/Add';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { subscribeReimbursements, updateReimbursementStatus } from '../lib/repository';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrencyCLP, formatDateTime, formatShortDate, toDateValue } from '../lib/formatters';
@@ -59,6 +59,7 @@ const STATUS_LABEL = {
 
 export default function Reembolsos() {
   const { profile, user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedStatus = searchParams.get('status');
   const [importOpen, setImportOpen] = useState(false);
@@ -214,7 +215,7 @@ export default function Reembolsos() {
           <Typography variant="body2" color="text.secondary">Gestión de solicitudes de reembolso</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <Button variant="contained" startIcon={<AddIcon />} disabled>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/solicitar')}>
             Nueva solicitud
           </Button>
           <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={() => setImportOpen(true)}>

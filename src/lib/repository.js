@@ -184,6 +184,43 @@ function buildDraftReceiptPayload(receipt, workerProfile, { status = 'draft', su
   };
 }
 
+function buildSubmittedReceiptPayload(receipt, requesterProfile, { groupId, requestNumber, submittedAt }) {
+  const workerId = requesterProfile.workerId ?? requesterProfile.uid;
+  const workerName = requesterProfile.displayName || requesterProfile.email || 'Usuario';
+
+  return {
+    requestNumber,
+    workerId,
+    workerName,
+    workerRut: requesterProfile.rut || '',
+    centerCost: requesterProfile.centerCosts?.[0] || '',
+    category: receipt.category || '',
+    concept: receipt.concept || '',
+    amount: Number(receipt.amount) || 0,
+    expenseDate: receipt.expenseDate ? new Date(receipt.expenseDate) : null,
+    receiptNumber: receipt.receiptNumber || '',
+    merchantName: receipt.merchantName || '',
+    notes: receipt.notes || '',
+    attachmentUrls: receipt.fileUrl ? [receipt.fileUrl] : (receipt.attachmentUrls ?? []),
+    status: 'pending_approval',
+    paymentStatus: 'unpaid',
+    paymentBatchId: null,
+    submittedAt,
+    submittedByName: workerName,
+    approvedAt: null,
+    approvedBy: null,
+    approvedByName: null,
+    approvalComment: '',
+    rejectedAt: null,
+    rejectedBy: null,
+    rejectedByName: null,
+    rejectionReason: '',
+    paidAt: null,
+    paidBy: null,
+    groupId,
+  };
+}
+
 export async function submitReimbursementBatch(receipts, workerProfile) {
   const batch = writeBatch(db);
   const groupId = await generateGroupId();
@@ -209,6 +246,26 @@ export async function submitReimbursementBatch(receipts, workerProfile) {
       createdAt: serverTimestamp(),
     };
     batch.set(docRef, docData);
+  }
+
+  await batch.commit();
+  return groupId;
+}
+
+export async function submitAuthenticatedReimbursementBatch(receipts, requesterProfile) {
+  const batch = writeBatch(db);
+  const groupId = receipts[0]?.groupId || await generateGroupId();
+  const baseRequestNumber = await generateRequestNumber();
+
+  for (const [index, receipt] of receipts.entries()) {
+    const docRef = doc(collection(db, 'reimbursements'));
+    const requestNumber = incrementRequestNumber(baseRequestNumber, index);
+
+    batch.set(docRef, buildSubmittedReceiptPayload(receipt, requesterProfile, {
+      groupId,
+      requestNumber,
+      submittedAt: serverTimestamp(),
+    }));
   }
 
   await batch.commit();

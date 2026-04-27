@@ -40,6 +40,7 @@ import {
   createDraftReceipt,
   deleteDraftReceipt,
   saveDraftReceipt,
+  submitAuthenticatedReimbursementBatch,
   submitDraftGroup,
   subscribeWorkerReimbursements,
 } from '../lib/repository';
@@ -82,8 +83,14 @@ function normalizeReceipt(item) {
   };
 }
 
+function createEmptyReceipt(groupId = '') {
+  return normalizeReceipt({
+    groupId,
+  });
+}
+
 export default function SolicitarGastos() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeStep, setActiveStep] = useState(0);
@@ -94,7 +101,8 @@ export default function SolicitarGastos() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState('');
   const autosaveTimeoutRef = useRef(null);
-  const isInternalUser = profile && !profile.workerId;
+  const isInternalUser = Boolean(profile && !profile.workerId);
+  const submitTarget = isInternalUser ? '/reembolsos' : '/mis-solicitudes';
   const editGroupId = searchParams.get('edit');
   const hasReceiptProcessing = receipts.some((r) => r.aiProcessing);
   const isBusy = loading || submitting || savingDraft || hasReceiptProcessing;
@@ -141,7 +149,7 @@ export default function SolicitarGastos() {
           // Nuevo flujo sin workerId: trabajar en memoria
           if (isInternalUser) {
             setGroupId(`SOL-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-000`);
-            setReceipts([normalizeReceipt({})]);
+            setReceipts([createEmptyReceipt()]);
             setLoading(false);
           } else {
             const createdReceipt = await createDraftReceipt(profile);
@@ -193,8 +201,12 @@ export default function SolicitarGastos() {
   const addReceipt = async () => {
     setSavingDraft(true);
     try {
-      const created = await createDraftReceipt(profile, groupId);
-      setReceipts((current) => [...current, normalizeReceipt(created)]);
+      if (isInternalUser) {
+        setReceipts((current) => [...current, createEmptyReceipt(groupId)]);
+      } else {
+        const created = await createDraftReceipt(profile, groupId);
+        setReceipts((current) => [...current, normalizeReceipt(created)]);
+      }
     } catch {
       setError('Error al enviar la solicitud.');
     } finally {
@@ -206,7 +218,9 @@ export default function SolicitarGastos() {
     if (receipts.length === 1) return;
     setSavingDraft(true);
     try {
-      await deleteDraftReceipt(id);
+      if (!isInternalUser) {
+        await deleteDraftReceipt(id);
+      }
       setReceipts((current) => current.filter((r) => r.id !== id));
     } catch {
       setError('Error al enviar la solicitud.');
@@ -280,15 +294,16 @@ export default function SolicitarGastos() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const finalReceipts = receipts.map(r => ({
-        ...r,
-        workerId: profile.workerId ?? profile.uid,
-        workerName: profile.displayName ?? profile.email,
-        centerCost: profile.centerCosts?.[0] ?? 'N/A'
-      }));
-      await flushDraft(finalReceipts);
-      await submitDraftGroup(finalReceipts, profile);
-      navigate(isInternalUser ? '/reembolsos' : '/mis-solicitudes');
+      if (isInternalUser) {
+        await submitAuthenticatedReimbursementBatch(receipts, {
+          ...profile,
+          uid: user?.uid ?? profile?.uid ?? '',
+        });
+      } else {
+        await flushDraft(receipts);
+        await submitDraftGroup(receipts, profile);
+      }
+      navigate(submitTarget);
     } catch {
       setError('Error al enviar la solicitud.');
     } finally {
@@ -297,6 +312,7 @@ export default function SolicitarGastos() {
   };
 
   const handleSaveDraft = async () => {
+    if (isInternalUser) return;
     setSavingDraft(true);
     try {
       await flushDraft(receipts);
@@ -354,6 +370,11 @@ export default function SolicitarGastos() {
               <Alert severity="info">
                 Los reembolsos se procesan según la información de tu perfil. Si hay errores, contacta a RRHH.
               </Alert>
+              {isInternalUser ? (
+                <Alert severity="info">
+                  Tu perfil no tiene `workerId`. Esta solicitud se enviará directamente al confirmar y no tendrá borrador ni autoguardado.
+                </Alert>
+              ) : null}
             </Stack>
           )}
 
@@ -509,7 +530,7 @@ export default function SolicitarGastos() {
           <Button
             variant="text"
             startIcon={<ArrowBackIcon />}
-            onClick={activeStep === 0 ? () => navigate('/mis-solicitudes') : handleBack}
+            onClick={activeStep === 0 ? () => navigate(submitTarget) : handleBack}
             disabled={submitting}
           >
             {activeStep === 0 ? 'Cancelar' : 'Atrás'}
@@ -518,7 +539,7 @@ export default function SolicitarGastos() {
             variant="outlined"
             startIcon={<SaveIcon />}
             onClick={handleSaveDraft}
-            disabled={isBusy || receipts.length === 0}
+            disabled={isInternalUser || isBusy || receipts.length === 0}
           >
             Guardar Borrador
           </Button>
