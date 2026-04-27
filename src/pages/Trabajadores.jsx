@@ -493,19 +493,18 @@ export default function Trabajadores() {
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Nombre</Typography>
-                    <Typography variant="body1">{selectedWorker.fullName}</Typography>
-                    <Typography variant="caption" color="text.secondary">RUT</Typography>
-                    <Typography variant="body1" sx={sensitiveTextSx}>
-                      {showSensitive ? (selectedWorker.rut || '—') : maskSensitiveValue(selectedWorker.rut)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">Código / área</Typography>
-                    <Typography variant="body1">{selectedWorker.employeeCode || 'N/A'} · {selectedWorker.department || 'N/A'}</Typography>
-                    <Typography variant="caption" color="text.secondary">Ubicación</Typography>
-                    <Typography variant="body1">{selectedWorker.location || 'N/A'}</Typography>
-                    <Typography variant="caption" color="text.secondary">Ingreso</Typography>
-                    <Typography variant="body1">{formatShortDate(selectedWorker.joinedAt)}</Typography>
+                  <Typography variant="caption" color="text.secondary">Nombre</Typography>
+                  <Typography variant="body1">{selectedWorker.fullName}</Typography>
+                  <Typography variant="caption" color="text.secondary">RUT</Typography>
+                  <Typography variant="body1" sx={sensitiveTextSx}>
+                    {showSensitive ? (selectedWorker.rut || '—') : maskSensitiveValue(selectedWorker.rut)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Ubicación</Typography>
+                  <Typography variant="body1">{selectedWorker.location || 'N/A'}</Typography>
+                  <Typography variant="caption" color="text.secondary">Ingreso</Typography>
+                  <Typography variant="body1">{formatShortDate(selectedWorker.joinedAt)}</Typography>
                   </Box>
+
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">Correo corporativo</Typography>
                     <Typography variant="body1">{selectedWorker.email}</Typography>
@@ -621,13 +620,6 @@ export default function Trabajadores() {
                 fullWidth
                 value={editForm.email}
                 onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))}
-                disabled={editing}
-              />
-              <TextField
-                label="Código empleado"
-                fullWidth
-                value={editForm.employeeCode}
-                onChange={(e) => setEditForm({ ...editForm, employeeCode: e.target.value })}
                 disabled={editing}
               />
             </Stack>
@@ -834,13 +826,6 @@ export default function Trabajadores() {
                 fullWidth
                 value={manualForm.email}
                 onChange={(e) => setManualForm({ ...manualForm, email: e.target.value })}
-                disabled={creating}
-              />
-              <TextField
-                label="Código empleado"
-                fullWidth
-                value={manualForm.employeeCode}
-                onChange={(e) => setManualForm({ ...manualForm, employeeCode: e.target.value })}
                 disabled={creating}
               />
             </Stack>

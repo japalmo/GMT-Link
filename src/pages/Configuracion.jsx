@@ -126,19 +126,9 @@ export default function Configuracion() {
     [users],
   );
 
-  const availableWorkers = useMemo(
-    () => workers.filter((worker) => !assignedWorkerIds.has(worker.id) || worker.id === formState.workerId),
-    [assignedWorkerIds, formState.workerId, workers],
-  );
-
   const selectedWorker = useMemo(
     () => workers.find((worker) => worker.id === formState.workerId) ?? null,
     [formState.workerId, workers],
-  );
-
-  const supervisors = useMemo(
-    () => users.filter((item) => item.role === 'supervisor'),
-    [users],
   );
 
   const resolvedRut = formState.role === 'worker'
@@ -232,48 +222,41 @@ export default function Configuracion() {
     setSuccessMessage('');
 
     try {
-      let workerId = formState.role === 'worker' ? formState.workerId : null;
-      let workerCenterCost = selectedWorker?.centerCost || '';
-
-      if (formState.role === 'worker' && formState.workerMode === 'new') {
-        const supervisor = supervisors.find((item) => item.id === formState.workerSupervisorId);
-        const workerRef = await createWorker({
-          fullName: formState.workerFullName,
-          rut: formState.rut,
-          email: formState.workerEmail || formState.email,
-          centerCost: formState.workerCenterCost,
-          supervisorId: formState.workerSupervisorId,
-          supervisorName: supervisor?.displayName || '',
-          active: true,
-        });
-        workerId = workerRef.id;
-        workerCenterCost = formState.workerCenterCost;
-      }
-
+      const uid = editingUserId || crypto.randomUUID();
+      const workerId = `wkr-${uid.slice(0, 8)}`;
+      
       const payload = {
         email: normalizeCompanyEmail(formState.email),
         displayName: formState.displayName,
         role: formState.role,
-        rut: resolvedRut.trim(),
-        centerCosts: formState.role === 'supervisor'
-          ? formState.centerCosts
-          : (formState.role === 'worker' && workerCenterCost ? [workerCenterCost] : []),
-        bankName: resolvedBankName.trim(),
-        bankAccountType: resolvedBankAccountType.trim(),
-        bankAccountNumber: resolvedBankAccountNumber.trim(),
-        workerId,
+        rut: formState.rut.trim(),
+        centerCosts: formState.role === 'supervisor' ? formState.centerCosts : [],
+        bankName: formState.bankName.trim(),
+        bankAccountType: formState.bankAccountType.trim(),
+        bankAccountNumber: formState.bankAccountNumber.trim(),
+        workerId: workerId,
       };
 
       if (modalMode === 'edit') {
         await updateUser(editingUserId, payload);
-        setSuccessMessage('Usuario actualizado. Si cambiaste el email, la credencial en Firebase Auth no se actualiza desde este panel.');
+        setSuccessMessage('Usuario actualizado.');
       } else {
+        // Parte B: Crear usuario + worker doc siempre
+        await createWorker({
+          id: workerId,
+          fullName: formState.displayName,
+          rut: formState.rut.trim(),
+          email: normalizeCompanyEmail(formState.email),
+          centerCost: formState.centerCosts?.[0] || '',
+          active: true,
+        });
+        
         const result = await createInternalUser({
           ...payload,
           createdBy: user?.uid || 'admin',
         });
         setSuccessMessage(
-          `Usuario creado. UID: ${result.uid}. Se envió correo de reset a ${payload.email}. Clave temporal: ${result.temporaryPassword}`,
+          `Usuario creado. UID: ${result.uid}. Clave temporal: ${result.temporaryPassword}`,
         );
       }
 
@@ -481,12 +464,6 @@ export default function Configuracion() {
                 ...current,
                 role: event.target.value,
                 centerCosts: event.target.value === 'supervisor' ? current.centerCosts : [],
-                workerMode: event.target.value === 'worker' ? current.workerMode : 'existing',
-                workerId: event.target.value === 'worker' ? current.workerId : '',
-                workerFullName: event.target.value === 'worker' ? current.workerFullName : '',
-                workerEmail: event.target.value === 'worker' ? current.workerEmail : '',
-                workerCenterCost: event.target.value === 'worker' ? current.workerCenterCost : '',
-                workerSupervisorId: event.target.value === 'worker' ? current.workerSupervisorId : '',
               }))}
               fullWidth
             >
@@ -513,91 +490,6 @@ export default function Configuracion() {
                   <MenuItem key={item.id} value={item.name}>{item.name}</MenuItem>
                 ))}
               </TextField>
-            ) : null}
-
-            {formState.role === 'worker' ? (
-              <>
-                <FormControl>
-                  <RadioGroup
-                    row
-                    value={formState.workerMode}
-                    onChange={(event) => setFormState((current) => ({
-                      ...current,
-                      workerMode: event.target.value,
-                      workerId: event.target.value === 'existing' ? current.workerId : '',
-                    }))}
-                  >
-                    <FormControlLabel value="existing" control={<Radio />} label="Vincular existente" />
-                    <FormControlLabel value="new" control={<Radio />} label="Crear trabajador nuevo" />
-                  </RadioGroup>
-                </FormControl>
-
-                {formState.workerMode === 'existing' ? (
-                  <>
-                    <TextField
-                      select
-                      label="Trabajador vinculado"
-                      value={formState.workerId}
-                      onChange={(event) => setFormState((current) => ({
-                        ...current,
-                        workerId: event.target.value,
-                      }))}
-                      fullWidth
-                    >
-                      {availableWorkers.map((worker) => (
-                        <MenuItem key={worker.id} value={worker.id}>
-                          {worker.fullName} ({worker.rut})
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    {selectedWorker ? (
-                      <Alert severity="info">
-                        Se vinculará al trabajador existente y heredará `rut`, banco y `centerCost: {selectedWorker.centerCost || 'Sin centro de costo'}`.
-                      </Alert>
-                    ) : (
-                      <Alert severity="warning">
-                        Primero selecciona un trabajador existente. Este flujo no crea documentos en la colección `workers`.
-                      </Alert>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <TextField
-                      label="Nombre trabajador"
-                      value={formState.workerFullName}
-                      onChange={(event) => setFormState((current) => ({ ...current, workerFullName: event.target.value }))}
-                      fullWidth
-                    />
-                    <TextField
-                      label="Correo trabajador"
-                      type="email"
-                      value={formState.workerEmail}
-                      onChange={(event) => setFormState((current) => ({ ...current, workerEmail: event.target.value }))}
-                      fullWidth
-                    />
-                    <TextField
-                      label="Centro de costo trabajador"
-                      value={formState.workerCenterCost}
-                      onChange={(event) => setFormState((current) => ({ ...current, workerCenterCost: event.target.value }))}
-                      fullWidth
-                    />
-                    <TextField
-                      select
-                      label="Supervisor trabajador"
-                      value={formState.workerSupervisorId}
-                      onChange={(event) => setFormState((current) => ({ ...current, workerSupervisorId: event.target.value }))}
-                      fullWidth
-                    >
-                      {supervisors.map((item) => (
-                        <MenuItem key={item.id} value={item.id}>{item.displayName}</MenuItem>
-                      ))}
-                    </TextField>
-                    <Alert severity="info">
-                      Este submit creará primero el trabajador y luego el usuario `worker` enlazado.
-                    </Alert>
-                  </>
-                )}
-              </>
             ) : null}
 
             <TextField
