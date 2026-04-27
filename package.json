@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "seed:demo": "node scripts/seed-firestore.mjs"
+    "seed:demo": "node scripts/seed-firestore.mjs",
+    "reset:uat": "node scripts/reset-uat-data.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -30,6 +31,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "firebase-admin": "^13.8.0",
     "globals": "^17.5.0",
     "vite": "^8.0.9"
   }
