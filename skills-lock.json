@@ -16,10 +16,15 @@
       "sourceType": "github",
       "computedHash": "4d3de47b5be279ab3b0ee6055ae541f28d1cc45f8e8986c0b5df2f8d89f4ea30"
     },
+    "developing-genkit-python": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "6d80e42acbaec4f53f8f62da5d61e0ae540144552fc07fc06a3605efb5420fba"
+    },
     "firebase-ai-logic": {
       "source": "firebase/agent-skills",
       "sourceType": "github",
-      "computedHash": "6ddf74ac9b3366d396e5fa85e695a7c5871e39edffc385533eaee2be159fcf03"
+      "computedHash": "454e17900a16e50008ebff708000d1daa7bdbce8991b805a56b2e556ab6614f6"
     },
     "firebase-app-hosting-basics": {
       "source": "firebase/agent-skills",
