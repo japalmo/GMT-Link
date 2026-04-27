@@ -427,7 +427,7 @@ export default function SolicitarGastos() {
                           <CircularProgress size={30} />
                         ) : receipt.fileUrl ? (
                           <>
-                            <CheckCircleOutlineIcon color="success" />
+                            <CheckCircleOutlinedIcon color="success" />
                             <Typography variant="caption" sx={{ mt: 1 }}>Cambiar archivo</Typography>
                           </>
                         ) : (
