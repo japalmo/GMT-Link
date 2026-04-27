@@ -51,9 +51,9 @@ export async function createInternalUser({
   await updateUser(signUpPayload.localId, {
     uid: signUpPayload.localId,
     email: normalizedEmail,
-    displayName: displayName.trim(),
+    displayName: (displayName || '').trim(),
     role,
-    rut: rut.trim(),
+    rut: (rut || '').trim(),
     centerCosts,
     bankName: bankName.trim(),
     bankAccountType: bankAccountType.trim(),
