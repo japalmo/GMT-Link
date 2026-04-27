@@ -121,11 +121,6 @@ export default function Configuracion() {
     [users],
   );
 
-  const assignedWorkerIds = useMemo(
-    () => new Set(users.filter((item) => item.role === 'worker').map((item) => item.workerId).filter(Boolean)),
-    [users],
-  );
-
   const selectedWorker = useMemo(
     () => workers.find((worker) => worker.id === formState.workerId) ?? null,
     [formState.workerId, workers],
