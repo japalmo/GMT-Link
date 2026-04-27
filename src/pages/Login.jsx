@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { sendPasswordResetLink } from '../lib/auth';
 import { useSnackbar } from '../contexts/useSnackbar';
-import logoWide from '../assets/branding/logo-wide.png';
+import logoWide from '../assets/branding/logo-wide-login.png';
 
 export default function Login() {
   const { login } = useAuth();
