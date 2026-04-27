@@ -179,7 +179,7 @@ export default function Trabajadores() {
     );
 
     const unsubscribeUsers = subscribeUsers(
-      { onlyRole: 'supervisor' },
+      {},
       (items) => setUsers(items),
     );
 
