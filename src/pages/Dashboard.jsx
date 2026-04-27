@@ -301,7 +301,7 @@ export default function Dashboard() {
           <Card sx={{ minHeight: 320 }}>
             <CardContent sx={{ height: '100%' }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
-                Kanban operativo
+                Seguimiento de solicitudes
               </Typography>
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 6 }}>

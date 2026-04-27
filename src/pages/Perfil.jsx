@@ -139,13 +139,13 @@ export default function Perfil() {
 
       <Grid container spacing={3}>
         <Grid item xs={12} lg={7}>
-          <Card>
+          <Card sx={{ height: '100%' }}>
             <CardContent>
               <Stack spacing={2.5}>
                 <Box>
-                  <Typography variant="h6" gutterBottom>Cuenta</Typography>
+                  <Typography variant="h6" gutterBottom>Cuenta y Seguridad</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Estos datos se usan para identificar tu sesión en GMT Link.
+                    Datos de identidad y gestión de acceso. El cambio de contraseña se hace vía correo seguro.
                   </Typography>
                 </Box>
 
@@ -175,6 +175,18 @@ export default function Perfil() {
                     <Chip key={costCenter} label={costCenter} size="small" />
                   ))}
                 </Stack>
+
+                <Divider sx={{ my: 1 }} />
+
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  startIcon={sendingReset ? <CircularProgress size={18} /> : <LockResetRoundedIcon />}
+                  onClick={handlePasswordReset}
+                  disabled={sendingReset || !user?.email}
+                >
+                  Enviar correo de cambio de contraseña
+                </Button>
               </Stack>
             </CardContent>
           </Card>
@@ -185,9 +197,9 @@ export default function Perfil() {
             <CardContent>
               <Stack spacing={2.5}>
                 <Box>
-                  <Typography variant="h6" gutterBottom>Seguridad y banco</Typography>
+                  <Typography variant="h6" gutterBottom>Datos Bancarios</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    El cambio de contraseña se hace vía correo seguro de Firebase. Los datos bancarios quedan en tu usuario para autocompletar flujos futuros.
+                    Información utilizada para el pago de tus reembolsos aprobados.
                   </Typography>
                 </Box>
 
@@ -209,15 +221,6 @@ export default function Perfil() {
                   onChange={(event) => setBankForm((current) => ({ ...current, bankAccountNumber: event.target.value }))}
                   fullWidth
                 />
-
-                <Button
-                  variant="outlined"
-                  startIcon={sendingReset ? <CircularProgress size={18} /> : <LockResetRoundedIcon />}
-                  onClick={handlePasswordReset}
-                  disabled={sendingReset || !user?.email}
-                >
-                  Enviar correo de cambio de contraseña
-                </Button>
               </Stack>
             </CardContent>
           </Card>

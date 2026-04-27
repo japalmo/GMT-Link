@@ -22,7 +22,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
 import PaymentIcon from '@mui/icons-material/Payment';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrencyCLP, formatShortDate } from '../lib/formatters';
-import { subscribeWorkerReimbursements } from '../lib/repository';
+import { subscribeWorkerReimbursements, deleteDraftReceipt } from '../lib/repository';
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -134,6 +134,20 @@ export default function MisSolicitudes() {
 
   const handleNewRequest = () => {
     navigate('/solicitar');
+  };
+
+  const handleDeleteDraft = async (group) => {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar este borrador? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      // Eliminar todos los ítems del grupo
+      const deletePromises = group.items.map((item) => deleteDraftReceipt(item.id));
+      await Promise.all(deletePromises);
+    } catch (err) {
+      alert('Error al eliminar borrador: ' + err.message);
+    }
   };
 
   return (
@@ -253,14 +267,23 @@ export default function MisSolicitudes() {
                     <Typography variant="h6" fontWeight={800} color="primary">{formatCurrencyCLP(group.total)}</Typography>
                   </Box>
                   {group.status === 'draft' ? (
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        navigate(`/solicitar?edit=${group.id}`);
-                      }}
-                    >
-                      Continuar borrador
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleDeleteDraft(group)}
+                      >
+                        Eliminar
+                      </Button>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          navigate(`/solicitar?edit=${group.id}`);
+                        }}
+                      >
+                        Continuar
+                      </Button>
+                    </Stack>
                   ) : null}
                 </Box>
               </Box>

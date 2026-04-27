@@ -175,36 +175,6 @@ export default function AppShell() {
           </Tooltip>
         ))}
       </List>
-
-      <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)' }} />
-
-      <Box
-        sx={{
-          px: isCollapsed ? 1.5 : 2,
-          py: 1.5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: isCollapsed && !isMobile ? 'center' : 'flex-start',
-          gap: 1.5,
-          transition: theme.transitions.create(['padding', 'justify-content'], {
-            duration: drawerTransitionMs,
-          }),
-          borderRadius: 2,
-          mx: 1,
-        }}
-      >
-        <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main', fontSize: 14 }}>{avatarLetter}</Avatar>
-        {!isCollapsed || isMobile ? (
-          <Box>
-            <Typography variant="caption" sx={{ color: '#fff', display: 'block', lineHeight: 1.2 }}>
-              {displayName}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-              {roleLabel}
-            </Typography>
-          </Box>
-        ) : null}
-      </Box>
     </Box>
   );
 
@@ -318,6 +288,7 @@ export default function AppShell() {
                 <ListItemIcon><PersonOutlineRoundedIcon fontSize="small" /></ListItemIcon>
                 <ListItemText
                   primary="Ver perfil"
+                  primaryTypographyProps={{ fontWeight: 600 }}
                   secondary="Editar datos y cambio de contraseña"
                 />
               </MenuItem>
