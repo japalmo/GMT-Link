@@ -121,6 +121,27 @@ export default function Trabajadores() {
     [selectedWorker, users],
   );
 
+  const handleCreateCredentials = async () => {
+    try {
+      await createInternalUser({
+        email: selectedWorker.email,
+        displayName: selectedWorker.fullName,
+        role: 'worker',
+        rut: selectedWorker.rut || '',
+        centerCosts: selectedWorker.centerCost ? [selectedWorker.centerCost] : [],
+        workerId: selectedWorker.id,
+        createdBy: user?.uid || 'admin',
+      });
+      alert(`Credenciales creadas. Email enviado a ${selectedWorker.email}`);
+    } catch (err) {
+      if (err.message.includes('EMAIL_EXISTS')) {
+        alert('Este correo ya tiene credenciales asociadas.');
+      } else {
+        alert('Error creando credenciales: ' + err.message);
+      }
+    }
+  };
+
   const handleSendCredentials = async (type) => {
     try {
       await sendPasswordSetupEmail(linkedUser.email);
@@ -552,6 +573,9 @@ export default function Trabajadores() {
                     ) : (
                       <Stack spacing={1} sx={{ mt: 1 }}>
                         <Chip label="Sin credenciales" color="default" size="small" />
+                        <Button size="small" variant="contained" onClick={handleCreateCredentials}>
+                          Crear credenciales
+                        </Button>
                       </Stack>
                     )}
                   </Box>
