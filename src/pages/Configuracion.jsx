@@ -10,13 +10,9 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   FormControlLabel,
   LinearProgress,
-  MenuItem,
   Paper,
-  Radio,
-  RadioGroup,
   Stack,
   Switch,
   Table,
@@ -24,29 +20,18 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import { useAuth } from '../contexts/AuthContext';
-import { createInternalUser } from '../lib/admin';
 import {
-  createWorker,
   deleteUser,
   subscribeCostCenters,
   subscribeUsers,
   subscribeWorkers,
   updateUser,
 } from '../lib/repository';
-
-const USER_ROLES = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'supervisor', label: 'Supervisor' },
-  { value: 'finance_clerk', label: 'Finanzas' },
-  { value: 'worker', label: 'Trabajador' },
-];
 
 const EMPTY_FORM = {
   displayName: '',
@@ -57,12 +42,6 @@ const EMPTY_FORM = {
   bankName: '',
   bankAccountType: '',
   bankAccountNumber: '',
-  workerMode: 'existing',
-  workerId: '',
-  workerFullName: '',
-  workerEmail: '',
-  workerCenterCost: '',
-  workerSupervisorId: '',
 };
 
 export default function Configuracion() {
@@ -73,11 +52,6 @@ export default function Configuracion() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create');
-  const [editingUserId, setEditingUserId] = useState('');
-  const [formState, setFormState] = useState(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
   const [deleteTargetUser, setDeleteTargetUser] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -164,32 +138,6 @@ export default function Configuracion() {
     setModalOpen(true);
   };
 
-  const openEditModal = (target) => {
-    const linkedWorker = workers.find((worker) => worker.id === target.workerId) ?? null;
-    setError('');
-    setSuccessMessage('');
-    setModalMode('edit');
-    setEditingUserId(target.id);
-    setFormState({
-      ...EMPTY_FORM,
-      displayName: target.displayName ?? '',
-      email: target.email ?? '',
-      rut: target.rut ?? '',
-      role: target.role ?? 'supervisor',
-      centerCosts: target.centerCosts ?? [],
-      bankName: target.bankName ?? '',
-      bankAccountType: target.bankAccountType ?? '',
-      bankAccountNumber: target.bankAccountNumber ?? '',
-      workerMode: target.role === 'worker' && target.workerId ? 'existing' : 'new',
-      workerId: target.workerId ?? '',
-      workerFullName: linkedWorker?.fullName ?? target.displayName ?? '',
-      workerEmail: linkedWorker?.email ?? target.email ?? '',
-      workerCenterCost: linkedWorker?.centerCost ?? target.centerCosts?.[0] ?? '',
-      workerSupervisorId: linkedWorker?.supervisorId ?? '',
-    });
-    setModalOpen(true);
-  };
-
   const openDeleteConfirm = (target) => {
     setError('');
     setSuccessMessage('');
@@ -211,58 +159,6 @@ export default function Configuracion() {
     }
   };
 
-  const handleSubmitUser = async () => {
-    setSubmitting(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const uid = editingUserId || crypto.randomUUID();
-      const workerId = `wkr-${uid.slice(0, 8)}`;
-      
-      const payload = {
-        email: normalizeCompanyEmail(formState.email),
-        displayName: formState.displayName,
-        role: formState.role,
-        rut: formState.rut.trim(),
-        centerCosts: formState.role === 'supervisor' ? formState.centerCosts : [],
-        bankName: formState.bankName.trim(),
-        bankAccountType: formState.bankAccountType.trim(),
-        bankAccountNumber: formState.bankAccountNumber.trim(),
-        workerId: workerId,
-      };
-
-      if (modalMode === 'edit') {
-        await updateUser(editingUserId, payload);
-        setSuccessMessage('Usuario actualizado.');
-      } else {
-        // Parte B: Crear usuario + worker doc siempre
-        await createWorker({
-          id: workerId,
-          fullName: formState.displayName,
-          rut: formState.rut.trim(),
-          email: normalizeCompanyEmail(formState.email),
-          centerCost: formState.centerCosts?.[0] || '',
-          active: true,
-        });
-        
-        const result = await createInternalUser({
-          ...payload,
-          createdBy: user?.uid || 'admin',
-        });
-        setSuccessMessage(
-          `Usuario creado. UID: ${result.uid}. Clave temporal: ${result.temporaryPassword}`,
-        );
-      }
-
-      resetModal();
-    } catch (submitError) {
-      setError(submitError.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleDeleteUser = async () => {
     if (!deleteTargetUser) return;
 
@@ -272,7 +168,7 @@ export default function Configuracion() {
 
     try {
       await deleteUser(deleteTargetUser.id);
-      setSuccessMessage(`Usuario ${deleteTargetUser.displayName} eliminado del perfil Firestore.`);
+      setSuccessMessage(`Usuario ${deleteTargetUser.displayName} eliminado.`);
       setDeleteConfirmOpen(false);
       setDeleteTargetUser(null);
     } catch (deleteError) {
@@ -294,19 +190,9 @@ export default function Configuracion() {
         <Box>
           <Typography variant="h5" gutterBottom>Configuración</Typography>
           <Typography variant="body2" color="text.secondary">
-            Gestión de usuarios, roles, activación y vínculo con trabajadores.
+            Gestión de usuarios, roles y activación.
           </Typography>
         </Box>
-
-        {canManageUsers ? (
-          <Button
-            variant="contained"
-            startIcon={<PersonAddAltOutlinedIcon />}
-            onClick={openCreateModal}
-          >
-            Crear usuario
-          </Button>
-        ) : null}
       </Stack>
 
       {loading ? <LinearProgress sx={{ mb: 2 }} /> : null}
@@ -397,14 +283,6 @@ export default function Configuracion() {
                           <Stack direction="row" spacing={1} justifyContent="flex-end">
                             <Button
                               size="small"
-                              variant="outlined"
-                              startIcon={<EditOutlinedIcon />}
-                              onClick={() => openEditModal(item)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="small"
                               color="error"
                               variant="outlined"
                               startIcon={<DeleteOutlineRoundedIcon />}
@@ -423,119 +301,6 @@ export default function Configuracion() {
           </Paper>
         </CardContent>
       </Card>
-
-      <Dialog open={modalOpen} onClose={() => !submitting && resetModal()} fullWidth maxWidth="sm">
-        <DialogTitle>{modalMode === 'edit' ? 'Editar usuario' : 'Crear usuario'}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Nombre"
-              value={formState.displayName}
-              onChange={(event) => setFormState((current) => ({ ...current, displayName: event.target.value }))}
-              fullWidth
-            />
-            <TextField
-              label="Email"
-              type="email"
-              value={formState.email}
-              onChange={(event) => setFormState((current) => ({ ...current, email: event.target.value }))}
-              fullWidth
-              helperText={modalMode === 'edit'
-                ? 'Se normaliza a @gmtingenieria.com si ingresas un dominio antiguo. Cambiarlo aquí no actualiza Firebase Auth.'
-                : 'Se normaliza a @gmtingenieria.com si ingresas un dominio antiguo.'}
-            />
-            <TextField
-              label="RUT"
-              value={resolvedRut}
-              onChange={(event) => setFormState((current) => ({ ...current, rut: event.target.value }))}
-              fullWidth
-              disabled={formState.role === 'worker'}
-            />
-            <TextField
-              select
-              label="Rol"
-              value={formState.role}
-              onChange={(event) => setFormState((current) => ({
-                ...current,
-                role: event.target.value,
-                centerCosts: event.target.value === 'supervisor' ? current.centerCosts : [],
-              }))}
-              fullWidth
-            >
-              {USER_ROLES.map((role) => (
-                <MenuItem key={role.value} value={role.value}>{role.label}</MenuItem>
-              ))}
-            </TextField>
-
-            {formState.role === 'supervisor' ? (
-              <TextField
-                select
-                label="Centros de costo"
-                value={formState.centerCosts}
-                onChange={(event) => setFormState((current) => ({
-                  ...current,
-                  centerCosts: typeof event.target.value === 'string'
-                    ? event.target.value.split(',')
-                    : event.target.value,
-                }))}
-                fullWidth
-                SelectProps={{ multiple: true }}
-              >
-                {costCenters.map((item) => (
-                  <MenuItem key={item.id} value={item.name}>{item.name}</MenuItem>
-                ))}
-              </TextField>
-            ) : null}
-
-            <TextField
-              label="Banco"
-              value={resolvedBankName}
-              onChange={(event) => setFormState((current) => ({ ...current, bankName: event.target.value }))}
-              fullWidth
-              disabled={formState.role === 'worker'}
-            />
-            <TextField
-              label="Tipo de cuenta"
-              value={resolvedBankAccountType}
-              onChange={(event) => setFormState((current) => ({ ...current, bankAccountType: event.target.value }))}
-              fullWidth
-              disabled={formState.role === 'worker'}
-            />
-            <TextField
-              label="Número de cuenta"
-              value={resolvedBankAccountNumber}
-              onChange={(event) => setFormState((current) => ({ ...current, bankAccountNumber: event.target.value }))}
-              fullWidth
-              disabled={formState.role === 'worker'}
-            />
-
-            <Alert severity="info">
-              {modalMode === 'edit'
-                ? 'Este flujo actualiza solo el documento `users`. Para `worker`, mantiene o reasigna el vínculo técnico `workerId` según el modo seleccionado.'
-                : 'Este flujo crea el usuario en Auth y dispara correo de reset. Para `worker`, solo vincula un trabajador existente y copia sus datos base al doc `users`.'}
-            </Alert>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={resetModal} disabled={submitting}>Cancelar</Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmitUser}
-            disabled={submitting
-              || !formState.displayName
-              || !formState.email
-              || !resolvedRut
-              || (formState.role === 'worker' && formState.workerMode === 'existing' && !formState.workerId)
-              || (formState.role === 'worker' && formState.workerMode === 'new' && (
-                !formState.workerFullName
-                || !formState.workerCenterCost
-                || !formState.workerSupervisorId
-              ))}
-          >
-            {modalMode === 'edit' ? 'Guardar cambios' : 'Crear usuario'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog open={deleteConfirmOpen} onClose={closeDeleteConfirm} fullWidth maxWidth="xs">
         <DialogTitle>Eliminar usuario</DialogTitle>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createInternalUser } from '../lib/admin';
 import {
   Alert,
   Box,
@@ -164,11 +165,28 @@ export default function Trabajadores() {
     setCreating(true);
     setManualError('');
     try {
+      const workerId = `wkr-${crypto.randomUUID().slice(0, 8)}`;
       const supervisor = users.find((u) => u.id === manualForm.supervisorId);
+      
       await createWorker({
         ...manualForm,
+        id: workerId,
         supervisorName: supervisor?.displayName || '',
       });
+      
+      await createInternalUser({
+        email: manualForm.email,
+        displayName: manualForm.fullName,
+        role: manualForm.role || 'worker',
+        rut: manualForm.rut,
+        centerCosts: manualForm.centerCost ? [manualForm.centerCost] : [],
+        bankName: manualForm.bankName,
+        bankAccountType: manualForm.bankAccountType,
+        bankAccountNumber: manualForm.bankAccountNumber,
+        workerId: workerId,
+      });
+
+      alert(`Se envió un correo a ${manualForm.email} para que el usuario configure su contraseña`);
       setManualOpen(false);
       setManualForm(INITIAL_MANUAL_FORM);
     } catch (err) {
@@ -828,6 +846,20 @@ export default function Trabajadores() {
                 onChange={(e) => setManualForm({ ...manualForm, email: e.target.value })}
                 disabled={creating}
               />
+              <TextField
+                select
+                label="Rol"
+                fullWidth
+                value={manualForm.role || 'worker'}
+                onChange={(e) => setManualForm({ ...manualForm, role: e.target.value })}
+                disabled={creating}
+              >
+                <MenuItem value="worker">Trabajador</MenuItem>
+                <MenuItem value="supervisor">Supervisor</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+                <MenuItem value="gerencia">Gerencia</MenuItem>
+                <MenuItem value="finance_clerk">Finanzas</MenuItem>
+              </TextField>
             </Stack>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
