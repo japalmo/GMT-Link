@@ -1,10 +1,12 @@
 import {
   browserLocalPersistence,
+  confirmPasswordReset,
   onAuthStateChanged,
   sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
+  verifyPasswordResetCode,
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -33,6 +35,14 @@ export function logoutUser() {
 
 export function sendPasswordResetLink(email) {
   return sendPasswordResetEmail(auth, email.trim());
+}
+
+export function verifyCode(code) {
+  return verifyPasswordResetCode(auth, code);
+}
+
+export function resetPassword(code, newPassword) {
+  return confirmPasswordReset(auth, code, newPassword);
 }
 
 export async function loadUserProfile(uid) {

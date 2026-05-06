@@ -98,11 +98,7 @@ const router = createBrowserRouter([
   },
   // Rutas públicas — sin auth
   { path: '/login',     element: withSuspense(<Login />) },
-  { path: '/cambiar-password', element: withSuspense(
-      <ProtectedRoute>
-        <CambiarPassword />
-      </ProtectedRoute>
-  )},
+  { path: '/cambiar-password', element: withSuspense(<CambiarPassword />) },
   { path: '/verificar-datos', element: withSuspense(
     <ProtectedRoute>
       <VerificarDatos />
