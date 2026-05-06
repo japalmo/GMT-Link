@@ -28,7 +28,9 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ReportProblem';
@@ -48,6 +50,9 @@ import {
 } from '../lib/repository';
 import { useAuth } from '../contexts/AuthContext';
 import { formatShortDate } from '../lib/formatters';
+
+const MotionBox = motion(Box);
+const MotionCard = motion(Card);
 
 const CSV_STEPS = ['Descargar plantilla', 'Subir archivo', 'Vista previa', 'Finalizar'];
 
@@ -69,6 +74,7 @@ const INITIAL_MANUAL_FORM = {
 };
 
 export default function Trabajadores() {
+  const theme = useTheme();
   const { profile, user } = useAuth();
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState(INITIAL_MANUAL_FORM);
@@ -425,88 +431,137 @@ export default function Trabajadores() {
   };
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box sx={{ pb: 4 }}>
+      <MotionBox
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+        sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
+      >
         <Box>
-          <Typography variant="h5">Trabajadores</Typography>
+          <Typography variant="h5" fontWeight={800}>Trabajadores</Typography>
           <Typography variant="body2" color="text.secondary">Maestro de trabajadores de GMT</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-          <Button variant="contained" startIcon={<AddOutlinedIcon />} onClick={() => setManualOpen(true)}>
+          <Button 
+            variant="contained" 
+            startIcon={<AddOutlinedIcon />} 
+            onClick={() => setManualOpen(true)}
+            sx={{ borderRadius: 2.5, fontWeight: 700, textTransform: 'none', px: 3 }}
+          >
             Crear manualmente
           </Button>
-          <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={() => setImportOpen(true)}>
+          <Button 
+            variant="outlined" 
+            startIcon={<UploadFileOutlinedIcon />} 
+            onClick={() => setImportOpen(true)}
+            sx={{ borderRadius: 2.5, fontWeight: 600, textTransform: 'none' }}
+          >
             Importar CSV
           </Button>
         </Stack>
-      </Box>
+      </MotionBox>
 
       <Stack spacing={3}>
-        <Card>
+        <MotionCard
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+        >
           <CardContent>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between">
               <Box>
-                <Typography variant="h6" sx={{ mb: 0.75 }}>
+                <Typography variant="h6" sx={{ mb: 0.75 }} fontWeight={700}>
                   Gestión integral de trabajadores
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" fontWeight={500}>
                   Carga individual o masiva con validación automática de duplicados y asignación de supervisores.
                 </Typography>
               </Box>
             </Stack>
           </CardContent>
-        </Card>
+        </MotionCard>
 
-        <Card>
+        <MotionCard
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+        >
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ mb: 2 }} fontWeight={700}>
               Trabajadores cargados
             </Typography>
-            {loading ? <LinearProgress sx={{ mb: 2 }} /> : null}
-            {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
+            {loading ? <LinearProgress sx={{ mb: 2, borderRadius: 2 }} /> : null}
+            {error ? <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert> : null}
             
             {!loading && workers.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Typography color="text.secondary">No hay trabajadores registrados.</Typography>
               </Box>
             ) : (
-              <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: 3, borderColor: 'rgba(0,0,0,0.08)' }}>
                 <Table size="small">
-                  <TableHead>
+                  <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.01)' }}>
                     <TableRow>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>RUT</TableCell>
-                      <TableCell>Área</TableCell>
-                      <TableCell>Supervisor</TableCell>
-                      <TableCell>Solicitudes</TableCell>
-                      <TableCell>Estado</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>RUT</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Área</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Supervisor</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Solicitudes</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {workers.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        hover
-                        onClick={() => {
-                          setShowSensitive(false);
-                          setSelectedWorkerId(row.id);
-                        }}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell>{row.fullName}</TableCell>
-                        <TableCell>{row.rut}</TableCell>
-                        <TableCell>{row.centerCost}</TableCell>
-                        <TableCell>{row.supervisorName}</TableCell>
-                        <TableCell>{requestCountByWorker.get(row.id) ?? 0}</TableCell>
-                        <TableCell>{row.active ? 'Activo' : 'Inactivo'}</TableCell>
-                      </TableRow>
-                    ))}
+                    <AnimatePresence mode="wait">
+                      {workers.map((row, idx) => (
+                        <TableRow
+                          key={row.id}
+                          hover
+                          onClick={() => {
+                            setShowSensitive(false);
+                            setSelectedWorkerId(row.id);
+                          }}
+                          sx={{ 
+                            cursor: 'pointer',
+                            '&:hover': { bgcolor: 'rgba(0,0,0,0.02) !important' },
+                            transition: 'background-color 0.2s'
+                          }}
+                          component={motion.tr}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: idx * 0.03 }}
+                        >
+                          <TableCell sx={{ fontWeight: 600 }}>{row.fullName}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{row.rut}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{row.centerCost}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{row.supervisorName}</TableCell>
+                          <TableCell align="center">
+                            <Chip 
+                              label={requestCountByWorker.get(row.id) ?? 0} 
+                              size="small" 
+                              sx={{ borderRadius: 1.5, fontWeight: 700, minWidth: 32 }} 
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={row.active ? 'Activo' : 'Inactivo'} 
+                              color={row.active ? 'success' : 'default'}
+                              size="small"
+                              variant="outlined"
+                              sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: '0.7rem' }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </AnimatePresence>
                   </TableBody>
                 </Table>
               </Paper>
             )}
           </CardContent>
-        </Card>
+        </MotionCard>
       </Stack>
 
       <Dialog
@@ -517,62 +572,88 @@ export default function Trabajadores() {
         }}
         fullWidth
         maxWidth="md"
+        PaperProps={{ sx: { borderRadius: 4 } }}
       >
-        <DialogTitle>Detalle del trabajador</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800 }}>Detalle del trabajador</DialogTitle>
         <DialogContent>
           {selectedWorker ? (
             <Stack spacing={2} sx={{ pt: 1 }}>
               {!showSensitive ? (
-                <Alert severity="warning">
+                <Alert severity="warning" sx={{ borderRadius: 2, fontWeight: 500 }}>
                   Datos bancarios sensibles. Visibilidad restringida.
                 </Alert>
               ) : null}
 
-              <Paper variant="outlined" sx={{ p: 2 }}>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(0,0,0,0.01)', borderColor: 'rgba(0,0,0,0.05)' }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Nombre</Typography>
-                    <Typography variant="body1">{selectedWorker.fullName}</Typography>
-                    <Typography variant="caption" color="text.secondary">RUT</Typography>
-                    <Typography variant="body1" sx={sensitiveTextSx}>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>Nombre</Typography>
+                    <Typography variant="body1" fontWeight={700} sx={{ mb: 1 }}>{selectedWorker.fullName}</Typography>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>RUT</Typography>
+                    <Typography variant="body1" sx={{ ...sensitiveTextSx, fontWeight: 500, mb: 1 }}>
                       {showSensitive ? (selectedWorker.rut || '—') : maskSensitiveValue(selectedWorker.rut)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">Ingreso</Typography>
-                    <Typography variant="body1">{formatShortDate(selectedWorker.joinedAt)}</Typography>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>Ingreso</Typography>
+                    <Typography variant="body1" fontWeight={500}>{formatShortDate(selectedWorker.joinedAt)}</Typography>
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Acceso al sistema</Typography>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>Acceso al sistema</Typography>
                     {linkedUser ? (
                       <Stack spacing={1} sx={{ mt: 1 }}>
-                        <Chip label={`Con credenciales (${linkedUser.role})`} color="success" size="small" />
-                        <Button size="small" variant="outlined" onClick={() => handleSendCredentials('setup')}>
+                        <Chip 
+                          label={`Con credenciales (${linkedUser.role})`} 
+                          color="success" 
+                          size="small" 
+                          sx={{ borderRadius: 1.5, fontWeight: 700 }}
+                        />
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          onClick={() => handleSendCredentials('setup')}
+                          sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                        >
                           Reenviar credenciales
                         </Button>
-                        <Button size="small" variant="outlined" onClick={() => handleSendCredentials('reset')}>
-                          Enviar link cambio de contraseña
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          onClick={() => handleSendCredentials('reset')}
+                          sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600 }}
+                        >
+                          Cambio de contraseña
                         </Button>
                       </Stack>
                     ) : (
                       <Stack spacing={1} sx={{ mt: 1 }}>
-                        <Chip label="Sin credenciales" color="default" size="small" />
-                        <Button size="small" variant="contained" onClick={handleCreateCredentials}>
+                        <Chip 
+                          label="Sin credenciales" 
+                          color="default" 
+                          size="small" 
+                          sx={{ borderRadius: 1.5, fontWeight: 700 }}
+                        />
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          onClick={handleCreateCredentials}
+                          sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 700 }}
+                        >
                           Crear credenciales
                         </Button>
                       </Stack>
                     )}
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Correo corporativo</Typography>
-                    <Typography variant="body1">{selectedWorker.email}</Typography>
-                    <Typography variant="caption" color="text.secondary">Teléfono</Typography>
-                    <Typography variant="body1">{selectedWorker.phone || '—'}</Typography>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>Correo corporativo</Typography>
+                    <Typography variant="body1" fontWeight={500} sx={{ mb: 1 }}>{selectedWorker.email}</Typography>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600}>Teléfono</Typography>
+                    <Typography variant="body1" fontWeight={500}>{selectedWorker.phone || '—'}</Typography>
                   </Box>
                 </Stack>
               </Paper>
 
-              <Paper variant="outlined" sx={{ p: 2 }}>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(0,0,0,0.01)', borderColor: 'rgba(0,0,0,0.05)' }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2">
+                  <Typography variant="subtitle2" fontWeight={700}>
                     Cuenta bancaria
                   </Typography>
                   <IconButton
@@ -583,22 +664,26 @@ export default function Trabajadores() {
                     {showSensitive ? <VisibilityOffOutlinedIcon fontSize="small" /> : <VisibilityOutlinedIcon fontSize="small" />}
                   </IconButton>
                 </Stack>
-                <Typography variant="body2" color="text.secondary" sx={sensitiveTextSx}>
+                <Typography variant="body2" color="text.secondary" sx={{ ...sensitiveTextSx, fontWeight: 500 }}>
                   {showSensitive
                     ? `${selectedWorker.bankName || '—'} · ${selectedWorker.bankAccountType || '—'}`
                     : `${maskSensitiveValue(selectedWorker.bankName)} · ${maskSensitiveValue(selectedWorker.bankAccountType)}`}
                 </Typography>
-                <Typography variant="body1" sx={sensitiveTextSx}>
+                <Typography variant="h6" sx={{ ...sensitiveTextSx, fontWeight: 800 }}>
                   {showSensitive ? (selectedWorker.bankAccountNumber || '—') : maskSensitiveValue(selectedWorker.bankAccountNumber)}
                 </Typography>
               </Paper>
             </Stack>
           ) : null}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           {isAdmin ? (
             <>
-              <Button startIcon={<EditOutlinedIcon />} onClick={handleOpenEditDialog}>
+              <Button 
+                startIcon={<EditOutlinedIcon />} 
+                onClick={handleOpenEditDialog}
+                sx={{ fontWeight: 600 }}
+              >
                 Editar
               </Button>
               {selectedWorker?.active === false ? (
@@ -607,6 +692,7 @@ export default function Trabajadores() {
                   startIcon={<CheckCircleOutlineIcon />}
                   onClick={handleActivate}
                   disabled={activateLoading}
+                  sx={{ fontWeight: 700 }}
                 >
                   {activateLoading ? <CircularProgress size={24} color="inherit" /> : 'Activar'}
                 </Button>
@@ -615,31 +701,40 @@ export default function Trabajadores() {
                   color="error"
                   startIcon={<DeleteOutlineRoundedIcon />}
                   onClick={() => setDeleteConfirmOpen(true)}
+                  sx={{ fontWeight: 700 }}
                 >
                   Eliminar
                 </Button>
               )}
             </>
           ) : null}
+          <Box sx={{ flex: 1 }} />
           <Button
             onClick={() => {
               setShowSensitive(false);
               setSelectedWorkerId(null);
             }}
+            sx={{ fontWeight: 600 }}
           >
             Cerrar
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={editOpen} onClose={() => !editing && resetEditDialog()} fullWidth maxWidth="md">
-        <DialogTitle>Editar trabajador</DialogTitle>
+      <Dialog 
+        open={editOpen} 
+        onClose={() => !editing && resetEditDialog()} 
+        fullWidth 
+        maxWidth="md"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Editar trabajador</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ pt: 1 }}>
-            {editError ? <Alert severity="error">{editError}</Alert> : null}
+            {editError ? <Alert severity="error" sx={{ borderRadius: 2 }}>{editError}</Alert> : null}
             
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Información General</Typography>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }} fontWeight={700}>Información General</Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Nombre completo"
@@ -647,6 +742,8 @@ export default function Trabajadores() {
                   value={editForm.fullName}
                   onChange={(event) => setEditForm((current) => ({ ...current, fullName: event.target.value }))}
                   disabled={editing}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
                 <TextField
                   label="RUT"
@@ -655,6 +752,8 @@ export default function Trabajadores() {
                   value={editForm.rut}
                   onChange={(event) => setEditForm((current) => ({ ...current, rut: event.target.value }))}
                   disabled={editing}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
               </Stack>
             </Box>
@@ -667,6 +766,8 @@ export default function Trabajadores() {
                 value={editForm.email}
                 onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))}
                 disabled={editing}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               />
             </Stack>
 
@@ -678,6 +779,8 @@ export default function Trabajadores() {
                 value={editForm.centerCost}
                 onChange={(event) => setEditForm((current) => ({ ...current, centerCost: event.target.value }))}
                 disabled={editing}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               >
                 {costCenters.map((cc) => (
                   <MenuItem key={cc.id} value={cc.name}>
@@ -692,6 +795,8 @@ export default function Trabajadores() {
                 value={editForm.supervisorId}
                 onChange={(event) => setEditForm((current) => ({ ...current, supervisorId: event.target.value }))}
                 disabled={editing}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               >
                 {users.map((item) => (
                   <MenuItem key={item.id} value={item.id}>
@@ -704,7 +809,7 @@ export default function Trabajadores() {
             <Divider />
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Información Adicional</Typography>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }} fontWeight={700}>Información Adicional</Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Departamento / Área"
@@ -712,6 +817,8 @@ export default function Trabajadores() {
                   value={editForm.department}
                   onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
                   disabled={editing}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
                 <TextField
                   label="Teléfono"
@@ -719,6 +826,8 @@ export default function Trabajadores() {
                   value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                   disabled={editing}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
               </Stack>
             </Box>
@@ -726,7 +835,7 @@ export default function Trabajadores() {
             <Divider />
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Datos Bancarios</Typography>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }} fontWeight={700}>Datos Bancarios</Typography>
               <Stack spacing={2}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
@@ -735,6 +844,8 @@ export default function Trabajadores() {
                     value={editForm.bankName}
                     onChange={(e) => setEditForm({ ...editForm, bankName: e.target.value })}
                     disabled={editing}
+                    variant="outlined"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                   />
                   <TextField
                     select
@@ -743,6 +854,8 @@ export default function Trabajadores() {
                     value={editForm.bankAccountType}
                     onChange={(e) => setEditForm({ ...editForm, bankAccountType: e.target.value })}
                     disabled={editing}
+                    variant="outlined"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                   >
                     <MenuItem value="Cuenta Corriente">Cuenta Corriente</MenuItem>
                     <MenuItem value="Cuenta Vista">Cuenta Vista</MenuItem>
@@ -756,47 +869,62 @@ export default function Trabajadores() {
                   value={editForm.bankAccountNumber}
                   onChange={(e) => setEditForm({ ...editForm, bankAccountNumber: e.target.value })}
                   disabled={editing}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
               </Stack>
             </Box>
 
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={resetEditDialog} disabled={editing}>Cancelar</Button>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={resetEditDialog} disabled={editing} sx={{ fontWeight: 600 }}>Cancelar</Button>
           <Button
             variant="contained"
             onClick={handleEditSave}
             disabled={editing || !editForm.fullName || !editForm.rut}
+            sx={{ borderRadius: 3, fontWeight: 800, px: 3 }}
           >
             {editing ? <CircularProgress size={24} color="inherit" /> : 'Guardar cambios'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deleteConfirmOpen} onClose={() => !deleting && setDeleteConfirmOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Desactivar trabajador</DialogTitle>
+      <Dialog 
+        open={deleteConfirmOpen} 
+        onClose={() => !deleting && setDeleteConfirmOpen(false)} 
+        fullWidth 
+        maxWidth="xs"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Desactivar trabajador</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ pt: 1, fontWeight: 500 }}>
             ¿Seguro que quieres desactivar a <strong>{selectedWorker?.fullName || 'este trabajador'}</strong>? No se borrará el historial; solo quedará inactivo.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleting}>Atrás</Button>
-          <Button color="error" variant="contained" onClick={handleSoftDelete} disabled={deleting}>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleting} sx={{ fontWeight: 600 }}>Atrás</Button>
+          <Button color="error" variant="contained" onClick={handleSoftDelete} disabled={deleting} sx={{ borderRadius: 2, fontWeight: 700 }}>
             {deleting ? <CircularProgress size={24} color="inherit" /> : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={manualOpen} onClose={() => !creating && setManualOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Crear trabajador manualmente</DialogTitle>
+      <Dialog 
+        open={manualOpen} 
+        onClose={() => !creating && setManualOpen(false)} 
+        fullWidth 
+        maxWidth="md"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Crear trabajador manualmente</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ pt: 1 }}>
-            {manualError && <Alert severity="error">{manualError}</Alert>}
+            {manualError && <Alert severity="error" sx={{ borderRadius: 2 }}>{manualError}</Alert>}
             
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Información General</Typography>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }} fontWeight={700}>Información General</Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Nombre completo"
@@ -805,6 +933,8 @@ export default function Trabajadores() {
                   onChange={(e) => setManualForm({ ...manualForm, fullName: e.target.value })}
                   disabled={creating}
                   required
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
                 <TextField
                   label="RUT"
@@ -814,6 +944,8 @@ export default function Trabajadores() {
                   onChange={(e) => setManualForm({ ...manualForm, rut: e.target.value })}
                   disabled={creating}
                   required
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
               </Stack>
             </Box>
@@ -826,6 +958,8 @@ export default function Trabajadores() {
                 value={manualForm.email}
                 onChange={(e) => setManualForm({ ...manualForm, email: e.target.value })}
                 disabled={creating}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               />
               <TextField
                 select
@@ -834,6 +968,8 @@ export default function Trabajadores() {
                 value={manualForm.role || 'worker'}
                 onChange={(e) => setManualForm({ ...manualForm, role: e.target.value })}
                 disabled={creating}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               >
                 <MenuItem value="worker">Trabajador</MenuItem>
                 <MenuItem value="supervisor">Supervisor</MenuItem>
@@ -851,6 +987,8 @@ export default function Trabajadores() {
                 value={manualForm.centerCost}
                 onChange={(e) => setManualForm({ ...manualForm, centerCost: e.target.value })}
                 disabled={creating}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               >
                 {costCenters.map((cc) => (
                   <MenuItem key={cc.id} value={cc.name}>
@@ -865,6 +1003,8 @@ export default function Trabajadores() {
                 value={manualForm.supervisorId}
                 onChange={(e) => setManualForm({ ...manualForm, supervisorId: e.target.value })}
                 disabled={creating}
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               >
                 {users.map((u) => (
                   <MenuItem key={u.id} value={u.id}>
@@ -877,7 +1017,7 @@ export default function Trabajadores() {
             <Divider />
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Información Adicional</Typography>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }} fontWeight={700}>Información Adicional</Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="Departamento / Área"
@@ -885,6 +1025,8 @@ export default function Trabajadores() {
                   value={manualForm.department}
                   onChange={(e) => setManualForm({ ...manualForm, department: e.target.value })}
                   disabled={creating}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
                 <TextField
                   label="Teléfono"
@@ -892,6 +1034,8 @@ export default function Trabajadores() {
                   value={manualForm.phone}
                   onChange={(e) => setManualForm({ ...manualForm, phone: e.target.value })}
                   disabled={creating}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
               </Stack>
             </Box>
@@ -899,7 +1043,7 @@ export default function Trabajadores() {
             <Divider />
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Datos Bancarios</Typography>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }} fontWeight={700}>Datos Bancarios</Typography>
               <Stack spacing={2}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
@@ -908,6 +1052,8 @@ export default function Trabajadores() {
                     value={manualForm.bankName}
                     onChange={(e) => setManualForm({ ...manualForm, bankName: e.target.value })}
                     disabled={creating}
+                    variant="outlined"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                   />
                   <TextField
                     select
@@ -916,6 +1062,8 @@ export default function Trabajadores() {
                     value={manualForm.bankAccountType}
                     onChange={(e) => setManualForm({ ...manualForm, bankAccountType: e.target.value })}
                     disabled={creating}
+                    variant="outlined"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                   >
                     <MenuItem value="Cuenta Corriente">Cuenta Corriente</MenuItem>
                     <MenuItem value="Cuenta Vista">Cuenta Vista</MenuItem>
@@ -929,123 +1077,169 @@ export default function Trabajadores() {
                   value={manualForm.bankAccountNumber}
                   onChange={(e) => setManualForm({ ...manualForm, bankAccountNumber: e.target.value })}
                   disabled={creating}
+                  variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
               </Stack>
             </Box>
 
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setManualOpen(false)} disabled={creating}>Cancelar</Button>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setManualOpen(false)} disabled={creating} sx={{ fontWeight: 600 }}>Cancelar</Button>
           <Button
             variant="contained"
             onClick={handleManualSave}
             disabled={creating || !manualForm.fullName || !manualForm.rut}
+            sx={{ borderRadius: 3, fontWeight: 800, px: 3 }}
           >
             {creating ? <CircularProgress size={24} color="inherit" /> : 'Guardar trabajador'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={importOpen} onClose={resetImportDialog} fullWidth maxWidth="md">
-        <DialogTitle>Importar trabajadores por CSV</DialogTitle>
+      <Dialog 
+        open={importOpen} 
+        onClose={resetImportDialog} 
+        fullWidth 
+        maxWidth="md"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Importar trabajadores por CSV</DialogTitle>
         <DialogContent>
           <Stepper activeStep={activeStep} sx={{ py: 1.5 }}>
             {CSV_STEPS.map((label) => (
               <Step key={label}>
-                <StepLabel>{label}</StepLabel>
+                <StepLabel sx={{ '& .MuiStepLabel-label': { fontWeight: 600, fontSize: '0.8rem' } }}>{label}</StepLabel>
               </Step>
             ))}
           </Stepper>
 
-          {activeStep === 0 && (
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Descarga la plantilla base antes de preparar el archivo definitivo.
-              </Typography>
-              <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={handleDownloadTemplate}>
-                Descargar plantilla
-              </Button>
-            </Stack>
-          )}
+          <Box sx={{ minHeight: 200, mt: 2 }}>
+            <AnimatePresence mode="wait">
+              {activeStep === 0 && (
+                <MotionBox
+                  key="step0"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  spacing={2}
+                >
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                    Descarga la plantilla base antes de preparar el archivo definitivo.
+                  </Typography>
+                  <Button 
+                    variant="outlined" 
+                    startIcon={<UploadFileOutlinedIcon />} 
+                    onClick={handleDownloadTemplate}
+                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+                  >
+                    Descargar plantilla
+                  </Button>
+                </MotionBox>
+              )}
 
-          {activeStep === 1 && (
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Sube el archivo preparado. El siguiente paso mostrará una tabla de validación previa.
-              </Typography>
-              <Button component="label" variant="contained">
-                Seleccionar archivo CSV
-                <input hidden type="file" accept=".csv" onChange={handleFileChange} />
-              </Button>
-              <Typography variant="caption" color="text.secondary">
-                {selectedFileName || 'Sin archivo seleccionado'}
-              </Typography>
-            </Stack>
-          )}
+              {activeStep === 1 && (
+                <MotionBox
+                  key="step1"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  spacing={2}
+                >
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                    Sube el archivo preparado. El siguiente paso mostrará una tabla de validación previa.
+                  </Typography>
+                  <Button component="label" variant="contained" sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}>
+                    Seleccionar archivo CSV
+                    <input hidden type="file" accept=".csv" onChange={handleFileChange} />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, fontWeight: 600 }}>
+                    {selectedFileName || 'Sin archivo seleccionado'}
+                  </Typography>
+                </MotionBox>
+              )}
 
-          {activeStep === 2 && (
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                {importSummary}
-              </Typography>
-              {importError && <Alert severity="error">{importError}</Alert>}
-              <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>RUT</TableCell>
-                      <TableCell>Nombre</TableCell>
-                      <TableCell>Centro de costo</TableCell>
-                      <TableCell>Estado</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {parsedRows.map((row, index) => (
-                      <TableRow key={index} sx={{ bgcolor: row.error ? 'error.light' : 'inherit' }}>
-                        <TableCell>{row.rut}</TableCell>
-                        <TableCell>{row.nombre_completo}</TableCell>
-                        <TableCell>{row.centro_costo}</TableCell>
-                        <TableCell>
-                          {row.error ? (
-                            <Chip
-                              icon={<ErrorOutlineIcon />}
-                              label={row.error}
-                              color="error"
-                              size="small"
-                              variant="outlined"
-                            />
-                          ) : (
-                            <Chip label="Válido" color="success" size="small" variant="outlined" />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Paper>
-            </Stack>
-          )}
+              {activeStep === 2 && (
+                <MotionBox
+                  key="step2"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  spacing={2}
+                >
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
+                    {importSummary}
+                  </Typography>
+                  {importError && <Alert severity="error" sx={{ borderRadius: 2, mb: 2 }}>{importError}</Alert>}
+                  <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: 3, borderColor: 'rgba(0,0,0,0.08)' }}>
+                    <Table size="small">
+                      <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.01)' }}>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>RUT</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Centro de costo</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {parsedRows.map((row, index) => (
+                          <TableRow key={index} sx={{ bgcolor: row.error ? 'error.light' : 'inherit' }}>
+                            <TableCell sx={{ fontWeight: 500 }}>{row.rut}</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>{row.nombre_completo}</TableCell>
+                            <TableCell sx={{ fontWeight: 500 }}>{row.centro_costo}</TableCell>
+                            <TableCell>
+                              {row.error ? (
+                                <Chip
+                                  icon={<ErrorOutlineIcon />}
+                                  label={row.error}
+                                  color="error"
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ borderRadius: 1.5, fontWeight: 700 }}
+                                />
+                              ) : (
+                                <Chip label="Válido" color="success" size="small" variant="outlined" sx={{ borderRadius: 1.5, fontWeight: 700 }} />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Paper>
+                </MotionBox>
+              )}
 
-          {activeStep === 3 && (
-            <Stack spacing={2} sx={{ pt: 2, alignItems: 'center', textAlign: 'center' }}>
-              <Typography variant="h6">Importación completada</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Los trabajadores válidos han sido incorporados al maestro exitosamente.
-              </Typography>
-              <Button variant="contained" onClick={resetImportDialog}>Entendido</Button>
-            </Stack>
-          )}
+              {activeStep === 3 && (
+                <MotionBox
+                  key="step3"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  sx={{ py: 4, alignItems: 'center', textAlign: 'center' }}
+                >
+                  <CheckCircleOutlineIcon color="success" sx={{ fontSize: 64, mb: 2 }} />
+                  <Typography variant="h6" fontWeight={800}>Importación completada</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3, fontWeight: 500 }}>
+                    Los trabajadores válidos han sido incorporados al maestro exitosamente.
+                  </Typography>
+                  <Button variant="contained" onClick={resetImportDialog} sx={{ borderRadius: 2, fontWeight: 700, px: 4 }}>Entendido</Button>
+                </MotionBox>
+              )}
+            </AnimatePresence>
+          </Box>
         </DialogContent>
-        <DialogActions sx={{ visibility: activeStep === 3 ? 'hidden' : 'visible' }}>
-          <Button onClick={resetImportDialog} disabled={importing}>Cerrar</Button>
-          <Button onClick={previousStep} disabled={activeStep === 0 || importing}>
+        <DialogActions sx={{ px: 3, pb: 3, visibility: activeStep === 3 ? 'hidden' : 'visible' }}>
+          <Button onClick={resetImportDialog} disabled={importing} sx={{ fontWeight: 600 }}>Cerrar</Button>
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={previousStep} disabled={activeStep === 0 || importing} sx={{ fontWeight: 600 }}>
             Atrás
           </Button>
           <Button
             variant="contained"
             onClick={nextStep}
             disabled={(activeStep === 1 && !selectedFileName) || importing || (activeStep === 2 && parsedRows.filter(r => !r.error).length === 0)}
+            sx={{ borderRadius: 2, fontWeight: 800, px: 3 }}
           >
             {importing ? <CircularProgress size={24} color="inherit" /> : activeStep === 2 ? 'Importar válidos' : 'Siguiente'}
           </Button>

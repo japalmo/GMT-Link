@@ -5,6 +5,7 @@ import {
   List, ListItemButton, ListItemIcon, ListItemText,
   Divider, Avatar, Tooltip, useMediaQuery, useTheme, Menu, MenuItem, Breadcrumbs, Link,
 } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
@@ -20,7 +21,7 @@ import logoMid from '../assets/branding/logo-mid.png';
 import logoCompact from '../assets/branding/logo-compact.png';
 import { useAuth } from '../contexts/AuthContext';
 
-const DRAWER_WIDTH = 240;
+const DRAWER_WIDTH = 280;
 const COLLAPSED_DRAWER_WIDTH = 88;
 
 const NAV_ITEMS = [
@@ -32,7 +33,8 @@ const NAV_ITEMS = [
 ];
 
 const WORKER_NAV_ITEMS = [
-  { label: 'Reembolsos', path: '/mis-solicitudes', icon: <ReceiptLongOutlinedIcon /> },
+  { label: 'Dashboard', path: '/', icon: <DashboardOutlinedIcon /> },
+  { label: 'Mis Reembolsos', path: '/mis-solicitudes', icon: <ReceiptLongOutlinedIcon /> },
 ];
 
 export default function AppShell() {
@@ -131,7 +133,7 @@ export default function AppShell() {
   );
 
   const drawerContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'background.paper' }}>
       <Box
         sx={{
           px: isCollapsed && !isMobile ? 0.75 : 1.75,
@@ -142,9 +144,9 @@ export default function AppShell() {
         {renderBrandLogo()}
       </Box>
 
-      <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)' }} />
+      <Divider sx={{ borderColor: 'rgba(0,0,0,0.04)', mx: 2 }} />
 
-      <List sx={{ flex: 1, pt: 1 }}>
+      <List sx={{ flex: 1, pt: 2, px: 1.5 }}>
         {navItems.map(({ label, path, icon }) => (
           <Tooltip key={path} title={isCollapsed && !isMobile ? label : ''} placement="right">
             <ListItemButton
@@ -152,10 +154,20 @@ export default function AppShell() {
               onClick={() => handleNav(path)}
               sx={{
                 justifyContent: isCollapsed && !isMobile ? 'center' : 'flex-start',
-                px: isCollapsed && !isMobile ? 1.25 : 1.75,
-                transition: theme.transitions.create(['padding', 'justify-content'], {
-                  duration: drawerTransitionMs,
-                }),
+                px: isCollapsed && !isMobile ? 1.25 : 2,
+                borderRadius: 2.5,
+                mb: 0.5,
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&.Mui-selected': {
+                  bgcolor: `${theme.palette.primary.main}08`,
+                  color: 'primary.main',
+                  '& .MuiListItemIcon-root': { color: 'primary.main' },
+                  '&:hover': { bgcolor: `${theme.palette.primary.main}12` },
+                },
+                '&:hover': {
+                  bgcolor: 'rgba(0,0,0,0.02)',
+                  transform: isCollapsed ? 'none' : 'translateX(4px)',
+                }
               }}
             >
               <ListItemIcon
@@ -163,6 +175,7 @@ export default function AppShell() {
                   minWidth: isCollapsed && !isMobile ? 'auto' : 40,
                   mr: isCollapsed && !isMobile ? 0 : 1,
                   justifyContent: 'center',
+                  color: pathname === path || (path !== '/' && pathname.startsWith(path)) ? 'primary.main' : 'text.secondary',
                   transition: theme.transitions.create(['min-width', 'margin'], {
                     duration: drawerTransitionMs,
                   }),
@@ -170,16 +183,51 @@ export default function AppShell() {
               >
                 {icon}
               </ListItemIcon>
-              {!isCollapsed || isMobile ? <ListItemText primary={label} /> : null}
+              {!isCollapsed || isMobile ? (
+                <ListItemText 
+                  primary={label} 
+                  primaryTypographyProps={{ 
+                    fontWeight: pathname === path || (path !== '/' && pathname.startsWith(path)) ? 700 : 600, 
+                    fontSize: '0.875rem' 
+                  }} 
+                />
+              ) : null}
             </ListItemButton>
           </Tooltip>
         ))}
       </List>
+
+      <Box sx={{ p: 2, mt: 'auto' }}>
+        <Paper 
+          variant="outlined" 
+          sx={{ 
+            p: 1.5, 
+            borderRadius: 3, 
+            display: isCollapsed && !isMobile ? 'none' : 'flex', 
+            alignItems: 'center', 
+            gap: 1.5,
+            borderColor: 'rgba(0,0,0,0.05)',
+            bgcolor: 'rgba(0,0,0,0.01)'
+          }}
+        >
+          <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.main', fontWeight: 800 }}>
+            {avatarLetter}
+          </Avatar>
+          <Box sx={{ overflow: 'hidden' }}>
+            <Typography variant="caption" fontWeight={700} display="block" noWrap sx={{ lineHeight: 1 }}>
+              {displayName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'capitalize' }}>
+              {roleLabel}
+            </Typography>
+          </Box>
+        </Paper>
+      </Box>
     </Box>
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <Box
         component="nav"
         sx={{
@@ -198,6 +246,7 @@ export default function AppShell() {
               width: activeDrawerWidth,
               boxSizing: 'border-box',
               overflowX: 'hidden',
+              borderRight: '1px solid rgba(0,0,0,0.05)',
               transition: theme.transitions.create('width', { duration: drawerTransitionMs }),
             },
           }}
@@ -207,8 +256,17 @@ export default function AppShell() {
       </Box>
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <AppBar position="sticky" elevation={0}>
-          <Toolbar>
+        <AppBar 
+          position="sticky" 
+          elevation={0} 
+          sx={{ 
+            bgcolor: 'rgba(255,255,255,0.7)', 
+            backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid rgba(0,0,0,0.04)',
+            color: 'text.primary'
+          }}
+        >
+          <Toolbar sx={{ px: { xs: 2, md: 3 } }}>
             <IconButton
               edge="start"
               onClick={() => {
@@ -218,20 +276,29 @@ export default function AppShell() {
                   setIsCollapsed((current) => !current);
                 }
               }}
-              sx={{ mr: 1 }}
+              sx={{ mr: 1.5, color: 'text.secondary' }}
             >
               {isMobile ? <MenuIcon /> : (isCollapsed ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />)}
             </IconButton>
             <Box sx={{ flex: 1 }}>
-              <Breadcrumbs aria-label="breadcrumb">
+              <Breadcrumbs 
+                aria-label="breadcrumb"
+                sx={{ 
+                  '& .MuiBreadcrumbs-li': { fontWeight: 600, fontSize: '0.85rem' },
+                  '& .MuiBreadcrumbs-separator': { mx: 0.5, color: 'text.disabled' }
+                }}
+              >
                 {breadcrumbs.map((item, index) => (
                   <Link
                     key={item.path}
                     component={RouterLink}
                     to={item.path}
-                    underline={index === breadcrumbs.length - 1 ? 'none' : 'hover'}
-                    color={index === breadcrumbs.length - 1 ? 'text.primary' : 'inherit'}
-                    sx={{ fontSize: '0.875rem' }}
+                    underline="none"
+                    color={index === breadcrumbs.length - 1 ? 'text.primary' : 'text.secondary'}
+                    sx={{ 
+                      transition: 'color 0.2s',
+                      '&:hover': { color: 'primary.main' }
+                    }}
                   >
                     {item.label}
                   </Link>
@@ -241,7 +308,17 @@ export default function AppShell() {
             <Tooltip title="Cuenta">
               <Avatar
                 onClick={handleOpenAccountMenu}
-                sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: 14, cursor: 'pointer' }}
+                sx={{ 
+                  width: 36, 
+                  height: 36, 
+                  bgcolor: 'primary.main', 
+                  fontSize: 14, 
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  transition: 'transform 0.2s',
+                  '&:hover': { transform: 'scale(1.05)' }
+                }}
               >
                 {avatarLetter}
               </Avatar>
@@ -256,52 +333,59 @@ export default function AppShell() {
                 paper: {
                   sx: {
                     width: 280,
-                    mt: 1.25,
-                    borderRadius: 3,
-                    bgcolor: 'background.paper',
-                    color: 'text.primary',
-                    '& .MuiListItemText-primary': {
-                      color: 'text.primary',
-                    },
-                    '& .MuiListItemText-secondary': {
-                      color: 'text.secondary',
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: 'text.secondary',
-                    },
-                    '& .MuiMenuItem-root:hover': {
-                      bgcolor: 'rgba(15, 23, 42, 0.06)',
-                    },
+                    mt: 1.5,
+                    borderRadius: 4,
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+                    p: 1,
+                    '& .MuiMenuItem-root': {
+                      borderRadius: 2,
+                      py: 1,
+                      mb: 0.5,
+                      gap: 1.5
+                    }
                   },
                 },
               }}
             >
               <Box sx={{ px: 2, py: 1.5 }}>
-                <Typography variant="subtitle2" fontWeight={700} color="text.primary">{displayName}</Typography>
-                <Typography variant="body2" color="text.secondary">{user?.email || profile?.email}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                  {roleLabel}
-                </Typography>
+                <Typography variant="subtitle2" fontWeight={800} color="text.primary">{displayName}</Typography>
+                <Typography variant="body2" color="text.secondary" fontWeight={500}>{user?.email || profile?.email}</Typography>
+                <Chip 
+                  label={roleLabel} 
+                  size="small" 
+                  color="primary" 
+                  variant="outlined" 
+                  sx={{ mt: 1, height: 20, fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase' }} 
+                />
               </Box>
-              <Divider />
+              <Divider sx={{ my: 1, opacity: 0.6 }} />
               <MenuItem onClick={handleOpenProfile}>
-                <ListItemIcon><PersonOutlineRoundedIcon fontSize="small" /></ListItemIcon>
+                <ListItemIcon sx={{ color: 'text.secondary', minWidth: '0 !important' }}><PersonOutlineRoundedIcon fontSize="small" /></ListItemIcon>
                 <ListItemText
-                  primary="Ver perfil"
-                  primaryTypographyProps={{ fontWeight: 600 }}
-                  secondary="Editar datos y cambio de contraseña"
+                  primary="Mi Perfil"
+                  primaryTypographyProps={{ fontWeight: 700, fontSize: '0.9rem' }}
                 />
               </MenuItem>
-              <MenuItem onClick={handleLogout}>
-                <ListItemIcon><LogoutRoundedIcon fontSize="small" /></ListItemIcon>
-                <ListItemText primary="Cerrar Sesión" />
+              <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+                <ListItemIcon sx={{ color: 'inherit', minWidth: '0 !important' }}><LogoutRoundedIcon fontSize="small" /></ListItemIcon>
+                <ListItemText primary="Cerrar Sesión" primaryTypographyProps={{ fontWeight: 700, fontSize: '0.9rem' }} />
               </MenuItem>
             </Menu>
           </Toolbar>
         </AppBar>
 
-        <Box component="main" sx={{ flex: 1, p: { xs: 2, md: 3 }, bgcolor: 'background.default' }}>
-          <Outlet />
+        <Box component="main" sx={{ flex: 1, p: { xs: 2, md: 4 }, bgcolor: 'background.default', overflow: 'hidden' }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </Box>
       </Box>
     </Box>

@@ -77,21 +77,21 @@ const KPICard = ({ label, value, icon, color, delay }) => (
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.5, delay }}
-    whileHover={{ y: -5, boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}
-    sx={{ height: '100%' }}
+    whileHover={{ y: -5, boxShadow: '0 12px 24px rgba(0,0,0,0.06)' }}
+    sx={{ height: '100%', borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
   >
-    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 3 }}>
       <Box sx={{
-        p: 1.5, borderRadius: 3, bgcolor: `${color}18`,
+        p: 2, borderRadius: 3, bgcolor: `${color}12`,
         color, display: 'flex',
       }}>
         {icon}
       </Box>
       <Box>
-        <Typography variant="h5" fontWeight={800}>
+        <Typography variant="h4" fontWeight={900} color="text.primary">
           <AnimatedCounter value={value} />
         </Typography>
-        <Typography variant="caption" color="text.secondary" fontWeight={500}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
           {label}
         </Typography>
       </Box>
@@ -100,20 +100,21 @@ const KPICard = ({ label, value, icon, color, delay }) => (
 );
 
 const KanbanColumn = ({ title, items, color }) => (
-  <Box sx={{ flex: 1, minWidth: 280, bgcolor: 'rgba(0,0,0,0.01)', borderRadius: 3, p: 2 }}>
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
-      <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+  <Box sx={{ flex: 1, minWidth: 300, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 4, p: 2.5 }}>
+    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
+      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: color, boxShadow: `0 0 10px ${color}40` }} />
+      <Typography variant="subtitle2" fontWeight={800} color="text.primary" sx={{ textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.75rem' }}>
         {title} ({items.length})
       </Typography>
     </Stack>
-    <Stack spacing={1.5}>
-      <AnimatePresence>
+    <Stack spacing={2}>
+      <AnimatePresence mode="popLayout">
         {items.map((item, idx) => (
           <motion.div
             key={item.id}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
             transition={{ delay: idx * 0.05 }}
             layout
           >
@@ -121,21 +122,26 @@ const KanbanColumn = ({ title, items, color }) => (
               elevation={0}
               sx={{
                 p: 2,
-                borderRadius: 2,
-                border: '1px solid rgba(0,0,0,0.05)',
+                borderRadius: 3,
+                border: '1px solid rgba(0,0,0,0.04)',
+                bgcolor: 'background.paper',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
                 '&:hover': {
                   borderColor: 'primary.light',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                  transform: 'scale(1.02)',
+                  boxShadow: '0 8px 20px rgba(0,0,0,0.06)',
+                  transform: 'translateY(-2px)',
                 },
-                transition: 'all 0.2s ease-in-out',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 cursor: 'pointer',
               }}
             >
-              <Typography variant="subtitle2" fontWeight={700} noWrap>{item.workerName}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{item.merchantName || 'Sin comercio'}</Typography>
+              <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ mb: 0.5 }}>{item.workerName}</Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight={500} display="block" sx={{ mb: 1.5 }}>
+                {item.merchantName || 'Sin comercio'}
+              </Typography>
+              <Divider sx={{ mb: 1.5, opacity: 0.5 }} />
               <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" color="text.disabled" fontWeight={600}>
                   {item.submittedAt ? new Date(item.submittedAt.seconds * 1000).toLocaleDateString() : 'N/A'}
                 </Typography>
                 <Typography variant="subtitle2" fontWeight={800} color="primary.main">
@@ -147,9 +153,11 @@ const KanbanColumn = ({ title, items, color }) => (
         ))}
       </AnimatePresence>
       {items.length === 0 && (
-        <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center', py: 4 }}>
-          No hay solicitudes
-        </Typography>
+        <Box sx={{ py: 6, textAlign: 'center', opacity: 0.5 }}>
+          <Typography variant="caption" color="text.disabled" fontWeight={600}>
+            No hay solicitudes
+          </Typography>
+        </Box>
       )}
     </Stack>
   </Box>

@@ -25,7 +25,9 @@ import {
   TableRow,
   TableCell,
   Tooltip,
+  useTheme,
 } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -47,6 +49,9 @@ import {
 import { formatCurrencyCLP, toDateValue } from '../lib/formatters';
 import { storage } from '../lib/firebase';
 import { extractReceiptData, hasLowConfidenceReceiptData } from '../lib/ocrService';
+
+const MotionBox = motion(Box);
+const MotionCard = motion(Card);
 
 const STEPS = ['Información', 'Carga de Gastos', 'Revisión'];
 const CATEGORIES = ['Bencina', 'Peajes', 'Alimentación', 'Alojamiento', 'Otros'];
@@ -92,6 +97,7 @@ function createEmptyReceipt(groupId = '') {
 }
 
 export default function SolicitarGastos() {
+  const theme = useTheme();
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -338,230 +344,336 @@ export default function SolicitarGastos() {
   }
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', py: 2 }}>
-      <Typography variant="h5" fontWeight={700} sx={{ mb: 3 }}>
-        Nueva Solicitud de Reembolso
-      </Typography>
+    <Box sx={{ maxWidth: 800, mx: 'auto', py: 2, pb: 6 }}>
+      <MotionBox
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Typography variant="h5" fontWeight={800} sx={{ mb: 3 }}>
+          Nueva Solicitud de Reembolso
+        </Typography>
+      </MotionBox>
 
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-        {STEPS.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      <MotionBox
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+      >
+        <Stepper 
+          activeStep={activeStep} 
+          sx={{ 
+            mb: 4,
+            '& .MuiStepLabel-label': { fontWeight: 600, fontSize: '0.85rem' },
+            '& .MuiStepIcon-root.Mui-active': { color: 'primary.main' },
+            '& .MuiStepIcon-root.Mui-completed': { color: 'success.main' }
+          }}
+        >
+          {STEPS.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      </MotionBox>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      <AnimatePresence mode="wait">
+        {error && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <Card sx={{ borderRadius: 3, mb: 4 }}>
-        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-          {activeStep === 0 && (
-            <Stack spacing={3}>
-              <Typography variant="h6" fontWeight={700}>Información del Solicitante</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Nombre" fullWidth disabled value={profile?.displayName || ''} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="RUT" fullWidth disabled value={profile?.rut || ''} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Centro de Costo" fullWidth disabled value={profile?.centerCosts?.[0] || 'N/A'} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Email" fullWidth disabled value={profile?.email || ''} />
-                </Grid>
-              </Grid>
-              <Alert severity="info">
-                Los reembolsos se procesan según la información de tu perfil. Si hay errores, contacta a RRHH.
-              </Alert>
-              {isInternalUser ? (
-                <Alert severity="info">
-                  Tu perfil no tiene `workerId`. Esta solicitud se enviará directamente al confirmar y no tendrá borrador ni autoguardado.
-                </Alert>
-              ) : null}
-            </Stack>
-          )}
-
-          {activeStep === 1 && (
-            <Stack spacing={3}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" fontWeight={700}>Detalle de Gastos</Typography>
-                <Chip label={`ID: ${groupId}`} size="small" variant="outlined" />
-              </Box>
-
-              {receipts.map((receipt) => (
-                <Card key={receipt.id} variant="outlined" sx={{ borderRadius: 2, p: 2, position: 'relative' }}>
-                  {receipts.length > 1 && (
-                    <IconButton
-                      size="small"
-                      color="error"
-                      sx={{ position: 'absolute', top: 8, right: 8 }}
-                      onClick={() => removeReceipt(receipt.id)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={4}>
-                      <Box
-                        component="label"
-                        sx={{
-                          height: '100%',
-                          minHeight: 140,
-                          border: '2px dashed',
-                          borderColor: receipt.fileUrl ? 'success.main' : 'primary.light',
-                          borderRadius: 2,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: receipt.fileUrl ? 'rgba(16,185,129,0.04)' : 'rgba(37,99,235,0.02)',
-                          cursor: 'pointer',
-                          p: 1,
-                        }}
-                      >
-                        <input
-                          type="file"
-                          hidden
-                          accept="image/*,.pdf"
-                          onChange={(e) => handleFileChange(receipt.id, e.target.files?.[0])}
-                        />
-                        {receipt.aiProcessing ? (
-                          <CircularProgress size={30} />
-                        ) : receipt.previewUrl ? (
-                          <>
-                            <Box
-                              component="img"
-                              src={receipt.previewUrl}
-                              alt="preview"
-                              sx={{
-                                width: '100%',
-                                height: 100,
-                                objectFit: 'cover',
-                                borderRadius: 1,
-                                mb: 0.5,
-                              }}
-                            />
-                            <Typography variant="caption">Cambiar archivo</Typography>
-                          </>
-                        ) : receipt.fileUrl ? (
-                          <>
-                            <CheckCircleOutlinedIcon color="success" />
-                            <Typography variant="caption" sx={{ mt: 1 }}>Cambiar archivo</Typography>
-                          </>
-                        ) : (
-                          <>
-                            <UploadFileIcon color="primary" />
-                            <Typography variant="caption" sx={{ mt: 1 }}>Subir boleta</Typography>
-                          </>
-                        )}
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={8}>
-                      <Stack spacing={2}>
-                        <Grid container spacing={1}>
-                          <Grid item xs={12} sm={4}>
-                            <TextField
-                              select
-                              label="Tipo"
-                              size="small"
-                              fullWidth
-                              value={receipt.documentType}
-                              onChange={(e) => updateReceipt(receipt.id, { documentType: e.target.value })}
-                            >
-                              <MenuItem value="boleta">Boleta</MenuItem>
-                              <MenuItem value="factura">Factura</MenuItem>
-                            </TextField>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <TextField
-                              select
-                              label="Categoría"
-                              size="small"
-                              fullWidth
-                              value={receipt.category}
-                              onChange={(e) => updateReceipt(receipt.id, { category: e.target.value })}
-                            >
-                              {CATEGORIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                            </TextField>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <TextField
-                              label="Monto"
-                              size="small"
-                              fullWidth
-                              type="number"
-                              value={receipt.amount}
-                              onChange={(e) => updateReceipt(receipt.id, { amount: e.target.value })}
-                            />
-                          </Grid>
-                        </Grid>
-                        <TextField
-                          label="Descripción"
-                          size="small"
-                          fullWidth
-                          value={receipt.concept}
-                          onChange={(e) => updateReceipt(receipt.id, { concept: e.target.value })}
-                        />
-                      </Stack>
-                    </Grid>
-                  </Grid>
-                  {receipt.aiWarning && (
-                    <Alert severity="warning" sx={{ mt: 2 }}>
-                      {receipt.aiWarning}
-                    </Alert>
-                  )}
-                  {receipt.aiError && <Typography variant="caption" color="error">{receipt.aiError}</Typography>}
-                </Card>
-              ))}
-
-              <Button
-                variant="outlined"
-                fullWidth
-                startIcon={<AddIcon />}
-                onClick={addReceipt}
-                disabled={isBusy}
-                sx={{ borderStyle: 'dashed', py: 1.5 }}
+      <MotionCard 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+        sx={{ borderRadius: 4, mb: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
+      >
+        <CardContent sx={{ p: { xs: 2, md: 4 } }}>
+          <AnimatePresence mode="wait">
+            {activeStep === 0 && (
+              <MotionBox
+                key="step0"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.4 }}
+                sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
               >
-                Agregar otro ítem
-              </Button>
-            </Stack>
-          )}
+                <Typography variant="h6" fontWeight={700}>Información del Solicitante</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField 
+                      label="Nombre" 
+                      fullWidth 
+                      disabled 
+                      value={profile?.displayName || ''} 
+                      variant="outlined"
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField 
+                      label="RUT" 
+                      fullWidth 
+                      disabled 
+                      value={profile?.rut || ''} 
+                      variant="outlined"
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField 
+                      label="Centro de Costo" 
+                      fullWidth 
+                      disabled 
+                      value={profile?.centerCosts?.[0] || 'N/A'} 
+                      variant="outlined"
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField 
+                      label="Email" 
+                      fullWidth 
+                      disabled 
+                      value={profile?.email || ''} 
+                      variant="outlined"
+                      sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                    />
+                  </Grid>
+                </Grid>
+                <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  Los reembolsos se procesan según la información de tu perfil. Si hay errores, contacta a RRHH.
+                </Alert>
+                {isInternalUser ? (
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    Tu perfil no tiene `workerId`. Esta solicitud se enviará directamente al confirmar y no tendrá borrador ni autoguardado.
+                  </Alert>
+                ) : null}
+              </MotionBox>
+            )}
 
-          {activeStep === 2 && (
-            <Stack spacing={3}>
-              <Typography variant="h6" fontWeight={700}>Revisión Final</Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Descripción</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>Monto</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {receipts.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>{r.concept || r.category || 'Sin descripción'}</TableCell>
-                      <TableCell align="right">{formatCurrencyCLP(r.amount)}</TableCell>
-                    </TableRow>
+            {activeStep === 1 && (
+              <MotionBox
+                key="step1"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.4 }}
+                sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="h6" fontWeight={700}>Detalle de Gastos</Typography>
+                  <Chip label={`ID: ${groupId}`} size="small" variant="outlined" sx={{ borderRadius: 1.5, fontWeight: 700 }} />
+                </Box>
+
+                <Stack spacing={2}>
+                  {receipts.map((receipt, idx) => (
+                    <MotionCard 
+                      key={receipt.id} 
+                      variant="outlined" 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      sx={{ borderRadius: 3, p: 2, position: 'relative', border: '1px solid rgba(0,0,0,0.08)' }}
+                    >
+                      {receipts.length > 1 && (
+                        <IconButton
+                          size="small"
+                          color="error"
+                          sx={{ position: 'absolute', top: 8, right: 8 }}
+                          onClick={() => removeReceipt(receipt.id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={4}>
+                          <Box
+                            component="label"
+                            sx={{
+                              height: '100%',
+                              minHeight: 140,
+                              border: '2px dashed',
+                              borderColor: receipt.fileUrl ? 'success.main' : 'primary.light',
+                              borderRadius: 3,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              bgcolor: receipt.fileUrl ? `${theme.palette.success.main}08` : `${theme.palette.primary.main}04`,
+                              cursor: 'pointer',
+                              p: 1,
+                              transition: 'all 0.2s',
+                              '&:hover': {
+                                bgcolor: receipt.fileUrl ? `${theme.palette.success.main}12` : `${theme.palette.primary.main}08`,
+                                borderColor: 'primary.main',
+                              }
+                            }}
+                          >
+                            <input
+                              type="file"
+                              hidden
+                              accept="image/*,.pdf"
+                              onChange={(e) => handleFileChange(receipt.id, e.target.files?.[0])}
+                            />
+                            {receipt.aiProcessing ? (
+                              <CircularProgress size={30} />
+                            ) : receipt.previewUrl ? (
+                              <>
+                                <Box
+                                  component="img"
+                                  src={receipt.previewUrl}
+                                  alt="preview"
+                                  sx={{
+                                    width: '100%',
+                                    height: 100,
+                                    objectFit: 'cover',
+                                    borderRadius: 2,
+                                    mb: 0.5,
+                                  }}
+                                />
+                                <Typography variant="caption" fontWeight={600}>Cambiar archivo</Typography>
+                              </>
+                            ) : receipt.fileUrl ? (
+                              <>
+                                <CheckCircleOutlinedIcon color="success" />
+                                <Typography variant="caption" sx={{ mt: 1 }} fontWeight={600}>Cambiar archivo</Typography>
+                              </>
+                            ) : (
+                              <>
+                                <UploadFileIcon color="primary" />
+                                <Typography variant="caption" sx={{ mt: 1 }} fontWeight={600}>Subir boleta</Typography>
+                              </>
+                            )}
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} md={8}>
+                          <Stack spacing={2}>
+                            <Grid container spacing={1}>
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  select
+                                  label="Tipo"
+                                  size="small"
+                                  fullWidth
+                                  value={receipt.documentType}
+                                  onChange={(e) => updateReceipt(receipt.id, { documentType: e.target.value })}
+                                  variant="outlined"
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
+                                >
+                                  <MenuItem value="boleta">Boleta</MenuItem>
+                                  <MenuItem value="factura">Factura</MenuItem>
+                                </TextField>
+                              </Grid>
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  select
+                                  label="Categoría"
+                                  size="small"
+                                  fullWidth
+                                  value={receipt.category}
+                                  onChange={(e) => updateReceipt(receipt.id, { category: e.target.value })}
+                                  variant="outlined"
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
+                                >
+                                  {CATEGORIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                                </TextField>
+                              </Grid>
+                              <Grid item xs={12} sm={4}>
+                                <TextField
+                                  label="Monto"
+                                  size="small"
+                                  fullWidth
+                                  type="number"
+                                  value={receipt.amount}
+                                  onChange={(e) => updateReceipt(receipt.id, { amount: e.target.value })}
+                                  variant="outlined"
+                                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 }, '& input': { fontWeight: 700, color: 'primary.main' } }}
+                                />
+                              </Grid>
+                            </Grid>
+                            <TextField
+                              label="Descripción / Comercio"
+                              size="small"
+                              fullWidth
+                              value={receipt.concept}
+                              onChange={(e) => updateReceipt(receipt.id, { concept: e.target.value })}
+                              variant="outlined"
+                              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2.5 } }}
+                            />
+                          </Stack>
+                        </Grid>
+                      </Grid>
+                      {receipt.aiWarning && (
+                        <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, py: 0 }}>
+                          <Typography variant="caption" fontWeight={600}>{receipt.aiWarning}</Typography>
+                        </Alert>
+                      )}
+                      {receipt.aiError && <Typography variant="caption" color="error" fontWeight={600}>{receipt.aiError}</Typography>}
+                    </MotionCard>
                   ))}
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800 }}>TOTAL</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                      {formatCurrencyCLP(totalAmount)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-              <Alert severity="info">
-                Al enviar, la solicitud pasará a revisión por tu supervisor. Puedes guardarla como borrador para continuar después.
-              </Alert>
-            </Stack>
-          )}
+                </Stack>
+
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  startIcon={<AddIcon />}
+                  onClick={addReceipt}
+                  disabled={isBusy}
+                  sx={{ borderStyle: 'dashed', py: 1.5, borderRadius: 3, fontWeight: 700 }}
+                >
+                  Agregar otro ítem
+                </Button>
+              </MotionBox>
+            )}
+
+            {activeStep === 2 && (
+              <MotionBox
+                key="step2"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.4 }}
+                sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}
+              >
+                <Typography variant="h6" fontWeight={700}>Revisión Final</Typography>
+                <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>Descripción</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>Monto</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {receipts.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell sx={{ fontWeight: 500 }}>{r.concept || r.category || 'Sin descripción'}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>{formatCurrencyCLP(r.amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow sx={{ bgcolor: `${theme.palette.primary.main}04` }}>
+                        <TableCell sx={{ fontWeight: 800 }}>TOTAL</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 900, color: 'primary.main', fontSize: '1.1rem' }}>
+                          {formatCurrencyCLP(totalAmount)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </Paper>
+                <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  Al enviar, la solicitud pasará a revisión por tu supervisor. Puedes guardarla como borrador para continuar después.
+                </Alert>
+              </MotionBox>
+            )}
+          </AnimatePresence>
         </CardContent>
-      </Card>
+      </MotionCard>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -570,17 +682,21 @@ export default function SolicitarGastos() {
             startIcon={<ArrowBackIcon />}
             onClick={activeStep === 0 ? () => navigate(submitTarget) : handleBack}
             disabled={submitting}
+            sx={{ fontWeight: 600, textTransform: 'none' }}
           >
             {activeStep === 0 ? 'Cancelar' : 'Atrás'}
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<SaveIcon />}
-            onClick={handleSaveDraft}
-            disabled={isInternalUser || isBusy || receipts.length === 0}
-          >
-            Guardar Borrador
-          </Button>
+          {!isInternalUser && (
+            <Button
+              variant="outlined"
+              startIcon={<SaveIcon />}
+              onClick={handleSaveDraft}
+              disabled={isBusy || receipts.length === 0}
+              sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
+            >
+              Guardar Borrador
+            </Button>
+          )}
         </Box>
         
         {activeStep < 2 ? (
@@ -589,6 +705,7 @@ export default function SolicitarGastos() {
             endIcon={<ArrowForwardIcon />}
             onClick={handleNext}
             disabled={isBusy || receipts.length === 0}
+            sx={{ borderRadius: 2.5, px: 4, fontWeight: 700, textTransform: 'none' }}
           >
             Siguiente
           </Button>
@@ -597,7 +714,7 @@ export default function SolicitarGastos() {
             variant="contained"
             onClick={handleSubmit}
             disabled={isBusy}
-            sx={{ px: 4, fontWeight: 700 }}
+            sx={{ px: 5, py: 1.2, fontWeight: 800, borderRadius: 3, textTransform: 'none' }}
           >
             {submitting ? <CircularProgress size={24} color="inherit" /> : 'Confirmar y Enviar'}
           </Button>

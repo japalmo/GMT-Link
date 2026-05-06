@@ -23,7 +23,9 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
@@ -42,12 +44,16 @@ import { storage } from '../lib/firebase';
 import { formatCurrencyCLP, formatDateTime } from '../lib/formatters';
 import { generatePaymentPDF } from '../lib/pdfService';
 
+const MotionBox = motion(Box);
+const MotionCard = motion(Card);
+
 function buildVoucherStoragePath(file) {
   const safeName = file.name.replace(/\s+/g, '_');
   return `vouchers/${file.lastModified}_${safeName}`;
 }
 
 export default function Pagos() {
+  const theme = useTheme();
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedWorkerId = searchParams.get('worker') ?? '';
@@ -286,17 +292,28 @@ export default function Pagos() {
   };
 
   return (
-    <Box>
-      <Typography variant="h5" gutterBottom>Pagos</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Selección y consolidación de reembolsos aprobados para pago por trabajador
-      </Typography>
+    <Box sx={{ pb: 4 }}>
+      <MotionBox
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Typography variant="h5" fontWeight={800}>Pagos</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Selección y consolidación de reembolsos aprobados para pago por trabajador
+        </Typography>
+      </MotionBox>
 
       <Stack spacing={3}>
-        {loading ? <LinearProgress /> : null}
-        {error ? <Alert severity="error">{error}</Alert> : null}
+        {loading ? <LinearProgress sx={{ borderRadius: 2 }} /> : null}
+        {error ? <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert> : null}
 
-        <Card>
+        <MotionCard
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+        >
           <CardContent>
             <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems={{ xs: 'stretch', lg: 'center' }}>
               <TextField
@@ -305,6 +322,8 @@ export default function Pagos() {
                 value={activeWorkerId}
                 onChange={(event) => setSelectedWorkerId(event.target.value)}
                 fullWidth
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               >
                 {workerGroups.length === 0 && !loading && (
                   <MenuItem value="">No hay pagos pendientes</MenuItem>
@@ -327,39 +346,67 @@ export default function Pagos() {
                   setSuccess(false);
                   setPaymentOpen(true);
                 }}
+                sx={{ borderRadius: 3, fontWeight: 700, minWidth: 240, py: 1.5 }}
               >
                 Pagar Seleccionados ({selectedRows.length})
               </Button>
             </Stack>
           </CardContent>
-        </Card>
+        </MotionCard>
 
         {selectedWorkerGroup ? (
           <>
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
-                <Box>
-                  <Typography variant="subtitle2">Trabajador seleccionado</Typography>
-                  <Typography variant="body1">{selectedWorkerGroup.workerName}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {selectedWorkerGroup.centerCost} · {selectedWorkerGroup.workerRut}
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip label={`${selectedRows.length} seleccionadas de ${selectedWorkerGroup.rows.length}`} />
-                  <Chip label={`Total Seleccionado ${formatCurrencyCLP(selectedTotal)}`} color="secondary" />
+            <MotionBox
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <Paper 
+                variant="outlined" 
+                sx={{ 
+                  p: 2, 
+                  borderRadius: 3, 
+                  bgcolor: 'rgba(0,0,0,0.01)', 
+                  borderColor: 'rgba(0,0,0,0.05)',
+                  mb: 2
+                }}
+              >
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700}>Trabajador seleccionado</Typography>
+                    <Typography variant="body1" fontWeight={600}>{selectedWorkerGroup.workerName}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {selectedWorkerGroup.centerCost} · {selectedWorkerGroup.workerRut}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+                    <Chip 
+                      label={`${selectedRows.length} seleccionadas de ${selectedWorkerGroup.rows.length}`} 
+                      sx={{ borderRadius: 2, fontWeight: 600 }}
+                    />
+                    <Chip 
+                      label={`Total Seleccionado ${formatCurrencyCLP(selectedTotal)}`} 
+                      color="secondary" 
+                      sx={{ borderRadius: 2, fontWeight: 700 }}
+                    />
+                  </Stack>
                 </Stack>
-              </Stack>
-            </Paper>
+              </Paper>
+            </MotionBox>
 
-            <Card>
+            <MotionCard
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+            >
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
+                <Typography variant="h6" sx={{ mb: 2 }} fontWeight={700}>
                   Solicitudes aprobadas pendientes
                 </Typography>
-                <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+                <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: 3, borderColor: 'rgba(0,0,0,0.08)' }}>
                   <Table size="small">
-                    <TableHead>
+                    <TableHead sx={{ bgcolor: 'rgba(0,0,0,0.01)' }}>
                       <TableRow>
                         <TableCell padding="checkbox">
                           <Checkbox
@@ -368,29 +415,48 @@ export default function Pagos() {
                             onChange={toggleAll}
                           />
                         </TableCell>
-                        <TableCell>Solicitud</TableCell>
-                        <TableCell>Fecha</TableCell>
-                        <TableCell>Concepto</TableCell>
-                        <TableCell align="right">Monto</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Solicitud</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Fecha</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>Monto</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {selectedWorkerGroup.rows.map((row) => (
-                        <TableRow key={row.id} hover onClick={() => toggleRow(row.id)} sx={{ cursor: 'pointer' }}>
-                          <TableCell padding="checkbox">
-                            <Checkbox checked={selectedRows.includes(row.id)} />
-                          </TableCell>
-                          <TableCell>{row.requestNumber}</TableCell>
-                          <TableCell>{formatDateTime(row.submittedAt)}</TableCell>
-                          <TableCell>{row.concept}</TableCell>
-                          <TableCell align="right">{formatCurrencyCLP(row.amount)}</TableCell>
-                        </TableRow>
-                      ))}
+                      <AnimatePresence mode="wait">
+                        {selectedWorkerGroup.rows.map((row, idx) => (
+                          <TableRow 
+                            key={row.id} 
+                            hover 
+                            onClick={() => toggleRow(row.id)} 
+                            sx={{ 
+                              cursor: 'pointer',
+                              '&:hover': { bgcolor: 'rgba(0,0,0,0.02) !important' },
+                              transition: 'background-color 0.2s'
+                            }}
+                            component={motion.tr}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: idx * 0.03 }}
+                          >
+                            <TableCell padding="checkbox">
+                              <Checkbox checked={selectedRows.includes(row.id)} />
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>{row.requestNumber}</TableCell>
+                            <TableCell>{formatDateTime(row.submittedAt)}</TableCell>
+                            <TableCell>{row.concept}</TableCell>
+                            <TableCell align="right">
+                              <Typography variant="subtitle2" fontWeight={800} color="primary.main">
+                                {formatCurrencyCLP(row.amount)}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </AnimatePresence>
                     </TableBody>
                   </Table>
                 </Paper>
               </CardContent>
-            </Card>
+            </MotionCard>
           </>
         ) : !loading && (
           <Box sx={{ textAlign: 'center', py: 8 }}>
@@ -399,11 +465,16 @@ export default function Pagos() {
         )}
 
         {latestPaidBatch ? (
-          <Card>
+          <MotionCard
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderLeft: `6px solid ${theme.palette.success.main}` }}
+          >
             <CardContent>
-              <Typography variant="subtitle2" gutterBottom>Último lote pagado</Typography>
-              <Typography variant="body1" fontWeight={600}>{latestPaidBatch.workerName}</Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="subtitle2" gutterBottom color="text.secondary" fontWeight={700}>Último lote pagado</Typography>
+              <Typography variant="body1" fontWeight={700}>{latestPaidBatch.workerName}</Typography>
+              <Typography variant="body2" color="text.secondary" fontWeight={500}>
                 {latestPaidBatch.batchNumber} · {formatCurrencyCLP(latestPaidBatch.totalAmount)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -417,6 +488,7 @@ export default function Pagos() {
                     href={latestPaidBatch.voucherUrl}
                     target="_blank"
                     startIcon={<UploadFileOutlinedIcon />}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
                   >
                     Ver comprobante
                   </Button>
@@ -428,43 +500,61 @@ export default function Pagos() {
                     startIcon={downloading ? <CircularProgress size={16} /> : <PictureAsPdfIcon />}
                     onClick={() => handleDownloadPDF(latestPaidBatch)}
                     disabled={downloading}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
                   >
                     Descargar PDF
                   </Button>
                 )}
               </Stack>
             </CardContent>
-          </Card>
+          </MotionCard>
         ) : null}
       </Stack>
 
-      <Dialog open={paymentOpen} onClose={() => !processing && resetPaymentDialog()} fullWidth maxWidth="md">
-        <DialogTitle>Pagar lote del trabajador</DialogTitle>
+      <Dialog 
+        open={paymentOpen} 
+        onClose={() => !processing && resetPaymentDialog()} 
+        fullWidth 
+        maxWidth="md"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Pagar lote del trabajador</DialogTitle>
         <DialogContent>
           {selectedWorkerGroup && selectedWorker ? (
             <Stack spacing={2} sx={{ pt: 1 }}>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'rgba(37, 99, 235, 0.04)' }}>
-                <Typography variant="caption" color="text.secondary">Monto total a transferir</Typography>
-                <Typography variant="h4" color="primary.main" fontWeight={700}>
+              <Paper 
+                variant="outlined" 
+                sx={{ 
+                  p: 3, 
+                  bgcolor: `${theme.palette.primary.main}08`, 
+                  borderRadius: 4, 
+                  borderColor: `${theme.palette.primary.main}20`,
+                  textAlign: 'center'
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                  Monto total a transferir
+                </Typography>
+                <Typography variant="h3" color="primary.main" fontWeight={900} sx={{ my: 1 }}>
                   {formatCurrencyCLP(selectedTotal)}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Consolidado de {selectedRows.length} solicitudes.
+                <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                  Consolidado de <strong>{selectedRows.length}</strong> solicitudes.
                 </Typography>
               </Paper>
 
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: 'rgba(0,0,0,0.08)' }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }} fontWeight={700}>
                   Datos bancarios del trabajador
                 </Typography>
-                <Typography variant="body1" fontWeight={500}>{selectedWorker.fullName}</Typography>
-                <Typography variant="body2">
+                <Typography variant="body1" fontWeight={600}>{selectedWorker.fullName}</Typography>
+                <Typography variant="body2" color="text.secondary">
                   {selectedWorker.bankName} · {selectedWorker.bankAccountType}
                 </Typography>
-                <Typography variant="body1" sx={{ mt: 0.5, letterSpacing: 1 }}>
-                  Cuenta: <strong>{selectedWorker.bankAccountNumber}</strong>
+                <Typography variant="h6" sx={{ mt: 0.5, letterSpacing: 1, color: 'text.primary', fontWeight: 800 }}>
+                  {selectedWorker.bankAccountNumber}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" fontWeight={500}>
                   RUT: {selectedWorker.rut}
                 </Typography>
               </Paper>
@@ -477,10 +567,12 @@ export default function Pagos() {
                 disabled={processing}
                 placeholder="Ej: 123456789"
                 helperText="Número de operación del banco"
+                variant="outlined"
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               />
 
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }} fontWeight={700}>
                   Comprobante de transferencia (Opcional)
                 </Typography>
                 <Button
@@ -489,17 +581,18 @@ export default function Pagos() {
                   color={voucherFile ? 'success' : 'primary'}
                   startIcon={<UploadFileOutlinedIcon />}
                   disabled={processing}
+                  sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
                 >
                   {voucherFile ? 'Cambiar comprobante' : 'Subir comprobante'}
                   <input hidden type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleVoucherChange} />
                 </Button>
-                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: voucherFile ? 'success.main' : 'text.secondary' }}>
+                <Typography variant="caption" sx={{ display: 'block', mt: 1, color: voucherFile ? 'success.main' : 'text.secondary', fontWeight: 500 }}>
                   {voucherFile ? `Seleccionado: ${voucherFile.name}` : 'Ya no es obligatorio para registrar el pago'}
                 </Typography>
               </Paper>
 
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }} fontWeight={700}>
                   Notificar por correo a:
                 </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -512,14 +605,15 @@ export default function Pagos() {
                       variant={selectedRecipients.includes(email) ? 'filled' : 'outlined'}
                       size="small"
                       disabled={processing}
+                      sx={{ borderRadius: 1.5, fontWeight: 600 }}
                     />
                   ))}
                 </Stack>
               </Paper>
 
               {success && (
-                <>
-                  <Alert severity="success" sx={{ mb: 2 }}>
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
+                  <Alert severity="success" sx={{ mb: 2, borderRadius: 3, fontWeight: 600 }}>
                     ¡Pago registrado exitosamente! Las solicitudes han sido marcadas como pagadas y se ha generado el lote de control.
                   </Alert>
                   {isAuthorizedPayer && (
@@ -530,17 +624,18 @@ export default function Pagos() {
                       startIcon={downloading ? <CircularProgress size={20} color="inherit" /> : <PictureAsPdfIcon />}
                       onClick={() => handleDownloadPDF(latestPaidBatch)}
                       disabled={downloading || !latestPaidBatch}
+                      sx={{ borderRadius: 3, fontWeight: 700, py: 1.2 }}
                     >
                       Descargar Comprobante PDF
                     </Button>
                   )}
-                </>
+                </motion.div>
               )}
             </Stack>
           ) : null}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={resetPaymentDialog} disabled={processing}>Cancelar</Button>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={resetPaymentDialog} disabled={processing} sx={{ fontWeight: 600 }}>Cancelar</Button>
           <Button
             variant="contained"
             color="primary"
@@ -548,6 +643,7 @@ export default function Pagos() {
             disabled={!paymentReference.trim() || processing || success || selectedRows.length === 0}
             onClick={handleProcessPayment}
             startIcon={processing ? <CircularProgress size={20} color="inherit" /> : <PaymentsOutlinedIcon />}
+            sx={{ borderRadius: 3, fontWeight: 800, px: 4, py: 1.2 }}
           >
             Confirmar y registrar pago
           </Button>
