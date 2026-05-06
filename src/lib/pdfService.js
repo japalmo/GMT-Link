@@ -88,3 +88,107 @@ export function generatePaymentPDF(batchData, requests) {
   const filename = `comprobante-pago-${batchData.paymentReference || 'batch'}-${formatShortDate(batchData.paidAt).replace(/\//g, '-')}.pdf`;
   doc.save(filename);
 }
+
+/**
+ * Loads an image from a URL and returns a Promise that resolves to a base64 string or HTMLImageElement.
+ */
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image at ${url}`));
+    img.src = url;
+  });
+}
+
+/**
+ * Generates a PDF with multiple receipts (4 per page) for physical registration.
+ * 
+ * @param {Array} reimbursements - Array of reimbursement objects to print.
+ */
+export async function generateReceiptsBatchPDF(reimbursements) {
+  const doc = new jsPDF();
+  const margin = 10;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const boxWidth = (pageWidth - (margin * 3)) / 2;
+  const boxHeight = (pageHeight - (margin * 3)) / 2;
+
+  for (let i = 0; i < reimbursements.length; i++) {
+    const item = reimbursements[i];
+    const boxIndex = i % 4;
+    
+    if (boxIndex === 0 && i > 0) {
+      doc.addPage();
+    }
+
+    const col = boxIndex % 2;
+    const row = Math.floor(boxIndex / 2);
+    
+    const x = margin + (col * (boxWidth + margin));
+    const y = margin + (row * (boxHeight + margin));
+
+    // Draw box border
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(x, y, boxWidth, boxHeight);
+
+    // Header info
+    doc.setFontSize(9);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text(item.requestNumber || 'S/N', x + 5, y + 8);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(formatShortDate(item.expenseDate || item.submittedAt), x + 5, y + 13);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(37, 99, 235);
+    doc.text(formatCurrencyCLP(item.amount), x + boxWidth - 5, y + 8, { align: 'right' });
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(8);
+    doc.text(item.workerName || '', x + 5, y + 18, { maxWidth: boxWidth - 10 });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(item.concept || '', x + 5, y + 23, { maxWidth: boxWidth - 10 });
+
+    // Draw image if available
+    const imageUrl = item.attachmentUrls?.[0];
+    if (imageUrl) {
+      try {
+        const img = await loadImage(imageUrl);
+        
+        // Calculate dimensions to fit in the box while maintaining aspect ratio
+        const imgPadding = 5;
+        const availableWidth = boxWidth - (imgPadding * 2);
+        const availableHeight = boxHeight - 30 - imgPadding; // 30 is space for text
+        
+        const imgWidth = img.width;
+        const imgHeight = img.height;
+        const ratio = Math.min(availableWidth / imgWidth, availableHeight / imgHeight);
+        
+        const finalWidth = imgWidth * ratio;
+        const finalHeight = imgHeight * ratio;
+        
+        const imgX = x + ((boxWidth - finalWidth) / 2);
+        const imgY = y + 28 + ((availableHeight - finalHeight) / 2);
+
+        doc.addImage(img, 'JPEG', imgX, imgY, finalWidth, finalHeight);
+      } catch {
+        doc.setFontSize(7);
+        doc.setTextColor(239, 68, 68);
+        doc.text('No se pudo cargar la imagen del comprobante', x + 5, y + 35);
+      }
+    } else {
+      doc.setFontSize(7);
+      doc.setTextColor(148, 163, 184);
+      doc.text('Sin imagen adjunta', x + (boxWidth / 2), y + (boxHeight / 2) + 10, { align: 'center' });
+    }
+  }
+
+  const dateStr = formatShortDate(new Date()).replace(/\//g, '-');
+  doc.save(`lote-boletas-gmt-${dateStr}.pdf`);
+}
