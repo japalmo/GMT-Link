@@ -61,17 +61,11 @@ const INITIAL_MANUAL_FORM = {
   // Campos extendidos
   employeeCode: '',
   department: '',
-  location: '',
-  personalEmail: '',
   phone: '',
-  address: '',
   // Datos bancarios
   bankName: '',
   bankAccountType: '',
   bankAccountNumber: '',
-  // Emergencia
-  emergencyContactName: '',
-  emergencyContactPhone: '',
 };
 
 export default function Trabajadores() {
@@ -251,15 +245,10 @@ export default function Trabajadores() {
       active: selectedWorker.active !== false,
       employeeCode: selectedWorker.employeeCode || '',
       department: selectedWorker.department || '',
-      location: selectedWorker.location || '',
-      personalEmail: selectedWorker.personalEmail || '',
       phone: selectedWorker.phone || '',
-      address: selectedWorker.address || '',
       bankName: selectedWorker.bankName || '',
       bankAccountType: selectedWorker.bankAccountType || '',
       bankAccountNumber: selectedWorker.bankAccountNumber || '',
-      emergencyContactName: selectedWorker.emergencyContactName || '',
-      emergencyContactPhone: selectedWorker.emergencyContactPhone || '',
     });
     setEditError('');
     setEditOpen(true);
@@ -384,15 +373,10 @@ export default function Trabajadores() {
         supervisorName: row.supervisorName,
         employeeCode: row.codigo_empleado || '',
         department: row.departamento || '',
-        location: row.ubicacion || '',
-        personalEmail: row.email_personal || '',
         phone: row.telefono || '',
-        address: row.direccion || '',
         bankName: row.banco || '',
         bankAccountType: row.tipo_cuenta || '',
         bankAccountNumber: row.numero_cuenta || '',
-        emergencyContactName: row.contacto_emergencia_nombre || '',
-        emergencyContactPhone: row.contacto_emergencia_telefono || '',
       }));
 
       await createWorkersBatch(workersData);
@@ -428,8 +412,8 @@ export default function Trabajadores() {
 
   const handleDownloadTemplate = () => {
     const content = [
-      'rut,nombre_completo,email,centro_costo,supervisor,codigo_empleado,departamento,ubicacion,email_personal,telefono,direccion,banco,tipo_cuenta,numero_cuenta,contacto_emergencia_nombre,contacto_emergencia_telefono',
-      '11.111.111-1,Ana Perez,ana.perez@gmtingenieria.com,Operaciones Norte,Mauricio Diaz,EMP001,Mantenimiento,Antofagasta,ana.p@gmail.com,+56912345678,Av. Principal 123,Banco Estado,Cuenta RUT,111111111,Pedro Perez,+56987654321',
+      'rut,nombre_completo,email,centro_costo,supervisor,codigo_empleado,departamento,telefono,banco,tipo_cuenta,numero_cuenta',
+      '11.111.111-1,Ana Perez,ana.perez@gmtingenieria.com,Operaciones Norte,Mauricio Diaz,EMP001,Mantenimiento,+56912345678,Banco Estado,Cuenta RUT,111111111',
     ].join('\n');
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -553,8 +537,6 @@ export default function Trabajadores() {
                     <Typography variant="body1" sx={sensitiveTextSx}>
                       {showSensitive ? (selectedWorker.rut || '—') : maskSensitiveValue(selectedWorker.rut)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">Ubicación</Typography>
-                    <Typography variant="body1">{selectedWorker.location || 'N/A'}</Typography>
                     <Typography variant="caption" color="text.secondary">Ingreso</Typography>
                     <Typography variant="body1">{formatShortDate(selectedWorker.joinedAt)}</Typography>
                   </Box>
@@ -582,10 +564,8 @@ export default function Trabajadores() {
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">Correo corporativo</Typography>
                     <Typography variant="body1">{selectedWorker.email}</Typography>
-                    <Typography variant="caption" color="text.secondary">Correo personal / teléfono</Typography>
-                    <Typography variant="body1">{selectedWorker.personalEmail || '—'} · {selectedWorker.phone || '—'}</Typography>
-                    <Typography variant="caption" color="text.secondary">Dirección</Typography>
-                    <Typography variant="body1">{selectedWorker.address || '—'}</Typography>
+                    <Typography variant="caption" color="text.secondary">Teléfono</Typography>
+                    <Typography variant="body1">{selectedWorker.phone || '—'}</Typography>
                   </Box>
                 </Stack>
               </Paper>
@@ -611,14 +591,6 @@ export default function Trabajadores() {
                 <Typography variant="body1" sx={sensitiveTextSx}>
                   {showSensitive ? (selectedWorker.bankAccountNumber || '—') : maskSensitiveValue(selectedWorker.bankAccountNumber)}
                 </Typography>
-              </Paper>
-
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Contacto de emergencia
-                </Typography>
-                <Typography variant="body1">{selectedWorker.emergencyContactName || '—'}</Typography>
-                <Typography variant="body2" color="text.secondary">{selectedWorker.emergencyContactPhone || '—'}</Typography>
               </Paper>
             </Stack>
           ) : null}
@@ -732,45 +704,20 @@ export default function Trabajadores() {
             <Divider />
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Contacto y Ubicación</Typography>
-              <Stack spacing={2}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <TextField
-                    label="Departamento / Área"
-                    fullWidth
-                    value={editForm.department}
-                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                    disabled={editing}
-                  />
-                  <TextField
-                    label="Ubicación / Ciudad"
-                    fullWidth
-                    value={editForm.location}
-                    onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                    disabled={editing}
-                  />
-                </Stack>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <TextField
-                    label="Email personal"
-                    fullWidth
-                    value={editForm.personalEmail}
-                    onChange={(e) => setEditForm({ ...editForm, personalEmail: e.target.value })}
-                    disabled={editing}
-                  />
-                  <TextField
-                    label="Teléfono"
-                    fullWidth
-                    value={editForm.phone}
-                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    disabled={editing}
-                  />
-                </Stack>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Información Adicional</Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="Dirección"
+                  label="Departamento / Área"
                   fullWidth
-                  value={editForm.address}
-                  onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  value={editForm.department}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  disabled={editing}
+                />
+                <TextField
+                  label="Teléfono"
+                  fullWidth
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                   disabled={editing}
                 />
               </Stack>
@@ -808,28 +755,6 @@ export default function Trabajadores() {
                   fullWidth
                   value={editForm.bankAccountNumber}
                   onChange={(e) => setEditForm({ ...editForm, bankAccountNumber: e.target.value })}
-                  disabled={editing}
-                />
-              </Stack>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Contacto de Emergencia</Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Nombre contacto"
-                  fullWidth
-                  value={editForm.emergencyContactName}
-                  onChange={(e) => setEditForm({ ...editForm, emergencyContactName: e.target.value })}
-                  disabled={editing}
-                />
-                <TextField
-                  label="Teléfono contacto"
-                  fullWidth
-                  value={editForm.emergencyContactPhone}
-                  onChange={(e) => setEditForm({ ...editForm, emergencyContactPhone: e.target.value })}
                   disabled={editing}
                 />
               </Stack>
@@ -952,45 +877,20 @@ export default function Trabajadores() {
             <Divider />
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Contacto y Ubicación</Typography>
-              <Stack spacing={2}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <TextField
-                    label="Departamento / Área"
-                    fullWidth
-                    value={manualForm.department}
-                    onChange={(e) => setManualForm({ ...manualForm, department: e.target.value })}
-                    disabled={creating}
-                  />
-                  <TextField
-                    label="Ubicación / Ciudad"
-                    fullWidth
-                    value={manualForm.location}
-                    onChange={(e) => setManualForm({ ...manualForm, location: e.target.value })}
-                    disabled={creating}
-                  />
-                </Stack>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <TextField
-                    label="Email personal"
-                    fullWidth
-                    value={manualForm.personalEmail}
-                    onChange={(e) => setManualForm({ ...manualForm, personalEmail: e.target.value })}
-                    disabled={creating}
-                  />
-                  <TextField
-                    label="Teléfono"
-                    fullWidth
-                    value={manualForm.phone}
-                    onChange={(e) => setManualForm({ ...manualForm, phone: e.target.value })}
-                    disabled={creating}
-                  />
-                </Stack>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Información Adicional</Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="Dirección"
+                  label="Departamento / Área"
                   fullWidth
-                  value={manualForm.address}
-                  onChange={(e) => setManualForm({ ...manualForm, address: e.target.value })}
+                  value={manualForm.department}
+                  onChange={(e) => setManualForm({ ...manualForm, department: e.target.value })}
+                  disabled={creating}
+                />
+                <TextField
+                  label="Teléfono"
+                  fullWidth
+                  value={manualForm.phone}
+                  onChange={(e) => setManualForm({ ...manualForm, phone: e.target.value })}
                   disabled={creating}
                 />
               </Stack>
@@ -1028,28 +928,6 @@ export default function Trabajadores() {
                   fullWidth
                   value={manualForm.bankAccountNumber}
                   onChange={(e) => setManualForm({ ...manualForm, bankAccountNumber: e.target.value })}
-                  disabled={creating}
-                />
-              </Stack>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>Contacto de Emergencia</Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Nombre contacto"
-                  fullWidth
-                  value={manualForm.emergencyContactName}
-                  onChange={(e) => setManualForm({ ...manualForm, emergencyContactName: e.target.value })}
-                  disabled={creating}
-                />
-                <TextField
-                  label="Teléfono contacto"
-                  fullWidth
-                  value={manualForm.emergencyContactPhone}
-                  onChange={(e) => setManualForm({ ...manualForm, emergencyContactPhone: e.target.value })}
                   disabled={creating}
                 />
               </Stack>
