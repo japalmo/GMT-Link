@@ -248,7 +248,10 @@ def _handle_reimbursement_rejected(before: dict[str, Any], after: dict[str, Any]
 def _handle_payment_batch_created(data: dict[str, Any]) -> None:
     worker = _get_worker(data.get("workerId"))
     worker_email = _worker_email(worker)
-    if not worker_email:
+    supervisor_email = _supervisor_email(worker)
+    
+    recipients = _normalize_recipients(worker_email, supervisor_email)
+    if not recipients:
         return
 
     worker_name = data.get("workerName") or worker.get("fullName") or "Trabajador"
@@ -261,7 +264,7 @@ def _handle_payment_batch_created(data: dict[str, Any]) -> None:
         ("Registrado por", data.get("paidByName") or ""),
     ]
     _queue_mail(
-        [worker_email],
+        recipients,
         f"Pago registrado · {data.get('batchNumber') or 'GMT Link'}",
         f"Hola {worker_name}, se registró el pago de tu lote de reembolsos.",
         details,

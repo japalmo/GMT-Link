@@ -66,6 +66,7 @@ export default function Pagos() {
   const [downloading, setDownloading] = useState(false);
   const [paymentReference, setPaymentReference] = useState('');
   const [selectedRecipients, setSelectedRecipients] = useState([]);
+  const [selectedRows, setSelectedRows] = useState([]);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
@@ -128,6 +129,40 @@ export default function Pagos() {
   }, [selectedWorkerId, workerGroups]);
 
   const selectedWorkerGroup = workerGroups.find((item) => item.workerId === activeWorkerId) ?? null;
+
+  // Selection logic
+  useEffect(() => {
+    if (selectedWorkerGroup) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedRows(selectedWorkerGroup.rows.map((r) => r.id));
+    } else {
+      setSelectedRows([]);
+    }
+  }, [selectedWorkerGroup]);
+
+  const selectedRowsData = useMemo(() => {
+    if (!selectedWorkerGroup) return [];
+    return selectedWorkerGroup.rows.filter((r) => selectedRows.includes(r.id));
+  }, [selectedRows, selectedWorkerGroup]);
+
+  const selectedTotal = useMemo(() => {
+    return selectedRowsData.reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+  }, [selectedRowsData]);
+
+  const toggleRow = (id) => {
+    setSelectedRows((current) => (
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    ));
+  };
+
+  const toggleAll = () => {
+    if (selectedRows.length === selectedWorkerGroup?.rows.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(selectedWorkerGroup?.rows.map((r) => r.id) ?? []);
+    }
+  };
+
   const selectedWorker = workers.find((item) => item.id === activeWorkerId) ?? null;
   const supervisorUser = users.find((item) => item.id === selectedWorker?.supervisorId) ?? null;
   // TODO: diferenciación gerencia vs admin
@@ -181,20 +216,22 @@ export default function Pagos() {
   };
 
   const handleProcessPayment = async () => {
-    if (!voucherFile) return;
     setProcessing(true);
     try {
-      const storageRef = ref(storage, buildVoucherStoragePath(voucherFile));
-      const uploadResult = await uploadBytes(storageRef, voucherFile);
-      const voucherUrl = await getDownloadURL(uploadResult.ref);
+      let voucherUrl = '';
+      if (voucherFile) {
+        const storageRef = ref(storage, buildVoucherStoragePath(voucherFile));
+        const uploadResult = await uploadBytes(storageRef, voucherFile);
+        voucherUrl = await getDownloadURL(uploadResult.ref);
+      }
 
       const batchData = {
         workerId: selectedWorker.id,
         workerName: selectedWorker.fullName,
         workerRut: selectedWorker.rut,
         centerCost: selectedWorkerGroup.centerCost,
-        totalAmount: selectedWorkerGroup.totalAmount,
-        requestCount: selectedWorkerGroup.rows.length,
+        totalAmount: selectedTotal,
+        requestCount: selectedRows.length,
         bankName: selectedWorker.bankName || '',
         bankAccountType: selectedWorker.bankAccountType || '',
         bankAccountNumber: selectedWorker.bankAccountNumber || '',
@@ -204,8 +241,7 @@ export default function Pagos() {
         emailSentAt: null,
       };
 
-      const requestIds = selectedWorkerGroup.rows.map((row) => row.id);
-      await createPaymentBatch(batchData, requestIds, profile);
+      await createPaymentBatch(batchData, selectedRows, profile);
       
       setSuccess(true);
       // Wait a bit before reset to allow manual download if desired
@@ -284,15 +320,15 @@ export default function Pagos() {
                 variant="contained"
                 size="large"
                 startIcon={<PaymentsOutlinedIcon />}
-                disabled={!selectedWorkerGroup || processing}
+                disabled={!selectedWorkerGroup || processing || selectedRows.length === 0}
                 onClick={() => {
-                  setSelectedRecipients(recipientOptions);
+                  setSelectedRecipients(recipientOptions.filter(email => email === selectedWorker?.email || email === supervisorUser?.email));
                   setVoucherFile(null);
                   setSuccess(false);
                   setPaymentOpen(true);
                 }}
               >
-                Pagar
+                Pagar Seleccionados ({selectedRows.length})
               </Button>
             </Stack>
           </CardContent>
@@ -310,8 +346,8 @@ export default function Pagos() {
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip label={`${selectedWorkerGroup.rows.length} solicitudes`} />
-                  <Chip label={`Total ${formatCurrencyCLP(selectedWorkerGroup.totalAmount)}`} color="secondary" />
+                  <Chip label={`${selectedRows.length} seleccionadas de ${selectedWorkerGroup.rows.length}`} />
+                  <Chip label={`Total Seleccionado ${formatCurrencyCLP(selectedTotal)}`} color="secondary" />
                 </Stack>
               </Stack>
             </Paper>
@@ -325,6 +361,13 @@ export default function Pagos() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            indeterminate={selectedRows.length > 0 && selectedRows.length < selectedWorkerGroup.rows.length}
+                            checked={selectedRows.length === selectedWorkerGroup.rows.length && selectedWorkerGroup.rows.length > 0}
+                            onChange={toggleAll}
+                          />
+                        </TableCell>
                         <TableCell>Solicitud</TableCell>
                         <TableCell>Fecha</TableCell>
                         <TableCell>Concepto</TableCell>
@@ -333,7 +376,10 @@ export default function Pagos() {
                     </TableHead>
                     <TableBody>
                       {selectedWorkerGroup.rows.map((row) => (
-                        <TableRow key={row.id} hover>
+                        <TableRow key={row.id} hover onClick={() => toggleRow(row.id)} sx={{ cursor: 'pointer' }}>
+                          <TableCell padding="checkbox">
+                            <Checkbox checked={selectedRows.includes(row.id)} />
+                          </TableCell>
                           <TableCell>{row.requestNumber}</TableCell>
                           <TableCell>{formatDateTime(row.submittedAt)}</TableCell>
                           <TableCell>{row.concept}</TableCell>
@@ -400,10 +446,10 @@ export default function Pagos() {
               <Paper variant="outlined" sx={{ p: 2, bgcolor: 'rgba(37, 99, 235, 0.04)' }}>
                 <Typography variant="caption" color="text.secondary">Monto total a transferir</Typography>
                 <Typography variant="h4" color="primary.main" fontWeight={700}>
-                  {formatCurrencyCLP(selectedWorkerGroup.totalAmount)}
+                  {formatCurrencyCLP(selectedTotal)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Consolidado de {selectedWorkerGroup.rows.length} solicitudes.
+                  Consolidado de {selectedRows.length} solicitudes.
                 </Typography>
               </Paper>
 
@@ -435,11 +481,11 @@ export default function Pagos() {
 
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Comprobante de transferencia *
+                  Comprobante de transferencia (Opcional)
                 </Typography>
                 <Button
                   component="label"
-                  variant="contained"
+                  variant="outlined"
                   color={voucherFile ? 'success' : 'primary'}
                   startIcon={<UploadFileOutlinedIcon />}
                   disabled={processing}
@@ -448,7 +494,7 @@ export default function Pagos() {
                   <input hidden type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleVoucherChange} />
                 </Button>
                 <Typography variant="caption" sx={{ display: 'block', mt: 1, color: voucherFile ? 'success.main' : 'text.secondary' }}>
-                  {voucherFile ? `Seleccionado: ${voucherFile.name}` : 'Obligatorio para marcar como pagado'}
+                  {voucherFile ? `Seleccionado: ${voucherFile.name}` : 'Ya no es obligatorio para registrar el pago'}
                 </Typography>
               </Paper>
 
@@ -499,7 +545,7 @@ export default function Pagos() {
             variant="contained"
             color="primary"
             size="large"
-            disabled={!voucherFile || !paymentReference.trim() || processing || success}
+            disabled={!paymentReference.trim() || processing || success || selectedRows.length === 0}
             onClick={handleProcessPayment}
             startIcon={processing ? <CircularProgress size={20} color="inherit" /> : <PaymentsOutlinedIcon />}
           >
