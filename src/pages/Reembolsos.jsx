@@ -31,10 +31,12 @@ import AddIcon from '@mui/icons-material/Add';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { subscribeReimbursements, updateReimbursementStatus } from '../lib/repository';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrencyCLP, formatDateTime, formatShortDate, toDateValue } from '../lib/formatters';
+import ImpresionLoteDialog from '../components/ImpresionLoteDialog';
 
 const IMPORT_STEPS = ['Descargar formato', 'Subir archivo', 'Vista previa', 'Confirmar'];
 
@@ -63,6 +65,7 @@ export default function Reembolsos() {
   const [searchParams] = useSearchParams();
   const requestedStatus = searchParams.get('status');
   const [importOpen, setImportOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [selectedFileName, setSelectedFileName] = useState('');
   const [reimbursements, setReimbursements] = useState([]);
@@ -76,6 +79,7 @@ export default function Reembolsos() {
   const [workerFilter, setWorkerFilter] = useState('all');
   const [centerCostFilter, setCenterCostFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -163,9 +167,10 @@ export default function Reembolsos() {
       && (workerFilter === 'all' || item.workerName === workerFilter)
       && (centerCostFilter === 'all' || item.centerCost === centerCostFilter)
       && (categoryFilter === 'all' || item.category === categoryFilter)
+      && (typeFilter === 'all' || item.documentType === typeFilter)
       && (!fromDate || (dateOnly && dateOnly >= fromDate))
       && (!toDateValueParsed || (expenseDate && expenseDate <= toDateValueParsed));
-  }), [activeStatus, categoryFilter, centerCostFilter, dateFrom, dateTo, reimbursements, workerFilter]);
+  }), [activeStatus, categoryFilter, centerCostFilter, dateFrom, dateTo, reimbursements, workerFilter, typeFilter]);
 
   const handleDownloadTemplate = () => {
     const content = [
@@ -207,6 +212,8 @@ export default function Reembolsos() {
     ),
   );
 
+  const canPrintBatch = profile?.role === 'admin' || profile?.role === 'finance_clerk';
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -215,6 +222,11 @@ export default function Reembolsos() {
           <Typography variant="body2" color="text.secondary">Gestión de solicitudes de reembolso</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+          {canPrintBatch && (
+            <Button variant="outlined" color="primary" startIcon={<PictureAsPdfIcon />} onClick={() => setPrintOpen(true)}>
+              Impresión por lote
+            </Button>
+          )}
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/solicitar')}>
             Nueva solicitud
           </Button>
@@ -298,6 +310,17 @@ export default function Reembolsos() {
                   <MenuItem key={item} value={item}>{item}</MenuItem>
                 ))}
               </TextField>
+              <TextField
+                select
+                label="Tipo"
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="all">Todos</MenuItem>
+                <MenuItem value="boleta">Boleta</MenuItem>
+                <MenuItem value="factura">Factura</MenuItem>
+              </TextField>
             </Stack>
 
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
@@ -323,6 +346,7 @@ export default function Reembolsos() {
                   setWorkerFilter('all');
                   setCenterCostFilter('all');
                   setCategoryFilter('all');
+                  setTypeFilter('all');
                   setDateFrom('');
                   setDateTo('');
                   setActiveStatus('all');
@@ -387,6 +411,11 @@ export default function Reembolsos() {
                               size="small"
                               variant="outlined"
                             />
+                            <Chip
+                              label={row.documentType === 'factura' ? 'Factura' : 'Boleta'}
+                              size="small"
+                              variant="outlined"
+                            />
                             {row.paymentStatus === 'unpaid' && row.status !== 'rejected' ? (
                               <Chip label="No pagada" size="small" variant="outlined" />
                             ) : null}
@@ -417,6 +446,7 @@ export default function Reembolsos() {
                 {selectedRequest.status !== 'rejected' && (
                   <Chip label={selectedRequest.paymentStatus === 'paid' ? 'Pagada' : 'Pendiente de pago'} variant="outlined" />
                 )}
+                <Chip label={selectedRequest.documentType === 'factura' ? 'Factura' : 'Boleta'} variant="outlined" color="primary" />
                 <Chip label={selectedRequest.category} variant="outlined" />
               </Stack>
 
@@ -644,6 +674,8 @@ export default function Reembolsos() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ImpresionLoteDialog open={printOpen} onClose={() => setPrintOpen(false)} />
     </Box>
   );
 }

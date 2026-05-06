@@ -47,7 +47,7 @@ export async function extractReceiptData(file) {
       },
     },
     `Analiza esta boleta o factura chilena y extrae los datos. Responde SOLO con un objeto JSON válido con exactamente estos campos:
-{"category":"Bencina|Peajes|Alimentación|Alojamiento|Otros","concept":"descripción breve del gasto","amount":número_entero_en_CLP_sin_puntos,"expenseDate":"YYYY-MM-DD","merchantName":"nombre del comercio","receiptNumber":"número de boleta o factura o vacío"}
+{"category":"Bencina|Peajes|Alimentación|Alojamiento|Otros","documentType":"boleta|factura","concept":"descripción breve del gasto","amount":número_entero_en_CLP_sin_puntos,"expenseDate":"YYYY-MM-DD","merchantName":"nombre del comercio","receiptNumber":"número de boleta o factura o vacío"}
 Si no puedes leer un campo, usa null. Solo JSON, sin texto adicional.`
   ]);
 

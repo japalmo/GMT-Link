@@ -62,6 +62,7 @@ function normalizeReceipt(item) {
     groupId: item.groupId || '',
     requestNumber: item.requestNumber || '',
     category: item.category || '',
+    documentType: item.documentType || 'boleta',
     concept: item.concept || '',
     amount: item.amount != null ? String(item.amount) : '',
     expenseDate: toDateValue(item.expenseDate)?.toISOString().split('T')[0] || '',
@@ -108,7 +109,7 @@ async function extractReceiptData(file) {
       },
     },
     `Analiza esta boleta o factura chilena y extrae los datos. Responde SOLO con un objeto JSON válido con exactamente estos campos:
-{"category":"Bencina|Peajes|Alimentación|Alojamiento|Otros","concept":"descripción breve del gasto","amount":número_entero_en_CLP_sin_puntos,"expenseDate":"YYYY-MM-DD","merchantName":"nombre del comercio","receiptNumber":"número de boleta o factura o vacío"}
+{"category":"Bencina|Peajes|Alimentación|Alojamiento|Otros","documentType":"boleta|factura","concept":"descripción breve del gasto","amount":número_entero_en_CLP_sin_puntos,"expenseDate":"YYYY-MM-DD","merchantName":"nombre del comercio","receiptNumber":"número de boleta o factura o vacío"}
 Si no puedes leer un campo, usa null. Solo JSON, sin texto adicional ni bloques de código.`,
   ]);
 
@@ -274,6 +275,7 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
 
       updateReceipt(receiptId, {
         category: extracted?.category ?? '',
+        documentType: extracted?.documentType ?? 'boleta',
         concept: extracted?.concept ?? '',
         amount: extracted?.amount != null ? String(extracted.amount) : '',
         expenseDate: extracted?.expenseDate ?? '',
@@ -527,7 +529,19 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
                       <Grid item xs={12} md={8}>
                         <Stack spacing={2.5}>
                           <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={4}>
+                              <TextField
+                                select
+                                label="Tipo"
+                                fullWidth
+                                value={receipt.documentType}
+                                onChange={(event) => updateReceipt(receipt.id, { documentType: event.target.value })}
+                              >
+                                <MenuItem value="boleta">Boleta</MenuItem>
+                                <MenuItem value="factura">Factura</MenuItem>
+                              </TextField>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
                               <TextField
                                 select
                                 label="Categoría"
@@ -545,7 +559,7 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
                                 ))}
                               </TextField>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={4}>
                               <TextField
                                 label="Monto (CLP)"
                                 fullWidth

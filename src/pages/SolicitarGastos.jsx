@@ -67,6 +67,7 @@ function normalizeReceipt(item) {
     groupId: item.groupId || '',
     requestNumber: item.requestNumber || '',
     category: item.category || '',
+    documentType: item.documentType || 'boleta',
     concept: item.concept || '',
     amount: item.amount != null ? String(item.amount) : '',
     expenseDate: toDateValue(item.expenseDate)?.toISOString().split('T')[0] || '',
@@ -256,6 +257,7 @@ export default function SolicitarGastos() {
 
       updateReceipt(id, {
         category: extracted?.category ?? '',
+        documentType: extracted?.documentType ?? 'boleta',
         concept: extracted?.concept ?? '',
         amount: extracted?.amount != null ? String(extracted.amount) : '',
         expenseDate: extracted?.expenseDate ?? '',
@@ -459,26 +461,43 @@ export default function SolicitarGastos() {
                     </Grid>
                     <Grid item xs={12} md={8}>
                       <Stack spacing={2}>
-                        <Stack direction="row" spacing={1}>
-                          <TextField
-                            select
-                            label="Categoría"
-                            size="small"
-                            fullWidth
-                            value={receipt.category}
-                            onChange={(e) => updateReceipt(receipt.id, { category: e.target.value })}
-                          >
-                            {CATEGORIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                          </TextField>
-                          <TextField
-                            label="Monto"
-                            size="small"
-                            fullWidth
-                            type="number"
-                            value={receipt.amount}
-                            onChange={(e) => updateReceipt(receipt.id, { amount: e.target.value })}
-                          />
-                        </Stack>
+                        <Grid container spacing={1}>
+                          <Grid item xs={12} sm={4}>
+                            <TextField
+                              select
+                              label="Tipo"
+                              size="small"
+                              fullWidth
+                              value={receipt.documentType}
+                              onChange={(e) => updateReceipt(receipt.id, { documentType: e.target.value })}
+                            >
+                              <MenuItem value="boleta">Boleta</MenuItem>
+                              <MenuItem value="factura">Factura</MenuItem>
+                            </TextField>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField
+                              select
+                              label="Categoría"
+                              size="small"
+                              fullWidth
+                              value={receipt.category}
+                              onChange={(e) => updateReceipt(receipt.id, { category: e.target.value })}
+                            >
+                              {CATEGORIES.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                            </TextField>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField
+                              label="Monto"
+                              size="small"
+                              fullWidth
+                              type="number"
+                              value={receipt.amount}
+                              onChange={(e) => updateReceipt(receipt.id, { amount: e.target.value })}
+                            />
+                          </Grid>
+                        </Grid>
                         <TextField
                           label="Descripción"
                           size="small"

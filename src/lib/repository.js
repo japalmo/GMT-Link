@@ -146,6 +146,7 @@ function buildDraftReceiptPayload(receipt, workerProfile, { status = 'draft', su
     workerRut: workerProfile.rut || '',
     centerCost: workerProfile.centerCosts?.[0] || '',
     category: receipt.category || '',
+    documentType: receipt.documentType || 'boleta',
     concept: receipt.concept || '',
     amount: Number(receipt.amount) || 0,
     expenseDate: receipt.expenseDate ? new Date(receipt.expenseDate) : null,
@@ -183,6 +184,7 @@ function buildSubmittedReceiptPayload(receipt, requesterProfile, { groupId, requ
     workerRut: requesterProfile.rut || '',
     centerCost: requesterProfile.centerCosts?.[0] || '',
     category: receipt.category || '',
+    documentType: receipt.documentType || 'boleta',
     concept: receipt.concept || '',
     amount: Number(receipt.amount) || 0,
     expenseDate: receipt.expenseDate ? new Date(receipt.expenseDate) : null,
@@ -650,4 +652,17 @@ export async function updateUser(id, data) {
 
 export async function deleteUser(id) {
   return deleteDoc(doc(db, 'users', id));
+}
+
+export async function markReimbursementsAsPrinted(ids, profile) {
+  const batch = writeBatch(db);
+  ids.forEach((id) => {
+    const ref = doc(db, 'reimbursements', id);
+    batch.update(ref, {
+      printedAt: serverTimestamp(),
+      printedBy: profile.uid,
+      printedByName: profile.displayName || profile.email,
+    });
+  });
+  return batch.commit();
 }
