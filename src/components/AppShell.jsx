@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-rout
 import {
   Box, Drawer, AppBar, Toolbar, IconButton, Typography,
   List, ListItemButton, ListItemIcon, ListItemText,
-  Divider, Avatar, Tooltip, useMediaQuery, useTheme, Menu, MenuItem, Breadcrumbs, Link, Paper,
+  Divider, Avatar, Tooltip, useMediaQuery, useTheme, Menu, MenuItem, Breadcrumbs, Link, Paper, Chip,
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import MenuIcon from '@mui/icons-material/Menu';
