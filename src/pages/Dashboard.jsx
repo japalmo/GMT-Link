@@ -11,6 +11,7 @@ import {
   Avatar,
   Paper,
   Divider,
+  useTheme,
 } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -157,6 +158,7 @@ const KanbanColumn = ({ title, items, color }) => (
 // --- Main Page ---
 
 export default function Dashboard() {
+  const theme = useTheme();
   const { profile } = useAuth();
   const [rollup, setRollup] = useState();
   const [reimbursements, setReimbursements] = useState();
@@ -244,7 +246,14 @@ export default function Dashboard() {
       .sort((a, b) => b.value - a.value);
   }, [reimbursementItems]);
 
-  const COLORS = ['#1C3A6B', '#2563EB', '#D97706', '#059669', '#7C3AED', '#475569'];
+  const COLORS = [
+    theme.palette.primary.main,
+    theme.palette.secondary.main,
+    theme.palette.success.main,
+    theme.palette.info.main,
+    theme.palette.warning.main,
+    theme.palette.text.secondary,
+  ];
 
   return (
     <Box sx={{ pb: 6 }}>
@@ -269,7 +278,7 @@ export default function Dashboard() {
             label="Pendientes de aprobación"
             value={metrics.pendingCount}
             icon={<PendingActionsOutlinedIcon />}
-            color="#2563EB"
+            color={theme.palette.primary.main}
             delay={0.1}
           />
         </Grid>
@@ -278,7 +287,7 @@ export default function Dashboard() {
             label="Aprobadas sin pagar"
             value={metrics.approvedUnpaidCount}
             icon={<TrendingUpIcon />}
-            color="#D97706"
+            color={theme.palette.secondary.main}
             delay={0.2}
           />
         </Grid>
@@ -287,7 +296,7 @@ export default function Dashboard() {
             label="Monto por pagar"
             value={formatCurrencyCLP(metrics.approvedUnpaidAmount)}
             icon={<PaymentsOutlinedIcon />}
-            color="#059669"
+            color={theme.palette.success.main}
             delay={0.3}
           />
         </Grid>
@@ -309,10 +318,10 @@ export default function Dashboard() {
           '&::-webkit-scrollbar': { height: 8 },
           '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.1)', borderRadius: 10 }
         }}>
-          <KanbanColumn title="Borradores" items={kanbanData.draft} color="#94A3B8" />
-          <KanbanColumn title="Pendientes" items={kanbanData.pending} color="#2563EB" />
-          <KanbanColumn title="Aprobados" items={kanbanData.approved} color="#D97706" />
-          <KanbanColumn title="Pagados" items={kanbanData.paid} color="#059669" />
+          <KanbanColumn title="Borradores" items={kanbanData.draft} color={theme.palette.text.disabled} />
+          <KanbanColumn title="Pendientes" items={kanbanData.pending} color={theme.palette.primary.main} />
+          <KanbanColumn title="Aprobados" items={kanbanData.approved} color={theme.palette.secondary.main} />
+          <KanbanColumn title="Pagados" items={kanbanData.paid} color={theme.palette.success.main} />
         </Box>
       </motion.div>
 
