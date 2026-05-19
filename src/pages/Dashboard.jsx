@@ -272,7 +272,7 @@ export default function Dashboard() {
       >
         <Typography variant="h5" gutterBottom fontWeight={800}>Dashboard</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-          Resumen operativo y análisis de gastos en tiempo realeww.
+          Resumen operativo y análisis de gastos en tiempo realewwe.
         </Typography>
       </motion.div>
 
