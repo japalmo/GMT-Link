@@ -112,7 +112,9 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-]);
+], {
+  basename: import.meta.env.BASE_URL,
+});
 
 export default function App() {
   return (
