@@ -16,11 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: 'npm'
       - run: npm ci && npm run build
-          - uses: actions/setup-node@v4
-            with:
-              node-version: '24'
-              cache: 'npm'
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
