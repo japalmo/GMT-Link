@@ -21,7 +21,7 @@ export default function ProtectedRoute({ children, allowedRoles, redirectTo = '/
   if (!profile || profile.active === false) {
     return (
       <Container maxWidth="xs" sx={{ mt: 8, textAlign: 'center' }}>
-        <Typography variant="h5" gutterBottom>Tu cuenta no está configurada</Typography>
+        <Typography variant="h5" gutterBottom>Su cuenta no está configurada</Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           No se ha encontrado un perfil activo para este usuario. Por favor, contacta al administrador.
         </Typography>

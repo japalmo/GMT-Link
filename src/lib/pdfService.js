@@ -9,18 +9,20 @@ import { formatCurrencyCLP, formatDateTime, formatShortDate } from './formatters
  * @param {Array} requests - Array of reimbursement objects included in the batch.
  * @param {Object} profile - Profile of the user performing the download.
  */
-export function generatePaymentPDF(batchData, requests) {
+export function generatePaymentPDF(batchData, requests = []) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
 
+  const safe = (val, fallback = '—') => (val != null && val !== '' ? val : fallback);
+
   // Header
   doc.setFontSize(18);
-  doc.setTextColor(37, 99, 235); // primary.main color
+  doc.setTextColor(37, 99, 235);
   doc.text('COMPROBANTE DE PAGO', pageWidth / 2, 20, { align: 'center' });
-  
+
   doc.setFontSize(10);
-  doc.setTextColor(100, 116, 139); // text.secondary
-  doc.text(`Referencia: ${batchData.batchNumber || 'N/A'}`, pageWidth / 2, 27, { align: 'center' });
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Referencia: ${safe(batchData.batchNumber)}`, pageWidth / 2, 27, { align: 'center' });
   doc.text(`Fecha de emisión: ${formatShortDate(new Date())}`, pageWidth / 2, 32, { align: 'center' });
 
   doc.setDrawColor(226, 232, 240);
@@ -28,65 +30,81 @@ export function generatePaymentPDF(batchData, requests) {
 
   // Worker Data
   doc.setFontSize(12);
-  doc.setTextColor(30, 41, 59); // text.primary
+  doc.setTextColor(30, 41, 59);
   doc.text('DATOS DEL TRABAJADOR', 15, 48);
-  
+
   doc.setFontSize(10);
-  doc.text(`Nombre: ${batchData.workerName}`, 15, 55);
-  doc.text(`RUT: ${batchData.workerRut}`, 15, 60);
-  doc.text(`Centro de Costo: ${batchData.centerCost}`, 15, 65);
-  
-  // Bank Data
-  doc.text(`Banco: ${batchData.bankName || 'N/A'}`, pageWidth / 2, 55);
-  doc.text(`Tipo Cuenta: ${batchData.bankAccountType || 'N/A'}`, pageWidth / 2, 60);
-  doc.text(`N° Cuenta: ${batchData.bankAccountNumber || 'N/A'}`, pageWidth / 2, 65);
+  const workerName = safe(batchData.workerName || batchData.worker || batchData.fullName);
+  const workerRut = safe(batchData.workerRut || batchData.rut);
+  const centerCost = safe(batchData.centerCost);
+  doc.text(`Nombre: ${workerName}`, 15, 55);
+  doc.text(`RUT: ${workerRut}`, 15, 60);
+  doc.text(`Centro de Costo: ${centerCost}`, 15, 65);
 
-  // Table of Requests
-  const tableRows = requests.map(req => [
-    req.requestNumber,
-    formatShortDate(req.expenseDate || req.submittedAt),
-    req.concept,
-    formatCurrencyCLP(req.amount)
-  ]);
+  doc.text(`Banco: ${safe(batchData.bankName)}`, pageWidth / 2, 55);
+  doc.text(`Tipo Cuenta: ${safe(batchData.bankAccountType)}`, pageWidth / 2, 60);
+  doc.text(`N° Cuenta: ${safe(batchData.bankAccountNumber)}`, pageWidth / 2, 65);
 
-  doc.autoTable({
-    startY: 75,
-    head: [['Solicitud', 'Fecha Gasto', 'Concepto', 'Monto']],
-    body: tableRows,
-    theme: 'striped',
-    headStyles: { fillColor: [37, 99, 235], textColor: 255 },
-    columnStyles: {
-      3: { halign: 'right' }
-    },
-    margin: { left: 15, right: 15 }
-  });
+  let finalY = 75;
 
-  const finalY = doc.lastAutoTable.finalY || 150;
+  if (requests.length > 0) {
+    const tableRows = requests.map(req => [
+      safe(req.requestNumber),
+      formatShortDate(req.expenseDate || req.submittedAt),
+      req.concept || '—',
+      formatCurrencyCLP(req.amount),
+    ]);
 
-  // Totals and Payment Info
+    doc.autoTable({
+      startY: finalY,
+      head: [['Solicitud', 'Fecha Gasto', 'Concepto', 'Monto']],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      columnStyles: { 3: { halign: 'right' } },
+      margin: { left: 15, right: 15 },
+    });
+    finalY = doc.lastAutoTable.finalY || finalY + 20;
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text('No se pudieron cargar los detalles de las solicitudes.', 15, finalY + 10);
+    finalY += 15;
+  }
+
+  // Summary
   doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
   doc.text('RESUMEN DE PAGO', 15, finalY + 15);
-  
+
   doc.setFontSize(10);
-  doc.text(`Cantidad de solicitudes: ${batchData.requestCount || requests.length}`, 15, finalY + 22);
-  doc.text(`Referencia bancaria: ${batchData.paymentReference || 'Sin referencia'}`, 15, finalY + 27);
-  
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Cantidad de solicitudes: ${batchData.requestCount || requests.length || '—'}`, 15, finalY + 22);
+  doc.text(`Referencia bancaria: ${safe(batchData.paymentReference, 'Sin referencia')}`, 15, finalY + 27);
+
   doc.setFontSize(14);
   doc.setTextColor(37, 99, 235);
-  doc.text(`TOTAL PAGADO: ${formatCurrencyCLP(batchData.totalAmount)}`, pageWidth - 15, finalY + 25, { align: 'right' });
+  const total = batchData.totalAmount || requests.reduce((s, r) => s + Number(r.amount || 0), 0);
+  doc.text(`TOTAL PAGADO: ${formatCurrencyCLP(total)}`, pageWidth - 15, finalY + 25, { align: 'right' });
 
   doc.setDrawColor(226, 232, 240);
   doc.line(15, finalY + 35, pageWidth - 15, finalY + 35);
 
   // Audit
+  const paidByName = safe(batchData.paidByName || batchData.paidBy);
+  const paidAt = batchData.paidAt ? formatDateTime(batchData.paidAt) : formatDateTime(new Date());
   doc.setFontSize(8);
-  doc.setTextColor(148, 163, 184); // text.disabled/secondary
-  doc.text(`Pagado por: ${batchData.paidByName} el ${formatDateTime(batchData.paidAt)}`, 15, finalY + 42);
+  doc.setTextColor(148, 163, 184);
+  doc.text(`Pagado por: ${paidByName} el ${paidAt}`, 15, finalY + 42);
   doc.text('Este documento es un comprobante interno de gestión de reembolsos.', 15, finalY + 47);
 
-  // Save PDF
-  const filename = `comprobante-pago-${batchData.paymentReference || 'batch'}-${formatShortDate(batchData.paidAt).replace(/\//g, '-')}.pdf`;
-  doc.save(filename);
+  // Footer
+  doc.setFontSize(7);
+  doc.setTextColor(203, 213, 225);
+  doc.text('GMT Link — Comprobante generado automáticamente', pageWidth / 2, finalY + 55, { align: 'center' });
+
+  const dateStr = formatShortDate(batchData.paidAt || new Date()).replace(/\//g, '-');
+  doc.save(`comprobante-pago-${batchData.batchNumber || batchData.paymentReference || 'lote'}-${dateStr}.pdf`);
 }
 
 /**

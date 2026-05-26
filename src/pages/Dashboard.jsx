@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Button,
   Box,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   LinearProgress,
   Typography,
@@ -99,15 +104,45 @@ const KPICard = ({ label, value, icon, color, delay }) => (
   </MotionCard>
 );
 
-const KanbanColumn = ({ title, items, color }) => (
-  <Box sx={{ flex: 1, minWidth: 300, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 4, p: 2.5 }}>
-    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
+function formatFirestoreDate(value) {
+  if (!value) return '';
+  if (value instanceof Date) return value.toLocaleString();
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000).toLocaleString();
+  }
+  return '';
+}
+
+function statusMeta(item) {
+  const status = item?.status ?? '';
+  const paymentStatus = item?.paymentStatus ?? '';
+
+  if (status === 'draft') return { label: 'Borrador', chipColor: 'default' };
+  if (status === 'pending_approval') return { label: 'Pendiente de aprobación', chipColor: 'primary' };
+  if (status === 'approved' && paymentStatus === 'unpaid') return { label: 'Aprobado (sin pagar)', chipColor: 'secondary' };
+  if (status === 'paid') return { label: 'Pagado', chipColor: 'success' };
+  if (status === 'rejected') return { label: 'Rechazado', chipColor: 'error' };
+  return { label: status || 'Estado', chipColor: 'default' };
+}
+
+const KanbanColumn = ({ title, items, color, onSelect }) => (
+  <Box
+    sx={{
+      flex: '1 1 260px',
+      minWidth: { xs: '100%', sm: 240, md: 260 },
+      bgcolor: 'rgba(0,0,0,0.02)',
+      borderRadius: 4,
+      p: 2,
+    }}
+  >
+    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 2 }}>
       <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: color, boxShadow: `0 0 10px ${color}40` }} />
       <Typography variant="subtitle2" fontWeight={800} color="text.primary" sx={{ textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.75rem' }}>
         {title} ({items.length})
       </Typography>
     </Stack>
-    <Stack spacing={2}>
+    <Stack spacing={1.5}>
       <AnimatePresence mode="popLayout">
         {items.map((item, idx) => (
           <motion.div
@@ -121,7 +156,7 @@ const KanbanColumn = ({ title, items, color }) => (
             <Paper
               elevation={0}
               sx={{
-                p: 2,
+                p: 1.5,
                 borderRadius: 3,
                 border: '1px solid rgba(0,0,0,0.04)',
                 bgcolor: 'background.paper',
@@ -134,6 +169,7 @@ const KanbanColumn = ({ title, items, color }) => (
                 transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                 cursor: 'pointer',
               }}
+              onClick={() => onSelect?.(item)}
             >
               <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ mb: 0.5 }}>{item.workerName}</Typography>
               <Typography variant="caption" color="text.secondary" fontWeight={500} display="block" sx={{ mb: 1.5 }}>
@@ -153,7 +189,7 @@ const KanbanColumn = ({ title, items, color }) => (
         ))}
       </AnimatePresence>
       {items.length === 0 && (
-        <Box sx={{ py: 6, textAlign: 'center', opacity: 0.5 }}>
+        <Box sx={{ py: 4, textAlign: 'center', opacity: 0.5 }}>
           <Typography variant="caption" color="text.disabled" fontWeight={600}>
             No hay solicitudes
           </Typography>
@@ -171,6 +207,7 @@ export default function Dashboard() {
   const [rollup, setRollup] = useState();
   const [reimbursements, setReimbursements] = useState();
   const [error, setError] = useState('');
+  const [selectedKanbanItem, setSelectedKanbanItem] = useState(null);
 
   const reimbursementItems = useMemo(() => reimbursements ?? [], [reimbursements]);
   const loading = rollup === undefined || reimbursements === undefined;
@@ -263,6 +300,12 @@ export default function Dashboard() {
     theme.palette.text.secondary,
   ];
 
+  const selectedMeta = useMemo(() => statusMeta(selectedKanbanItem), [selectedKanbanItem]);
+  const selectedAttachments = useMemo(() => {
+    const urls = selectedKanbanItem?.attachmentUrls ?? [];
+    return Array.isArray(urls) ? urls.filter(Boolean) : [];
+  }, [selectedKanbanItem]);
+
   return (
     <Box sx={{ pb: 6 }}>
       <motion.div
@@ -272,7 +315,7 @@ export default function Dashboard() {
       >
         <Typography variant="h5" gutterBottom fontWeight={800}>Dashboard</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-          Resumen operativo y análisis de gastos en tiempo realewwe.fddfdf
+          Resumen operativo y análisis de gastos en tiempo real
         </Typography>
       </motion.div>
 
@@ -319,19 +362,140 @@ export default function Dashboard() {
         <Typography variant="h6" sx={{ mb: 2, px: 1 }}>Flujo de Solicitudes (Kanban)</Typography>
         <Box sx={{ 
           display: 'flex', 
-          gap: 2, 
-          overflowX: 'auto', 
-          pb: 2, 
+          flexWrap: 'wrap',
+          gap: 1.5,
+          overflowX: 'hidden',
           px: 1,
-          '&::-webkit-scrollbar': { height: 8 },
-          '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.1)', borderRadius: 10 }
+          pb: 0.5,
         }}>
-          <KanbanColumn title="Borradores" items={kanbanData.draft} color={theme.palette.text.disabled} />
-          <KanbanColumn title="Pendientes" items={kanbanData.pending} color={theme.palette.primary.main} />
-          <KanbanColumn title="Aprobados" items={kanbanData.approved} color={theme.palette.secondary.main} />
-          <KanbanColumn title="Pagados" items={kanbanData.paid} color={theme.palette.success.main} />
+          <KanbanColumn
+            title="Borradores"
+            items={kanbanData.draft}
+            color={theme.palette.text.disabled}
+            onSelect={(item) => setSelectedKanbanItem(item)}
+          />
+          <KanbanColumn
+            title="Pendientes"
+            items={kanbanData.pending}
+            color={theme.palette.primary.main}
+            onSelect={(item) => setSelectedKanbanItem(item)}
+          />
+          <KanbanColumn
+            title="Aprobados"
+            items={kanbanData.approved}
+            color={theme.palette.secondary.main}
+            onSelect={(item) => setSelectedKanbanItem(item)}
+          />
+          <KanbanColumn
+            title="Pagados"
+            items={kanbanData.paid}
+            color={theme.palette.success.main}
+            onSelect={(item) => setSelectedKanbanItem(item)}
+          />
         </Box>
       </motion.div>
+
+      <Dialog
+        open={Boolean(selectedKanbanItem)}
+        onClose={() => setSelectedKanbanItem(null)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 4 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>
+          Detalle de solicitud
+        </DialogTitle>
+        <DialogContent>
+          {selectedKanbanItem ? (
+            <Stack spacing={1.5} sx={{ pt: 1 }}>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+                <Typography variant="subtitle1" fontWeight={900} sx={{ mr: 0.5 }}>
+                  {selectedKanbanItem.workerName || 'Trabajador'}
+                </Typography>
+                <Box sx={{ flexGrow: 1 }} />
+                <Box>
+                  <Box
+                    component="span"
+                    sx={{
+                      px: 1.2,
+                      py: 0.4,
+                      borderRadius: 2,
+                      bgcolor: 'rgba(0,0,0,0.04)',
+                      fontSize: '0.75rem',
+                      fontWeight: 800,
+                      color: 'text.secondary',
+                      display: 'inline-block',
+                    }}
+                  >
+                    {selectedMeta.label}
+                  </Box>
+                </Box>
+              </Stack>
+
+              <Typography variant="body2" color="text.secondary">
+                {selectedKanbanItem.requestNumber ? `Solicitud ${selectedKanbanItem.requestNumber}` : 'Solicitud'}
+                {selectedKanbanItem.centerCost ? ` · CC: ${selectedKanbanItem.centerCost}` : ''}
+              </Typography>
+
+              <Divider sx={{ opacity: 0.6 }} />
+
+              <Stack spacing={0.75}>
+                {selectedKanbanItem.category ? (
+                  <Typography variant="body2"><strong>Categoría:</strong> {selectedKanbanItem.category}</Typography>
+                ) : null}
+                {selectedKanbanItem.concept ? (
+                  <Typography variant="body2"><strong>Concepto:</strong> {selectedKanbanItem.concept}</Typography>
+                ) : null}
+                {selectedKanbanItem.merchantName ? (
+                  <Typography variant="body2"><strong>Comercio:</strong> {selectedKanbanItem.merchantName}</Typography>
+                ) : null}
+                {selectedKanbanItem.receiptNumber ? (
+                  <Typography variant="body2"><strong>N° boleta/factura:</strong> {selectedKanbanItem.receiptNumber}</Typography>
+                ) : null}
+                {selectedKanbanItem.documentType ? (
+                  <Typography variant="body2"><strong>Documento:</strong> {selectedKanbanItem.documentType}</Typography>
+                ) : null}
+                <Typography variant="body2"><strong>Monto:</strong> {formatCurrencyCLP(selectedKanbanItem.amount)}</Typography>
+                {selectedKanbanItem.expenseDate ? (
+                  <Typography variant="body2"><strong>Fecha gasto:</strong> {formatFirestoreDate(selectedKanbanItem.expenseDate)}</Typography>
+                ) : null}
+                {selectedKanbanItem.submittedAt ? (
+                  <Typography variant="body2"><strong>Enviado:</strong> {formatFirestoreDate(selectedKanbanItem.submittedAt)}</Typography>
+                ) : null}
+                {selectedKanbanItem.notes ? (
+                  <Typography variant="body2"><strong>Notas:</strong> {selectedKanbanItem.notes}</Typography>
+                ) : null}
+              </Stack>
+
+              {selectedAttachments.length > 0 ? (
+                <>
+                  <Divider sx={{ opacity: 0.6 }} />
+                  <Typography variant="subtitle2" fontWeight={800}>Adjuntos</Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {selectedAttachments.slice(0, 6).map((url, index) => (
+                      <Button
+                        key={url}
+                        size="small"
+                        variant="outlined"
+                        href={url}
+                        target="_blank"
+                        sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+                      >
+                        Abrir adjunto {index + 1}
+                      </Button>
+                    ))}
+                  </Stack>
+                </>
+              ) : null}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setSelectedKanbanItem(null)} variant="contained" sx={{ borderRadius: 3, fontWeight: 800 }}>
+            Cerrar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Charts and Rankings */}
       <Grid container spacing={3} sx={{ mt: 2 }}>

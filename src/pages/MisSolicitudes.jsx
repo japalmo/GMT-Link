@@ -137,7 +137,7 @@ export default function MisSolicitudes() {
   };
 
   const handleDeleteDraft = async (group) => {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar este borrador? Esta acción no se puede deshacer.')) {
+    if (!window.confirm('¿Está seguro de que desea eliminar este borrador? Esta acción no se puede deshacer.')) {
       return;
     }
 
@@ -162,7 +162,7 @@ export default function MisSolicitudes() {
         <Box>
           <Typography variant="h5" fontWeight={700} gutterBottom>Reembolsos</Typography>
           <Typography variant="body2" color="text.secondary">
-            Hola, <strong>{profile?.displayName}</strong>. Desde aquí gestionas tus borradores y el estado de tus solicitudes.
+            Bienvenido, <strong>{profile?.displayName}</strong>. Desde aquí gestiona sus borradores y el estado de sus solicitudes.
           </Typography>
         </Box>
 

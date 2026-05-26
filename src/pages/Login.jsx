@@ -48,7 +48,7 @@ export default function Login() {
 
   const handleForgotPassword = async () => {
     if (!email) {
-      setError('Por favor ingresa tu correo para recuperar la contraseña.');
+      setError('Por favor ingrese su correo para recuperar la contraseña.');
       return;
     }
     try {
@@ -156,7 +156,7 @@ export default function Login() {
                     '&:hover': { textDecoration: 'underline' }
                   }}
               >
-                  ¿Olvidaste tu contraseña?
+                  ¿Olvidó su contraseña?
               </Link>
             </Stack>
           </CardContent>

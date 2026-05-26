@@ -74,6 +74,7 @@ export default function Pagos() {
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [success, setSuccess] = useState(false);
+  const [lastBatchCreated, setLastBatchCreated] = useState(null);
 
   useEffect(() => {
     const unsubscribeReimbursements = subscribeReimbursements(
@@ -126,6 +127,18 @@ export default function Pagos() {
 
     return [...grouped.values()];
   }, [reimbursements]);
+
+  const pendingRollup = useMemo(() => {
+    const pendingWorkers = workerGroups.length;
+    const pendingRequests = workerGroups.reduce((sum, group) => sum + (group.rows?.length ?? 0), 0);
+    const pendingTotalAmount = workerGroups.reduce((sum, group) => sum + Number(group.totalAmount ?? 0), 0);
+
+    return {
+      pendingWorkers,
+      pendingRequests,
+      pendingTotalAmount,
+    };
+  }, [workerGroups]);
 
   const activeWorkerId = useMemo(() => {
     if (selectedWorkerId && workerGroups.some((item) => item.workerId === selectedWorkerId)) {
@@ -188,15 +201,26 @@ export default function Pagos() {
     return [...new Set(options)];
   }, [adminEmails, selectedWorker, supervisorUser?.email]);
 
-  const latestPaidBatch = useMemo(() => {
-    const items = [...paymentBatches];
-    items.sort((left, right) => {
-      const leftValue = left.paidAt?.seconds ?? 0;
-      const rightValue = right.paidAt?.seconds ?? 0;
-      return rightValue - leftValue;
-    });
-    return items[0] ?? null;
-  }, [paymentBatches]);
+  const latestPaidBatch = useMemo(() => paymentBatches[0] ?? null, [paymentBatches]);
+
+  const latestPaidBatchDetails = useMemo(() => {
+    if (!latestPaidBatch) return null;
+    const requestCount = latestPaidBatch.requestCount
+      ?? latestPaidBatch.requestIds?.length
+      ?? 0;
+
+    const bankAccountNumber = String(latestPaidBatch.bankAccountNumber ?? '').trim();
+    const maskedAccount = bankAccountNumber
+      ? `•••• ${bankAccountNumber.slice(-4)}`
+      : '';
+
+    return {
+      requestCount,
+      maskedAccount,
+      notifiedCount: latestPaidBatch.emailSentTo?.length ?? 0,
+      hasReference: Boolean(String(latestPaidBatch.paymentReference ?? '').trim()),
+    };
+  }, [latestPaidBatch]);
 
   useEffect(() => {
     if (!shouldAutoOpenPayment) return;
@@ -247,10 +271,19 @@ export default function Pagos() {
         emailSentAt: null,
       };
 
-      await createPaymentBatch(batchData, selectedRows, profile);
+      const created = await createPaymentBatch(batchData, selectedRows, profile);
       
+      setLastBatchCreated({
+        ...batchData,
+        id: created.id,
+        batchNumber: created.batchNumber,
+        paidAt: new Date(),
+        paidByName: profile?.displayName || profile?.email,
+        requestCount: selectedRows.length,
+        totalAmount: selectedTotal,
+        selectedRows: selectedRowsData,
+      });
       setSuccess(true);
-      // Wait a bit before reset to allow manual download if desired
       setTimeout(() => {
         resetPaymentDialog();
       }, 5000);
@@ -264,14 +297,15 @@ export default function Pagos() {
   const handleDownloadPDF = async (batch) => {
     setDownloading(true);
     try {
-      // Fetch relevant reimbursements for this batch
-      const requests = await getReimbursements({ 
-        profile, 
-        limitTo: 1000 
-      });
-      const batchRequests = requests.filter(r => r.paymentBatchId === batch.id);
-      
-      generatePaymentPDF(batch, batchRequests);
+      let requests = [];
+      try {
+        const all = await getReimbursements({ profile, limitTo: 1000 });
+        requests = all.filter(r => r.paymentBatchId === batch.id);
+      } catch {
+        // fallback: use selected rows if available
+        requests = batch.selectedRows || [];
+      }
+      generatePaymentPDF(batch, requests);
     } catch (err) {
       alert('Error al generar PDF: ' + err.message);
     } finally {
@@ -289,6 +323,7 @@ export default function Pagos() {
     setPaymentReference('');
     setSelectedRecipients([]);
     setSuccess(false);
+    setLastBatchCreated(null);
   };
 
   return (
@@ -307,6 +342,36 @@ export default function Pagos() {
       <Stack spacing={3}>
         {loading ? <LinearProgress sx={{ borderRadius: 2 }} /> : null}
         {error ? <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert> : null}
+
+        {!loading && pendingRollup.pendingRequests > 0 ? (
+          <MotionCard
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
+            sx={{ borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+          >
+            <CardContent>
+              <Typography variant="subtitle2" color="text.secondary" fontWeight={800} sx={{ mb: 1 }}>
+                Resumen de pendientes
+              </Typography>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} flexWrap="wrap" useFlexGap alignItems={{ xs: 'stretch', md: 'center' }}>
+                <Chip
+                  label={`${pendingRollup.pendingWorkers} trabajadores con pagos pendientes`}
+                  sx={{ borderRadius: 2, fontWeight: 700 }}
+                />
+                <Chip
+                  label={`${pendingRollup.pendingRequests} solicitudes por pagar`}
+                  sx={{ borderRadius: 2, fontWeight: 700 }}
+                />
+                <Chip
+                  color="secondary"
+                  label={`Monto total pendiente ${formatCurrencyCLP(pendingRollup.pendingTotalAmount)}`}
+                  sx={{ borderRadius: 2, fontWeight: 800 }}
+                />
+              </Stack>
+            </CardContent>
+          </MotionCard>
+        ) : null}
 
         <MotionCard
           initial={{ opacity: 0, y: 20 }}
@@ -477,7 +542,7 @@ export default function Pagos() {
               <Typography variant="body2" color="text.secondary" fontWeight={500}>
                 {latestPaidBatch.batchNumber} · {formatCurrencyCLP(latestPaidBatch.totalAmount)}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 Pagado el {formatDateTime(latestPaidBatch.paidAt)} por {latestPaidBatch.paidByName}
               </Typography>
               <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
@@ -614,16 +679,28 @@ export default function Pagos() {
               {success && (
                 <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
                   <Alert severity="success" sx={{ mb: 2, borderRadius: 3, fontWeight: 600 }}>
-                    ¡Pago registrado exitosamente! Las solicitudes han sido marcadas como pagadas y se ha generado el lote de control.
+                    Pago registrado con éxito. Las solicitudes han sido marcadas como pagadas y se ha generado el lote de control.
                   </Alert>
+                  {(lastBatchCreated?.voucherUrl || latestPaidBatch?.voucherUrl) ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      href={(lastBatchCreated?.voucherUrl || latestPaidBatch?.voucherUrl) ?? undefined}
+                      target="_blank"
+                      startIcon={<UploadFileOutlinedIcon />}
+                      sx={{ borderRadius: 3, fontWeight: 700, py: 1.2, mb: 1 }}
+                    >
+                      Ver comprobante de transferencia
+                    </Button>
+                  ) : null}
                   {isAuthorizedPayer && (
                     <Button
                       fullWidth
                       variant="contained"
                       color="secondary"
                       startIcon={downloading ? <CircularProgress size={20} color="inherit" /> : <PictureAsPdfIcon />}
-                      onClick={() => handleDownloadPDF(latestPaidBatch)}
-                      disabled={downloading || !latestPaidBatch}
+                      onClick={() => handleDownloadPDF(lastBatchCreated || latestPaidBatch)}
+                      disabled={downloading || !(lastBatchCreated || latestPaidBatch)}
                       sx={{ borderRadius: 3, fontWeight: 700, py: 1.2 }}
                     >
                       Descargar Comprobante PDF

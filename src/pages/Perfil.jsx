@@ -140,7 +140,7 @@ export default function Perfil() {
       >
         <Typography variant="h5" fontWeight={800} gutterBottom>Mi perfil</Typography>
         <Typography variant="body2" color="text.secondary" fontWeight={500}>
-          Revisa tu cuenta, actualiza tus datos y gestiona tu contraseña.
+          Revise su cuenta, actualice sus datos y gestione su contraseña.
         </Typography>
       </MotionBox>
 
@@ -199,7 +199,7 @@ export default function Perfil() {
                   sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
                 />
 
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                <Stack direction="row" spacing={1} flexWrap="wrap">
                   <Chip 
                     label={profile?.role || 'usuario'} 
                     variant="filled" 
@@ -246,7 +246,7 @@ export default function Perfil() {
                 <Box>
                   <Typography variant="h6" fontWeight={700} gutterBottom>Datos Bancarios</Typography>
                   <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                    Información utilizada para el pago de tus reembolsos aprobados.
+                    Información utilizada para el pago de sus reembolsos aprobados.
                   </Typography>
                 </Box>
 
@@ -292,7 +292,7 @@ export default function Perfil() {
                   <Box>
                     <Typography variant="h6" fontWeight={700} gutterBottom>Datos personales</Typography>
                     <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                      Mantén actualizados tus datos de contacto para pagos y soporte.
+                      Mantenga actualizados sus datos de contacto para pagos y soporte.
                     </Typography>
                   </Box>
 

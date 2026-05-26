@@ -49,6 +49,7 @@ import {
 import { formatCurrencyCLP, toDateValue } from '../lib/formatters';
 import { storage } from '../lib/firebase';
 import { extractReceiptData, hasLowConfidenceReceiptData } from '../lib/ocrService';
+import { randomUUID } from '../lib/uuid';
 
 const MotionBox = motion(Box);
 const MotionCard = motion(Card);
@@ -57,7 +58,7 @@ const STEPS = ['Información', 'Carga de Gastos', 'Revisión'];
 const CATEGORIES = ['Bencina', 'Peajes', 'Alimentación', 'Alojamiento', 'Otros'];
 
 function createReceiptId() {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 function getFileNameFromUrl(url) {
@@ -118,9 +119,8 @@ export default function SolicitarGastos() {
   useEffect(() => {
     if (!profile) return;
 
-    // Redirigir si debe cambiar contraseña (lógica Gemini Prompt 5)
     if (profile?.mustChangePassword) {
-      navigate('/perfil');
+      navigate('/cambiar-password');
       return;
     }
 
@@ -258,7 +258,7 @@ export default function SolicitarGastos() {
       ]);
       const fileUrl = await getDownloadURL(snapshot.ref);
       const aiWarning = extracted && hasLowConfidenceReceiptData(extracted)
-        ? 'Revisá los datos — la lectura puede ser incompleta'
+        ? 'Revise los datos — la lectura puede ser incompleta'
         : '';
 
       updateReceipt(id, {
@@ -272,7 +272,7 @@ export default function SolicitarGastos() {
         fileUrl,
         attachmentUrls: [fileUrl],
         aiProcessing: false,
-        aiError: extracted ? '' : 'No se pudo leer la boleta. Completá los campos manualmente.',
+        aiError: extracted ? '' : 'No se pudo leer la boleta. Complete los campos manualmente.',
         aiWarning,
       });
     } catch {
@@ -315,8 +315,9 @@ export default function SolicitarGastos() {
         await submitDraftGroup(receipts, profile);
       }
       navigate(submitTarget);
-    } catch {
-      setError('Error al enviar la solicitud.');
+    } catch (err) {
+      const message = err?.message || 'Error al enviar la solicitud.';
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -446,11 +447,11 @@ export default function SolicitarGastos() {
                   </Grid>
                 </Grid>
                 <Alert severity="info" sx={{ borderRadius: 2 }}>
-                  Los reembolsos se procesan según la información de tu perfil. Si hay errores, contacta a RRHH.
+                  Los reembolsos se procesan según la información de su perfil. Si hay errores, contacte a RRHH.
                 </Alert>
                 {isInternalUser ? (
                   <Alert severity="info" sx={{ borderRadius: 2 }}>
-                    Tu perfil no tiene `workerId`. Esta solicitud se enviará directamente al confirmar y no tendrá borrador ni autoguardado.
+                    Su perfil no tiene `workerId`. Esta solicitud se enviará directamente al confirmar y no tendrá borrador ni autoguardado.
                   </Alert>
                 ) : null}
               </MotionBox>
@@ -667,7 +668,7 @@ export default function SolicitarGastos() {
                   </Table>
                 </Paper>
                 <Alert severity="info" sx={{ borderRadius: 2 }}>
-                  Al enviar, la solicitud pasará a revisión por tu supervisor. Puedes guardarla como borrador para continuar después.
+                  Al enviar, la solicitud pasará a revisión por su supervisor. Puede guardarla como borrador para continuar después.
                 </Alert>
               </MotionBox>
             )}

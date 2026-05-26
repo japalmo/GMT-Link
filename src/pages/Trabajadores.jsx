@@ -49,6 +49,7 @@ import {
   updateWorker,
 } from '../lib/repository';
 import { useAuth } from '../contexts/AuthContext';
+import { randomUUID } from '../lib/uuid';
 import { formatShortDate } from '../lib/formatters';
 
 const MotionBox = motion(Box);
@@ -200,7 +201,7 @@ export default function Trabajadores() {
     setCreating(true);
     setManualError('');
     try {
-      const workerId = `wkr-${crypto.randomUUID().slice(0, 8)}`;
+      const workerId = `wkr-${randomUUID().slice(0, 8)}`;
       const supervisor = users.find((u) => u.id === manualForm.supervisorId);
       
       await createWorker({
@@ -900,7 +901,7 @@ export default function Trabajadores() {
         <DialogTitle sx={{ fontWeight: 800 }}>Desactivar trabajador</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ pt: 1, fontWeight: 500 }}>
-            ¿Seguro que quieres desactivar a <strong>{selectedWorker?.fullName || 'este trabajador'}</strong>? No se borrará el historial; solo quedará inactivo.
+            ¿Está seguro de que desea desactivar a <strong>{selectedWorker?.fullName || 'este trabajador'}</strong>? No se borrará el historial; solo quedará inactivo.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -1123,7 +1124,7 @@ export default function Trabajadores() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={2}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
                     Descarga la plantilla base antes de preparar el archivo definitivo.
@@ -1145,7 +1146,7 @@ export default function Trabajadores() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={2}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
                     Sube el archivo preparado. El siguiente paso mostrará una tabla de validación previa.
@@ -1166,7 +1167,7 @@ export default function Trabajadores() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={2}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontWeight: 500 }}>
                     {importSummary}

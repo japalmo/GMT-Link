@@ -43,11 +43,12 @@ import {
 } from '../lib/repository';
 import { formatCurrencyCLP, toDateValue } from '../lib/formatters';
 import { firebaseAI, storage } from '../lib/firebase';
+import { randomUUID } from '../lib/uuid';
 
 const CATEGORIES = ['Bencina', 'Peajes', 'Alimentación', 'Alojamiento', 'Otros'];
 
 function createReceiptId() {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 function getFileNameFromUrl(url) {
@@ -284,7 +285,7 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
         fileUrl,
         attachmentUrls: [fileUrl],
         aiProcessing: false,
-        aiError: extracted ? '' : 'No se pudo leer la boleta. Completá los campos manualmente.',
+        aiError: extracted ? '' : 'No se pudo leer la boleta. Complete los campos manualmente.',
       });
     } catch {
       updateReceipt(receiptId, {
@@ -301,7 +302,7 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
 
   const validateForm = () => {
     if (receipts.some((receipt) => !receipt.amount || !receipt.expenseDate || !receipt.fileUrl)) {
-      setError('Completá monto, fecha y comprobante en cada boleta antes de enviar.');
+      setError('Complete monto, fecha y comprobante en cada boleta antes de enviar.');
       return false;
     }
 
@@ -386,7 +387,7 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
         scroll="paper"
       >
         <DialogTitle sx={{ fontWeight: 800 }}>
-          {success ? '¡Solicitud enviada!' : 'Nuevo reembolso'}
+          {success ? 'Solicitud enviada' : 'Nuevo reembolso'}
         </DialogTitle>
 
         <DialogContent dividers>
@@ -398,12 +399,12 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
           ) : success ? (
             <Box sx={{ py: 6, textAlign: 'center' }}>
               <CheckCircleOutlinedIcon color="success" sx={{ fontSize: 90, mb: 2 }} />
-              <Typography variant="h5" fontWeight={800} gutterBottom>¡Enviado exitosamente!</Typography>
+              <Typography variant="h5" fontWeight={800} gutterBottom>Enviado con éxito</Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
-                Tu solicitud <strong>{submittedGroupId}</strong> fue enviada para revisión.
+                Su solicitud <strong>{submittedGroupId}</strong> fue enviada para revisión.
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                La encontrarás en esta misma sección de reembolsos.
+                  La encontrará en esta misma sección de reembolsos.
               </Typography>
             </Box>
           ) : (
@@ -413,7 +414,7 @@ export default function SolicitarDialog({ open, onClose, initialGroup = null }) 
                   <Typography variant="body2" color="text.secondary">Solicitante</Typography>
                   <Typography variant="subtitle1" fontWeight={700}>{profile?.displayName}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Este formulario se guarda como borrador automáticamente.
+                        El formulario se guarda como borrador de forma automática.
                   </Typography>
                 </Box>
                 <Chip label={profile?.centerCosts?.[0] || 'Sin Centro de Costo'} size="small" variant="outlined" />

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Card, CardContent, TextField, Typography, Alert, CircularProgress, Stack, useTheme,
 } from '@mui/material';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -59,10 +59,10 @@ export default function VerificarDatos() {
         <Card sx={{ width: '100%', borderRadius: 4, boxShadow: '0 20px 40px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
           <CardContent sx={{ p: 4 }}>
             <Typography variant="h5" sx={{ mb: 1, textAlign: 'center' }} fontWeight={800}>
-              Verifica tus datos
+              Verifique sus datos
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 4, textAlign: 'center' }} fontWeight={500}>
-              Por favor, confirma o completa tu información para continuar.
+              Por favor, confirme o complete su información para continuar.
             </Typography>
 
             <AnimatePresence mode="wait">

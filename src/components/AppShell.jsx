@@ -21,6 +21,7 @@ import logoMid from '../assets/branding/logo-mid.png';
 import logoCompact from '../assets/branding/logo-compact.png';
 import { useAuth } from '../contexts/AuthContext';
 
+const gmtBlue = '#2563EB';
 const DRAWER_WIDTH = 280;
 const COLLAPSED_DRAWER_WIDTH = 88;
 
@@ -133,7 +134,7 @@ export default function AppShell() {
   );
 
   const drawerContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'background.paper' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box
         sx={{
           px: isCollapsed && !isMobile ? 0.75 : 1.75,
@@ -144,7 +145,7 @@ export default function AppShell() {
         {renderBrandLogo()}
       </Box>
 
-      <Divider sx={{ borderColor: 'rgba(0,0,0,0.04)', mx: 2 }} />
+      <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mx: 2 }} />
 
       <List sx={{ flex: 1, pt: 2, px: 1.5 }}>
         {navItems.map(({ label, path, icon }) => (
@@ -159,13 +160,13 @@ export default function AppShell() {
                 mb: 0.5,
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                 '&.Mui-selected': {
-                  bgcolor: `${theme.palette.primary.main}08`,
-                  color: 'primary.main',
-                  '& .MuiListItemIcon-root': { color: 'primary.main' },
-                  '&:hover': { bgcolor: `${theme.palette.primary.main}12` },
+                  bgcolor: `${theme.palette.primary.light}`,
+                  color: '#FFFFFF',
+                  '& .MuiListItemIcon-root': { color: '#FFFFFF' },
+                  '&:hover': { bgcolor: `${theme.palette.primary.light}` },
                 },
                 '&:hover': {
-                  bgcolor: 'rgba(0,0,0,0.02)',
+                  bgcolor: 'rgba(255,255,255,0.08)',
                   transform: isCollapsed ? 'none' : 'translateX(4px)',
                 }
               }}
@@ -175,7 +176,7 @@ export default function AppShell() {
                   minWidth: isCollapsed && !isMobile ? 'auto' : 40,
                   mr: isCollapsed && !isMobile ? 0 : 1,
                   justifyContent: 'center',
-                  color: pathname === path || (path !== '/' && pathname.startsWith(path)) ? 'primary.main' : 'text.secondary',
+                  color: pathname === path || (path !== '/' && pathname.startsWith(path)) ? '#FFFFFF' : 'rgba(255,255,255,0.65)',
                   transition: theme.transitions.create(['min-width', 'margin'], {
                     duration: drawerTransitionMs,
                   }),
@@ -187,7 +188,7 @@ export default function AppShell() {
                 <ListItemText 
                   primary={label} 
                   primaryTypographyProps={{ 
-                    fontWeight: pathname === path || (path !== '/' && pathname.startsWith(path)) ? 700 : 600, 
+                    fontWeight: pathname === path || (path !== '/' && pathname.startsWith(path)) ? 700 : 500, 
                     fontSize: '0.875rem' 
                   }} 
                 />
@@ -206,18 +207,18 @@ export default function AppShell() {
             display: isCollapsed && !isMobile ? 'none' : 'flex', 
             alignItems: 'center', 
             gap: 1.5,
-            borderColor: 'rgba(0,0,0,0.05)',
-            bgcolor: 'rgba(0,0,0,0.01)'
+            borderColor: 'rgba(255,255,255,0.15)',
+            bgcolor: 'rgba(255,255,255,0.06)'
           }}
         >
-          <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.main', fontWeight: 800 }}>
+          <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: gmtBlue, fontWeight: 800 }}>
             {avatarLetter}
           </Avatar>
           <Box sx={{ overflow: 'hidden' }}>
-            <Typography variant="caption" fontWeight={700} display="block" noWrap sx={{ lineHeight: 1 }}>
+            <Typography variant="caption" fontWeight={700} display="block" noWrap sx={{ lineHeight: 1, color: '#FFFFFF' }}>
               {displayName}
             </Typography>
-            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'capitalize' }}>
+            <Typography variant="caption" fontWeight={600} sx={{ textTransform: 'capitalize', color: 'rgba(255,255,255,0.6)' }}>
               {roleLabel}
             </Typography>
           </Box>

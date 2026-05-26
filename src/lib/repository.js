@@ -16,7 +16,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-
+import { randomUUID } from './uuid';
 function mapSnapshot(snapshot) {
   return snapshot.docs.map((item) => ({
     id: item.id,
@@ -139,10 +139,11 @@ async function generateGroupId() {
 }
 
 function buildDraftReceiptPayload(receipt, workerProfile, { status = 'draft', submittedAt = null } = {}) {
+  const workerId = workerProfile.workerId ?? workerProfile.uid ?? '__none__';
   return {
     requestNumber: receipt.requestNumber ?? '',
-    workerId: workerProfile.workerId,
-    workerName: workerProfile.displayName,
+    workerId,
+    workerName: workerProfile.displayName || workerProfile.email || 'Usuario',
     workerRut: workerProfile.rut || '',
     centerCost: workerProfile.centerCosts?.[0] || '',
     category: receipt.category || '',
@@ -158,7 +159,7 @@ function buildDraftReceiptPayload(receipt, workerProfile, { status = 'draft', su
     paymentStatus: 'unpaid',
     paymentBatchId: null,
     submittedAt,
-    submittedByName: workerProfile.displayName,
+    submittedByName: workerProfile.displayName || workerProfile.email || 'Usuario',
     approvedAt: null,
     approvedBy: null,
     approvedByName: null,
@@ -169,6 +170,7 @@ function buildDraftReceiptPayload(receipt, workerProfile, { status = 'draft', su
     rejectionReason: '',
     paidAt: null,
     paidBy: null,
+    paidByName: null,
     groupId: receipt.groupId ?? null,
   };
 }
@@ -207,6 +209,7 @@ function buildSubmittedReceiptPayload(receipt, requesterProfile, { groupId, requ
     rejectionReason: '',
     paidAt: null,
     paidBy: null,
+    paidByName: null,
     groupId,
   };
 }
@@ -288,7 +291,7 @@ export async function saveReimbursementDraft(receipts, workerProfile) {
 
 export async function createDraftReceipt(workerProfile, groupId = null) {
   const nextGroupId = groupId ?? await generateGroupId();
-  const receiptId = crypto.randomUUID();
+  const receiptId = randomUUID();
   const requestNumber = await generateRequestNumber();
   const receiptRef = doc(db, 'reimbursements', receiptId);
   const receipt = {
@@ -631,11 +634,19 @@ export function subscribeUsers({ onlyRole } = {}, onNext, onError) {
 }
 
 export async function createCostCenter(name) {
-  return addDoc(collection(db, 'costCenters'), { name: name.trim(), createdAt: new Date() });
+  return addDoc(collection(db, 'costCenters'), {
+    name: name.trim(),
+    active: true,
+    createdAt: serverTimestamp(),
+  });
 }
 
 export async function deleteCostCenter(id) {
   return deleteDoc(doc(db, 'costCenters', id));
+}
+
+export async function updateCostCenter(id, data) {
+  return setDoc(doc(db, 'costCenters', id), data, { merge: true });
 }
 
 export function subscribeCostCenters(onNext, onError) {

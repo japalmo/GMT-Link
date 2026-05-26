@@ -114,8 +114,8 @@ export default function CambiarPassword() {
               </Typography>
               <Typography variant="body2" color="text.secondary" fontWeight={500}>
                 {oobCode 
-                  ? `Estás restableciendo la contraseña para ${email}` 
-                  : 'Tu contraseña ha expirado o es tu primer ingreso. Por favor, crea una nueva.'}
+                  ? `Está restableciendo la contraseña para ${email}` 
+                  : 'Su contraseña ha expirado o es su primer ingreso. Por favor, cree una nueva.'}
               </Typography>
             </Box>
 

@@ -35,7 +35,12 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { subscribeReimbursements, updateReimbursementStatus } from '../lib/repository';
+import {
+  subscribeCostCenters,
+  subscribeReimbursements,
+  subscribeWorkers,
+  updateReimbursementStatus,
+} from '../lib/repository';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrencyCLP, formatDateTime, formatShortDate, toDateValue } from '../lib/formatters';
 import ImpresionLoteDialog from '../components/ImpresionLoteDialog';
@@ -75,6 +80,8 @@ export default function Reembolsos() {
   const [activeStep, setActiveStep] = useState(0);
   const [selectedFileName, setSelectedFileName] = useState('');
   const [reimbursements, setReimbursements] = useState([]);
+  const [costCenters, setCostCenters] = useState([]);
+  const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeStatus, setActiveStatus] = useState(
@@ -115,6 +122,23 @@ export default function Reembolsos() {
     return unsubscribe;
   }, [profile, requestIdFromUrl, selectedRequest]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeCostCenters(
+      (items) => setCostCenters(items),
+      (err) => setError(err.message),
+    );
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeWorkers(
+      { profile },
+      (items) => setWorkers(items),
+      (err) => setError(err.message),
+    );
+    return unsubscribe;
+  }, [profile]);
+
   const handleStatusUpdate = async (status) => {
     if (status === 'rejected' && !actionComment.trim()) {
       alert('Debe ingresar un motivo para el rechazo.');
@@ -143,15 +167,47 @@ export default function Reembolsos() {
     paid: reimbursements.filter((item) => item.status === 'paid').length,
   }), [reimbursements]);
 
-  const workerOptions = useMemo(
-    () => [...new Set(reimbursements.map((item) => item.workerName).filter(Boolean))].sort((left, right) => left.localeCompare(right, 'es-CL')),
-    [reimbursements],
-  );
+  const workerOptions = useMemo(() => {
+    const merged = new Map();
 
-  const centerCostOptions = useMemo(
-    () => [...new Set(reimbursements.map((item) => item.centerCost).filter(Boolean))].sort((left, right) => left.localeCompare(right, 'es-CL')),
-    [reimbursements],
-  );
+    // Prefer catálogo workers (id estable)
+    workers.forEach((w) => {
+      const id = w?.id;
+      const label = w?.fullName || w?.displayName || w?.email || w?.rut;
+      if (id && label) merged.set(id, label);
+    });
+
+    // Fallback: trabajadores que existan en reimbursements (p.ej. internos sin doc workers)
+    reimbursements.forEach((r) => {
+      const id = r?.workerId;
+      const label = r?.workerName;
+      if (id && label && !merged.has(id)) merged.set(id, label);
+    });
+
+    return [...merged.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((left, right) => left.label.localeCompare(right.label, 'es-CL'));
+  }, [reimbursements, workers]);
+
+  const centerCostOptions = useMemo(() => {
+    const reimbursementsSet = new Set(
+      reimbursements
+        .map((item) => item.centerCost)
+        .filter(Boolean),
+    );
+
+    const catalogNames = costCenters
+      .filter((cc) => cc?.active !== false)
+      .map((cc) => cc?.name)
+      .filter(Boolean);
+
+    const scopedCatalogNames = profile?.role === 'supervisor'
+      ? catalogNames.filter((name) => (profile.centerCosts ?? []).includes(name))
+      : catalogNames;
+
+    const merged = new Set([...scopedCatalogNames, ...reimbursementsSet]);
+    return [...merged].sort((left, right) => left.localeCompare(right, 'es-CL'));
+  }, [costCenters, profile?.centerCosts, profile?.role, reimbursements]);
 
   const categoryOptions = useMemo(
     () => [...new Set(reimbursements.map((item) => item.category).filter(Boolean))].sort((left, right) => left.localeCompare(right, 'es-CL')),
@@ -170,7 +226,7 @@ export default function Reembolsos() {
         : item.status === activeStatus;
 
     return matchesStatus
-      && (workerFilter === 'all' || item.workerName === workerFilter)
+      && (workerFilter === 'all' || item.workerId === workerFilter)
       && (centerCostFilter === 'all' || item.centerCost === centerCostFilter)
       && (categoryFilter === 'all' || item.category === categoryFilter)
       && (typeFilter === 'all' || item.documentType === typeFilter)
@@ -316,7 +372,7 @@ export default function Reembolsos() {
               >
                 <MenuItem value="all">Todos</MenuItem>
                 {workerOptions.map((item) => (
-                  <MenuItem key={item} value={item}>{item}</MenuItem>
+                  <MenuItem key={item.id} value={item.id}>{item.label}</MenuItem>
                 ))}
               </TextField>
               <TextField
@@ -697,7 +753,7 @@ export default function Reembolsos() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={2}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Descarga el formato base para preparar la carga masiva de registros.
@@ -719,7 +775,7 @@ export default function Reembolsos() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={2}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Sube el archivo CSV con los registros a incorporar al módulo de reembolsos.
@@ -740,7 +796,7 @@ export default function Reembolsos() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={2}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     {selectedFileName ? `Archivo listo para revisión: ${selectedFileName}` : 'Aún no hay archivo cargado.'}
@@ -776,7 +832,7 @@ export default function Reembolsos() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  spacing={1.5}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}
                 >
                   <Typography variant="body1" fontWeight={600}>
                     Importación preparada y pendiente de la conexión backend.

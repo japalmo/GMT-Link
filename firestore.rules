@@ -19,7 +19,11 @@ service cloud.firestore {
     }
 
     function isActiveUser() {
-      return hasProfile() && currentUser().active == true;
+      return isSignedIn() && exists(userDocPath()) && get(userDocPath()).data.active == true;
+    }
+
+    function isInternalUser() {
+      return isActiveUser() && (currentUser().role == 'admin' || currentUser().role == 'gerencia');
     }
 
     function isAdmin() {
@@ -126,10 +130,13 @@ service cloud.firestore {
     }
 
     function workerReimbursementCreateAllowed() {
-      return isWorker()
+      // Permite crear borradores (draft) a cualquier usuario activo que tenga workerId,
+      // siempre que esté creando solicitudes para sí mismo.
+      return isActiveUser()
         && currentWorkerId() != null
         && request.resource.data.workerId == currentWorkerId()
         && request.resource.data.status in ['draft', 'pending_approval']
+        && request.resource.data.paymentStatus == 'unpaid'
         && request.resource.data.paymentBatchId == null
         && request.resource.data.approvedAt == null
         && request.resource.data.approvedBy == null
@@ -138,7 +145,8 @@ service cloud.firestore {
         && request.resource.data.rejectedBy == null
         && request.resource.data.rejectedByName == null
         && request.resource.data.paidAt == null
-        && request.resource.data.paidBy == null;
+        && request.resource.data.paidBy == null
+        && request.resource.data.paidByName == null;
     }
 
     function workerReimbursementUpdateAllowed() {
@@ -236,8 +244,10 @@ service cloud.firestore {
       allow read: if isAdmin() || isGerencia()
         || userHasCenterCost(resource.data.centerCost)
         || (isWorker() && resource.data.workerId == currentWorkerId())
-        || (isFinanceClerk() && resource.data.status in ['approved', 'paid']);
-      allow create: if workerReimbursementCreateAllowed() || reimbursementCreateIsValid();
+        || (isFinanceClerk() && resource.data.status in ['approved', 'paid'])
+        || (isActiveUser() && resource.data.workerId == request.auth.uid);
+      allow create: if (isActiveUser() && reimbursementCreateIsValid())
+        || workerReimbursementCreateAllowed();
       allow update: if isAdmin() || isGerencia()
         || workerReimbursementUpdateAllowed()
         || supervisorReimbursementUpdateAllowed()
