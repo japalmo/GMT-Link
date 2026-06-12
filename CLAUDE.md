@@ -35,8 +35,18 @@ pnpm install        # instala todo el workspace
 pnpm dev            # levanta api (3001) + web (5173) en paralelo
 pnpm build          # build de todos los paquetes
 pnpm lint           # ESLint flat config raíz
-docker compose up -d  # PostgreSQL + Redis
+docker compose up -d  # PostgreSQL + Redis (alternativa si Docker funciona)
 ```
+
+## Infraestructura local (estado actual)
+
+PostgreSQL 16 y Redis 7 corren en **WSL Ubuntu** (no Docker — Docker Desktop tiene un bug recurrente de sockets en esta máquina). BD del proyecto: `gtm_link` (la `gmt_link` del MVP vive en el volumen Docker, no tocar). Si el puerto 5432 no responde, WSL se durmió:
+
+```powershell
+Start-Process wsl -ArgumentList "-d","Ubuntu","--exec","sleep","infinity" -WindowStyle Hidden
+```
+
+Redis en WSL aún no es accesible desde Windows (bind loopback; pendiente hasta que una etapa lo necesite).
 
 ## Git
 
