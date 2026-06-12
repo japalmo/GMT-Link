@@ -1,0 +1,122 @@
+// GTM Link — Esquema núcleo (plan maestro §4.2, verbatim).
+// Postgres = datos de negocio + catálogo legible de roles/permisos (espejo de OpenFGA, §4.1).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ IDENTIDAD ============
+model User {
+  id             String     @id @default(cuid())
+  firstName      String
+  secondName     String?
+  lastName       String
+  secondLastName String?
+  email          String     @unique
+  avatarUrl      String?
+  status         UserStatus @default(PENDING_FIRST_LOGIN)
+  points         Int        @default(0) // gamificación
+  isClientUser   Boolean    @default(false)
+  clientId       String?
+  client         Client?    @relation(fields: [clientId], references: [id])
+  memberships    Membership[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+enum UserStatus {
+  PENDING_FIRST_LOGIN
+  ACTIVE
+  SUSPENDED
+}
+
+// ============ ORGANIZACIÓN ============
+model Client {
+  id       String    @id @default(cuid())
+  code     String    @unique // máx 4 chars — obligatorio en codificación (§7)
+  name     String
+  rut      String?
+  users    User[]
+  projects Project[]
+}
+
+model Department {
+  id       String    @id @default(cuid())
+  code     String    @unique // 3 chars
+  name     String
+  projects Project[]
+}
+
+model Project {
+  id           String     @id @default(cuid())
+  code         String // 3 chars, único dentro del depto
+  name         String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  clientId     String
+  client       Client     @relation(fields: [clientId], references: [id])
+  services     Service[]
+  kpis         Json?
+  createdAt    DateTime   @default(now())
+
+  @@unique([departmentId, code])
+}
+
+model Service {
+  id              String  @id @default(cuid())
+  code            String // 3 chars
+  name            String
+  projectId       String
+  project         Project @relation(fields: [projectId], references: [id])
+  docCodingConfig Json
+
+  @@unique([projectId, code])
+}
+
+// ============ ROLES Y PERMISOS (catálogo — espejo de OpenFGA) ============
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  label       String
+  permissions RolePermission[]
+}
+
+model Permission {
+  id    String           @id @default(cuid())
+  key   String           @unique
+  label String
+  roles RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model Membership {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  roleKey   String
+  scopeType ScopeType
+  scopeId   String
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, roleKey, scopeType, scopeId])
+}
+
+enum ScopeType {
+  ORGANIZATION
+  DEPARTMENT
+  PROJECT
+  SERVICE
+}
