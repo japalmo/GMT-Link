@@ -1,4 +1,4 @@
-// ESLint flat config único del monorepo GTM Link.
+// ESLint flat config unico del monorepo GTM Link.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
@@ -14,6 +14,12 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'warn',
+    },
+  },
+  {
+    files: ['apps/api/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
     },
   },
 );

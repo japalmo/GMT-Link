@@ -5,9 +5,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
-import type { Reflector } from '@nestjs/core';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import type { FgaService } from '../fga/fga.service';
+import { FgaService } from '../fga/fga.service';
 import { PERMISSION_METADATA_KEY } from './require-permission.decorator';
 import type { PermissionMetadata } from './require-permission.decorator';
 
