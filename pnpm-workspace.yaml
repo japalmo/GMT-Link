@@ -8,3 +8,5 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   prisma: true
+  '@firebase/util': true
+  protobufjs: true
