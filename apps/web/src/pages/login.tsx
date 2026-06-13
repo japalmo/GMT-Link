@@ -1,0 +1,131 @@
+import { useState, type FormEvent } from 'react';
+import { Link2 } from 'lucide-react';
+import { FirebaseError } from 'firebase/app';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { useAuth } from '@/context/auth-context';
+
+/** Traduce los códigos de error de Firebase Auth a mensajes claros en español. */
+function authErrorMessage(error: unknown): string {
+  if (error instanceof FirebaseError) {
+    switch (error.code) {
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found':
+      case 'auth/invalid-email':
+        return 'Correo o contraseña incorrectos.';
+      case 'auth/user-disabled':
+        return 'Esta cuenta está deshabilitada. Contacta a un administrador.';
+      case 'auth/too-many-requests':
+        return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
+      case 'auth/network-request-failed':
+        return 'Sin conexión con el servidor de autenticación.';
+      default:
+        return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
+    }
+  }
+  return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
+}
+
+/**
+ * Pantalla de inicio de sesión (Etapa 0.5). Al autenticar, el routing decide el
+ * destino (/ o /first-login) según el `status` del usuario; aquí no navegamos.
+ */
+export default function LoginPage() {
+  const { login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
+    e.preventDefault();
+    setError(null);
+
+    if (!email.trim() || !password) {
+      setError('Ingresa tu correo y contraseña.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      // El observer de auth-context poblará el usuario y el router redirige.
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center gap-2 text-center">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Link2 className="size-5" aria-hidden />
+          </span>
+          <h1 className="text-xl font-bold tracking-tight">GTM Link</h1>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Iniciar sesión</CardTitle>
+            <CardDescription>Accede con tu correo corporativo.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="login-email">Correo</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  placeholder="tu@gmt.cl"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={error ? true : undefined}
+                  disabled={submitting}
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="login-password">Contraseña</Label>
+                <Input
+                  id="login-password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={error ? true : undefined}
+                  disabled={submitting}
+                />
+              </div>
+
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+
+              <Button type="submit" loading={submitting} className="w-full">
+                {submitting ? 'Ingresando…' : 'Ingresar'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}

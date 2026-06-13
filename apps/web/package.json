@@ -15,9 +15,11 @@
     "@radix-ui/react-dialog": "^1.1.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "firebase": "^12.14.0",
     "lucide-react": "^0.510.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^7.17.0",
     "tailwind-merge": "^3.0.0"
   },
   "devDependencies": {
