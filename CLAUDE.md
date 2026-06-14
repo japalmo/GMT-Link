@@ -52,6 +52,7 @@ Redis en WSL aún no es accesible desde Windows (bind loopback; pendiente hasta 
 
 - **1.1 (provisión de usuarios):** sin envío de email. El admin importa CSV / crea usuarios y la **clave provisoria se muestra en la UI** para que el admin la comparta manualmente. Dejar `EmailService` como interfaz enchufable para un proveedor real más adelante, pero no integrarlo aún.
 - **1.2 (tour onboarding):** "Omitir" **pospone**, no completa. Los checks de progreso persisten y el tour reaparece hasta que el usuario complete de verdad cada paso.
+- **1.4/1.5 (storage de archivos):** stub local en dev. `StorageService` enchufable que en desarrollo guarda en disco local (servido por la API) con interfaz lista para Cloudflare R2 (§2); R2 se integra cuando haya credenciales. Orden Etapa 1: 1.3 y 1.6 primero, luego 1.4/1.5/1.2.
 - **1.1 (roles al crear usuario):** acceso org + roles por defecto. En OpenFGA solo se escribe el **acceso** org del usuario: `organization#member` siempre, y `organization#admin` si trae `org_admin`. Los roles funcionales (operator/qa/finance/viewer/client_ito) se guardan como `Membership` scope ORGANIZATION = **"rol por defecto"** (visible en el directorio) y NO generan tupla funcional a nivel org; se materializan como tuplas FGA recién al asignar al usuario a un proyecto (Etapa 4). `assignRole`/`removeRole` solo tocan FGA para `org_admin`. (OpenFGA `write` no es idempotente: `member` se escribe una sola vez en la provisión.)
 
 ## Git

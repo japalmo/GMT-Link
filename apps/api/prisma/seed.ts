@@ -65,13 +65,17 @@ const ROLES: ReadonlyArray<{ key: string; label: string; permissions: string[] }
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
+    // 'directory:view:extended' NO se incluye: el modelo OpenFGA deriva
+    // can_view_directory_extended solo de organization#admin (org_admin). El
+    // espejo del catálogo debe coincidir con FGA para no prometer un acceso que
+    // el guard niega (§4.1). Si más adelante los dept admins deben verlo, hay que
+    // extender la relación en fga/model.fga primero.
     permissions: [
       'project:create',
       'project:kpi:define',
       'task:create',
       'task:assign',
       'asset:create',
-      'directory:view:extended',
     ],
   },
   {

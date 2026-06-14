@@ -44,3 +44,62 @@ export interface ProvisionedUser {
   status: UserStatus;
   roleKeys: RoleKey[];
 }
+
+/**
+ * Perfil propio del usuario autenticado (§6-1.3 "Mis datos").
+ * El `email` es la identidad Firebase → SOLO LECTURA. `roleKeys` viene de las
+ * Membership ORGANIZATION del propio usuario. Los campos editables son
+ * firstName/secondName/lastName/secondLastName/avatarUrl (ver UpdateProfileInput).
+ */
+export interface ProfileMe {
+  id: string;
+  firstName: string;
+  secondName: string | null;
+  lastName: string;
+  secondLastName: string | null;
+  email: string;
+  avatarUrl: string | null;
+  status: UserStatus;
+  isClientUser: boolean;
+  roleKeys: RoleKey[];
+}
+
+/** Campos editables del perfil propio (§6-1.3). Todos opcionales; email NO editable. */
+export interface UpdateProfileInput {
+  firstName?: string;
+  secondName?: string;
+  lastName?: string;
+  secondLastName?: string;
+  avatarUrl?: string;
+}
+
+/** Respuesta de POST /profile/change-password. */
+export interface ChangePasswordResponse {
+  ok: true;
+}
+
+/**
+ * Item del directorio (§6-1.6). Campos BÁSICOS visibles para cualquier usuario
+ * autenticado. Sin datos internos (status/points): esos van en el detalle
+ * extendido y solo si el solicitante tiene el permiso directory:view:extended.
+ */
+export interface DirectoryEntry {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl: string | null;
+  roleKeys: RoleKey[];
+  isClientUser: boolean;
+}
+
+/**
+ * Detalle extendido del directorio (§6-1.6). Básicos + campos internos.
+ * Solo se sirve a quien tiene directory:view:extended (organization#can_view_directory_extended).
+ */
+export interface DirectoryEntryExtended extends DirectoryEntry {
+  status: UserStatus;
+  points: number;
+  secondName: string | null;
+  secondLastName: string | null;
+}

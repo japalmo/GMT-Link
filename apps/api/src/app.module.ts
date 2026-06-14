@@ -10,6 +10,8 @@ import { DemoController } from './demo/demo.controller';
 import { DevUserMiddleware } from './dev/dev-user.middleware';
 import { FgaModule } from './fga/fga.module';
 import { HealthController } from './health.controller';
+import { DirectoryModule } from './modules/directory/directory.module';
+import { ProfileModule } from './modules/profile/profile.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -21,6 +23,8 @@ import { PrismaModule } from './prisma/prisma.module';
     FgaModule,
     AuthModule,
     UsersModule,
+    ProfileModule,
+    DirectoryModule,
   ],
   controllers: [HealthController, DemoController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],

@@ -9,6 +9,8 @@ type organization
     define member: [user] or admin
     # permisos atómicos org-scope (§3.1 "rol chico por método")
     define can_manage_users: admin
+    # datos extendidos de directorio (§8 directory:view:extended, §6-1.6) — derivado de admin
+    define can_view_directory_extended: admin
 
 type department
   relations
