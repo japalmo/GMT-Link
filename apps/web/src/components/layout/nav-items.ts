@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Users,
+  Contact,
   Wallet,
   Boxes,
   Package,
@@ -26,6 +27,7 @@ export interface NavItem {
 export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
   { label: 'Usuarios', to: '/usuarios', icon: Users },
+  { label: 'Directorio', to: '/directorio', icon: Contact },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, placeholder: true },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, placeholder: true },
   { label: 'Recursos', to: '/recursos', icon: Package, placeholder: true },

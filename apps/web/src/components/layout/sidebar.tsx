@@ -179,12 +179,18 @@ export function SidebarContent({
       {/* Footer: perfil + acciones */}
       <div className="border-t border-border p-2">
         {user && (
-          <div
+          <NavLink
+            to="/perfil"
+            onClick={handleNavigate}
+            title={collapsed ? `${user.firstName} ${user.lastName}` : 'Mi perfil'}
+            aria-label="Mi perfil"
             className={cn(
-              'mb-1 flex items-center gap-3 rounded-md px-3 py-2',
+              'mb-1 flex items-center gap-3 rounded-md px-3 py-2 outline-none transition-colors',
+              'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
               collapsed && 'justify-center px-0',
+              isActive('/perfil') && 'bg-primary/10 text-primary',
             )}
-            title={collapsed ? `${user.firstName} ${user.lastName}` : undefined}
+            aria-current={isActive('/perfil') ? 'page' : undefined}
           >
             <span
               className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground"
@@ -200,7 +206,7 @@ export function SidebarContent({
                 <p className="truncate text-xs text-muted-foreground">{user.email}</p>
               </div>
             )}
-          </div>
+          </NavLink>
         )}
 
         <div className={cn('flex flex-col gap-1', collapsed && 'items-center')}>

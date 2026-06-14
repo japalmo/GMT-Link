@@ -1,6 +1,13 @@
 import { auth } from '@/lib/firebase';
 import type { AuthedUser } from '@/types/auth';
-import type { RoleKey, UserStatus } from '@gtm-link/shared-types';
+import type {
+  DirectoryEntry,
+  DirectoryEntryExtended,
+  ProfileMe,
+  RoleKey,
+  UpdateProfileInput,
+  UserStatus,
+} from '@gtm-link/shared-types';
 
 /** Base de la API (NestJS). Cae a localhost si la var no está definida. */
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -192,5 +199,65 @@ export function removeUserRole(id: string, roleKey: RoleKey): Promise<UserRolesR
   return request<UserRolesResponse>(
     `/users/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleKey)}`,
     { method: 'DELETE' },
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Perfil propio (§6-1.3) — "Mis datos"                                        */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /profile/me` — perfil propio del usuario autenticado. 401 sin sesión. */
+export function getProfile(): Promise<ProfileMe> {
+  return request<ProfileMe>('/profile/me');
+}
+
+/**
+ * `PATCH /profile/me` — actualiza campos editables del perfil propio. El `email`
+ * no es editable (campos extra → 400). Devuelve el perfil ya actualizado.
+ */
+export function updateProfile(input: UpdateProfileInput): Promise<ProfileMe> {
+  return request<ProfileMe>('/profile/me', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * `POST /profile/change-password` — fija una nueva contraseña (mín. 8). No
+ * devuelve datos de interés más allá del éxito. La clave nunca se registra.
+ */
+export async function changePassword(newPassword: string): Promise<void> {
+  await request<{ ok: true }>('/profile/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ newPassword }),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Directorio (§6-1.6) — visible para cualquier usuario autenticado            */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /directory?search=` — entradas del directorio scopeadas por permisos. */
+export function listDirectory(search?: string): Promise<DirectoryEntry[]> {
+  const query =
+    search && search.trim().length > 0
+      ? `?search=${encodeURIComponent(search.trim())}`
+      : '';
+  return request<DirectoryEntry[]>(`/directory${query}`);
+}
+
+/** `GET /directory/:id` — detalle básico. 404 si la entrada no es visible. */
+export function getDirectoryEntry(id: string): Promise<DirectoryEntry> {
+  return request<DirectoryEntry>(`/directory/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `GET /directory/:id/extended` — detalle extendido (status, points, segundos
+ * nombres). 403 si no se tiene `directory:view:extended` (solo org_admin); el
+ * llamador debe manejar ese 403 silenciosamente y mostrar solo el básico.
+ */
+export function getDirectoryExtended(id: string): Promise<DirectoryEntryExtended> {
+  return request<DirectoryEntryExtended>(
+    `/directory/${encodeURIComponent(id)}/extended`,
   );
 }

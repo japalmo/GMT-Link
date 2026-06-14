@@ -7,6 +7,8 @@ import LoginPage from '@/pages/login';
 import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
 import UsuariosPage from '@/pages/usuarios';
+import PerfilPage from '@/pages/perfil';
+import DirectorioPage from '@/pages/directorio';
 import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
 import DesignDemo from '@/pages/DesignDemo';
@@ -46,6 +48,8 @@ const router = createBrowserRouter([
         children: [
           { path: '/', element: <DashboardPage /> },
           { path: '/usuarios', element: <UsuariosPage /> },
+          { path: '/perfil', element: <PerfilPage /> },
+          { path: '/directorio', element: <DirectorioPage /> },
           {
             path: '/finanzas',
             element: (
