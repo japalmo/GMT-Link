@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useAuth } from '@/context/auth-context';
+import { OnboardingTour } from '@/components/onboarding-tour';
 
 /**
  * Dashboard placeholder (el real, modular y configurable, llega en §6-2.1).
@@ -27,6 +28,8 @@ export default function DashboardPage() {
           llegará en una próxima etapa.
         </p>
       </header>
+
+      <OnboardingTour />
 
       <Card>
         <CardHeader>
