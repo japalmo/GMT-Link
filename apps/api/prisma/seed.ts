@@ -32,7 +32,16 @@ const PERMISSIONS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'finance:reimbursement:import', label: 'Importar reembolsos' },
   { key: 'finance:print:batch', label: 'Impresión en lote' },
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio' },
+  // Provisión de usuarios (§1.1). Espejo legible; la autorización real es FGA
+  // (organization#can_manage_users = admin). Solo el rol org_admin los porta.
+  { key: 'user:create', label: 'Crear usuarios' },
+  { key: 'user:read', label: 'Ver usuarios' },
+  { key: 'user:update', label: 'Editar usuarios' },
+  { key: 'role:assign', label: 'Asignar roles a usuarios' },
 ];
+
+/** Permisos de gestión de usuarios (§1.1) — solo para org_admin. */
+const USER_MANAGEMENT_PERMISSIONS = ['user:create', 'user:read', 'user:update', 'role:assign'];
 
 /**
  * Roles = bundles (§3.1). Keys alineadas con las relaciones de asignación directa de §4.3.
@@ -48,8 +57,10 @@ const PERMISSIONS: ReadonlyArray<{ key: string; label: string }> = [
 const ROLES: ReadonlyArray<{ key: string; label: string; permissions: string[] }> = [
   {
     key: 'org_admin',
+    // admin deriva a todo (§4.3): el catálogo completo incluye los permisos de
+    // gestión de usuarios (§1.1). El dedup vía Set deja explícita la inclusión.
     label: 'Administrador de organización',
-    permissions: PERMISSIONS.map((p) => p.key), // admin deriva a todo (§4.3)
+    permissions: [...new Set([...PERMISSIONS.map((p) => p.key), ...USER_MANAGEMENT_PERMISSIONS])],
   },
   {
     key: 'department_admin',

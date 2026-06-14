@@ -87,6 +87,11 @@ describe('Modelo OpenFGA §4.3 — derivaciones', () => {
     expect(await allowed('user:anna', 'can_assign_task', 'project:p1')).toBe(true);
   });
 
+  it('b2) admin de organización deriva can_manage_users; un no-admin no (§1.1)', async () => {
+    expect(await allowed('user:anna', 'can_manage_users', 'organization:gmt')).toBe(true);
+    expect(await allowed('user:bob', 'can_manage_users', 'organization:gmt')).toBe(false);
+  });
+
   it('c) operator: can_create_task y can_view sí, can_define_kpi no', async () => {
     expect(await allowed('user:bob', 'can_create_task', 'project:p1')).toBe(true);
     expect(await allowed('user:bob', 'can_view', 'project:p1')).toBe(true);

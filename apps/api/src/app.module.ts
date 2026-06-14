@@ -5,18 +5,22 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { SessionMiddleware } from './auth/session.middleware';
 import { PermissionsGuard } from './authz/permissions.guard';
+import { CommonModule } from './common/common.module';
 import { DemoController } from './demo/demo.controller';
 import { DevUserMiddleware } from './dev/dev-user.middleware';
 import { FgaModule } from './fga/fga.module';
 import { HealthController } from './health.controller';
+import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
+    CommonModule,
     PrismaModule,
     FgaModule,
     AuthModule,
+    UsersModule,
   ],
   controllers: [HealthController, DemoController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],

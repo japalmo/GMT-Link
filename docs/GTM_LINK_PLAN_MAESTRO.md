@@ -164,6 +164,8 @@ type organization
   relations
     define admin: [user]
     define member: [user] or admin
+    # permiso atómico (derivado) — provisión de usuarios (§1.1)
+    define can_manage_users: admin
 
 type department
   relations
@@ -353,6 +355,10 @@ Ej.: `GMT-ALS-...-CA-A4-001`. Cada código máx 4 chars, configurable. Al crear 
 | `finance:reimbursement:import` | Importar reembolsos |
 | `finance:print:batch` | Impresión en lote |
 | `directory:view:extended` | Ver datos extendidos de directorio |
+| `user:create` | Crear usuarios (§1.1) |
+| `user:read` | Ver usuarios |
+| `user:update` | Editar usuarios |
+| `role:assign` | Asignar roles a usuarios |
 
 ---
 

@@ -12,6 +12,7 @@
     "db:studio": "prisma studio",
     "fga:bootstrap": "tsx scripts/fga-bootstrap.ts",
     "seed:auth-dev": "tsx prisma/seed-auth-dev.ts",
+    "seed:admin": "tsx prisma/seed-admin.ts",
     "test": "vitest run"
   },
   "dependencies": {

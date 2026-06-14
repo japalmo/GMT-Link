@@ -1,10 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import type { App } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { FirebaseAuthError, getAuth } from 'firebase-admin/auth';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 
 export type { DecodedIdToken };
+
+/** Entrada para aprovisionar un usuario en Firebase (§1.1). */
+export interface CreateFirebaseUserInput {
+  email: string;
+  password: string;
+  /** Por defecto true: las cuentas las aprovisiona el admin ya verificadas (§1.1). */
+  emailVerified?: boolean;
+}
 
 /**
  * Wrapper tipado sobre firebase-admin (§2).
@@ -59,5 +67,46 @@ export class FirebaseService {
   /** Cambia la contraseña del usuario de Firebase identificado por `uid`. */
   async setPassword(uid: string, password: string): Promise<void> {
     await getAuth(this.app).updateUser(uid, { password });
+  }
+
+  /**
+   * Crea un usuario en Firebase (§1.1, provisión por admin).
+   * `emailVerified` por defecto true: las cuentas las aprovisiona el admin y el
+   * `SessionMiddleware` exige email verificado para derivar sesión.
+   * Si el email ya existe lanza `ConflictException` con un mensaje claro
+   * (Firebase responde `auth/email-already-exists`).
+   */
+  async createUser(input: CreateFirebaseUserInput): Promise<{ uid: string }> {
+    try {
+      const record = await getAuth(this.app).createUser({
+        email: input.email,
+        password: input.password,
+        emailVerified: input.emailVerified ?? true,
+      });
+      return { uid: record.uid };
+    } catch (error: unknown) {
+      if (error instanceof FirebaseAuthError && error.code === 'auth/email-already-exists') {
+        throw new ConflictException(
+          `Ya existe una cuenta de Firebase con el email "${input.email}".`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Borra un usuario de Firebase por `uid`. Best-effort: usado para compensar
+   * (§1.1) cuando la creación en Postgres/FGA falla tras crear el usuario
+   * Firebase. Si el usuario ya no existe se ignora el error.
+   */
+  async deleteUser(uid: string): Promise<void> {
+    try {
+      await getAuth(this.app).deleteUser(uid);
+    } catch (error: unknown) {
+      if (error instanceof FirebaseAuthError && error.code === 'auth/user-not-found') {
+        return;
+      }
+      throw error;
+    }
   }
 }

@@ -40,12 +40,7 @@ export class PermissionsGuard implements CanActivate {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');
     }
 
-    const resourceId = request.params[metadata.resource.param];
-    if (!resourceId) {
-      throw new BadRequestException(
-        `Falta el parámetro de ruta "${metadata.resource.param}" necesario para evaluar el permiso "${metadata.relation}" sobre "${metadata.resource.type}".`,
-      );
-    }
+    const resourceId = this.resolveResourceId(metadata.resource, request);
 
     const allowed = await this.fgaService.check({
       user: `user:${authUser.id}`,
@@ -58,5 +53,31 @@ export class PermissionsGuard implements CanActivate {
       );
     }
     return true;
+  }
+
+  /**
+   * Resuelve el id del recurso FGA según la forma del descriptor:
+   *  - id estático → se usa tal cual (acciones org-scope, §1.1);
+   *  - param de ruta → se lee de `request.params`, 400 si falta.
+   * La unión es discriminada por la presencia de `param`, así nunca se
+   * consulta un objeto ambiguo.
+   */
+  private resolveResourceId(
+    resource: PermissionMetadata['resource'],
+    request: Request,
+  ): string {
+    if (resource.param !== undefined) {
+      // En Express 5 un param puede ser string o string[] (rutas con comodín);
+      // para un id de recurso esperamos un único segmento → tomamos el primero.
+      const raw = request.params[resource.param];
+      const fromRoute = Array.isArray(raw) ? raw[0] : raw;
+      if (!fromRoute) {
+        throw new BadRequestException(
+          `Falta el parámetro de ruta "${resource.param}" necesario para evaluar el permiso sobre "${resource.type}".`,
+        );
+      }
+      return fromRoute;
+    }
+    return resource.id;
   }
 }
