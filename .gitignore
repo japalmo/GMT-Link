@@ -16,6 +16,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Uploads del storage local (dev) — los archivos no se versionan (§9)
+apps/api/var/
+
 # IDE
 .vscode/
 .idea/

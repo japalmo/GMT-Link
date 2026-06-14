@@ -33,6 +33,7 @@
     "@nestjs/cli": "^11.0.0",
     "@openfga/syntax-transformer": "^0.2.1",
     "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
     "@types/node": "^22.10.0",
     "dotenv": "^16.4.7",
     "prisma": "^6.19.0",

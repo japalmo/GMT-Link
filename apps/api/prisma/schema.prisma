@@ -25,6 +25,9 @@ model User {
   clientId       String?
   client         Client?    @relation(fields: [clientId], references: [id])
   memberships    Membership[]
+  cv             CV?
+  documents      PersonalDocument[] @relation("UserDocuments")
+  reviewedDocs   PersonalDocument[] @relation("DocumentReviewer")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -119,4 +122,91 @@ enum ScopeType {
   DEPARTMENT
   PROJECT
   SERVICE
+}
+
+// ============ PERFIL — CV (§6-1.4) ============
+// CV 1:1 con User; tres arrays editables (experiencia / educación / certificaciones).
+model CV {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summary   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experiences    CVExperience[]
+  education      CVEducation[]
+  certifications CVCertification[]
+
+  @@map("cvs")
+}
+
+model CVExperience {
+  id          String    @id @default(cuid())
+  cvId        String
+  cv          CV        @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  role        String
+  company     String
+  startDate   DateTime
+  endDate     DateTime?
+  description String?
+  createdAt   DateTime  @default(now())
+
+  @@map("cv_experiences")
+}
+
+model CVEducation {
+  id          String    @id @default(cuid())
+  cvId        String
+  cv          CV        @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  institution String
+  degree      String
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("cv_education")
+}
+
+model CVCertification {
+  id        String    @id @default(cuid())
+  cvId      String
+  cv        CV        @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  name      String
+  issuer    String?
+  issuedAt  DateTime?
+  expiresAt DateTime?
+  fileUrl   String? // diploma PDF (StorageService; stub local en dev)
+  createdAt DateTime  @default(now())
+
+  @@map("cv_certifications")
+}
+
+// ============ PERFIL — Documentos personales (§6-1.5) ============
+// Versionado vía la primitiva ApprovalWorkflow: status + versión anterior + revisor.
+model PersonalDocument {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation("UserDocuments", fields: [userId], references: [id], onDelete: Cascade)
+  type            String
+  name            String
+  fileUrl         String
+  issuedAt        DateTime?
+  expiresAt       DateTime? // para alertas de vencimiento
+  status          DocumentStatus @default(EN_REVISION)
+  previousFileUrl String? // versión anterior conservada al subir una nueva
+  reviewedById    String?
+  reviewedBy      User?          @relation("DocumentReviewer", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("personal_documents")
+}
+
+enum DocumentStatus {
+  BORRADOR
+  EN_REVISION
+  APROBADO
+  RECHAZADO
 }

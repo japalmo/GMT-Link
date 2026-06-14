@@ -6,11 +6,14 @@ import { AuthModule } from './auth/auth.module';
 import { SessionMiddleware } from './auth/session.middleware';
 import { PermissionsGuard } from './authz/permissions.guard';
 import { CommonModule } from './common/common.module';
+import { StorageModule } from './common/storage/storage.module';
 import { DemoController } from './demo/demo.controller';
 import { DevUserMiddleware } from './dev/dev-user.middleware';
 import { FgaModule } from './fga/fga.module';
 import { HealthController } from './health.controller';
+import { CvModule } from './modules/cv/cv.module';
 import { DirectoryModule } from './modules/directory/directory.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -19,12 +22,15 @@ import { PrismaModule } from './prisma/prisma.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     CommonModule,
+    StorageModule,
     PrismaModule,
     FgaModule,
     AuthModule,
     UsersModule,
     ProfileModule,
     DirectoryModule,
+    CvModule,
+    DocumentsModule,
   ],
   controllers: [HealthController, DemoController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],

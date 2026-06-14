@@ -32,6 +32,9 @@ const PERMISSIONS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'finance:reimbursement:import', label: 'Importar reembolsos' },
   { key: 'finance:print:batch', label: 'Impresión en lote' },
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio' },
+  // Revisión de documentos personales (§6-1.5). Espejo legible; la autorización
+  // real es FGA (organization#can_review_documents = admin). Solo org_admin.
+  { key: 'document:review', label: 'Revisar documentos' },
   // Provisión de usuarios (§1.1). Espejo legible; la autorización real es FGA
   // (organization#can_manage_users = admin). Solo el rol org_admin los porta.
   { key: 'user:create', label: 'Crear usuarios' },
