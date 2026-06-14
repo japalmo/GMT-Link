@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import LoginPage from '@/pages/login';
 import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
+import UsuariosPage from '@/pages/usuarios';
 import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
 import DesignDemo from '@/pages/DesignDemo';
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: '/', element: <DashboardPage /> },
+          { path: '/usuarios', element: <UsuariosPage /> },
           {
             path: '/finanzas',
             element: (

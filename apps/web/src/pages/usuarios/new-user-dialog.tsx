@@ -1,0 +1,223 @@
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import type { RoleKey } from '@gtm-link/shared-types';
+import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from '@/components/ui/modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import type { CreateUserDto } from '@/lib/api';
+import { RoleMultiSelect } from './role-multi-select';
+
+/** Estado del formulario (campos opcionales como string vacío para inputs controlados). */
+interface FormState {
+  firstName: string;
+  secondName: string;
+  lastName: string;
+  secondLastName: string;
+  email: string;
+  roleKeys: RoleKey[];
+  isClientUser: boolean;
+}
+
+const EMPTY: FormState = {
+  firstName: '',
+  secondName: '',
+  lastName: '',
+  secondLastName: '',
+  email: '',
+  roleKeys: [],
+  isClientUser: false,
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Convierte el estado del formulario al DTO del backend (omite opcionales vacíos). */
+function toDto(form: FormState): CreateUserDto {
+  return {
+    firstName: form.firstName.trim(),
+    secondName: form.secondName.trim() || undefined,
+    lastName: form.lastName.trim(),
+    secondLastName: form.secondLastName.trim() || undefined,
+    email: form.email.trim(),
+    roleKeys: form.roleKeys,
+    isClientUser: form.isClientUser,
+  };
+}
+
+/**
+ * Diálogo "Nuevo usuario" (§1.1). Formulario controlado con validación básica;
+ * delega la creación al padre vía `onCreate` (que llama al backend y muestra la
+ * clave provisoria). Muestra errores de servidor (409 email duplicado, etc.).
+ */
+export function NewUserDialog({
+  open,
+  onOpenChange,
+  onCreate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreate: (dto: CreateUserDto) => Promise<void>;
+}): ReactNode {
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
+
+  function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function reset(): void {
+    setForm(EMPTY);
+    setError(null);
+    setSubmitting(false);
+  }
+
+  function localError(): string | null {
+    if (form.firstName.trim().length === 0) return 'El nombre es obligatorio.';
+    if (form.lastName.trim().length === 0) return 'El apellido es obligatorio.';
+    if (!EMAIL_RE.test(form.email.trim())) return 'Ingresa un correo válido.';
+    if (form.roleKeys.length === 0) return 'Selecciona al menos un rol.';
+    return null;
+  }
+
+  async function handleSubmit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const invalid = localError();
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onCreate(toDto(form));
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear el usuario.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        if (submitting) return;
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <ModalContent className="sm:max-w-lg">
+        <ModalHeader>
+          <ModalTitle>Nuevo usuario</ModalTitle>
+          <ModalDescription>
+            Se generará una clave provisoria para entregar a la persona.
+          </ModalDescription>
+        </ModalHeader>
+
+        <form className="flex flex-col gap-4" onSubmit={(e) => void handleSubmit(e)} noValidate>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Primer nombre" required>
+              <Input
+                value={form.firstName}
+                onChange={(e) => update('firstName', e.target.value)}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Segundo nombre">
+              <Input
+                value={form.secondName}
+                onChange={(e) => update('secondName', e.target.value)}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Apellido paterno" required>
+              <Input
+                value={form.lastName}
+                onChange={(e) => update('lastName', e.target.value)}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Apellido materno">
+              <Input
+                value={form.secondLastName}
+                onChange={(e) => update('secondLastName', e.target.value)}
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+
+          <Field label="Correo electrónico" required>
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(e) => update('email', e.target.value)}
+              autoComplete="off"
+            />
+          </Field>
+
+          <RoleMultiSelect
+            value={form.roleKeys}
+            onChange={(next) => update('roleKeys', next)}
+            disabled={submitting}
+          />
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-input accent-primary"
+              checked={form.isClientUser}
+              onChange={(e) => update('isClientUser', e.target.checked)}
+            />
+            Es usuario cliente (ITO)
+          </label>
+
+          {error && (
+            <p id={errorId} role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" loading={submitting}>
+              Crear usuario
+            </Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+/**
+ * Campo de formulario. Usa un `<label>` ENVOLVENTE (asociación implícita) para
+ * que el texto quede ligado al control sin necesidad de ids manuales.
+ */
+function Field({
+  label,
+  required = false,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium leading-none text-foreground">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
