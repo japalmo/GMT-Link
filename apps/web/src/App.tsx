@@ -9,6 +9,9 @@ import DashboardPage from '@/pages/dashboard';
 import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
 import DesignDemo from '@/pages/DesignDemo';
+import RoleScopedListDemo from '@/pages/primitives/role-scoped-list-demo';
+import ImportWizardDemo from '@/pages/primitives/import-wizard-demo';
+import ApprovalWorkflowDemo from '@/pages/primitives/approval-workflow-demo';
 
 /** Redirección de rutas inexistentes a la raíz (que aplica los guards). */
 function NotFoundRedirect() {
@@ -88,6 +91,10 @@ const router = createBrowserRouter([
           },
           // QA del design system.
           { path: '/design', element: <DesignDemo /> },
+          // Demos aisladas de las primitivas §5 (Etapa 0.8, QA).
+          { path: '/primitives/role-scoped-list', element: <RoleScopedListDemo /> },
+          { path: '/primitives/import-wizard', element: <ImportWizardDemo /> },
+          { path: '/primitives/approval-workflow', element: <ApprovalWorkflowDemo /> },
         ],
       },
     ],
