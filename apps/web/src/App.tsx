@@ -8,6 +8,8 @@ import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
 import UsuariosPage from '@/pages/usuarios';
 import PerfilPage from '@/pages/perfil';
+import CvPage from '@/pages/perfil/cv';
+import DocumentsPage from '@/pages/documentos';
 import DirectorioPage from '@/pages/directorio';
 import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
@@ -49,6 +51,8 @@ const router = createBrowserRouter([
           { path: '/', element: <DashboardPage /> },
           { path: '/usuarios', element: <UsuariosPage /> },
           { path: '/perfil', element: <PerfilPage /> },
+          { path: '/perfil/cv', element: <CvPage /> },
+          { path: '/perfil/documentos', element: <DocumentsPage /> },
           { path: '/directorio', element: <DirectorioPage /> },
           {
             path: '/finanzas',

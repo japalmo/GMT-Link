@@ -1,6 +1,20 @@
 import { auth } from '@/lib/firebase';
 import type { AuthedUser } from '@/types/auth';
 import type {
+  CvCertificationInput,
+  CvCertificationView,
+  CvEducationInput,
+  CvEducationView,
+  CvExperienceInput,
+  CvExperienceView,
+  CvView,
+} from '@/types/cv';
+import type {
+  DocumentFilters,
+  PersonalDocumentView,
+  UploadDocumentFields,
+} from '@/types/documents';
+import type {
   DirectoryEntry,
   DirectoryEntryExtended,
   ProfileMe,
@@ -65,6 +79,45 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(
       extractMessage(body, `Error ${res.status} al llamar a la API.`),
+      res.status,
+    );
+  }
+
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+/**
+ * `fetch` tipado para subidas multipart (archivos). A diferencia de
+ * {@link request}, **NO** fija `Content-Type`: el navegador lo establece con el
+ * `boundary` correcto a partir del `FormData`. Adjunta el ID token de Firebase
+ * igual que `request` y comparte el manejo de errores (`ApiError`).
+ */
+async function uploadRequest<T>(
+  path: string,
+  formData: FormData,
+  method = 'POST',
+): Promise<T> {
+  const headers = new Headers();
+  const token = await auth.currentUser?.getIdToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { method, body: formData, headers });
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', 0);
+  }
+
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // respuesta sin cuerpo JSON; usamos el fallback
+    }
+    throw new ApiError(
+      extractMessage(body, `Error ${res.status} al subir el archivo.`),
       res.status,
     );
   }
@@ -260,4 +313,175 @@ export function getDirectoryExtended(id: string): Promise<DirectoryEntryExtended
   return request<DirectoryEntryExtended>(
     `/directory/${encodeURIComponent(id)}/extended`,
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mi CV (§6-1.4) — experiencia, educación y certificaciones                   */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /cv/me` — CV propio (se crea vacío de forma perezosa). 401 sin sesión. */
+export function getCv(): Promise<CvView> {
+  return request<CvView>('/cv/me');
+}
+
+/** `PATCH /cv/me` — actualiza el resumen del CV. Devuelve el CV completo. */
+export function patchCv(input: { summary?: string }): Promise<CvView> {
+  return request<CvView>('/cv/me', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `POST /cv/me/experiences` — agrega una experiencia. */
+export function addExperience(input: CvExperienceInput): Promise<CvExperienceView> {
+  return request<CvExperienceView>('/cv/me/experiences', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `PATCH /cv/me/experiences/:id` — edita una experiencia. */
+export function updateExperience(
+  id: string,
+  input: CvExperienceInput,
+): Promise<CvExperienceView> {
+  return request<CvExperienceView>(`/cv/me/experiences/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `DELETE /cv/me/experiences/:id` — elimina una experiencia. */
+export function deleteExperience(id: string): Promise<void> {
+  return request<void>(`/cv/me/experiences/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/** `POST /cv/me/education` — agrega una formación académica. */
+export function addEducation(input: CvEducationInput): Promise<CvEducationView> {
+  return request<CvEducationView>('/cv/me/education', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `PATCH /cv/me/education/:id` — edita una formación académica. */
+export function updateEducation(
+  id: string,
+  input: CvEducationInput,
+): Promise<CvEducationView> {
+  return request<CvEducationView>(`/cv/me/education/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `DELETE /cv/me/education/:id` — elimina una formación académica. */
+export function deleteEducation(id: string): Promise<void> {
+  return request<void>(`/cv/me/education/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/** `POST /cv/me/certifications` — agrega una certificación. */
+export function addCertification(
+  input: CvCertificationInput,
+): Promise<CvCertificationView> {
+  return request<CvCertificationView>('/cv/me/certifications', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `PATCH /cv/me/certifications/:id` — edita una certificación. */
+export function updateCertification(
+  id: string,
+  input: CvCertificationInput,
+): Promise<CvCertificationView> {
+  return request<CvCertificationView>(
+    `/cv/me/certifications/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+}
+
+/** `DELETE /cv/me/certifications/:id` — elimina una certificación. */
+export function deleteCertification(id: string): Promise<void> {
+  return request<void>(`/cv/me/certifications/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * `POST /cv/me/certifications/:id/diploma` — sube el diploma (solo PDF) de una
+ * certificación, vía multipart (campo `file`). Devuelve la certificación con su
+ * `fileUrl` ya poblado.
+ */
+export function uploadDiploma(
+  id: string,
+  file: File,
+): Promise<CvCertificationView> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return uploadRequest<CvCertificationView>(
+    `/cv/me/certifications/${encodeURIComponent(id)}/diploma`,
+    formData,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mis documentos (§6-1.5) — vencimiento, filtros, versionado                  */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /documents/me?status=&expiring=` — documentos personales del usuario. */
+export function listDocuments(
+  filters: DocumentFilters = {},
+): Promise<PersonalDocumentView[]> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.expiring) params.set('expiring', 'true');
+  const query = params.toString();
+  return request<PersonalDocumentView[]>(
+    `/documents/me${query ? `?${query}` : ''}`,
+  );
+}
+
+/**
+ * `POST /documents/me` — sube un documento nuevo (PDF o imagen) vía multipart
+ * (campo `file`) junto con sus metadatos. Queda en estado `EN_REVISION`.
+ */
+export function uploadDocument(
+  fields: UploadDocumentFields,
+  file: File,
+): Promise<PersonalDocumentView> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('type', fields.type);
+  formData.append('name', fields.name);
+  if (fields.issuedAt) formData.append('issuedAt', fields.issuedAt);
+  if (fields.expiresAt) formData.append('expiresAt', fields.expiresAt);
+  return uploadRequest<PersonalDocumentView>('/documents/me', formData);
+}
+
+/**
+ * `POST /documents/me/:id/version` — sube una versión nueva del documento
+ * (campo `file`). Conserva `previousFileUrl` y vuelve a `EN_REVISION`.
+ */
+export function uploadDocumentVersion(
+  id: string,
+  file: File,
+): Promise<PersonalDocumentView> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return uploadRequest<PersonalDocumentView>(
+    `/documents/me/${encodeURIComponent(id)}/version`,
+    formData,
+  );
+}
+
+/** `DELETE /documents/me/:id` — elimina un documento personal. */
+export function deleteDocument(id: string): Promise<void> {
+  return request<void>(`/documents/me/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }

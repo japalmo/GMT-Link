@@ -14,6 +14,7 @@ import { StatusBadge } from '@/pages/usuarios/status-badge';
 import { PersonAvatar } from '@/pages/directorio/person-avatar';
 import { ProfileForm } from './profile-form';
 import { ChangePasswordForm } from './change-password-form';
+import { ProfileTabs } from './profile-tabs';
 
 /** Skeleton de carga del perfil, con la forma de la cabecera + tarjetas. */
 function ProfileSkeleton(): ReactNode {
@@ -44,11 +45,14 @@ export default function PerfilPage(): ReactNode {
 
   return (
     <div className="flex flex-col gap-6 p-6 sm:p-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Mis datos</h1>
-        <p className="text-sm text-muted-foreground">
-          Revisa y actualiza tu información personal y tu contraseña.
-        </p>
+      <header className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Mi perfil</h1>
+          <p className="text-sm text-muted-foreground">
+            Revisa y actualiza tu información personal y tu contraseña.
+          </p>
+        </div>
+        <ProfileTabs />
       </header>
 
       {loading && <ProfileSkeleton />}
