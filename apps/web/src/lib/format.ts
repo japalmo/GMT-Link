@@ -88,6 +88,20 @@ export function formatRelativeTime(
   return 'hace un momento';
 }
 
+/** Formateador de moneda chilena (CLP, sin decimales): "$ 25.000". */
+const clpFormatter = new Intl.NumberFormat('es-CL', {
+  style: 'currency',
+  currency: 'CLP',
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Formatea un monto entero en pesos chilenos ("$25.000"). CLP no usa decimales.
+ */
+export function formatCLP(amount: number): string {
+  return clpFormatter.format(amount);
+}
+
 /** Formatea un tamaño en bytes a texto legible ("2,4 MB"). */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

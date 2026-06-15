@@ -28,8 +28,8 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard },
   { label: 'Usuarios', to: '/usuarios', icon: Users },
   { label: 'Directorio', to: '/directorio', icon: Contact },
-  { label: 'Finanzas', to: '/finanzas', icon: Wallet, placeholder: true },
-  { label: 'Operaciones', to: '/operaciones', icon: Boxes, placeholder: true },
+  { label: 'Finanzas', to: '/finanzas', icon: Wallet },
+  { label: 'Operaciones', to: '/operaciones', icon: Boxes },
   { label: 'Recursos', to: '/recursos', icon: Package, placeholder: true },
 ];
 

@@ -12,6 +12,7 @@ import PerfilPage from '@/pages/perfil';
 import CvPage from '@/pages/perfil/cv';
 import DocumentsPage from '@/pages/documentos';
 import DirectorioPage from '@/pages/directorio';
+import FinanzasPage from '@/pages/finanzas';
 import NotificacionesPage from '@/pages/notificaciones';
 import ConfiguracionPage from '@/pages/configuracion';
 import PlaceholderPage from '@/pages/placeholder';
@@ -20,6 +21,7 @@ import DesignDemo from '@/pages/DesignDemo';
 import RoleScopedListDemo from '@/pages/primitives/role-scoped-list-demo';
 import ImportWizardDemo from '@/pages/primitives/import-wizard-demo';
 import ApprovalWorkflowDemo from '@/pages/primitives/approval-workflow-demo';
+import OperacionesPage from '@/pages/operaciones';
 
 /** Redirección de rutas inexistentes a la raíz (que aplica los guards). */
 function NotFoundRedirect() {
@@ -59,24 +61,8 @@ const router = createBrowserRouter([
           { path: '/directorio', element: <DirectorioPage /> },
           { path: '/notificaciones', element: <NotificacionesPage /> },
           { path: '/configuracion', element: <ConfiguracionPage /> },
-          {
-            path: '/finanzas',
-            element: (
-              <PlaceholderPage
-                title="Finanzas"
-                description="Reembolsos, horas extra y liquidaciones."
-              />
-            ),
-          },
-          {
-            path: '/operaciones',
-            element: (
-              <PlaceholderPage
-                title="Operaciones"
-                description="Proyectos, backlog y documentos."
-              />
-            ),
-          },
+          { path: '/finanzas', element: <FinanzasPage /> },
+          { path: '/operaciones', element: <OperacionesPage /> },
           {
             path: '/recursos',
             element: (

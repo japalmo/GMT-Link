@@ -15,6 +15,14 @@ import type {
   UploadDocumentFields,
 } from '@/types/documents';
 import type { DashboardLayoutItem, DashboardView } from '@/types/dashboard';
+import type {
+  CreateOvertimeInput,
+  CreateReimbursementInput,
+  FinanceStatus,
+  OvertimeView,
+  ReimbursementView,
+  LiquidationView,
+} from '@/types/finance';
 import type { NotificationView } from '@/types/notifications';
 import type {
   PermissionRequestAdminView,
@@ -30,6 +38,13 @@ import type {
   UpdateProfileInput,
   UserStatus,
 } from '@gtm-link/shared-types';
+import type {
+  ProjectView,
+  ServiceView,
+  TaskView,
+  ProjectDocumentView,
+  TaskStatus,
+} from '@/types/operations';
 
 /** Base de la API (NestJS). Cae a localhost si la var no está definida. */
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -625,3 +640,387 @@ export function rejectPermissionRequest(
     { method: 'POST', body: JSON.stringify(body) },
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Finanzas (§6-3.1 Reembolsos / §6-3.3 Horas extra)                           */
+/* -------------------------------------------------------------------------- */
+/*
+ * Rutas propias (`/me`, crear, boleta): cualquiera autenticado, "solo el dueño"
+ * lo resuelve el backend con el userId de la sesión. Rutas de GESTIÓN (lista
+ * global `GET /…`, approve/reject/pay): devuelven 403 si el usuario no es gestor
+ * (`can_manage_finance`). El llamador maneja ese 403 como "no soy gestor" sin
+ * romper la UI (probe silencioso). Las transiciones inválidas devuelven 409.
+ */
+
+/* --- Reembolsos --- */
+
+/** `POST /reimbursements` — crea un reembolso propio (PENDIENTE). */
+export function createReimbursement(
+  input: CreateReimbursementInput,
+): Promise<ReimbursementView> {
+  return request<ReimbursementView>('/reimbursements', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `POST /reimbursements/import` — importa un lote de reembolsos propios (PENDIENTE). */
+export function importReimbursements(
+  items: CreateReimbursementInput[],
+): Promise<ReimbursementView[]> {
+  return request<ReimbursementView[]>('/reimbursements/import', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}
+
+/** `GET /reimbursements/me?status=` — reembolsos propios. Filtro de estado opcional. */
+export function listMyReimbursements(
+  status?: FinanceStatus,
+): Promise<ReimbursementView[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<ReimbursementView[]>(`/reimbursements/me${query}`);
+}
+
+/**
+ * `GET /reimbursements?status=&userId=` — TODOS los reembolsos (gestor). Devuelve
+ * 403 si no se tiene `can_manage_finance` (el llamador lo trata como "no gestor"
+ * sin romper la UI). Las filas incluyen `requester`.
+ */
+export function listAllReimbursements(filters: {
+  status?: FinanceStatus;
+  userId?: string;
+}): Promise<ReimbursementView[]> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.userId) params.set('userId', filters.userId);
+  const query = params.toString();
+  return request<ReimbursementView[]>(`/reimbursements${query ? `?${query}` : ''}`);
+}
+
+/** `GET /reimbursements/:id` — detalle. Lo ve el dueño O un gestor. 404 si no. */
+export function getReimbursement(id: string): Promise<ReimbursementView> {
+  return request<ReimbursementView>(`/reimbursements/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `POST /reimbursements/:id/receipt` — sube/actualiza la boleta (multipart, campo
+ * `file` PDF/imagen). SOLO el dueño y solo si está PENDIENTE. Devuelve el
+ * reembolso con su `receiptUrl` ya poblado.
+ */
+export function attachReimbursementReceipt(
+  id: string,
+  file: File,
+): Promise<ReimbursementView> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return uploadRequest<ReimbursementView>(
+    `/reimbursements/${encodeURIComponent(id)}/receipt`,
+    formData,
+  );
+}
+
+/** `POST /reimbursements/:id/approve` — aprueba (gestor). PENDIENTE→APROBADO; 409 si no. */
+export function approveReimbursement(id: string): Promise<ReimbursementView> {
+  return request<ReimbursementView>(
+    `/reimbursements/${encodeURIComponent(id)}/approve`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * `POST /reimbursements/:id/reject` — rechaza (gestor), con motivo opcional.
+ * PENDIENTE→RECHAZADO; 409 si el estado no lo permite.
+ */
+export function rejectReimbursement(
+  id: string,
+  reason?: string,
+): Promise<ReimbursementView> {
+  const body: { reason?: string } = {};
+  if (reason && reason.trim().length > 0) body.reason = reason.trim();
+  return request<ReimbursementView>(
+    `/reimbursements/${encodeURIComponent(id)}/reject`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/** `POST /reimbursements/:id/pay` — marca pagado (gestor). APROBADO→PAGADO; 409 si no. */
+export function payReimbursement(id: string): Promise<ReimbursementView> {
+  return request<ReimbursementView>(
+    `/reimbursements/${encodeURIComponent(id)}/pay`,
+    { method: 'POST' },
+  );
+}
+
+/* --- Horas extra --- */
+
+/** `POST /overtime` — crea una solicitud de horas extra propia (PENDIENTE). */
+export function createOvertime(input: CreateOvertimeInput): Promise<OvertimeView> {
+  return request<OvertimeView>('/overtime', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `GET /overtime/me?status=` — solicitudes propias. Filtro de estado opcional. */
+export function listMyOvertime(status?: FinanceStatus): Promise<OvertimeView[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<OvertimeView[]>(`/overtime/me${query}`);
+}
+
+/**
+ * `GET /overtime?status=&userId=` — TODAS las solicitudes (gestor). Devuelve 403
+ * si no se tiene `can_manage_finance` (el llamador lo trata como "no gestor" sin
+ * romper la UI). Las filas incluyen `requester`.
+ */
+export function listAllOvertime(filters: {
+  status?: FinanceStatus;
+  userId?: string;
+}): Promise<OvertimeView[]> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.userId) params.set('userId', filters.userId);
+  const query = params.toString();
+  return request<OvertimeView[]>(`/overtime${query ? `?${query}` : ''}`);
+}
+
+/** `GET /overtime/:id` — detalle. Lo ve el dueño O un gestor. 404 si no. */
+export function getOvertime(id: string): Promise<OvertimeView> {
+  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}`);
+}
+
+/** `POST /overtime/:id/approve` — aprueba (gestor). PENDIENTE→APROBADO; 409 si no. */
+export function approveOvertime(id: string): Promise<OvertimeView> {
+  return request<OvertimeView>(
+    `/overtime/${encodeURIComponent(id)}/approve`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * `POST /overtime/:id/reject` — rechaza (gestor), con motivo opcional.
+ * PENDIENTE→RECHAZADO; 409 si el estado no lo permite.
+ */
+export function rejectOvertime(
+  id: string,
+  reason?: string,
+): Promise<OvertimeView> {
+  const body: { reason?: string } = {};
+  if (reason && reason.trim().length > 0) body.reason = reason.trim();
+  return request<OvertimeView>(
+    `/overtime/${encodeURIComponent(id)}/reject`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+/** `POST /overtime/:id/pay` — marca pagada (gestor). APROBADO→PAGADO; 409 si no. */
+export function payOvertime(id: string): Promise<OvertimeView> {
+  return request<OvertimeView>(
+    `/overtime/${encodeURIComponent(id)}/pay`,
+    { method: 'POST' },
+  );
+}
+
+/* --- Liquidaciones --- */
+
+/** `GET /liquidations/me` — obtiene las liquidaciones propias del colaborador. */
+export function listMyLiquidations(): Promise<LiquidationView[]> {
+  return request<LiquidationView[]>('/liquidations/me');
+}
+
+/** `GET /liquidations` — obtiene todas las liquidaciones del sistema (gestor). */
+export function listAllLiquidations(): Promise<LiquidationView[]> {
+  return request<LiquidationView[]>('/liquidations');
+}
+
+/** `POST /liquidations` — sube una liquidación de sueldo PDF (gestor). */
+export function uploadLiquidation(
+  userId: string,
+  period: string,
+  file: File,
+): Promise<LiquidationView> {
+  const formData = new FormData();
+  formData.append('userId', userId);
+  formData.append('period', period);
+  formData.append('file', file);
+  return uploadRequest<LiquidationView>('/liquidations', formData);
+}
+
+/** `DELETE /liquidations/:id` — elimina una liquidación (gestor). */
+export function deleteLiquidation(id: string): Promise<void> {
+  return request<void>(`/liquidations/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/* --- Proyectos --- */
+
+export function listProjects(): Promise<ProjectView[]> {
+  return request<ProjectView[]>('/projects');
+}
+
+export function listDepartments(): Promise<Array<{ id: string; name: string; code: string }>> {
+  return request<Array<{ id: string; name: string; code: string }>>('/projects/departments');
+}
+
+export function listClients(): Promise<Array<{ id: string; name: string; code: string }>> {
+  return request<Array<{ id: string; name: string; code: string }>>('/projects/clients');
+}
+
+export function createProject(dto: {
+  code: string;
+  name: string;
+  departmentId: string;
+  clientId: string;
+}): Promise<ProjectView> {
+  return request<ProjectView>('/projects', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function createService(
+  projectId: string,
+  dto: { code: string; name: string; docCodingConfig: Record<string, unknown> },
+): Promise<ServiceView> {
+  return request<ServiceView>(`/projects/${encodeURIComponent(projectId)}/services`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function updateProjectKpis(projectId: string, kpis: Record<string, unknown>): Promise<ProjectView> {
+  return request<ProjectView>(`/projects/${encodeURIComponent(projectId)}/kpis`, {
+    method: 'PUT',
+    body: JSON.stringify({ kpis }),
+  });
+}
+
+/* --- Backlog / Tareas --- */
+
+export function listTasks(filters: {
+  projectId?: string;
+  serviceId?: string;
+  status?: TaskStatus;
+  assignedToId?: string | null;
+  search?: string;
+}): Promise<TaskView[]> {
+  const query = new URLSearchParams();
+  if (filters.projectId) query.append('projectId', filters.projectId);
+  if (filters.serviceId) query.append('serviceId', filters.serviceId);
+  if (filters.status) query.append('status', filters.status);
+  if (filters.assignedToId) query.append('assignedToId', filters.assignedToId);
+  if (filters.search) query.append('search', filters.search);
+
+  const qs = query.toString();
+  return request<TaskView[]>(`/tasks${qs ? `?${qs}` : ''}`);
+}
+
+export function createTask(dto: {
+  name: string;
+  description?: string;
+  projectId: string;
+  serviceId?: string;
+  assignedToId?: string;
+  estimatedPoints?: number;
+  recurrence?: string;
+  clientUserId?: string;
+}): Promise<TaskView> {
+  return request<TaskView>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function updateTask(
+  id: string,
+  dto: {
+    name?: string;
+    description?: string;
+    assignedToId?: string;
+    estimatedPoints?: number;
+    actualPoints?: number;
+    recurrence?: string;
+    clientUserId?: string;
+  },
+): Promise<TaskView> {
+  return request<TaskView>(`/tasks/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function updateTaskStatus(id: string, status: TaskStatus, actualPoints?: number): Promise<TaskView> {
+  return request<TaskView>(`/tasks/${encodeURIComponent(id)}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, actualPoints }),
+  });
+}
+
+export function deleteTask(id: string): Promise<void> {
+  return request<void>(`/tasks/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+/* --- Documentos de Proyecto --- */
+
+export function listProjectDocuments(projectId?: string, serviceId?: string): Promise<ProjectDocumentView[]> {
+  const query = new URLSearchParams();
+  if (projectId) query.append('projectId', projectId);
+  if (serviceId) query.append('serviceId', serviceId);
+  const qs = query.toString();
+  return request<ProjectDocumentView[]>(`/project-documents${qs ? `?${qs}` : ''}`);
+}
+
+export function uploadProjectDocument(
+  dto: {
+    name: string;
+    projectId: string;
+    serviceId: string;
+    documentType: string;
+    areaCode: string;
+  },
+  file: File,
+): Promise<ProjectDocumentView> {
+  const formData = new FormData();
+  formData.append('name', dto.name);
+  formData.append('projectId', dto.projectId);
+  formData.append('serviceId', dto.serviceId);
+  formData.append('documentType', dto.documentType);
+  formData.append('areaCode', dto.areaCode);
+  formData.append('file', file);
+  return uploadRequest<ProjectDocumentView>('/project-documents', formData);
+}
+
+export function uploadProjectDocumentRevision(id: string, file: File): Promise<ProjectDocumentView> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return uploadRequest<ProjectDocumentView>(`/project-documents/${encodeURIComponent(id)}/revision`, formData);
+}
+
+export function signProjectDocumentQA(id: string): Promise<ProjectDocumentView> {
+  return request<ProjectDocumentView>(`/project-documents/${encodeURIComponent(id)}/sign-qa`, {
+    method: 'POST',
+  });
+}
+
+export function signProjectDocumentClient(id: string): Promise<ProjectDocumentView> {
+  return request<ProjectDocumentView>(`/project-documents/${encodeURIComponent(id)}/sign-client`, {
+    method: 'POST',
+  });
+}
+
+export function rejectProjectDocument(id: string, reason: string): Promise<ProjectDocumentView> {
+  return request<ProjectDocumentView>(`/project-documents/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function deleteProjectDocument(id: string): Promise<void> {
+  return request<void>(`/project-documents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
