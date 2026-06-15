@@ -5,6 +5,7 @@ import type { PersonalDocument } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
+import type { NotificationsService } from '../../src/modules/notifications/notifications.service';
 import {
   DocumentsService,
   type UploadedDocumentFile,
@@ -61,6 +62,11 @@ function buildStorage(): { storage: StorageService; save: ReturnType<typeof vi.f
   return { storage: { save, delete: del } as unknown as StorageService, save, del };
 }
 
+function buildNotifications(): { notifications: NotificationsService; create: ReturnType<typeof vi.fn> } {
+  const create = vi.fn(() => Promise.resolve(undefined));
+  return { notifications: { create } as unknown as NotificationsService, create };
+}
+
 const FILE: UploadedDocumentFile = {
   buffer: Buffer.from('pdf'),
   originalname: 'doc.pdf',
@@ -69,9 +75,11 @@ const FILE: UploadedDocumentFile = {
 
 describe('DocumentsService', () => {
   let storageBits: ReturnType<typeof buildStorage>;
+  let notifBits: ReturnType<typeof buildNotifications>;
 
   beforeEach(() => {
     storageBits = buildStorage();
+    notifBits = buildNotifications();
   });
 
   it('create sube el archivo y deja el documento EN_REVISION', async () => {
@@ -79,7 +87,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, id: 'doc-new' })),
     );
     const { prisma } = buildPrisma({ create });
-    const service = new DocumentsService(prisma, storageBits.storage);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
 
     const view = await service.create('u1', { type: 'carnet', name: 'Carnet' }, FILE);
 
@@ -105,7 +113,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...current, ...args.data })),
     );
     const { prisma } = buildPrisma({ findFirst, update });
-    const service = new DocumentsService(prisma, storageBits.storage);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
 
     await service.addVersion('u1', 'doc-1', FILE);
 
@@ -126,7 +134,7 @@ describe('DocumentsService', () => {
   it('addVersion sobre un documento ajeno o inexistente lanza 404', async () => {
     const findFirst = vi.fn(() => Promise.resolve(null));
     const { prisma } = buildPrisma({ findFirst });
-    const service = new DocumentsService(prisma, storageBits.storage);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
 
     await expect(service.addVersion('u1', 'ajeno', FILE)).rejects.toBeInstanceOf(NotFoundException);
     expect(storageBits.save).not.toHaveBeenCalled();
@@ -135,7 +143,7 @@ describe('DocumentsService', () => {
   it('listMine con expiring=true filtra por ventana de vencimiento (gte ahora, lte +30d)', async () => {
     const findMany = vi.fn(() => Promise.resolve([]));
     const { prisma } = buildPrisma({ findMany });
-    const service = new DocumentsService(prisma, storageBits.storage);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
 
     await service.listMine('u1', { expiring: true });
 
@@ -154,12 +162,69 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
 
     await service.approve('admin-id', 'doc-1');
 
     const data = update.mock.calls[0]?.[0]?.data as { status: DocumentStatus; reviewedById: string };
     expect(data.status).toBe(DocumentStatus.APROBADO);
     expect(data.reviewedById).toBe('admin-id');
+  });
+
+  it('approve notifica al DUEÑO del documento (document.reviewed, link a Mis documentos)', async () => {
+    const update = vi.fn((args: { data: Partial<PersonalDocument> }) =>
+      Promise.resolve(buildRow({ ...args.data, userId: 'owner-1', name: 'Carnet' })),
+    );
+    const { prisma } = buildPrisma({ update });
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+
+    await service.approve('admin-id', 'doc-1');
+
+    expect(notifBits.create).toHaveBeenCalledTimes(1);
+    const [toUserId, payload] = notifBits.create.mock.calls[0] as [
+      string,
+      { type: string; title: string; link: string },
+    ];
+    expect(toUserId).toBe('owner-1');
+    expect(payload.type).toBe('document.reviewed');
+    expect(payload.link).toBe('/perfil/documentos');
+    expect(payload.title).toContain('aprobado');
+  });
+
+  it('reject notifica al dueño con título de rechazo', async () => {
+    const update = vi.fn((args: { data: Partial<PersonalDocument> }) =>
+      Promise.resolve(buildRow({ ...args.data, userId: 'owner-1', name: 'Carnet' })),
+    );
+    const { prisma } = buildPrisma({ update });
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+
+    await service.reject('admin-id', 'doc-1', 'ilegible');
+
+    expect(notifBits.create).toHaveBeenCalledTimes(1);
+    const payload = notifBits.create.mock.calls[0]?.[1] as { title: string; type: string };
+    expect(payload.type).toBe('document.reviewed');
+    expect(payload.title).toContain('rechazado');
+  });
+
+  it('NO notifica si el dueño es quien revisa (defensivo)', async () => {
+    const update = vi.fn((args: { data: Partial<PersonalDocument> }) =>
+      Promise.resolve(buildRow({ ...args.data, userId: 'same-user' })),
+    );
+    const { prisma } = buildPrisma({ update });
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+
+    await service.approve('same-user', 'doc-1');
+
+    expect(notifBits.create).not.toHaveBeenCalled();
+  });
+
+  it('approve sobre documento inexistente lanza 404 y no notifica', async () => {
+    const notFound = Object.assign(new Error('not found'), { code: 'P2025' });
+    const update = vi.fn(() => Promise.reject(notFound));
+    const { prisma } = buildPrisma({ update });
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+
+    await expect(service.approve('admin-id', 'no-existe')).rejects.toBeInstanceOf(NotFoundException);
+    expect(notifBits.create).not.toHaveBeenCalled();
   });
 });

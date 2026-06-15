@@ -12,8 +12,10 @@ import { DevUserMiddleware } from './dev/dev-user.middleware';
 import { FgaModule } from './fga/fga.module';
 import { HealthController } from './health.controller';
 import { CvModule } from './modules/cv/cv.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -31,6 +33,8 @@ import { PrismaModule } from './prisma/prisma.module';
     DirectoryModule,
     CvModule,
     DocumentsModule,
+    NotificationsModule,
+    DashboardModule,
   ],
   controllers: [HealthController, DemoController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],

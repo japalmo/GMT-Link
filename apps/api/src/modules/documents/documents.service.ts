@@ -8,11 +8,18 @@ import { DocumentStatus } from '@prisma/client';
 import type { PersonalDocument, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CreatePersonalDocumentDto } from './dto/documents.dto';
 import type { PersonalDocumentView } from './documents.types';
 
 /** Carpeta lógica del storage para documentos personales (§6-1.5). */
 const DOCUMENTS_FOLDER = 'documents';
+
+/** Tipo de notificación que recibe el dueño al revisarse su documento (§6-2.2). */
+const NOTIFICATION_TYPE_DOCUMENT_REVIEWED = 'document.reviewed';
+
+/** Enlace destino de la notificación de revisión (ruta del front). */
+const DOCUMENTS_LINK = '/perfil/documentos';
 
 /** Umbral de "por vencer": <= 30 días (§6-1.5). */
 const EXPIRING_WINDOW_DAYS = 30;
@@ -53,6 +60,7 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -173,24 +181,52 @@ export class DocumentsService {
 
   // ============ Helpers ============
 
-  /** Aplica el resultado de revisión (estado + revisor). 404 si no existe. */
+  /**
+   * Aplica el resultado de revisión (estado + revisor) y notifica al DUEÑO del
+   * documento (§6-2.2 "llega"): tipo `document.reviewed`, título según el
+   * resultado, link a "Mis documentos". 404 si el documento no existe. No
+   * notifica si el dueño es quien revisa (no debería ocurrir: el dueño no tiene
+   * permiso de revisión).
+   */
   private async review(
     id: string,
     status: DocumentStatus,
     reviewerId: string,
   ): Promise<PersonalDocumentView> {
+    let row: PersonalDocument;
     try {
-      const row = await this.prisma.personalDocument.update({
+      row = await this.prisma.personalDocument.update({
         where: { id },
         data: { status, reviewedById: reviewerId, reviewedAt: new Date() },
       });
-      return this.toView(row);
     } catch (error: unknown) {
       if (isRecordNotFound(error)) {
         throw new NotFoundException('El documento no existe.');
       }
       throw error;
     }
+
+    await this.notifyOwnerReviewed(row, status, reviewerId);
+    return this.toView(row);
+  }
+
+  /** Crea la notificación de revisión para el dueño (salvo que él mismo revise). */
+  private async notifyOwnerReviewed(
+    doc: PersonalDocument,
+    status: DocumentStatus,
+    reviewerId: string,
+  ): Promise<void> {
+    if (doc.userId === reviewerId) {
+      return;
+    }
+    const approved = status === DocumentStatus.APROBADO;
+    await this.notifications.create(doc.userId, {
+      type: NOTIFICATION_TYPE_DOCUMENT_REVIEWED,
+      title: approved
+        ? `Tu documento "${doc.name}" fue aprobado`
+        : `Tu documento "${doc.name}" fue rechazado`,
+      link: DOCUMENTS_LINK,
+    });
   }
 
   /** Documento del propio usuario o 404 (no distingue inexistente de ajeno). */

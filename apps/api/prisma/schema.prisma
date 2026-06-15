@@ -28,6 +28,11 @@ model User {
   cv             CV?
   documents      PersonalDocument[] @relation("UserDocuments")
   reviewedDocs   PersonalDocument[] @relation("DocumentReviewer")
+  dashboard      DashboardConfig?
+  preferences    UserPreferences?
+  notifications  Notification[]      @relation("UserNotifications")
+  permissionRequests PermissionRequest[] @relation("RequestedBy")
+  decidedRequests    PermissionRequest[] @relation("DecidedBy")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -209,4 +214,71 @@ enum DocumentStatus {
   EN_REVISION
   APROBADO
   RECHAZADO
+}
+
+// ============ DASHBOARD (§6-2.1) ============
+// Layout modular configurable por usuario. `layout` es JSONB: lista de
+// { widgetKey, order, visible } que el frontend acomoda y persiste.
+model DashboardConfig {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout    Json
+  updatedAt DateTime @updatedAt
+
+  @@map("dashboard_configs")
+}
+
+// ============ NOTIFICACIONES (§6-2.2) ============
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// ============ CONFIGURACIÓN (§6-2.3) ============
+model UserPreferences {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme       String   @default("system") // system | light | dark
+  notifyInApp Boolean  @default(true)
+  notifyEmail Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+// Solicitud de un rol/permiso a un admin (§6-2.3 "solicitar permisos a admin").
+model PermissionRequest {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation("RequestedBy", fields: [userId], references: [id], onDelete: Cascade)
+  roleKey     String
+  scopeType   ScopeType
+  scopeId     String
+  reason      String?
+  status      RequestStatus @default(PENDIENTE)
+  decidedById String?
+  decidedBy   User?         @relation("DecidedBy", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+  @@map("permission_requests")
+}
+
+enum RequestStatus {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
 }
