@@ -13,6 +13,8 @@ type organization
     define can_view_directory_extended: admin
     # revisión de documentos personales (§8 document:review, §6-1.5) — derivado de admin
     define can_review_documents: admin
+    # gestión de finanzas (§8 finance:manage, §6-3.1/3.3) — derivado de admin
+    define can_manage_finance: admin
 
 type department
   relations

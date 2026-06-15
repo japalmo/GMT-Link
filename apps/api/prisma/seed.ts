@@ -35,6 +35,10 @@ const PERMISSIONS: ReadonlyArray<{ key: string; label: string }> = [
   // Revisión de documentos personales (§6-1.5). Espejo legible; la autorización
   // real es FGA (organization#can_review_documents = admin). Solo org_admin.
   { key: 'document:review', label: 'Revisar documentos' },
+  // Gestión de finanzas (§6-3.1/3.3). Espejo legible; la autorización real es FGA
+  // (organization#can_manage_finance = admin). Solo org_admin (aprobar/rechazar/
+  // pagar reembolsos y horas extra, y ver todas las solicitudes).
+  { key: 'finance:manage', label: 'Gestionar finanzas' },
   // Provisión de usuarios (§1.1). Espejo legible; la autorización real es FGA
   // (organization#can_manage_users = admin). Solo el rol org_admin los porta.
   { key: 'user:create', label: 'Crear usuarios' },

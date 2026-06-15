@@ -33,6 +33,11 @@ model User {
   notifications  Notification[]      @relation("UserNotifications")
   permissionRequests PermissionRequest[] @relation("RequestedBy")
   decidedRequests    PermissionRequest[] @relation("DecidedBy")
+  reimbursements        Reimbursement[]   @relation("ReimbursementRequester")
+  approvedReimbursements Reimbursement[]  @relation("ReimbursementApprover")
+  overtimeRequests      OvertimeRequest[] @relation("OvertimeRequester")
+  approvedOvertime      OvertimeRequest[] @relation("OvertimeApprover")
+  liquidations          Liquidation[]     @relation("UserLiquidations")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -281,4 +286,68 @@ enum RequestStatus {
   PENDIENTE
   APROBADA
   RECHAZADA
+}
+
+// ============ FINANZAS (Etapa 3) ============
+// Estado comun de solicitudes financieras (reembolsos, horas extra).
+enum FinanceStatus {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  PAGADO
+}
+
+// Reembolso (§6-3.1/3.2). monto en CLP entero (sin decimales).
+model Reimbursement {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation("ReimbursementRequester", fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int
+  date        DateTime
+  concept     String
+  category    String?
+  receiptUrl  String? // boleta/comprobante (StorageService)
+  status      FinanceStatus @default(PENDIENTE)
+  decidedById String?
+  decidedBy   User?         @relation("ReimbursementApprover", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@map("reimbursements")
+}
+
+// Horas extra (§6-3.3). Reusa el patron de reembolsos.
+model OvertimeRequest {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation("OvertimeRequester", fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  hours       Float
+  reason      String
+  status      FinanceStatus @default(PENDIENTE)
+  decidedById String?
+  decidedBy   User?         @relation("OvertimeApprover", fields: [decidedById], references: [id])
+  decidedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@map("overtime_requests")
+}
+
+// Liquidacion de sueldo (§6-3.4). Una por colaborador y periodo (mes).
+model Liquidation {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("UserLiquidations", fields: [userId], references: [id], onDelete: Cascade)
+  period       String // "2026-06" (mes)
+  fileUrl      String // PDF en StorageService
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, period])
+  @@index([userId])
+  @@map("liquidations")
 }
