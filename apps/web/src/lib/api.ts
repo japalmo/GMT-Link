@@ -14,6 +14,8 @@ import type {
   PersonalDocumentView,
   UploadDocumentFields,
 } from '@/types/documents';
+import type { DashboardLayoutItem, DashboardView } from '@/types/dashboard';
+import type { NotificationView } from '@/types/notifications';
 import type {
   DirectoryEntry,
   DirectoryEntryExtended,
@@ -483,5 +485,62 @@ export function uploadDocumentVersion(
 export function deleteDocument(id: string): Promise<void> {
   return request<void>(`/documents/me/${encodeURIComponent(id)}`, {
     method: 'DELETE',
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dashboard (§6-2.1) — widgets configurables por usuario                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `GET /dashboard/me` — widgets disponibles (ya filtrados por permiso) + layout
+ * reconciliado (orden 0..n-1). 401 sin sesión.
+ */
+export function getDashboard(): Promise<DashboardView> {
+  return request<DashboardView>('/dashboard/me');
+}
+
+/**
+ * `PUT /dashboard/me` — guarda el layout del propio usuario. Valida los
+ * `widgetKey` (400 si alguno es desconocido/no disponible). Devuelve el mismo
+ * shape que `getDashboard` (layout reconciliado).
+ */
+export function saveDashboard(layout: DashboardLayoutItem[]): Promise<DashboardView> {
+  return request<DashboardView>('/dashboard/me', {
+    method: 'PUT',
+    body: JSON.stringify({ layout }),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Notificaciones (§6-2.2) — in-app, propias del usuario                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `GET /notifications?unreadOnly=` — notificaciones propias (createdAt desc).
+ * `unreadOnly=true` filtra solo las no leídas.
+ */
+export function listNotifications(unreadOnly = false): Promise<NotificationView[]> {
+  const query = unreadOnly ? '?unreadOnly=true' : '';
+  return request<NotificationView[]>(`/notifications${query}`);
+}
+
+/** `GET /notifications/unread-count` — cantidad de notificaciones sin leer. */
+export function getUnreadCount(): Promise<{ count: number }> {
+  return request<{ count: number }>('/notifications/unread-count');
+}
+
+/** `POST /notifications/:id/read` — marca una propia como leída. 404 si es ajena. */
+export function markNotificationRead(id: string): Promise<NotificationView> {
+  return request<NotificationView>(
+    `/notifications/${encodeURIComponent(id)}/read`,
+    { method: 'POST' },
+  );
+}
+
+/** `POST /notifications/read-all` — marca todas las no leídas. Retorna cuántas. */
+export function markAllNotificationsRead(): Promise<{ updated: number }> {
+  return request<{ updated: number }>('/notifications/read-all', {
+    method: 'POST',
   });
 }

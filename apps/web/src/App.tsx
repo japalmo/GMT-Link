@@ -11,6 +11,7 @@ import PerfilPage from '@/pages/perfil';
 import CvPage from '@/pages/perfil/cv';
 import DocumentsPage from '@/pages/documentos';
 import DirectorioPage from '@/pages/directorio';
+import NotificacionesPage from '@/pages/notificaciones';
 import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
 import DesignDemo from '@/pages/DesignDemo';
@@ -54,6 +55,7 @@ const router = createBrowserRouter([
           { path: '/perfil/cv', element: <CvPage /> },
           { path: '/perfil/documentos', element: <DocumentsPage /> },
           { path: '/directorio', element: <DirectorioPage /> },
+          { path: '/notificaciones', element: <NotificacionesPage /> },
           {
             path: '/finanzas',
             element: (

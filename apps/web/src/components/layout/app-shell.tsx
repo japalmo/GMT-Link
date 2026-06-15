@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { SidebarProvider, useSidebar } from '@/components/layout/use-sidebar';
 import { SidebarContent } from '@/components/layout/sidebar';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 /** Topbar: solo visible en móvil; ofrece el botón hamburguesa del drawer. */
 function Topbar() {
@@ -21,6 +22,9 @@ function Topbar() {
         <Menu aria-hidden />
       </Button>
       <span className="font-semibold tracking-tight">GTM Link</span>
+      <div className="ml-auto">
+        <NotificationBell />
+      </div>
     </header>
   );
 }

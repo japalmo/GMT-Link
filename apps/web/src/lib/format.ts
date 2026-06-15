@@ -48,6 +48,46 @@ export function toDateInputValue(iso: string | null | undefined): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** Formateador de tiempo relativo en español de Chile ("hace 5 min"). */
+const relativeFormatter = new Intl.RelativeTimeFormat('es-CL', {
+  numeric: 'auto',
+});
+
+/** Umbrales de tiempo relativo (segundos por unidad), de mayor a menor. */
+const RELATIVE_UNITS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
+  { unit: 'year', seconds: 60 * 60 * 24 * 365 },
+  { unit: 'month', seconds: 60 * 60 * 24 * 30 },
+  { unit: 'day', seconds: 60 * 60 * 24 },
+  { unit: 'hour', seconds: 60 * 60 },
+  { unit: 'minute', seconds: 60 },
+];
+
+/**
+ * Formatea una fecha ISO como tiempo relativo en es-CL ("hace 5 minutos",
+ * "ayer"). Para diferencias menores a un minuto devuelve "hace un momento".
+ * Devuelve `fallback` si la entrada es inválida.
+ */
+export function formatRelativeTime(
+  iso: string | null | undefined,
+  fallback = '—',
+): string {
+  if (!iso) return fallback;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return fallback;
+
+  const diffSeconds = (date.getTime() - Date.now()) / 1000;
+  const absSeconds = Math.abs(diffSeconds);
+  if (absSeconds < 60) return 'hace un momento';
+
+  for (const { unit, seconds } of RELATIVE_UNITS) {
+    if (absSeconds >= seconds) {
+      const value = Math.round(diffSeconds / seconds);
+      return relativeFormatter.format(value, unit);
+    }
+  }
+  return 'hace un momento';
+}
+
 /** Formatea un tamaño en bytes a texto legible ("2,4 MB"). */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

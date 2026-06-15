@@ -1,6 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  Bell,
   ChevronLeft,
   LogOut,
   Settings,
@@ -12,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/auth-context';
 import { useSidebar } from '@/components/layout/use-sidebar';
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from '@/components/layout/nav-items';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 /** Iniciales para el avatar de fallback (nombre + apellido). */
 function initials(firstName: string, lastName: string): string {
@@ -211,7 +211,7 @@ export function SidebarContent({
 
         <div className={cn('flex flex-col gap-1', collapsed && 'items-center')}>
           <IconAction icon={Settings} label="Configuración" collapsed={collapsed} />
-          <IconAction icon={Bell} label="Notificaciones" collapsed={collapsed} />
+          <NotificationBell variant={collapsed ? 'icon' : 'row'} />
           <IconAction
             icon={LogOut}
             label="Cerrar sesión"
