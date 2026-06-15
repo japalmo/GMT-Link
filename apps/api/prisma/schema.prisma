@@ -38,6 +38,12 @@ model User {
   overtimeRequests      OvertimeRequest[] @relation("OvertimeRequester")
   approvedOvertime      OvertimeRequest[] @relation("OvertimeApprover")
   liquidations          Liquidation[]     @relation("UserLiquidations")
+  tasksAssigned         Task[]            @relation("TaskAssignee")
+  tasksCreated          Task[]            @relation("TaskCreator")
+  clientTasksRequested  Task[]            @relation("TaskClientRequester")
+  projectDocuments      ProjectDocument[] @relation("ProjectDocumentOwner")
+  signedQADocs          ProjectDocument[] @relation("DocumentQASigner")
+  signedClientDocs      ProjectDocument[] @relation("DocumentClientSigner")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -75,6 +81,8 @@ model Project {
   client       Client     @relation(fields: [clientId], references: [id])
   services     Service[]
   kpis         Json?
+  tasks        Task[]
+  documents    ProjectDocument[]
   createdAt    DateTime   @default(now())
 
   @@unique([departmentId, code])
@@ -87,6 +95,8 @@ model Service {
   projectId       String
   project         Project @relation(fields: [projectId], references: [id])
   docCodingConfig Json
+  tasks           Task[]
+  documents       ProjectDocument[]
 
   @@unique([projectId, code])
 }
@@ -350,4 +360,77 @@ model Liquidation {
   @@unique([userId, period])
   @@index([userId])
   @@map("liquidations")
+}
+
+// ============ OPERACIONES (Etapa 4) ============
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROGRESO
+  REVISADO
+  COMPLETADO
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  name            String
+  description     String?
+  status          TaskStatus @default(PENDIENTE)
+  projectId       String
+  project         Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId       String?
+  service         Service?   @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  assignedToId    String?
+  assignedTo      User?      @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById     String
+  createdBy       User       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  estimatedPoints Int        @default(0)
+  actualPoints    Int?
+  recurrence      String?    // cron expression para tareas cíclicas
+  clientUserId    String?    // ITO/cliente que solicitó la tarea
+  clientUser      User?      @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([projectId, status])
+  @@index([assignedToId])
+  @@map("tasks")
+}
+
+enum ProjectDocumentStatus {
+  BORRADOR
+  PENDIENTE_QA
+  PENDIENTE_CLIENTE
+  APROBADO
+  RECHAZADO
+}
+
+model ProjectDocument {
+  id              String                @id @default(cuid())
+  name            String
+  code            String                @unique // formato: GMT-{Client}-{Depto}-{Project}-{Service}-{TipoDoc}-{Area}-{No}
+  fileUrl         String
+  fileHash        String?               // hash SHA-256 para integridad (FES)
+  status          ProjectDocumentStatus @default(BORRADOR)
+  version         Int                   @default(0) // rev0 = 0, revA = 1, etc.
+  previousFileUrl String?
+  projectId       String
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User                  @relation("ProjectDocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  qaSignerId      String?
+  qaSigner        User?                 @relation("DocumentQASigner", fields: [qaSignerId], references: [id], onDelete: SetNull)
+  qaSignedAt      DateTime?
+  clientSignerId  String?
+  clientSigner    User?                 @relation("DocumentClientSigner", fields: [clientSignerId], references: [id], onDelete: SetNull)
+  clientSignedAt  DateTime?
+  rejectionReason String?               // motivo de rechazo si aplica
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([projectId, status])
+  @@index([serviceId])
+  @@map("project_documents")
 }

@@ -12,7 +12,7 @@ import { StorageService } from '../../common/storage/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
-import type { CreateReimbursementDto } from './dto/reimbursements.dto';
+import { CreateReimbursementDto, ImportReimbursementsDto } from './dto/reimbursements.dto';
 import type { ReimbursementView } from './reimbursements.types';
 
 /** Carpeta lógica del storage para boletas de reembolso (§6-3.1). */
@@ -85,6 +85,27 @@ export class ReimbursementsService {
       },
     });
     return toView(row);
+  }
+
+  /**
+   * Importa un lote de reembolsos para el propio usuario en estado PENDIENTE.
+   */
+  async importBatch(userId: string, dto: ImportReimbursementsDto): Promise<ReimbursementView[]> {
+    const created = await this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.reimbursement.create({
+          data: {
+            userId,
+            amount: item.amount,
+            date: parseDate(item.date),
+            concept: item.concept,
+            category: item.category ?? null,
+            status: FinanceStatus.PENDIENTE,
+          },
+        }),
+      ),
+    );
+    return created.map(toView);
   }
 
   /**

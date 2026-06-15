@@ -23,6 +23,7 @@ import { FgaService } from '../../fga/fga.service';
 import { ReimbursementsService } from './reimbursements.service';
 import {
   CreateReimbursementDto,
+  ImportReimbursementsDto,
   ListReimbursementsQueryDto,
   RejectReimbursementDto,
 } from './dto/reimbursements.dto';
@@ -71,6 +72,15 @@ export class ReimbursementsController {
     @Body() dto: CreateReimbursementDto,
   ): Promise<ReimbursementView> {
     return this.reimbursements.create(this.requireUserId(authUser), dto);
+  }
+
+  /** Importa un lote de reembolsos propios (PENDIENTE). */
+  @Post('import')
+  importBatch(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Body() dto: ImportReimbursementsDto,
+  ): Promise<ReimbursementView[]> {
+    return this.reimbursements.importBatch(this.requireUserId(authUser), dto);
   }
 
   /** Lista los reembolsos propios. Filtro opcional `?status=`. */

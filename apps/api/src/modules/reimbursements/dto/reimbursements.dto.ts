@@ -8,6 +8,8 @@ import {
   MaxLength,
   MinLength,
   Min,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
 import { FinanceStatus } from '@prisma/client';
 
@@ -63,3 +65,12 @@ export class RejectReimbursementDto {
   @MaxLength(1000)
   reason?: string;
 }
+
+/** Body de `POST /reimbursements/import` para importación masiva. */
+export class ImportReimbursementsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateReimbursementDto)
+  items!: CreateReimbursementDto[];
+}
+

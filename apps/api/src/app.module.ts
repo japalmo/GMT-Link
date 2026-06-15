@@ -23,6 +23,11 @@ import { ReimbursementsModule } from './modules/reimbursements/reimbursements.mo
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { LiquidationsModule } from './modules/liquidations/liquidations.module';
+
+import { ProjectsModule } from './modules/projects/projects.module';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { ProjectDocumentsModule } from './modules/project-documents/project-documents.module';
 
 @Module({
   imports: [
@@ -43,6 +48,10 @@ import { PrismaModule } from './prisma/prisma.module';
     PermissionRequestsModule,
     ReimbursementsModule,
     OvertimeModule,
+    LiquidationsModule,
+    ProjectsModule,
+    TasksModule,
+    ProjectDocumentsModule,
   ],
   controllers: [HealthController, DemoController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],
