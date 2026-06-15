@@ -17,6 +17,12 @@ import type {
 import type { DashboardLayoutItem, DashboardView } from '@/types/dashboard';
 import type { NotificationView } from '@/types/notifications';
 import type {
+  PermissionRequestAdminView,
+  PermissionRequestView,
+  UpdateSettingsInput,
+  UserSettings,
+} from '@/types/settings';
+import type {
   DirectoryEntry,
   DirectoryEntryExtended,
   ProfileMe,
@@ -543,4 +549,79 @@ export function markAllNotificationsRead(): Promise<{ updated: number }> {
   return request<{ updated: number }>('/notifications/read-all', {
     method: 'POST',
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ajustes propios (§6-2.3) — tema + preferencias de notificación             */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /settings/me` — ajustes propios del usuario. Defaults perezosos. */
+export function getSettings(): Promise<UserSettings> {
+  return request<UserSettings>('/settings/me');
+}
+
+/** `PATCH /settings/me` — actualiza ajustes propios. Devuelve los ya aplicados. */
+export function updateSettings(patch: UpdateSettingsInput): Promise<UserSettings> {
+  return request<UserSettings>('/settings/me', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Solicitudes de acceso a roles (§6-2.3)                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `POST /permission-requests` — solicita un rol. Queda en estado PENDIENTE.
+ * 409 si ya hay una solicitud pendiente igual; 400 si el `roleKey` es inválido.
+ */
+export function createPermissionRequest(
+  roleKey: RoleKey,
+  reason?: string,
+): Promise<PermissionRequestView> {
+  const body: { roleKey: RoleKey; reason?: string } = { roleKey };
+  if (reason && reason.trim().length > 0) body.reason = reason.trim();
+  return request<PermissionRequestView>('/permission-requests', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** `GET /permission-requests/me` — solicitudes de acceso propias del usuario. */
+export function listMyPermissionRequests(): Promise<PermissionRequestView[]> {
+  return request<PermissionRequestView[]>('/permission-requests/me');
+}
+
+/**
+ * `GET /permission-requests` — solicitudes PENDIENTES de todos. SOLO admin;
+ * devuelve 403 si el solicitante no lo es (el llamador maneja ese 403 como
+ * "no soy admin" sin romper la UI).
+ */
+export function listPendingPermissionRequests(): Promise<PermissionRequestAdminView[]> {
+  return request<PermissionRequestAdminView[]>('/permission-requests');
+}
+
+/** `POST /permission-requests/:id/approve` — aprueba una solicitud. SOLO admin. */
+export function approvePermissionRequest(id: string): Promise<PermissionRequestView> {
+  return request<PermissionRequestView>(
+    `/permission-requests/${encodeURIComponent(id)}/approve`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * `POST /permission-requests/:id/reject` — rechaza una solicitud, con motivo
+ * opcional. SOLO admin.
+ */
+export function rejectPermissionRequest(
+  id: string,
+  reason?: string,
+): Promise<PermissionRequestView> {
+  const body: { reason?: string } = {};
+  if (reason && reason.trim().length > 0) body.reason = reason.trim();
+  return request<PermissionRequestView>(
+    `/permission-requests/${encodeURIComponent(id)}/reject`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
 }

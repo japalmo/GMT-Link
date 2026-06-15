@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '@/context/auth-context';
+import { ThemeProvider } from '@/components/theme/theme-provider';
 import { ProtectedRoute } from '@/routes/protected-route';
 import { PublicRoute } from '@/routes/public-route';
 import { AppShell } from '@/components/layout/app-shell';
@@ -12,6 +13,7 @@ import CvPage from '@/pages/perfil/cv';
 import DocumentsPage from '@/pages/documentos';
 import DirectorioPage from '@/pages/directorio';
 import NotificacionesPage from '@/pages/notificaciones';
+import ConfiguracionPage from '@/pages/configuracion';
 import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
 import DesignDemo from '@/pages/DesignDemo';
@@ -56,6 +58,7 @@ const router = createBrowserRouter([
           { path: '/perfil/documentos', element: <DocumentsPage /> },
           { path: '/directorio', element: <DirectorioPage /> },
           { path: '/notificaciones', element: <NotificacionesPage /> },
+          { path: '/configuracion', element: <ConfiguracionPage /> },
           {
             path: '/finanzas',
             element: (
@@ -118,7 +121,9 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <AuthProvider>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </AuthProvider>
   );
 }

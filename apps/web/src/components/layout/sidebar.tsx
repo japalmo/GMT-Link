@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
   LogOut,
@@ -101,6 +101,7 @@ export function SidebarContent({
   const { user, logout } = useAuth();
   const { collapsed: collapsedState, toggleCollapsed } = useSidebar();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const collapsed = forceExpanded ? false : collapsedState;
 
   const isActive = (to: string): boolean =>
@@ -210,7 +211,15 @@ export function SidebarContent({
         )}
 
         <div className={cn('flex flex-col gap-1', collapsed && 'items-center')}>
-          <IconAction icon={Settings} label="Configuración" collapsed={collapsed} />
+          <IconAction
+            icon={Settings}
+            label="Configuración"
+            collapsed={collapsed}
+            onClick={() => {
+              handleNavigate();
+              navigate('/configuracion');
+            }}
+          />
           <NotificationBell variant={collapsed ? 'icon' : 'row'} />
           <IconAction
             icon={LogOut}
