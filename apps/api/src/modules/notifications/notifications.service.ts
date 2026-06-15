@@ -18,8 +18,26 @@ export class NotificationsService {
   /**
    * Crea una notificación para `userId` (destinatario). Reutilizable desde otros
    * módulos. No falla si `body`/`link` vienen vacíos: se guardan como null.
+   *
+   * Respeta la preferencia del DESTINATARIO (§6-2.3, DoD "cambios aplican"): si
+   * sus `UserPreferences.notifyInApp === false`, NO crea la notificación y
+   * retorna `null` (no-op tipado). Sin preferencias guardadas → default true
+   * (se crea). Los llamadores que no usan el retorno (p. ej. `DocumentsService`)
+   * siguen funcionando sin cambios.
    */
-  async create(userId: string, payload: CreateNotificationPayload): Promise<NotificationView> {
+  async create(
+    userId: string,
+    payload: CreateNotificationPayload,
+  ): Promise<NotificationView | null> {
+    const prefs = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { notifyInApp: true },
+    });
+    // Sin preferencias → default true (se crea). Solo se omite si está en false.
+    if (prefs !== null && prefs.notifyInApp === false) {
+      return null;
+    }
+
     const row = await this.prisma.notification.create({
       data: {
         userId,

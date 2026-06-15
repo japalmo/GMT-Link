@@ -28,6 +28,8 @@ interface PrismaParts {
   update: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
   count: ReturnType<typeof vi.fn>;
+  /** `userPreferences.findUnique` del DESTINATARIO (gating de notifyInApp). */
+  prefsFindUnique: ReturnType<typeof vi.fn>;
 }
 
 function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
@@ -38,8 +40,13 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     update: parts.update ?? vi.fn(),
     updateMany: parts.updateMany ?? vi.fn(() => Promise.resolve({ count: 0 })),
     count: parts.count ?? vi.fn(() => Promise.resolve(0)),
+    // Default: sin preferencias guardadas → notifyInApp default true (se crea).
+    prefsFindUnique: parts.prefsFindUnique ?? vi.fn(() => Promise.resolve(null)),
   };
-  const prisma = { notification: resolved } as unknown as PrismaService;
+  const prisma = {
+    notification: resolved,
+    userPreferences: { findUnique: resolved.prefsFindUnique },
+  } as unknown as PrismaService;
   return { prisma, parts: resolved };
 }
 
@@ -72,7 +79,48 @@ describe('NotificationsService', () => {
     expect(data.type).toBe('document.reviewed');
     expect(data.body).toBeNull();
     expect(data.link).toBeNull();
-    expect(view.type).toBe('document.reviewed');
+    expect(view?.type).toBe('document.reviewed');
+  });
+
+  it('create SIN preferencias del destinatario usa default true: crea la notificación', async () => {
+    const create = vi.fn((args: { data: Partial<Notification> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    // prefsFindUnique default → null (sin preferencias).
+    ({ prisma: prismaBits.prisma } = buildPrisma({ create }));
+    service = new NotificationsService(prismaBits.prisma);
+
+    const view = await service.create('owner-1', { type: 'x', title: 'Hola' });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(view).not.toBeNull();
+  });
+
+  it('create respeta notifyInApp=false del destinatario: NO inserta y retorna null', async () => {
+    const create = vi.fn();
+    const prefsFindUnique = vi.fn(() => Promise.resolve({ notifyInApp: false }));
+    ({ prisma: prismaBits.prisma } = buildPrisma({ create, prefsFindUnique }));
+    service = new NotificationsService(prismaBits.prisma);
+
+    const view = await service.create('owner-1', { type: 'x', title: 'Hola' });
+
+    expect(view).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+    expect(prefsFindUnique.mock.calls[0]?.[0]?.where).toEqual({ userId: 'owner-1' });
+  });
+
+  it('create con notifyInApp=true del destinatario sí inserta', async () => {
+    const create = vi.fn((args: { data: Partial<Notification> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const prefsFindUnique = vi.fn(() => Promise.resolve({ notifyInApp: true }));
+    ({ prisma: prismaBits.prisma } = buildPrisma({ create, prefsFindUnique }));
+    service = new NotificationsService(prismaBits.prisma);
+
+    const view = await service.create('owner-1', { type: 'x', title: 'Hola' });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(view).not.toBeNull();
   });
 
   it('listMine (todas) filtra por userId y ordena createdAt desc', async () => {
