@@ -234,7 +234,7 @@ export class ProjectsService {
     });
   }
 
-  private async injectCurrentKpi(project: any) {
+  private async injectCurrentKpi<T extends { id: string; kpis: unknown }>(project: T) {
     if (!project) return project;
     const completedTasksSum = await this.prisma.task.aggregate({
       where: {
@@ -247,7 +247,10 @@ export class ProjectsService {
     });
     const current = completedTasksSum._sum.actualPoints || 0;
 
-    const existingKpis = typeof project.kpis === 'object' && project.kpis !== null ? project.kpis : {};
+    const existingKpis =
+      typeof project.kpis === 'object' && project.kpis !== null
+        ? (project.kpis as Record<string, unknown>)
+        : {};
 
     return {
       ...project,
