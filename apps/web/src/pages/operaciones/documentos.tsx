@@ -27,7 +27,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
-import type { ProjectDocumentView, ProjectDocumentStatus } from '@/types/operations';
+import type { ProjectDocumentStatus } from '@/types/operations';
 
 export function formatRevision(version: number): string {
   if (version === 0) return 'rev0';

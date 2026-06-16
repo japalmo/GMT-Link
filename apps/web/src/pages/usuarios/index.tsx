@@ -41,7 +41,7 @@ export default function UsuariosPage(): ReactNode {
     if (avatarFile) {
       try {
         await uploadUserAvatar(res.user.id, avatarFile);
-      } catch (err) {
+      } catch {
         toast.error('El usuario se creó, pero no se pudo subir su foto de perfil.');
       }
     }

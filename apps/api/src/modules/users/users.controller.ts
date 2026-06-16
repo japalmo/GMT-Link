@@ -26,7 +26,6 @@ import { ImportUsersDto } from './dto/import-users.dto';
 import { UsersService } from './users.service';
 import type {
   CreateUserResponse,
-  ImportErrorRow,
   ImportUsersResponse,
   UserListItem,
   UserRolesResponse,

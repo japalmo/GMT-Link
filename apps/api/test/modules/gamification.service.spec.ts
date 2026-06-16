@@ -16,6 +16,7 @@ describe('GamificationService', () => {
         ),
         groupBy: vi.fn(() => Promise.resolve([])),
         findMany: vi.fn(() => Promise.resolve([])),
+        aggregate: vi.fn(() => Promise.resolve({ _sum: { points: 50 } })),
       },
       user: {
         update: vi.fn(() => Promise.resolve({ id: 'u-1', points: 50 })),

@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react';
-import { Link2 } from 'lucide-react';
 import { FirebaseError } from 'firebase/app';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

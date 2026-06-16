@@ -13,8 +13,6 @@ import {
   Plus,
   Search,
   Filter,
-  Briefcase,
-  User,
   History,
   FileText,
   Clock,
@@ -47,6 +45,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import {
   Table,
   TableBody,
@@ -465,7 +464,7 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
             </TableHeader>
             <TableBody>
               {filteredAssets.map((asset) => {
-                const meta = (asset.metadata || {}) as Record<string, any>;
+                const meta = (asset.metadata || {}) as { chargeCycles?: number; calibrationDate?: string; plateCode?: string; odometerKm?: number };
                 return (
                   <TableRow
                     key={asset.id}
@@ -766,6 +765,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   const [accDesc, setAccDesc] = useState('');
   const [accSN, setAccSN] = useState('');
   const [editingAccId, setEditingAccId] = useState<string | null>(null);
+  const [deleteAccId, setDeleteAccId] = useState<string | null>(null);
 
   // Checklist template state & builder
   const [tplName, setTplName] = useState('');
@@ -777,7 +777,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
 
   // Telemetria simulation state
   const [simulating, setSimulating] = useState(false);
-  const [routeIndex, setRouteIndex] = useState(0);
+  const [, setRouteIndex] = useState(0);
   const routeIndexRef = useRef(0);
   const [simSpeed, setSimSpeed] = useState(60);
   const [manualLat, setManualLat] = useState('-33.460');
@@ -1037,7 +1037,6 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
 
   const handleDeleteAccessory = async (accId: string) => {
     if (actioning) return;
-    if (!confirm('¿Seguro que deseas eliminar este accesorio?')) return;
     setActioning('deleteAccessory');
     try {
       await deleteAccessory(id, accId);
@@ -1047,6 +1046,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
       toast.error(err instanceof Error ? err.message : 'Error al eliminar accesorio.');
     } finally {
       setActioning(null);
+      setDeleteAccId(null);
     }
   };
 
@@ -1585,7 +1585,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                               size="sm"
                               variant="ghost"
                               className="text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteAccessory(acc.id)}
+                              onClick={() => setDeleteAccId(acc.id)}
                             >
                               Eliminar
                             </Button>
@@ -2375,6 +2375,18 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
           </Card>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteAccId !== null}
+        onOpenChange={(open) => !open && setDeleteAccId(null)}
+        title="¿Eliminar accesorio?"
+        description="Esta acción eliminará de forma permanente el accesorio seleccionado. ¿Deseas continuar?"
+        onConfirm={async () => {
+          if (deleteAccId) {
+            await handleDeleteAccessory(deleteAccId);
+          }
+        }}
+      />
     </div>
   );
 }

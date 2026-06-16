@@ -1,6 +1,7 @@
 import { useState, type ReactNode, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { useProjects, useTasks } from '@/hooks/use-operations';
 import { useUsers } from '@/hooks/use-users';
 import {
@@ -89,6 +90,7 @@ export function BacklogTab(): ReactNode {
   const [editTask, setEditTask] = useState<TaskView | null>(null);
   const [pointsPromptOpen, setPointsPromptOpen] = useState(false);
   const [pointsPromptTask, setPointsPromptTask] = useState<TaskView | null>(null);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   
   // Form states - Create
   const [taskName, setTaskName] = useState('');
@@ -251,13 +253,13 @@ export function BacklogTab(): ReactNode {
   };
 
   const handleDeleteTask = async (id: string) => {
-    if (confirm('¿Estás seguro de que deseas eliminar esta tarea?')) {
-      try {
-        await remove(id);
-        toast.success('Tarea eliminada con éxito.');
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error al eliminar la tarea.');
-      }
+    try {
+      await remove(id);
+      toast.success('Tarea eliminada con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al eliminar la tarea.');
+    } finally {
+      setDeleteTaskId(null);
     }
   };
 
@@ -473,7 +475,7 @@ export function BacklogTab(): ReactNode {
                                 variant="ghost"
                                 size="icon"
                                 className="size-6 text-muted-foreground hover:text-destructive"
-                                onClick={() => handleDeleteTask(t.id)}
+                                onClick={() => setDeleteTaskId(t.id)}
                                 title="Eliminar"
                               >
                                 <Trash2 className="size-3" />
@@ -840,6 +842,18 @@ export function BacklogTab(): ReactNode {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteTaskId !== null}
+        onOpenChange={(open) => !open && setDeleteTaskId(null)}
+        title="¿Eliminar tarea?"
+        description="Esta acción eliminará de forma permanente la tarea seleccionada. ¿Deseas continuar?"
+        onConfirm={async () => {
+          if (deleteTaskId) {
+            await handleDeleteTask(deleteTaskId);
+          }
+        }}
+      />
     </div>
   );
 }

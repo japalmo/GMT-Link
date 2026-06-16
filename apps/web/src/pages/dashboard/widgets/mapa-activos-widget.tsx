@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Navigation, AlertCircle } from 'lucide-react';
 import { ApiError, listAssets } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import type { AssetView } from '@/types/assets';
 import { WidgetShell } from './widget-shell';
 
@@ -61,7 +60,7 @@ export function MapaActivosWidget(): ReactNode {
 
   // Filtrar activos con coordenadas de telemetría válidas
   const locatedAssets = assets.filter((asset) => {
-    const loc = (asset.metadata as Record<string, any> | null)?.location;
+    const loc = (asset.metadata as { location?: { latitude?: number; longitude?: number } } | null)?.location;
     return (
       loc &&
       typeof loc.latitude === 'number' &&
@@ -119,9 +118,11 @@ export function MapaActivosWidget(): ReactNode {
     const bounds = L.latLngBounds([]);
 
     locatedAssets.forEach((asset) => {
-      const loc = (asset.metadata as Record<string, any>).location;
+      const loc = (asset.metadata as { location?: { latitude?: number; longitude?: number } }).location;
+      if (!loc) return;
       const lat = loc.latitude;
       const lng = loc.longitude;
+      if (lat === undefined || lng === undefined) return;
       const latLng: [number, number] = [lat, lng];
 
       bounds.extend(latLng);
@@ -145,7 +146,7 @@ export function MapaActivosWidget(): ReactNode {
         popupAnchor: [0, -16],
       });
 
-      const speed = (asset.metadata as Record<string, any>).speed ?? 0;
+      const speed = (asset.metadata as { speed?: number }).speed ?? 0;
       const statusColor =
         asset.status === 'DISPONIBLE'
           ? 'text-emerald-500 font-bold'

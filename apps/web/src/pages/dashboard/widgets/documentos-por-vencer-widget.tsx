@@ -184,7 +184,6 @@ export function DocumentosPorVencerWidget(): ReactNode {
                     cell.date.getDate() === today.getDate();
 
                   const hasExpired = expDocs.some((d) => d.daysToExpire !== null && d.daysToExpire < 0);
-                  const hasSoon = expDocs.length > 0 && !hasExpired;
 
                   return (
                     <div

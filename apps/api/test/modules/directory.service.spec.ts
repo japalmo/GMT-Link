@@ -128,7 +128,7 @@ describe('DirectoryService.list — aislamiento cliente/colaborador (§3.4)', ()
     const [entry] = await service.list('colab-ana');
     expect(entry).toBeDefined();
     expect(Object.keys(entry ?? {}).sort()).toEqual(
-      ['avatarUrl', 'email', 'firstName', 'id', 'isClientUser', 'lastName', 'roleKeys'].sort(),
+      ['avatarUrl', 'companyName', 'email', 'firstName', 'id', 'isClientUser', 'lastName', 'roleKeys'].sort(),
     );
   });
 });
