@@ -1,4 +1,6 @@
 import { useState, type ReactNode, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useProjects, useTasks } from '@/hooks/use-operations';
 import { useUsers } from '@/hooks/use-users';
 import {
@@ -30,11 +32,46 @@ export function BacklogTab(): ReactNode {
   const { projects } = useProjects();
   const { users } = useUsers();
   
-  // Filters state
-  const [filterProject, setFilterProject] = useState<string>('all');
-  const [filterService, setFilterService] = useState<string>('all');
-  const [filterAssignee, setFilterAssignee] = useState<string>('all');
-  const [filterSearch, setFilterSearch] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial states from search params, fallback to 'all' or empty
+  const filterProject = searchParams.get('project') || 'all';
+  const filterService = searchParams.get('service') || 'all';
+  const filterAssignee = searchParams.get('assignee') || 'all';
+  const filterSearch = searchParams.get('search') || '';
+
+  const setFilterProject = (val: string) => {
+    setSearchParams((prev) => {
+      prev.set('project', val);
+      prev.set('service', 'all'); // reset service on project change
+      return prev;
+    });
+  };
+
+  const setFilterService = (val: string) => {
+    setSearchParams((prev) => {
+      prev.set('service', val);
+      return prev;
+    });
+  };
+
+  const setFilterAssignee = (val: string) => {
+    setSearchParams((prev) => {
+      prev.set('assignee', val);
+      return prev;
+    });
+  };
+
+  const setFilterSearch = (val: string) => {
+    setSearchParams((prev) => {
+      if (val) {
+        prev.set('search', val);
+      } else {
+        prev.delete('search');
+      }
+      return prev;
+    });
+  };
 
   const taskFilters = useMemo(() => {
     return {
@@ -181,7 +218,7 @@ export function BacklogTab(): ReactNode {
       });
       setEditTask(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al actualizar la tarea.');
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar la tarea.');
     }
   };
 
@@ -194,8 +231,9 @@ export function BacklogTab(): ReactNode {
     } else {
       try {
         await updateStatus(t.id, nextStatus);
+        toast.success('Estado de la tarea actualizado.');
       } catch (err) {
-        alert(err instanceof Error ? err.message : 'Error al mover el estado de la tarea.');
+        toast.error(err instanceof Error ? err.message : 'Error al mover el estado de la tarea.');
       }
     }
   };
@@ -206,8 +244,9 @@ export function BacklogTab(): ReactNode {
       await updateStatus(pointsPromptTask.id, 'COMPLETADO', Number(actualPointsVal));
       setPointsPromptOpen(false);
       setPointsPromptTask(null);
+      toast.success('Tarea completada con éxito.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al completar la tarea.');
+      toast.error(err instanceof Error ? err.message : 'Error al completar la tarea.');
     }
   };
 
@@ -215,8 +254,9 @@ export function BacklogTab(): ReactNode {
     if (confirm('¿Estás seguro de que deseas eliminar esta tarea?')) {
       try {
         await remove(id);
+        toast.success('Tarea eliminada con éxito.');
       } catch (err) {
-        alert(err instanceof Error ? err.message : 'Error al eliminar la tarea.');
+        toast.error(err instanceof Error ? err.message : 'Error al eliminar la tarea.');
       }
     }
   };

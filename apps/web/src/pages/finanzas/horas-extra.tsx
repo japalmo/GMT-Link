@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   Ban,
@@ -198,6 +199,33 @@ export function HorasExtraTab(): ReactNode {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  const [actioning, setActioning] = useState<string | null>(null);
+
+  const handleApprove = async (id: string) => {
+    if (actioning) return;
+    setActioning(id);
+    try {
+      await approve(id);
+      toast.success('Horas extra aprobadas con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al aprobar horas extra.');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const handlePay = async (id: string) => {
+    if (actioning) return;
+    setActioning(id);
+    try {
+      await pay(id);
+      toast.success('Pago registrado con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar pago.');
+    } finally {
+      setActioning(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -330,16 +358,22 @@ export function HorasExtraTab(): ReactNode {
                                   variant="outline"
                                   size="sm"
                                   className="h-8 px-2 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-                                  onClick={() => void approve(item.id)}
+                                  onClick={() => void handleApprove(item.id)}
+                                  disabled={actioning !== null}
                                 >
-                                  <Check className="size-3.5" aria-hidden />
-                                  Aprobar
+                                  {actioning === item.id ? 'Procesando...' : (
+                                    <>
+                                      <Check className="size-3.5" aria-hidden />
+                                      Aprobar
+                                    </>
+                                  )}
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
                                   onClick={() => setRejectTargetId(item.id)}
+                                  disabled={actioning !== null}
                                 >
                                   <Ban className="size-3.5" aria-hidden />
                                   Rechazar
@@ -351,10 +385,15 @@ export function HorasExtraTab(): ReactNode {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                                onClick={() => void pay(item.id)}
+                                onClick={() => void handlePay(item.id)}
+                                disabled={actioning !== null}
                               >
-                                <DollarSign className="size-3.5" aria-hidden />
-                                Registrar Pago
+                                {actioning === item.id ? 'Procesando...' : (
+                                  <>
+                                    <DollarSign className="size-3.5" aria-hidden />
+                                    Registrar Pago
+                                  </>
+                                )}
                               </Button>
                             )}
                             {(item.status === 'PAGADO' || item.status === 'RECHAZADO') && (
@@ -385,8 +424,18 @@ export function HorasExtraTab(): ReactNode {
         }}
         title="Rechazar solicitud de horas extra"
         onConfirm={async (reason) => {
+          if (actioning) return;
           if (rejectTargetId) {
-            await reject(rejectTargetId, reason);
+            setActioning(rejectTargetId);
+            try {
+              await reject(rejectTargetId, reason);
+              toast.success('Solicitud rechazada.');
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Error al rechazar solicitud.');
+              throw err;
+            } finally {
+              setActioning(null);
+            }
           }
         }}
       />

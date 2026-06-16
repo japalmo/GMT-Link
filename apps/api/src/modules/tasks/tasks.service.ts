@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { TaskStatus, ScopeType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
+import { GamificationService } from '../gamification/gamification.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/tasks.dto';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fga: FgaService,
+    private readonly gamification: GamificationService,
   ) {}
 
   /**
@@ -28,7 +30,7 @@ export class TasksService {
       throw new BadRequestException('No tienes permisos para crear tareas en este proyecto.');
     }
 
-    return this.prisma.task.create({
+    const task = await this.prisma.task.create({
       data: {
         name: dto.name,
         description: dto.description,
@@ -49,6 +51,11 @@ export class TasksService {
         clientUser: true,
       },
     });
+
+    // Gamificación: puntos por crear tarea (best-effort)
+    void this.gamification.awardPoints(userId, 'CREATE_TASK');
+
+    return task;
   }
 
   /**
@@ -244,35 +251,27 @@ export class TasksService {
     if (dto.status === TaskStatus.COMPLETADO && task.status !== TaskStatus.COMPLETADO) {
       const finalPoints = dto.actualPoints ?? task.estimatedPoints;
 
-      return this.prisma.$transaction(async (tx) => {
-        // 1. Actualizar la tarea
-        const updatedTask = await tx.task.update({
-          where: { id },
-          data: {
-            status: TaskStatus.COMPLETADO,
-            actualPoints: finalPoints,
-          },
-          include: {
-            project: true,
-            service: true,
-            assignedTo: true,
-            createdBy: true,
-            clientUser: true,
-          },
-        });
-
-        // 2. Si hay un usuario asignado, otorgar puntos de gamificación
-        if (task.assignedToId) {
-          await tx.user.update({
-            where: { id: task.assignedToId },
-            data: {
-              points: { increment: finalPoints },
-            },
-          });
-        }
-
-        return updatedTask;
+      const updatedTask = await this.prisma.task.update({
+        where: { id },
+        data: {
+          status: TaskStatus.COMPLETADO,
+          actualPoints: finalPoints,
+        },
+        include: {
+          project: true,
+          service: true,
+          assignedTo: true,
+          createdBy: true,
+          clientUser: true,
+        },
       });
+
+      // Gamificación: otorgar puntos al asignado por completar tarea (best-effort)
+      if (task.assignedToId) {
+        void this.gamification.awardPoints(task.assignedToId, 'COMPLETE_TASK');
+      }
+
+      return updatedTask;
     }
 
     // Transición de estado normal (no completado)

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   Download,
@@ -33,6 +34,59 @@ import { useUsers } from '@/hooks/use-users';
 import { StepperDownload } from '@/components/primitives/stepper-download';
 import { PDF_ACCEPT } from '../perfil/file-field';
 import { formatDate, formatRelativeTime } from '@/lib/format';
+
+interface ConfirmDeleteDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => Promise<void>;
+  title: string;
+  description: string;
+}
+
+function ConfirmDeleteDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  title,
+  description,
+}: ConfirmDeleteDialogProps): ReactNode {
+  const [submitting, setSubmitting] = useState(false);
+  return (
+    <Modal open={open} onOpenChange={(next) => (submitting ? undefined : onOpenChange(next))}>
+      <ModalContent>
+        <ModalHeader>
+          <ModalTitle>{title}</ModalTitle>
+          <ModalDescription>{description}</ModalDescription>
+        </ModalHeader>
+        <ModalFooter>
+          <ModalClose asChild>
+            <Button type="button" variant="outline" disabled={submitting}>
+              Cancelar
+            </Button>
+          </ModalClose>
+          <Button
+            type="button"
+            variant="destructive"
+            loading={submitting}
+            onClick={async () => {
+              setSubmitting(true);
+              try {
+                await onConfirm();
+                onOpenChange(false);
+              } catch {
+                // error alert handled by handler
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            Eliminar
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
 
 interface UploadLiquidationDialogProps {
   open: boolean;
@@ -218,13 +272,31 @@ export function LiquidacionesTab(): ReactNode {
   const [downloadStep, setDownloadStep] = useState<number | 'all'>(1);
   const [downloading, setDownloading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [actioning, setActioning] = useState<string | null>(null);
+
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!deleteTargetId || actioning) return;
+    setActioning(deleteTargetId);
+    try {
+      await remove(deleteTargetId);
+      toast.success('Liquidación eliminada con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al eliminar liquidación.');
+    } finally {
+      setActioning(null);
+      setDeleteTargetId(null);
+    }
+  };
 
   const handleDownloadBatch = async (): Promise<void> => {
+    if (downloading) return;
     setDownloading(true);
     try {
       await downloadBatch(downloadStep);
+      toast.success('Lote de liquidaciones descargado con éxito.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo descargar el lote de liquidaciones.');
+      toast.error(err instanceof Error ? err.message : 'No se pudo descargar el lote de liquidaciones.');
     } finally {
       setDownloading(false);
     }
@@ -391,9 +463,10 @@ export function LiquidacionesTab(): ReactNode {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => void remove(item.id)}
+                              onClick={() => setDeleteTargetId(item.id)}
                               aria-label={`Eliminar liquidación de ${name} para periodo ${item.period}`}
                               className="text-muted-foreground hover:text-destructive size-8"
+                              disabled={actioning !== null}
                             >
                               <Trash2 aria-hidden className="size-4" />
                             </Button>
@@ -415,6 +488,16 @@ export function LiquidacionesTab(): ReactNode {
         onSubmit={upload}
         users={users}
         usersLoading={usersLoading}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
+        title="¿Eliminar liquidación?"
+        description="Esta acción eliminará de forma permanente la liquidación de sueldo seleccionada. ¿Deseas continuar?"
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

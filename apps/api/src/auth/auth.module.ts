@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { GamificationModule } from '../modules/gamification/gamification.module';
 import { AuthController } from './auth.controller';
 import { FirebaseService } from './firebase.service';
 
@@ -11,7 +12,7 @@ import { FirebaseService } from './firebase.service';
  * a todas las rutas, no solo a las de este módulo).
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, GamificationModule],
   controllers: [AuthController],
   providers: [FirebaseService],
   exports: [FirebaseService],

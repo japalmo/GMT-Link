@@ -10,6 +10,9 @@ import {
   DocumentsService,
   type UploadedDocumentFile,
 } from '../../src/modules/documents/documents.service';
+import type { GamificationService } from '../../src/modules/gamification/gamification.service';
+
+const gamificationMock = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
 
 /** Construye una fila PersonalDocument completa con overrides. */
 function buildRow(overrides: Partial<PersonalDocument> = {}): PersonalDocument {
@@ -87,7 +90,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, id: 'doc-new' })),
     );
     const { prisma } = buildPrisma({ create });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     const view = await service.create('u1', { type: 'carnet', name: 'Carnet' }, FILE);
 
@@ -113,7 +116,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...current, ...args.data })),
     );
     const { prisma } = buildPrisma({ findFirst, update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.addVersion('u1', 'doc-1', FILE);
 
@@ -134,7 +137,7 @@ describe('DocumentsService', () => {
   it('addVersion sobre un documento ajeno o inexistente lanza 404', async () => {
     const findFirst = vi.fn(() => Promise.resolve(null));
     const { prisma } = buildPrisma({ findFirst });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await expect(service.addVersion('u1', 'ajeno', FILE)).rejects.toBeInstanceOf(NotFoundException);
     expect(storageBits.save).not.toHaveBeenCalled();
@@ -143,7 +146,7 @@ describe('DocumentsService', () => {
   it('listMine con expiring=true filtra por ventana de vencimiento (gte ahora, lte +30d)', async () => {
     const findMany = vi.fn(() => Promise.resolve([]));
     const { prisma } = buildPrisma({ findMany });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.listMine('u1', { expiring: true });
 
@@ -162,7 +165,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.approve('admin-id', 'doc-1');
 
@@ -176,7 +179,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, userId: 'owner-1', name: 'Carnet' })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.approve('admin-id', 'doc-1');
 
@@ -196,7 +199,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, userId: 'owner-1', name: 'Carnet' })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.reject('admin-id', 'doc-1', 'ilegible');
 
@@ -211,7 +214,7 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, userId: 'same-user' })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.approve('same-user', 'doc-1');
 
@@ -222,7 +225,7 @@ describe('DocumentsService', () => {
     const notFound = Object.assign(new Error('not found'), { code: 'P2025' });
     const update = vi.fn(() => Promise.reject(notFound));
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications);
+    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await expect(service.approve('admin-id', 'no-existe')).rejects.toBeInstanceOf(NotFoundException);
     expect(notifBits.create).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { GamificationModule } from '../gamification/gamification.module';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 
@@ -11,7 +12,7 @@ import { DocumentsService } from './documents.service';
  * Importa `NotificationsModule` para notificar al dueño al aprobar/rechazar (§6-2.2).
  */
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [PrismaModule, NotificationsModule, GamificationModule],
   controllers: [DocumentsController],
   providers: [DocumentsService],
   exports: [DocumentsService],

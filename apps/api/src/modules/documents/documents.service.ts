@@ -9,6 +9,7 @@ import type { PersonalDocument, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { GamificationService } from '../gamification/gamification.service';
 import type { CreatePersonalDocumentDto } from './dto/documents.dto';
 import type { PersonalDocumentView } from './documents.types';
 
@@ -61,6 +62,7 @@ export class DocumentsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
+    private readonly gamification: GamificationService,
   ) {}
 
   /**
@@ -112,6 +114,10 @@ export class DocumentsService {
         status: DocumentStatus.EN_REVISION,
       },
     });
+
+    // Gamificación: otorgar puntos por subir documento (best-effort)
+    void this.gamification.awardPoints(userId, 'UPLOAD_DOC');
+
     return this.toView(row);
   }
 

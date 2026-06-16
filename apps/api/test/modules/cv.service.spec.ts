@@ -8,6 +8,7 @@ import type {
   StorageService,
 } from '../../src/common/storage/storage.service';
 import { CvService } from '../../src/modules/cv/cv.service';
+import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 import type {
   CreateExperienceDto,
   UpdateExperienceDto,
@@ -113,7 +114,9 @@ function build(): {
 
   const storageService = { save: storage.save, delete: storage.delete } as unknown as StorageService;
 
-  return { service: new CvService(prismaService, storageService), prisma, storage };
+  const gamificationService = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
+
+  return { service: new CvService(prismaService, storageService, gamificationService), prisma, storage };
 }
 
 describe('CvService.getMe (lazy CV)', () => {

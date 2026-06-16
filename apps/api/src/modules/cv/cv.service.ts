@@ -11,6 +11,7 @@ import type {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { GamificationService } from '../gamification/gamification.service';
 import type {
   CreateCertificationDto,
   CreateEducationDto,
@@ -49,6 +50,7 @@ export class CvService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly gamification: GamificationService,
   ) {}
 
   /** CV propio con sus arrays. Crea uno vacío (lazy) si aún no existe. */
@@ -65,6 +67,8 @@ export class CvService {
         where: { id: cv.id },
         data: { summary: dto.summary === '' ? null : dto.summary },
       });
+      // Gamificación: otorgar puntos por completar CV (best-effort, idempotente por PointsLog)
+      void this.gamification.awardPoints(userId, 'COMPLETE_CV');
     }
     return this.getMe(userId);
   }

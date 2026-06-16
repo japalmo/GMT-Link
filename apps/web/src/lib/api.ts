@@ -45,6 +45,24 @@ import type {
   ProjectDocumentView,
   TaskStatus,
 } from '@/types/operations';
+import type {
+  AssetView,
+  AssetPublicView,
+  AssetDocumentView,
+  AssetHistoryEntryView,
+  AssetType,
+  AssetStatus,
+  CreateAssetInput,
+  ReviewAssetDocInput,
+  AssetAccessoryView,
+  ChecklistTemplateView,
+  ChecklistSubmissionView,
+  CreateAccessoryInput,
+  UpdateAccessoryInput,
+  UpdateChecklistTemplateInput,
+  ReviewChecklistTemplateInput,
+  SubmitChecklistInput,
+} from '@/types/assets';
 
 /** Base de la API (NestJS). Cae a localhost si la var no está definida. */
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -1059,5 +1077,473 @@ export function deleteProjectDocument(id: string): Promise<void> {
   return request<void>(`/project-documents/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Recursos / Activos (§6-5.1) — primitiva AssetBase                         */
+/* -------------------------------------------------------------------------- */
+
+export function listAssets(filters: {
+  type?: AssetType;
+  status?: AssetStatus;
+  projectId?: string;
+} = {}): Promise<AssetView[]> {
+  const query = new URLSearchParams();
+  if (filters.type) query.append('type', filters.type);
+  if (filters.status) query.append('status', filters.status);
+  if (filters.projectId) query.append('projectId', filters.projectId);
+  const qs = query.toString();
+  return request<AssetView[]>(`/assets${qs ? `?${qs}` : ''}`);
+}
+
+export function createAsset(dto: CreateAssetInput): Promise<AssetView> {
+  return request<AssetView>('/assets', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function getAsset(id: string): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}`);
+}
+
+export function getPublicAsset(code: string): Promise<AssetPublicView> {
+  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(code)}`);
+}
+
+export function updateAssetStatus(
+  id: string,
+  status: AssetStatus,
+  description?: string,
+): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status, description }),
+  });
+}
+
+export function assignAsset(id: string, assignedToId: string | null): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}/assign`, {
+    method: 'PUT',
+    body: JSON.stringify({ assignedToId }),
+  });
+}
+
+export function takeAssetUse(id: string): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}/use`, {
+    method: 'POST',
+  });
+}
+
+export function releaseAssetUse(id: string): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}/release`, {
+    method: 'POST',
+  });
+}
+
+export function uploadAssetDocument(
+  id: string,
+  name: string,
+  type: string,
+  file: File,
+  expirationDate?: string,
+): Promise<AssetDocumentView> {
+  const formData = new FormData();
+  formData.append('name', name);
+  formData.append('type', type);
+  formData.append('file', file);
+  if (expirationDate) formData.append('expirationDate', expirationDate);
+  return uploadRequest<AssetDocumentView>(`/assets/${encodeURIComponent(id)}/documents`, formData);
+}
+
+export function listAssetDocuments(id: string): Promise<AssetDocumentView[]> {
+  return request<AssetDocumentView[]>(`/assets/${encodeURIComponent(id)}/documents`);
+}
+
+export function reviewAssetDocument(
+  id: string,
+  docId: string,
+  dto: ReviewAssetDocInput,
+): Promise<AssetDocumentView> {
+  return request<AssetDocumentView>(
+    `/assets/${encodeURIComponent(id)}/documents/${encodeURIComponent(docId)}/review`,
+    {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    },
+  );
+}
+
+export function getAssetHistory(id: string): Promise<AssetHistoryEntryView[]> {
+  return request<AssetHistoryEntryView[]>(`/assets/${encodeURIComponent(id)}/history`);
+}
+
+export function listAssetAccessories(id: string): Promise<AssetAccessoryView[]> {
+  return request<AssetAccessoryView[]>(`/assets/${encodeURIComponent(id)}/accessories`);
+}
+
+export function addAssetAccessory(id: string, dto: CreateAccessoryInput): Promise<AssetAccessoryView> {
+  return request<AssetAccessoryView>(`/assets/${encodeURIComponent(id)}/accessories`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function updateAssetAccessory(
+  id: string,
+  accId: string,
+  dto: UpdateAccessoryInput,
+): Promise<AssetAccessoryView> {
+  return request<AssetAccessoryView>(
+    `/assets/${encodeURIComponent(id)}/accessories/${encodeURIComponent(accId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    },
+  );
+}
+
+export function removeAssetAccessory(id: string, accId: string): Promise<void> {
+  return request<void>(
+    `/assets/${encodeURIComponent(id)}/accessories/${encodeURIComponent(accId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export function getChecklistTemplate(id: string): Promise<ChecklistTemplateView> {
+  return request<ChecklistTemplateView>(`/assets/${encodeURIComponent(id)}/checklist/template`);
+}
+
+export function updateChecklistTemplate(
+  id: string,
+  dto: UpdateChecklistTemplateInput,
+): Promise<ChecklistTemplateView> {
+  return request<ChecklistTemplateView>(`/assets/${encodeURIComponent(id)}/checklist/template`, {
+    method: 'PUT',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function reviewChecklistTemplate(
+  id: string,
+  dto: ReviewChecklistTemplateInput,
+): Promise<ChecklistTemplateView> {
+  return request<ChecklistTemplateView>(`/assets/${encodeURIComponent(id)}/checklist/template/review`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function submitChecklist(id: string, dto: SubmitChecklistInput): Promise<ChecklistSubmissionView> {
+  return request<ChecklistSubmissionView>(`/assets/${encodeURIComponent(id)}/checklist/submit`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function listChecklistSubmissions(id: string): Promise<ChecklistSubmissionView[]> {
+  return request<ChecklistSubmissionView[]>(`/assets/${encodeURIComponent(id)}/checklist/submissions`);
+}
+
+export function submitTelemetry(
+  id: string,
+  dto: { latitude: number; longitude: number; speed: number },
+): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}/telemetry`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+// ============ RECURSOS: BODEGAS, INSUMOS, PROVEEDORES Y HERRAMIENTAS GIS ============
+
+export interface WarehouseView {
+  id: string;
+  code: string;
+  name: string;
+  location: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplyView {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  unit: string;
+  providerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  provider?: { id: string; name: string } | null;
+}
+
+export interface WarehouseStockView {
+  warehouseId: string;
+  supplyId: string;
+  quantity: number;
+  supply?: SupplyView;
+}
+
+export interface WarehouseTransactionView {
+  id: string;
+  warehouseId: string;
+  supplyId: string;
+  type: 'ENTRY' | 'EXIT';
+  quantity: number;
+  reason: string | null;
+  actorId: string | null;
+  createdAt: string;
+  supply?: SupplyView;
+  actor?: { firstName: string; lastName: string } | null;
+}
+
+export interface ProviderView {
+  id: string;
+  rut: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  score: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderProductView {
+  id: string;
+  providerId: string;
+  name: string;
+  description: string | null;
+  price: number | null;
+  unit: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderRatingView {
+  id: string;
+  providerId: string;
+  score: number;
+  comment: string | null;
+  actorId: string;
+  createdAt: string;
+  actor?: { firstName: string; lastName: string } | null;
+}
+
+export function createWarehouse(dto: { code: string; name: string; location?: string }): Promise<WarehouseView> {
+  return request<WarehouseView>('/warehouses', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function listWarehouses(): Promise<WarehouseView[]> {
+  return request<WarehouseView[]>('/warehouses');
+}
+
+export function getWarehouseById(id: string): Promise<{
+  warehouse: WarehouseView;
+  stocks: WarehouseStockView[];
+  transactions: WarehouseTransactionView[];
+}> {
+  return request<{
+    warehouse: WarehouseView;
+    stocks: WarehouseStockView[];
+    transactions: WarehouseTransactionView[];
+  }>(`/warehouses/${encodeURIComponent(id)}`);
+}
+
+export function createSupply(dto: {
+  code: string;
+  name: string;
+  description?: string;
+  category?: string;
+  unit?: string;
+  providerId?: string;
+}): Promise<SupplyView> {
+  return request<SupplyView>('/supplies', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function listSupplies(search?: string, category?: string): Promise<SupplyView[]> {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (category) params.append('category', category);
+  const queryStr = params.toString();
+  return request<SupplyView[]>(`/supplies${queryStr ? `?${queryStr}` : ''}`);
+}
+
+export function registerWarehouseTransaction(
+  warehouseId: string,
+  dto: { supplyId: string; type: 'ENTRY' | 'EXIT'; quantity: number; reason?: string },
+): Promise<WarehouseTransactionView> {
+  return request<WarehouseTransactionView>(`/warehouses/${encodeURIComponent(warehouseId)}/transactions`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function importSupplies(dto: { items: unknown[] }): Promise<{ count: number }> {
+  return request<{ count: number }>('/supplies/import', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function createProvider(dto: {
+  rut?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}): Promise<ProviderView> {
+  return request<ProviderView>('/providers', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function listProviders(): Promise<ProviderView[]> {
+  return request<ProviderView[]>('/providers');
+}
+
+export function getProviderById(id: string): Promise<{
+  provider: ProviderView;
+  products: ProviderProductView[];
+  ratings: ProviderRatingView[];
+}> {
+  return request<{
+    provider: ProviderView;
+    products: ProviderProductView[];
+    ratings: ProviderRatingView[];
+  }>(`/providers/${encodeURIComponent(id)}`);
+}
+
+export function addProviderProduct(
+  providerId: string,
+  dto: { name: string; description?: string; price?: number; unit?: string },
+): Promise<ProviderProductView> {
+  return request<ProviderProductView>(`/providers/${encodeURIComponent(providerId)}/products`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function submitProviderRating(
+  providerId: string,
+  dto: { score: number; comment?: string },
+): Promise<ProviderRatingView> {
+  return request<ProviderRatingView>(`/providers/${encodeURIComponent(providerId)}/ratings`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function cleanProviderDataWithIA(dto: { rawData: string }): Promise<{
+  name: string;
+  rut?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  products: Array<{ name: string; description?: string; price?: number; unit?: string }>;
+}> {
+  return request<{
+    name: string;
+    rut?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    products: Array<{ name: string; description?: string; price?: number; unit?: string }>;
+  }>('/providers/clean-data', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export interface ConvertPointInput {
+  direction: 'UTM_TO_LL' | 'LL_TO_UTM';
+  latitude?: number;
+  longitude?: number;
+  easting?: number;
+  northing?: number;
+  zone?: number;
+  southernHemisphere?: boolean;
+}
+
+export interface ConvertPointResult {
+  direction: 'UTM_TO_LL' | 'LL_TO_UTM';
+  latitude?: number;
+  longitude?: number;
+  easting?: number;
+  northing?: number;
+  zone?: number;
+  southernHemisphere?: boolean;
+}
+
+export function convertCoordinate(dto: ConvertPointInput): Promise<ConvertPointResult> {
+  return request<ConvertPointResult>('/tools/coords/convert', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function convertCoordinatesBulk(dto: { points: ConvertPointInput[] }): Promise<ConvertPointResult[]> {
+  return request<ConvertPointResult[]>('/tools/coords/convert/bulk', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function detectShorelineWithIA(dto: { fileBase64: string }): Promise<{ polygon: Array<{ x: number; y: number }> }> {
+  return request<{ polygon: Array<{ x: number; y: number }> }>('/tools/gis/shore-detect', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function getGeminiQuota(): Promise<{ used: number; remaining: number }> {
+  return request<{ used: number; remaining: number }>('/tools/gis/quota');
+}
+
+/* -------------------------------------------------------------------------- */
+/* Gamificación (§6-7.1)                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface GamificationUnlocked {
+  key: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+}
+
+export interface GamificationProgress {
+  key: string;
+  title: string;
+  description: string;
+  icon: string;
+  current: number;
+  target: number;
+}
+
+export interface GamificationProfile {
+  points: number;
+  periodPoints: number;
+  rank: 'BRONCE' | 'PLATA' | 'ORO' | 'PLATINO';
+  rankProgress: number;
+  nextRank: string;
+  unlocked: GamificationUnlocked[];
+  progress: GamificationProgress[];
+  recentPoints: Array<{ action: string; points: number; createdAt: string }>;
+}
+
+export function getGamificationProfile(): Promise<GamificationProfile> {
+  return request<GamificationProfile>('/gamification/profile');
 }
 

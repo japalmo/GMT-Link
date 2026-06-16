@@ -30,7 +30,7 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Directorio', to: '/directorio', icon: Contact },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes },
-  { label: 'Recursos', to: '/recursos', icon: Package, placeholder: true },
+  { label: 'Recursos', to: '/recursos', icon: Package },
 ];
 
 /**
@@ -38,6 +38,6 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
  * V-metric (§6-2.4).
  */
 export const SECONDARY_NAV: ReadonlyArray<NavItem> = [
-  { label: 'Herramientas', to: '/herramientas', icon: Wrench, placeholder: true },
+  { label: 'Herramientas', to: '/herramientas', icon: Wrench },
   { label: 'V-metric', to: '/v-metric', icon: Gauge, placeholder: true },
 ];

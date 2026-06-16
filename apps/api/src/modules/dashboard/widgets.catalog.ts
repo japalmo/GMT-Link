@@ -64,4 +64,9 @@ export const WIDGET_CATALOG: readonly WidgetDefinition[] = [
     title: 'Flota',
     description: 'Resumen de vehículos (placeholder).',
   },
+  {
+    key: 'gamificacion',
+    title: 'Mi Progreso',
+    description: 'Tus puntos, logros y badges acumulados.',
+  },
 ] as const;

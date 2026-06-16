@@ -80,7 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Completa el primer login y refresca el `user` para que el routing avance. */
   const completeFirstLogin = useCallback(async (newPassword: string): Promise<void> => {
+    const email = auth.currentUser?.email;
+    if (!email) throw new Error('No hay sesión activa. Recarga la página.');
     await apiCompleteFirstLogin(newPassword);
+    // Re-autenticar con la nueva contraseña para obtener token fresco
+    await signInWithEmailAndPassword(auth, email, newPassword);
     const me = await getMe();
     setUser(me);
   }, []);

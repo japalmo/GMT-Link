@@ -48,6 +48,13 @@ model User {
   inUseAssets           Asset[]           @relation("InUseAssets")
   reviewedAssetDocs     AssetDocument[]   @relation("AssetDocReviewer")
   assetHistoryEntries   AssetHistoryEntry[] @relation("AssetHistoryActor")
+  reviewedChecklists    ChecklistTemplate[] @relation("ChecklistReviewer")
+  submittedChecklists   ChecklistSubmission[] @relation("ChecklistSubmitter")
+  providerRatings       ProviderRating[]  @relation("ProviderRatingActor")
+  warehouseTransactions WarehouseTransaction[] @relation("WarehouseTransactionActor")
+  geminiUsages          GeminiUsage[]     @relation("GeminiUsageActor")
+  pointsLogs            PointsLog[]       @relation("PointsLogUser")
+  achievements          UserAchievement[] @relation("UserAchievements")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -478,6 +485,9 @@ model Asset {
   metadata     Json?
   documents    AssetDocument[]
   history      AssetHistoryEntry[]
+  accessories  AssetAccessory[]
+  checklistTemplate ChecklistTemplate?
+  checklistSubmissions ChecklistSubmission[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -499,6 +509,7 @@ model AssetDocument {
   reviewedById    String?
   reviewedBy      User?          @relation("AssetDocReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt      DateTime?
+  expirationDate  DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -519,4 +530,199 @@ model AssetHistoryEntry {
 
   @@index([assetId, createdAt])
   @@map("asset_history")
+}
+
+// Accesorios asociados a un equipo/activo (Etapa 5.2)
+model AssetAccessory {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  serialNumber String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([assetId])
+  @@map("asset_accessories")
+}
+
+// Plantilla de checklist (ApprovalWorkflow §5): versionable + revisor.
+model ChecklistTemplate {
+  id              String         @id @default(cuid())
+  assetId         String         @unique
+  asset           Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  name            String
+  items           Json           // array de { id, label, type: 'YES_NO' | 'TEXT' | 'NUMBER', required: boolean }
+  status          DocumentStatus @default(EN_REVISION)
+  previousItems   Json?          // versión anterior para el ApprovalWorkflow
+  reviewedById    String?
+  reviewedBy      User?          @relation("ChecklistReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  submissions     ChecklistSubmission[]
+
+  @@index([assetId])
+  @@map("checklist_templates")
+}
+
+// Registro de respuestas de un checklist ejecutado
+model ChecklistSubmission {
+  id         String            @id @default(cuid())
+  assetId    String
+  asset      Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  templateId String
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User              @relation("ChecklistSubmitter", fields: [userId], references: [id], onDelete: Cascade)
+  answers    Json              // array de { itemId, value: string/boolean/number, comment?: string }
+  createdAt  DateTime          @default(now())
+
+  @@index([assetId])
+  @@map("checklist_submissions")
+}
+
+// ============ PROVEEDORES (Etapa 5.5) ============
+model Provider {
+  id        String           @id @default(cuid())
+  rut       String?          @unique
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  score     Float            @default(0.0)
+  products  ProviderProduct[]
+  ratings   ProviderRating[]
+  supplies  Supply[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("providers")
+}
+
+model ProviderProduct {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Int?     // CLP sin decimales
+  unit        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("provider_products")
+}
+
+model ProviderRating {
+  id          String   @id @default(cuid())
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  score       Int      // 1 a 5
+  comment     String?
+  actorId     String
+  actor       User     @relation("ProviderRatingActor", fields: [actorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@map("provider_ratings")
+}
+
+// ============ INSUMOS (Etapa 5.4) ============
+model Supply {
+  id          String             @id @default(cuid())
+  code        String             @unique
+  name        String
+  description String?
+  category    String?
+  unit        String             @default("unidades")
+  providerId  String?
+  provider    Provider?          @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  stocks      WarehouseStock[]
+  transactions WarehouseTransaction[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@map("supplies")
+}
+
+// ============ BODEGAS (Etapa 5.6) ============
+model Warehouse {
+  id           String                 @id @default(cuid())
+  code         String                 @unique // máx 4 chars
+  name         String
+  location     String?
+  stocks       WarehouseStock[]
+  transactions WarehouseTransaction[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@map("warehouses")
+}
+
+model WarehouseStock {
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  supplyId    String
+  supply      Supply    @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  quantity    Float     @default(0)
+
+  @@id([warehouseId, supplyId])
+  @@map("warehouse_stocks")
+}
+
+model WarehouseTransaction {
+  id          String               @id @default(cuid())
+  warehouseId String
+  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  supplyId    String
+  supply      Supply               @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  type        WarehouseTxType
+  quantity    Float
+  reason      String?
+  actorId     String?
+  actor       User?                @relation("WarehouseTransactionActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime             @default(now())
+
+  @@map("warehouse_transactions")
+}
+
+enum WarehouseTxType {
+  ENTRY
+  EXIT
+}
+
+// ============ IA / USO (Etapa 6.2) ============
+model GeminiUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("GeminiUsageActor", fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // "SHORE_DETECTION" | "DATA_CLEANING"
+  createdAt DateTime @default(now())
+
+  @@map("gemini_usage")
+}
+
+// ============ GAMIFICACIÓN (Etapa 7.1) ============
+model PointsLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("PointsLogUser", fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // e.g. "FIRST_LOGIN", "COMPLETE_CV", "UPLOAD_DOC", "COMPLETE_TASK", etc.
+  points    Int
+  createdAt DateTime @default(now())
+
+  @@map("points_logs")
+}
+
+model UserAchievement {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation("UserAchievements", fields: [userId], references: [id], onDelete: Cascade)
+  achievementKey String   // e.g. "first_day", "cv_complete", "warehouse_10", etc.
+  unlockedAt     DateTime @default(now())
+
+  @@unique([userId, achievementKey])
+  @@map("user_achievements")
 }

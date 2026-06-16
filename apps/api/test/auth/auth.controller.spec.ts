@@ -8,6 +8,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import { CompleteFirstLoginDto } from '../../src/auth/dto/complete-first-login.dto';
 import '../../src/auth/auth-request.types';
+import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 
 interface UserRow {
   id: string;
@@ -35,8 +36,9 @@ function buildController(options: {
     user: { findUnique, update },
   } as unknown as PrismaService;
   const firebase = { setPassword } as unknown as FirebaseService;
+  const gamification = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
 
-  return { controller: new AuthController(prisma, firebase), findUnique, update, setPassword };
+  return { controller: new AuthController(prisma, firebase, gamification), findUnique, update, setPassword };
 }
 
 function buildReq(firebaseUid?: string): Request {

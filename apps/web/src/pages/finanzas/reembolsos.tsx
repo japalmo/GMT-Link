@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   Ban,
@@ -120,7 +121,7 @@ function NewReimbursementDialog({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
+    if (!open) {
       setConcept('');
       setAmount('');
       setDate(getTodayString());
@@ -343,6 +344,33 @@ export function ReembolsosTab(): ReactNode {
   const [importOpen, setImportOpen] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [actioning, setActioning] = useState<string | null>(null);
+
+  const handleApprove = async (id: string) => {
+    if (actioning) return;
+    setActioning(id);
+    try {
+      await approve(id);
+      toast.success('Reembolso aprobado con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al aprobar reembolso.');
+    } finally {
+      setActioning(null);
+    }
+  };
+
+  const handlePay = async (id: string) => {
+    if (actioning) return;
+    setActioning(id);
+    try {
+      await pay(id);
+      toast.success('Pago registrado con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar pago.');
+    } finally {
+      setActioning(null);
+    }
+  };
 
   // Checkboxes for manager batch print
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
@@ -364,7 +392,7 @@ export function ReembolsosTab(): ReactNode {
 
     const validationError = validateFile(file, DOC_ACCEPT);
     if (validationError) {
-      alert(validationError);
+      toast.error(validationError);
       setUploadingId(null);
       e.target.value = '';
       return;
@@ -372,8 +400,9 @@ export function ReembolsosTab(): ReactNode {
 
     try {
       await attachReceipt(uploadingId, file);
+      toast.success('Boleta subida con éxito.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo subir el archivo de la boleta.');
+      toast.error(err instanceof Error ? err.message : 'No se pudo subir el archivo de la boleta.');
     } finally {
       setUploadingId(null);
       e.target.value = '';
@@ -403,7 +432,7 @@ export function ReembolsosTab(): ReactNode {
       .filter((item) => selectedIds[item.id] && item.receiptUrl)
       .map((item) => item.id);
     if (ids.length === 0) {
-      alert('Selecciona al menos un reembolso con boleta adjunta.');
+      toast.error('Selecciona al menos un reembolso con boleta adjunta.');
       return;
     }
     try {
@@ -416,8 +445,9 @@ export function ReembolsosTab(): ReactNode {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      toast.success('PDF generado con éxito.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo generar el PDF de boletas.');
+      toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF de boletas.');
     }
   };
 
@@ -711,16 +741,22 @@ export function ReembolsosTab(): ReactNode {
                                   variant="outline"
                                   size="sm"
                                   className="h-8 px-2 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-                                  onClick={() => void approve(item.id)}
+                                  onClick={() => void handleApprove(item.id)}
+                                  disabled={actioning !== null}
                                 >
-                                  <Check className="size-3.5" aria-hidden />
-                                  Aprobar
+                                  {actioning === item.id ? 'Procesando...' : (
+                                    <>
+                                      <Check className="size-3.5" aria-hidden />
+                                      Aprobar
+                                    </>
+                                  )}
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
                                   onClick={() => setRejectTargetId(item.id)}
+                                  disabled={actioning !== null}
                                 >
                                   <Ban className="size-3.5" aria-hidden />
                                   Rechazar
@@ -732,10 +768,15 @@ export function ReembolsosTab(): ReactNode {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                                onClick={() => void pay(item.id)}
+                                onClick={() => void handlePay(item.id)}
+                                disabled={actioning !== null}
                               >
-                                <DollarSign className="size-3.5" aria-hidden />
-                                Registrar Pago
+                                {actioning === item.id ? 'Procesando...' : (
+                                  <>
+                                    <DollarSign className="size-3.5" aria-hidden />
+                                    Registrar Pago
+                                  </>
+                                )}
                               </Button>
                             )}
                             {(item.status === 'PAGADO' || item.status === 'RECHAZADO') && (
@@ -792,8 +833,18 @@ export function ReembolsosTab(): ReactNode {
         }}
         title="Rechazar reembolso"
         onConfirm={async (reason) => {
+          if (actioning) return;
           if (rejectTargetId) {
-            await reject(rejectTargetId, reason);
+            setActioning(rejectTargetId);
+            try {
+              await reject(rejectTargetId, reason);
+              toast.success('Reembolso rechazado.');
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Error al rechazar reembolso.');
+              throw err; // rethrow so that the dialog stays open and shows the error
+            } finally {
+              setActioning(null);
+            }
           }
         }}
       />

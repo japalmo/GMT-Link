@@ -7,7 +7,6 @@ import { SessionMiddleware } from './auth/session.middleware';
 import { PermissionsGuard } from './authz/permissions.guard';
 import { CommonModule } from './common/common.module';
 import { StorageModule } from './common/storage/storage.module';
-import { DemoController } from './demo/demo.controller';
 import { DevUserMiddleware } from './dev/dev-user.middleware';
 import { FgaModule } from './fga/fga.module';
 import { HealthController } from './health.controller';
@@ -28,6 +27,11 @@ import { LiquidationsModule } from './modules/liquidations/liquidations.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { ProjectDocumentsModule } from './modules/project-documents/project-documents.module';
+import { AssetsModule } from './modules/assets/assets.module';
+import { SuppliesModule } from './modules/supplies/supplies.module';
+import { ProvidersModule } from './modules/providers/providers.module';
+import { ToolsModule } from './modules/tools/tools.module';
+import { GamificationModule } from './modules/gamification/gamification.module';
 
 @Module({
   imports: [
@@ -52,8 +56,13 @@ import { ProjectDocumentsModule } from './modules/project-documents/project-docu
     ProjectsModule,
     TasksModule,
     ProjectDocumentsModule,
+    AssetsModule,
+    SuppliesModule,
+    ProvidersModule,
+    ToolsModule,
+    GamificationModule,
   ],
-  controllers: [HealthController, DemoController],
+  controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],
 })
 export class AppModule implements NestModule {

@@ -1,4 +1,5 @@
 import { useState, type ReactNode, useMemo, useRef } from 'react';
+import { toast } from 'sonner';
 import { useProjects, useProjectDocuments } from '@/hooks/use-operations';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -48,7 +49,7 @@ export function DocumentosTab(): ReactNode {
     filterService === 'all' ? undefined : filterService
   );
 
-  const [selectedDoc, setSelectedDoc] = useState<ProjectDocumentView | null>(null);
+  const [activeDocId, setActiveDocId] = useState<string | null>(null);
 
   // Modals state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -94,12 +95,16 @@ export function DocumentosTab(): ReactNode {
     });
   }, [documents, searchQuery]);
 
-  // If selectedDoc updates in full listing, update our detail view reference
+  // Derive activeDoc from activeDocId using the live documents list
   const activeDoc = useMemo(() => {
-    if (!selectedDoc) return null;
-    const found = documents.find((d) => d.id === selectedDoc.id);
-    return found || selectedDoc;
-  }, [selectedDoc, documents]);
+    if (!activeDocId) return null;
+    return documents.find((d) => d.id === activeDocId) || null;
+  }, [activeDocId, documents]);
+
+  const handleCloseRejectModal = () => {
+    setRejectOpen(false);
+    setRejectReason('');
+  };
 
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,15 +157,15 @@ export function DocumentosTab(): ReactNode {
     if (!file || !activeDoc) return;
 
     if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-      alert('La revisión debe ser obligatoriamente un archivo PDF.');
+      toast.error('La revisión debe ser obligatoriamente un archivo PDF.');
       return;
     }
 
     try {
       await uploadRevision(activeDoc.id, file);
-      alert('Nueva revisión subida con éxito.');
+      toast.success('Nueva revisión subida con éxito.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al subir la revisión del documento.');
+      toast.error(err instanceof Error ? err.message : 'Error al subir la revisión del documento.');
     }
   };
 
@@ -168,9 +173,9 @@ export function DocumentosTab(): ReactNode {
     if (!activeDoc) return;
     try {
       await signQA(activeDoc.id);
-      alert('Documento firmado con éxito como QA.');
+      toast.success('Documento firmado con éxito como QA.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al firmar documento como QA.');
+      toast.error(err instanceof Error ? err.message : 'Error al firmar documento como QA.');
     }
   };
 
@@ -178,9 +183,9 @@ export function DocumentosTab(): ReactNode {
     if (!activeDoc) return;
     try {
       await signClient(activeDoc.id);
-      alert('Documento firmado con éxito como Cliente/ITO.');
+      toast.success('Documento firmado con éxito como Cliente/ITO.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al firmar documento como Cliente/ITO.');
+      toast.error(err instanceof Error ? err.message : 'Error al firmar documento como Cliente/ITO.');
     }
   };
 
@@ -191,11 +196,10 @@ export function DocumentosTab(): ReactNode {
     setIsRejecting(true);
     try {
       await reject(activeDoc.id, rejectReason);
-      setRejectOpen(false);
-      setRejectReason('');
-      alert('Documento rechazado.');
+      handleCloseRejectModal();
+      toast.success('Documento rechazado.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al rechazar el documento.');
+      toast.error(err instanceof Error ? err.message : 'Error al rechazar el documento.');
     } finally {
       setIsRejecting(false);
     }
@@ -307,11 +311,11 @@ export function DocumentosTab(): ReactNode {
               <CardContent className="p-0 max-h-[600px] overflow-y-auto">
                 <div className="divide-y divide-border">
                   {filteredDocs.map((doc) => {
-                    const isSelected = activeDoc?.id === doc.id;
+                    const isSelected = activeDocId === doc.id;
                     return (
                       <div
                         key={doc.id}
-                        onClick={() => setSelectedDoc(doc)}
+                        onClick={() => setActiveDocId(doc.id)}
                         className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 cursor-pointer transition-colors ${
                           isSelected
                             ? 'bg-primary/5 hover:bg-primary/5 border-l-2 border-primary'
@@ -719,7 +723,7 @@ export function DocumentosTab(): ReactNode {
       </Modal>
 
       {/* MODAL RECHAZAR DOCUMENTO */}
-      <Modal open={rejectOpen} onOpenChange={setRejectOpen}>
+      <Modal open={rejectOpen} onOpenChange={(open) => { if (!open) handleCloseRejectModal(); }}>
         <ModalContent className="max-w-sm">
           <form onSubmit={handleReject}>
             <ModalHeader>
@@ -742,7 +746,7 @@ export function DocumentosTab(): ReactNode {
               </div>
             </div>
             <ModalFooter>
-              <Button type="button" variant="ghost" onClick={() => setRejectOpen(false)}>
+              <Button type="button" variant="ghost" onClick={handleCloseRejectModal}>
                 Cancelar
               </Button>
               <Button type="submit" variant="destructive" disabled={isRejecting}>

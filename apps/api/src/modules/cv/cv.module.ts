@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { GamificationModule } from '../gamification/gamification.module';
 import { CvController } from './cv.controller';
 import { CvService } from './cv.service';
 
@@ -9,7 +10,7 @@ import { CvService } from './cv.service';
  * para los diplomas PDF. No requiere FGA: opera sobre el propio usuario.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, GamificationModule],
   controllers: [CvController],
   providers: [CvService],
   exports: [CvService],

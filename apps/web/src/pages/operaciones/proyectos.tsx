@@ -1,4 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useProjects } from '@/hooks/use-operations';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -40,7 +42,24 @@ export function ProyectosTab(): ReactNode {
   const { profile } = useProfile();
   const { projects, loading, error, create, createSrv, updateKpis } = useProjects();
   
-  const [selectedProject, setSelectedProject] = useState<ProjectView | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedProjId = searchParams.get('project');
+
+  const selectedProject = useMemo(() => {
+    if (!selectedProjId) return null;
+    return projects.find((p) => p.id === selectedProjId) || null;
+  }, [selectedProjId, projects]);
+
+  const setSelectedProject = (proj: ProjectView | null) => {
+    setSearchParams((prev) => {
+      if (proj) {
+        prev.set('project', proj.id);
+      } else {
+        prev.delete('project');
+      }
+      return prev;
+    });
+  };
   
   // Modals state
   const [projectModalOpen, setProjectModalOpen] = useState(false);
@@ -126,7 +145,7 @@ export function ProyectosTab(): ReactNode {
       setKpiModalOpen(false);
       setSelectedProject(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error al actualizar los KPIs.');
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar los KPIs.');
     }
   };
 

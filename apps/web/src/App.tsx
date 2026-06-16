@@ -22,6 +22,9 @@ import RoleScopedListDemo from '@/pages/primitives/role-scoped-list-demo';
 import ImportWizardDemo from '@/pages/primitives/import-wizard-demo';
 import ApprovalWorkflowDemo from '@/pages/primitives/approval-workflow-demo';
 import OperacionesPage from '@/pages/operaciones';
+import RecursosPage from '@/pages/recursos';
+import PublicAssetPage from '@/pages/public/activo';
+import GisToolsPage from '@/pages/gis-tools';
 
 /** Redirección de rutas inexistentes a la raíz (que aplica los guards). */
 function NotFoundRedirect() {
@@ -44,6 +47,7 @@ const router = createBrowserRouter([
   // Cuenta suspendida: se auto-guarda (requiere sesión + status SUSPENDED),
   // fuera de ProtectedRoute para no entrar en bucle de redirección.
   { path: '/suspended', element: <SuspendedPage /> },
+  { path: '/public/activos/:code', element: <PublicAssetPage /> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -63,23 +67,10 @@ const router = createBrowserRouter([
           { path: '/configuracion', element: <ConfiguracionPage /> },
           { path: '/finanzas', element: <FinanzasPage /> },
           { path: '/operaciones', element: <OperacionesPage /> },
-          {
-            path: '/recursos',
-            element: (
-              <PlaceholderPage
-                title="Recursos"
-                description="Insumos, proveedores, equipos, vehículos y bodegas."
-              />
-            ),
-          },
+          { path: '/recursos', element: <RecursosPage /> },
           {
             path: '/herramientas',
-            element: (
-              <PlaceholderPage
-                title="Herramientas"
-                description="Transformación de coordenadas y utilidades técnicas."
-              />
-            ),
+            element: <GisToolsPage />,
           },
           {
             path: '/v-metric',

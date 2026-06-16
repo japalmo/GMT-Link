@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { GamificationService } from '../modules/gamification/gamification.service';
 import type { AuthUser } from '../authz/auth-user.types';
 import { CurrentUser } from './current-user.decorator';
 import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
@@ -41,6 +42,7 @@ export class AuthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly firebase: FirebaseService,
+    private readonly gamification: GamificationService,
   ) {}
 
   /** Datos del usuario autenticado. 401 si no hay sesión. */
@@ -109,6 +111,9 @@ export class AuthController {
       where: { id: authUser.id },
       data: { status: 'ACTIVE' },
     });
+
+    // Gamificación: otorgar puntos por primer login (best-effort)
+    void this.gamification.awardPoints(authUser.id, 'FIRST_LOGIN');
 
     return { status: 'ACTIVE' };
   }
