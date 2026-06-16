@@ -18,6 +18,8 @@ import type { TupleKey } from '../../fga/fga.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
+import { StorageService } from '../../common/storage/storage.service';
+
 /** Rol cuya asignación org-scope sí confiere acceso de admin en OpenFGA (§4.3). */
 const ORG_ADMIN_ROLE: RoleKey = 'org_admin';
 import type {
@@ -65,6 +67,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly firebase: FirebaseService,
     private readonly fga: FgaService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
@@ -437,6 +440,43 @@ export class UsersService {
       return error.message;
     }
     return typeof error === 'string' ? error : 'Error desconocido.';
+  }
+
+  /**
+   * Sube la imagen del avatar de un usuario y actualiza su avatarUrl.
+   */
+  async uploadAvatar(
+    id: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+  ): Promise<UserListItem> {
+    await this.assertUserExists(id);
+
+    const folder = `users/${id}/avatar`;
+    const saved = await this.storage.save({
+      buffer: file.buffer,
+      filename: file.originalname,
+      contentType: file.mimetype,
+      folder,
+    });
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { avatarUrl: saved.url },
+      include: { memberships: true },
+    });
+
+    return this.toListItem(updated);
+  }
+
+  /**
+   * Verifica si el usuario tiene permisos de administrador (can_manage_users) en FGA.
+   */
+  async checkAdminPermission(userId: string): Promise<boolean> {
+    return this.fga.check({
+      user: `user:${userId}`,
+      relation: 'can_manage_users',
+      object: `organization:${ORG_ID}`,
+    });
   }
 }
 

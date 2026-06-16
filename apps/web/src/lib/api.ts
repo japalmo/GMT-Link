@@ -296,6 +296,17 @@ export function removeUserRole(id: string, roleKey: RoleKey): Promise<UserRolesR
   );
 }
 
+/** `PATCH /users/:id/avatar` — sube la foto de perfil de un usuario. */
+export function uploadUserAvatar(id: string, file: File): Promise<UserListItem> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return uploadRequest<UserListItem>(
+    `/users/${encodeURIComponent(id)}/avatar`,
+    formData,
+    'PATCH',
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Perfil propio (§6-1.3) — "Mis datos"                                        */
 /* -------------------------------------------------------------------------- */

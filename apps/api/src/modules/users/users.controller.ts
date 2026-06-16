@@ -5,18 +5,28 @@ import {
   Get,
   Param,
   Post,
+  Patch,
   Query,
   UsePipes,
   ValidationPipe,
+  UseInterceptors,
+  UploadedFile,
+  ForbiddenException,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ORG_ID } from '../../common/org.constant';
 import { RequirePermission } from '../../authz/require-permission.decorator';
+import { CurrentUser } from '../../auth/current-user.decorator';
+import type { AuthUser } from '../../authz/auth-user.types';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
 import { UsersService } from './users.service';
 import type {
   CreateUserResponse,
+  ImportErrorRow,
   ImportUsersResponse,
   UserListItem,
   UserRolesResponse,
@@ -77,5 +87,40 @@ export class UsersController {
     @Param('roleKey') roleKey: string,
   ): Promise<UserRolesResponse> {
     return this.usersService.removeRole(id, roleKey);
+  }
+
+  /** Sube la foto de avatar para un usuario. */
+  @Patch(':id/avatar')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  async uploadAvatar(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<UserListItem> {
+    if (!authUser) {
+      throw new UnauthorizedException('Se requiere un usuario autenticado.');
+    }
+
+    const isSelf = authUser.id === id;
+    const isAdmin = await this.usersService.checkAdminPermission(authUser.id);
+
+    if (!isSelf && !isAdmin) {
+      throw new ForbiddenException('No tienes permisos para modificar el avatar de este usuario.');
+    }
+
+    if (!file) {
+      throw new BadRequestException('Falta el archivo (campo "file").');
+    }
+
+    const allowedMimeTypes = ['image/jpeg', 'image/png'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException('El archivo debe ser una imagen JPEG o PNG.');
+    }
+
+    return this.usersService.uploadAvatar(id, {
+      buffer: file.buffer,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    });
   }
 }

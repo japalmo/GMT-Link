@@ -54,9 +54,11 @@ export function NewUserDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (dto: CreateUserDto) => Promise<void>;
+  onCreate: (dto: CreateUserDto, avatarFile: File | null) => Promise<void>;
 }): ReactNode {
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorId = useId();
@@ -65,10 +67,40 @@ export function NewUserDialog({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0] || null;
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('La imagen de perfil no debe superar los 2MB.');
+        return;
+      }
+      if (!['image/jpeg', 'image/png'].includes(file.type)) {
+        setError('La imagen de perfil debe ser JPEG o PNG.');
+        return;
+      }
+      setAvatarFile(file);
+      setError(null);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setAvatarFile(null);
+      setAvatarPreview(null);
+    }
+  }
+
   function reset(): void {
     setForm(EMPTY);
+    setAvatarFile(null);
+    setAvatarPreview(null);
     setError(null);
     setSubmitting(false);
+    // Reset file input element
+    const fileInput = document.getElementById('avatar-file') as HTMLInputElement | null;
+    if (fileInput) fileInput.value = '';
   }
 
   function localError(): string | null {
@@ -89,7 +121,7 @@ export function NewUserDialog({
     setSubmitting(true);
     setError(null);
     try {
-      await onCreate(toDto(form));
+      await onCreate(toDto(form), avatarFile);
       reset();
       onOpenChange(false);
     } catch (err) {
@@ -117,6 +149,31 @@ export function NewUserDialog({
         </ModalHeader>
 
         <form className="flex flex-col gap-4" onSubmit={(e) => void handleSubmit(e)} noValidate>
+          <div className="flex items-center gap-4 border border-dashed border-border rounded-lg p-3 bg-muted/20">
+            <div className="size-14 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/80">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="Preview" className="size-full object-cover" />
+              ) : (
+                <span className="text-[10px] text-muted-foreground font-semibold">Sin foto</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <label className="flex flex-col gap-1.5 w-full">
+                <span className="text-xs font-semibold text-foreground">
+                  Foto de perfil (JPEG/PNG, máx 2MB)
+                </span>
+                <Input
+                  id="avatar-file"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleAvatarChange}
+                  disabled={submitting}
+                  className="h-9 py-1 text-xs cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Primer nombre" required>
               <Input
@@ -163,10 +220,10 @@ export function NewUserDialog({
             disabled={submitting}
           />
 
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-sm select-none">
             <input
               type="checkbox"
-              className="size-4 rounded border-input accent-primary"
+              className="size-4 rounded border-input accent-primary cursor-pointer"
               checked={form.isClientUser}
               onChange={(e) => update('isClientUser', e.target.checked)}
             />

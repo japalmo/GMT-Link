@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
 import { useUsers } from '@/hooks/use-users';
 import type { CreateUserDto, ImportUsersResponse, UserListItem } from '@/lib/api';
+import { uploadUserAvatar } from '@/lib/api';
+import { toast } from 'sonner';
 import { RoleChips } from './role-chips';
 import { StatusBadge } from './status-badge';
 import { NewUserDialog } from './new-user-dialog';
@@ -34,8 +36,15 @@ export default function UsuariosPage(): ReactNode {
   const [credentialsTitle, setCredentialsTitle] = useState('Credencial provisoria');
   const [importErrors, setImportErrors] = useState<ImportUsersResponse['errors']>([]);
 
-  async function handleCreate(dto: CreateUserDto): Promise<void> {
+  async function handleCreate(dto: CreateUserDto, avatarFile: File | null): Promise<void> {
     const res = await create(dto);
+    if (avatarFile) {
+      try {
+        await uploadUserAvatar(res.user.id, avatarFile);
+      } catch (err) {
+        toast.error('El usuario se creó, pero no se pudo subir su foto de perfil.');
+      }
+    }
     setCredentialsTitle('Credencial provisoria');
     setCredentials([
       { email: res.user.email, provisionalPassword: res.provisionalPassword },

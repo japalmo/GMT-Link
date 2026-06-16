@@ -155,7 +155,7 @@ export function DirectoryDetailDialog({
                   firstName={entry.firstName}
                   lastName={entry.lastName}
                   avatarUrl={entry.avatarUrl}
-                  size="lg"
+                  size="xl"
                 />
                 <div className="flex min-w-0 flex-col gap-2">
                   <h3 className="text-lg font-semibold tracking-tight">{name}</h3>

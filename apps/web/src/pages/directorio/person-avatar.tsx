@@ -9,12 +9,13 @@ function initials(firstName: string, lastName: string): string {
 }
 
 /** Tamaños disponibles del avatar. */
-type AvatarSize = 'sm' | 'md' | 'lg';
+type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
 
 const SIZE_CLASS: Record<AvatarSize, string> = {
   sm: 'size-9 text-xs',
   md: 'size-12 text-sm',
   lg: 'size-16 text-lg',
+  xl: 'size-20 text-xl',
 };
 
 /**
