@@ -752,6 +752,43 @@ export function payReimbursement(id: string): Promise<ReimbursementView> {
   );
 }
 
+/**
+ * `POST /reimbursements/print` — genera en el SERVIDOR un PDF con las boletas de
+ * los reembolsos indicados, en grilla de `perPage` (2/4/6) por página (§6-3.2).
+ * Solo gestores (403 si no). Devuelve el PDF como `Blob` para descargar.
+ */
+export async function downloadReimbursementsPdf(
+  ids: string[],
+  perPage: 2 | 4 | 6,
+): Promise<Blob> {
+  const headers = new Headers();
+  const token = await auth.currentUser?.getIdToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  headers.set('Content-Type', 'application/json');
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/reimbursements/print`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ids, perPage }),
+    });
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', 0);
+  }
+
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(extractMessage(body, `Error ${res.status} al generar el PDF.`), res.status);
+  }
+  return res.blob();
+}
+
 /* --- Horas extra --- */
 
 /** `POST /overtime` — crea una solicitud de horas extra propia (PENDIENTE). */

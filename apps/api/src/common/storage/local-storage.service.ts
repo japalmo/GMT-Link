@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Injectable, PayloadTooLargeException } from '@nestjs/common';
+import { Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { StorageService } from './storage.service';
 import type { StorageSaveInput, StorageSaveResult } from './storage.service';
 
@@ -45,6 +45,21 @@ export class LocalStorageService extends StorageService {
     await writeFile(path.join(folderDir, objectName), input.buffer);
 
     return { key, url: `${publicBaseUrl()}/files/${key}` };
+  }
+
+  async read(key: string): Promise<Buffer> {
+    const absolute = resolveWithinUploads(key);
+    if (absolute === null) {
+      throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+    }
+    try {
+      return await readFile(absolute);
+    } catch (error: unknown) {
+      if (isFileNotFound(error)) {
+        throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+      }
+      throw error;
+    }
   }
 
   async delete(key: string): Promise<void> {

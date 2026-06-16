@@ -14,6 +14,8 @@ import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { CreateReimbursementDto, ImportReimbursementsDto } from './dto/reimbursements.dto';
 import type { ReimbursementView } from './reimbursements.types';
+import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
+import type { ReceiptForPdf, ReceiptsPerPage } from './reimbursements-pdf.util';
 
 /** Carpeta lógica del storage para boletas de reembolso (§6-3.1). */
 const RECEIPTS_FOLDER = 'reimbursements';
@@ -106,6 +108,50 @@ export class ReimbursementsService {
       ),
     );
     return created.map(toView);
+  }
+
+  /**
+   * Genera (servidor, §6-3.2) un PDF con las boletas de los reembolsos indicados,
+   * en grilla de `perPage` por página. Gating FGA en el controller. Solo incluye
+   * los que tienen boleta adjunta y cuyo archivo se puede leer; 400 si ninguno.
+   */
+  async generateBatchPdf(ids: string[], perPage: ReceiptsPerPage): Promise<Uint8Array> {
+    if (ids.length === 0) {
+      throw new BadRequestException('Selecciona al menos un reembolso.');
+    }
+    const rows = await this.prisma.reimbursement.findMany({
+      where: { id: { in: ids } },
+      include: { user: REQUESTER_SELECT },
+      orderBy: { date: 'desc' },
+    });
+
+    const receipts: ReceiptForPdf[] = [];
+    for (const row of rows) {
+      if (!row.receiptUrl) continue;
+      const key = extractStorageKey(row.receiptUrl);
+      if (!key) continue;
+      let bytes: Buffer;
+      try {
+        bytes = await this.storage.read(key);
+      } catch {
+        continue; // boleta inaccesible: se omite, no se aborta el lote
+      }
+      receipts.push({
+        concept: row.concept,
+        amountLabel: formatClp(row.amount),
+        requesterName: `${row.user.firstName} ${row.user.lastName}`,
+        dateLabel: row.date.toISOString().slice(0, 10),
+        bytes,
+        kind: sniffReceiptKind(bytes),
+      });
+    }
+
+    if (receipts.length === 0) {
+      throw new BadRequestException(
+        'Ninguno de los reembolsos seleccionados tiene una boleta adjunta legible.',
+      );
+    }
+    return composeReceiptsPdf(receipts, perPage);
   }
 
   /**
@@ -308,4 +354,28 @@ function parseDate(value: string): Date {
     throw new BadRequestException('Fecha inválida.');
   }
   return date;
+}
+
+/** Formateador de pesos chilenos (sin decimales) para los encabezados del PDF. */
+const CLP_FORMAT = new Intl.NumberFormat('es-CL', {
+  style: 'currency',
+  currency: 'CLP',
+  maximumFractionDigits: 0,
+});
+
+/** Formatea un monto CLP entero (ej. 15000 → "$15.000"). */
+function formatClp(amount: number): string {
+  return CLP_FORMAT.format(amount);
+}
+
+/**
+ * Extrae la `key` del storage desde una `receiptUrl` pública (`.../files/<key>`).
+ * Devuelve `null` si la URL no tiene el prefijo esperado.
+ */
+function extractStorageKey(url: string): string | null {
+  const marker = '/files/';
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  const key = url.slice(index + marker.length);
+  return key.length > 0 ? decodeURIComponent(key) : null;
 }

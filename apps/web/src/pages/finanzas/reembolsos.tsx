@@ -33,10 +33,11 @@ import {
   ModalTitle,
 } from '@/components/ui/modal';
 import { useReimbursements } from '@/hooks/use-reimbursements';
+import { downloadReimbursementsPdf } from '@/lib/api';
 import { FinanceStatusBadge } from './finance-status-badge';
 import { RejectDialog } from './reject-dialog';
 import { formatCLP, formatDate } from '@/lib/format';
-import type { CreateReimbursementInput, ReimbursementView } from '@/types/finance';
+import type { CreateReimbursementInput } from '@/types/finance';
 import { DOC_ACCEPT, validateFile } from '../perfil/file-field';
 import { ImportWizard } from '@/components/primitives/import-wizard';
 import type { ImportTemplateColumn } from '@/components/primitives/import-wizard';
@@ -275,7 +276,7 @@ function PrintLayoutDialog({
         <ModalHeader>
           <ModalTitle>Impresión en lote</ModalTitle>
           <ModalDescription>
-            Configura la disposición de las {selectedCount} boletas seleccionadas por página. Se abrirá el asistente de impresión nativo del navegador.
+            Configura la disposición de las {selectedCount} boletas seleccionadas por página. Se generará y descargará un PDF desde el servidor.
           </ModalDescription>
         </ModalHeader>
 
@@ -346,7 +347,6 @@ export function ReembolsosTab(): ReactNode {
   // Checkboxes for manager batch print
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [printLayoutOpen, setPrintLayoutOpen] = useState(false);
-  const [boletasPerPage, setBoletasPerPage] = useState<2 | 4 | 6>(4);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -398,11 +398,27 @@ export function ReembolsosTab(): ReactNode {
     setSelectedIds(next);
   };
 
-  const handlePrintBatch = (layout: 2 | 4 | 6): void => {
-    setBoletasPerPage(layout);
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  const handlePrintBatch = async (layout: 2 | 4 | 6): Promise<void> => {
+    const ids = managerItems
+      .filter((item) => selectedIds[item.id] && item.receiptUrl)
+      .map((item) => item.id);
+    if (ids.length === 0) {
+      alert('Selecciona al menos un reembolso con boleta adjunta.');
+      return;
+    }
+    try {
+      const blob = await downloadReimbursementsPdf(ids, layout);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'boletas-reembolsos.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo generar el PDF de boletas.');
+    }
   };
 
   const selectedCount = Object.values(selectedIds).filter(Boolean).length;
@@ -477,16 +493,6 @@ export function ReembolsosTab(): ReactNode {
     await importBatch(rows);
   };
 
-  // Chunk selected items with receipts for grid pages
-  const selectedItemsWithReceipts = managerItems.filter(
-    (item) => selectedIds[item.id] && item.receiptUrl,
-  );
-
-  const chunkedPages: ReimbursementView[][] = [];
-  for (let i = 0; i < selectedItemsWithReceipts.length; i += boletasPerPage) {
-    chunkedPages.push(selectedItemsWithReceipts.slice(i, i + boletasPerPage));
-  }
-
   if (loading) {
     return (
       <div className="flex animate-pulse flex-col gap-3" aria-hidden>
@@ -514,7 +520,7 @@ export function ReembolsosTab(): ReactNode {
   }
 
   return (
-    <div className="flex flex-col gap-8 print:hidden">
+    <div className="flex flex-col gap-8">
       {/* Sección Mis Reembolsos */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -796,91 +802,8 @@ export function ReembolsosTab(): ReactNode {
         open={printLayoutOpen}
         onOpenChange={setPrintLayoutOpen}
         selectedCount={selectedCount}
-        onPrint={handlePrintBatch}
+        onPrint={(layout) => void handlePrintBatch(layout)}
       />
-
-      {/* Renders print-only view elements */}
-      {selectedItemsWithReceipts.length > 0 && (
-        <div className="hidden print:block print:w-full print:m-0 print:p-0">
-          <style>{`
-            @media print {
-              html, body {
-                background: #fff !important;
-                color: #000 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              body * {
-                visibility: hidden;
-              }
-              #print-layout-section, #print-layout-section * {
-                visibility: visible;
-              }
-              #print-layout-section {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-              }
-              .print-page {
-                page-break-after: always;
-                break-after: page;
-                box-sizing: border-box;
-                height: 297mm; /* A4 */
-                width: 210mm;
-                margin: 0 auto;
-                padding: 10mm;
-              }
-            }
-          `}</style>
-          <div id="print-layout-section">
-            {chunkedPages.map((page, pageIdx) => (
-              <div
-                key={pageIdx}
-                className={`print-page grid gap-6 ${
-                  boletasPerPage === 2 ? 'grid-cols-1 grid-rows-2' : ''
-                } ${boletasPerPage === 4 ? 'grid-cols-2 grid-rows-2' : ''} ${
-                  boletasPerPage === 6 ? 'grid-cols-2 grid-rows-3' : ''
-                }`}
-              >
-                {page.map((item) => {
-                  const requesterName = item.requester
-                    ? `${item.requester.firstName} ${item.requester.lastName}`
-                    : '—';
-                  return (
-                    <div
-                      key={item.id}
-                      className="border border-neutral-300 rounded-lg p-4 flex flex-col h-full bg-white max-h-full overflow-hidden"
-                    >
-                      <div className="mb-3 pb-2 border-b border-neutral-200 text-center">
-                        <h4 className="text-sm font-bold text-neutral-800 line-clamp-1">{item.concept}</h4>
-                        <p className="text-[10px] text-neutral-500 mt-0.5">
-                          {requesterName} • {formatDate(item.date)} • {formatCLP(item.amount)}
-                        </p>
-                      </div>
-                      <div className="flex-1 w-full min-h-0 flex items-center justify-center bg-neutral-50 rounded">
-                        {item.receiptUrl?.toLowerCase().endsWith('.pdf') ? (
-                          <iframe
-                            src={item.receiptUrl}
-                            className="w-full h-full border-0"
-                            title={item.concept}
-                          />
-                        ) : (
-                          <img
-                            src={item.receiptUrl || ''}
-                            alt={item.concept}
-                            className="max-w-full max-h-full object-contain"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

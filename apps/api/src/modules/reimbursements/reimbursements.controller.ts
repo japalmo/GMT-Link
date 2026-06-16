@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  Res,
   UnauthorizedException,
   UnsupportedMediaTypeException,
   UploadedFile,
@@ -15,6 +16,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { ORG_ID, ORG_OBJECT_TYPE } from '../../common/org.constant';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -25,6 +27,7 @@ import {
   CreateReimbursementDto,
   ImportReimbursementsDto,
   ListReimbursementsQueryDto,
+  PrintReimbursementsDto,
   RejectReimbursementDto,
 } from './dto/reimbursements.dto';
 import type { ReimbursementView } from './reimbursements.types';
@@ -81,6 +84,20 @@ export class ReimbursementsController {
     @Body() dto: ImportReimbursementsDto,
   ): Promise<ReimbursementView[]> {
     return this.reimbursements.importBatch(this.requireUserId(authUser), dto);
+  }
+
+  /**
+   * Genera un PDF en el servidor con las boletas seleccionadas en grilla (2/4/6
+   * por página). Gestor (requiere `can_manage_finance`). Responde `application/pdf`.
+   */
+  @Post('print')
+  @HttpCode(200)
+  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
+  async print(@Body() dto: PrintReimbursementsDto, @Res() res: Response): Promise<void> {
+    const pdf = await this.reimbursements.generateBatchPdf(dto.ids, dto.perPage);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="boletas-reembolsos.pdf"');
+    res.end(Buffer.from(pdf));
   }
 
   /** Lista los reembolsos propios. Filtro opcional `?status=`. */

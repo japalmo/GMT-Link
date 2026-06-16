@@ -17,15 +17,16 @@
   },
   "dependencies": {
     "@gtm-link/shared-types": "workspace:*",
-    "@openfga/sdk": "^0.9.6",
-    "@prisma/client": "^6.19.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@openfga/sdk": "^0.9.6",
+    "@prisma/client": "^6.19.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
     "firebase-admin": "^14.0.0",
+    "pdf-lib": "^1.17.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

@@ -36,6 +36,9 @@ export abstract class StorageService {
   /** Persiste un archivo y retorna su `key` estable + `url` de descarga. */
   abstract save(input: StorageSaveInput): Promise<StorageSaveResult>;
 
+  /** Lee el contenido binario de un archivo por su `key`. 404 si no existe. */
+  abstract read(key: string): Promise<Buffer>;
+
   /** Borra un archivo por su `key`. Idempotente: si no existe, no falla. */
   abstract delete(key: string): Promise<void>;
 }

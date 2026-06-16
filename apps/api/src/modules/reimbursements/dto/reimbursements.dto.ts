@@ -10,6 +10,9 @@ import {
   Min,
   IsArray,
   ValidateNested,
+  ArrayNotEmpty,
+  ArrayMaxSize,
+  IsIn,
 } from 'class-validator';
 import { FinanceStatus } from '@prisma/client';
 
@@ -72,5 +75,21 @@ export class ImportReimbursementsDto {
   @ValidateNested({ each: true })
   @Type(() => CreateReimbursementDto)
   items!: CreateReimbursementDto[];
+}
+
+/**
+ * Body de `POST /reimbursements/print` (§6-3.2). Genera un PDF en el servidor con
+ * las boletas seleccionadas en una grilla de `perPage` por página.
+ */
+export class PrintReimbursementsDto {
+  @IsArray()
+  @ArrayNotEmpty({ message: 'Selecciona al menos un reembolso.' })
+  @ArrayMaxSize(200, { message: 'No se pueden imprimir más de 200 boletas a la vez.' })
+  @IsString({ each: true })
+  ids!: string[];
+
+  @Type(() => Number)
+  @IsIn([2, 4, 6], { message: 'perPage debe ser 2, 4 o 6.' })
+  perPage!: 2 | 4 | 6;
 }
 
