@@ -3,7 +3,6 @@ import {
   ChevronLeft,
   LogOut,
   Settings,
-  Link2,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -12,6 +11,8 @@ import { useAuth } from '@/context/auth-context';
 import { useSidebar } from '@/components/layout/use-sidebar';
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from '@/components/layout/nav-items';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import logoMid from '@/assets/branding/logo-mid.png';
+import logoCompact from '@/assets/branding/logo-compact.png';
 
 /** Iniciales para el avatar de fallback (nombre + apellido). */
 function initials(firstName: string, lastName: string): string {
@@ -118,11 +119,10 @@ export function SidebarContent({
           collapsed && 'justify-center px-0',
         )}
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Link2 className="size-4" aria-hidden />
-        </span>
-        {!collapsed && (
-          <span className="truncate font-semibold tracking-tight">GTM Link</span>
+        {collapsed ? (
+          <img src={logoCompact} alt="GTM" className="h-8 w-auto object-contain" />
+        ) : (
+          <img src={logoMid} alt="GTM Link" className="h-8 w-auto object-contain" />
         )}
         {!forceExpanded && (
           <Button

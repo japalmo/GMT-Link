@@ -8,6 +8,9 @@ import { MiCvWidget } from './mi-cv-widget';
 import { FlotaResumenWidget } from './flota-resumen-widget';
 import { GamificationWidget } from './gamification-widget';
 
+import { TareasResumenWidget } from './tareas-resumen-widget';
+import { MapaActivosWidget } from './mapa-activos-widget';
+
 /**
  * Mapa de `widgetKey` (catálogo del backend, §6-2.1) → componente que renderiza
  * ese widget trayendo su propio dato. Las claves deben coincidir con
@@ -20,6 +23,8 @@ const WIDGET_COMPONENTS: Readonly<Record<string, ComponentType>> = {
   'mi-cv': MiCvWidget,
   'flota-resumen': FlotaResumenWidget,
   gamificacion: GamificationWidget,
+  'tareas-resumen': TareasResumenWidget,
+  'mapa-activos': MapaActivosWidget,
 };
 
 /**

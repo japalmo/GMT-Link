@@ -69,4 +69,14 @@ export const WIDGET_CATALOG: readonly WidgetDefinition[] = [
     title: 'Mi Progreso',
     description: 'Tus puntos, logros y badges acumulados.',
   },
+  {
+    key: 'tareas-resumen',
+    title: 'Resumen de Tareas',
+    description: 'Tareas activas y completadas.',
+  },
+  {
+    key: 'mapa-activos',
+    title: 'Ubicación de Activos',
+    description: 'Telemetría y ubicación en tiempo real.',
+  },
 ] as const;

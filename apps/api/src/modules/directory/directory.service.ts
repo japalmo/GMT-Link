@@ -7,7 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { DirectoryEntry, DirectoryEntryExtended } from './directory.types';
 
 /** Usuario con memberships, forma común de las consultas de este servicio. */
-type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true } }>;
+type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true; client: true } }>;
 
 /**
  * Directorio de personas (§6-1.6, scopeado por rol).
@@ -41,7 +41,7 @@ export class DirectoryService {
     const where = this.buildWhere(requesterIsClient, search);
     const users = await this.prisma.user.findMany({
       where,
-      include: { memberships: true },
+      include: { memberships: true, client: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
     return users.map((user) => this.toEntry(user));
@@ -95,7 +95,7 @@ export class DirectoryService {
   ): Promise<UserWithMemberships> {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { memberships: true },
+      include: { memberships: true, client: true },
     });
     // Aislamiento (§3.4): un cliente no ve a otros clientes — se trata como
     // inexistente (404), no 403, para no revelar su existencia.
@@ -146,6 +146,7 @@ export class DirectoryService {
       avatarUrl: user.avatarUrl,
       roleKeys: this.collectRoleKeys(user.memberships),
       isClientUser: user.isClientUser,
+      companyName: user.client?.name ?? null,
     };
   }
 

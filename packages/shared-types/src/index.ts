@@ -91,6 +91,7 @@ export interface DirectoryEntry {
   avatarUrl: string | null;
   roleKeys: RoleKey[];
   isClientUser: boolean;
+  companyName?: string | null;
 }
 
 /**

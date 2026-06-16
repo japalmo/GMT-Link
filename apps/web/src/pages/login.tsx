@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import logoWideLogin from '@/assets/branding/logo-wide-login.png';
 import { useAuth } from '@/context/auth-context';
 
 /** Traduce los códigos de error de Firebase Auth a mensajes claros en español. */
@@ -69,11 +70,8 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Link2 className="size-5" aria-hidden />
-          </span>
-          <h1 className="text-xl font-bold tracking-tight">GTM Link</h1>
+        <div className="mb-6 flex justify-center">
+          <img src={logoWideLogin} alt="GTM Link" className="h-16 w-auto object-contain" />
         </div>
 
         <Card>
