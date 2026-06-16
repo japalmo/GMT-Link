@@ -44,6 +44,10 @@ model User {
   projectDocuments      ProjectDocument[] @relation("ProjectDocumentOwner")
   signedQADocs          ProjectDocument[] @relation("DocumentQASigner")
   signedClientDocs      ProjectDocument[] @relation("DocumentClientSigner")
+  assignedAssets        Asset[]           @relation("AssignedAssets")
+  inUseAssets           Asset[]           @relation("InUseAssets")
+  reviewedAssetDocs     AssetDocument[]   @relation("AssetDocReviewer")
+  assetHistoryEntries   AssetHistoryEntry[] @relation("AssetHistoryActor")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -83,6 +87,7 @@ model Project {
   kpis         Json?
   tasks        Task[]
   documents    ProjectDocument[]
+  assets       Asset[]           @relation("ProjectAssets")
   createdAt    DateTime   @default(now())
 
   @@unique([departmentId, code])
@@ -433,4 +438,85 @@ model ProjectDocument {
   @@index([projectId, status])
   @@index([serviceId])
   @@map("project_documents")
+}
+
+// ============ RECURSOS / ACTIVOS (Etapa 5) ============
+// Base reutilizable de Equipo (5.2) y Vehículo (5.3) — primitiva `AssetBase` (§5):
+// codificación automática, QR/ficha pública, documentos (ApprovalWorkflow),
+// historial y disputa "en uso".
+
+enum AssetType {
+  EQUIPO
+  VEHICULO
+}
+
+enum AssetStatus {
+  DISPONIBLE
+  EN_USO
+  MANTENIMIENTO
+  BAJA
+}
+
+model Asset {
+  id           String      @id @default(cuid())
+  code         String      @unique // codificación automática; identifica el activo en el QR / ficha pública
+  type         AssetType
+  name         String
+  description  String?
+  status       AssetStatus @default(DISPONIBLE)
+  // Pertenencia opcional a un proyecto (FGA asset.project → can_view_list / can_create).
+  projectId    String?
+  project      Project?    @relation("ProjectAssets", fields: [projectId], references: [id], onDelete: SetNull)
+  // Responsable que corre el checklist (FGA asset.assigned → can_run_checklist).
+  assignedToId String?
+  assignedTo   User?       @relation("AssignedAssets", fields: [assignedToId], references: [id], onDelete: SetNull)
+  // Disputa "en uso": quién lo tiene tomado y desde cuándo.
+  inUseById    String?
+  inUseBy      User?       @relation("InUseAssets", fields: [inUseById], references: [id], onDelete: SetNull)
+  inUseSince   DateTime?
+  // Campos específicos por subtipo (ciclos de carga/calibración en equipos; km/ubicación en vehículos).
+  metadata     Json?
+  documents    AssetDocument[]
+  history      AssetHistoryEntry[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([type, status])
+  @@map("assets")
+}
+
+// Documentos del activo (ApprovalWorkflow §5): versionado + revisor. Reusa
+// `DocumentStatus` (BORRADOR/EN_REVISION/APROBADO/RECHAZADO) como los docs personales.
+model AssetDocument {
+  id              String         @id @default(cuid())
+  assetId         String
+  asset           Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  name            String
+  type            String
+  fileUrl         String
+  status          DocumentStatus @default(EN_REVISION)
+  previousFileUrl String?
+  reviewedById    String?
+  reviewedBy      User?          @relation("AssetDocReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([assetId])
+  @@map("asset_documents")
+}
+
+// Historial de eventos del activo (creación, asignación, uso/liberación, docs, checklist, cambios de estado).
+model AssetHistoryEntry {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  type        String // CREADO | ASIGNADO | EN_USO | LIBERADO | DOC | CHECKLIST | ESTADO | OTRO
+  description String
+  actorId     String?
+  actor       User?    @relation("AssetHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([assetId, createdAt])
+  @@map("asset_history")
 }
