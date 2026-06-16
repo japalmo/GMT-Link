@@ -268,18 +268,43 @@ export function ProyectosTab(): ReactNode {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/5 border border-primary/10">
-                  <TrendingUp className="size-8 text-primary" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Meta del Proyecto</p>
-                    <p className="text-lg font-bold text-foreground">
-                      {readNumber(selectedProject.kpis, 'goal') ?? 100} {readString(selectedProject.kpis, 'metric') ?? 'Pts'}
-                    </p>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3 p-4 rounded-lg bg-primary/5 border border-primary/10">
+                    <TrendingUp className="size-8 text-primary shrink-0" />
+                    <div className="flex-1 flex justify-between items-center gap-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Progreso del Proyecto</p>
+                        <p className="text-lg font-bold text-foreground">
+                          {readNumber(selectedProject.kpis, 'current') ?? 0} / {readNumber(selectedProject.kpis, 'goal') ?? 100} {readString(selectedProject.kpis, 'metric') ?? 'Pts'}
+                        </p>
+                      </div>
+                      <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-bold font-mono">
+                        {Math.round(((readNumber(selectedProject.kpis, 'current') ?? 0) / (readNumber(selectedProject.kpis, 'goal') ?? 100)) * 100)}%
+                      </Badge>
+                    </div>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-border/10">
+                    <div
+                      className="bg-primary h-full transition-all duration-500 rounded-full"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            ((readNumber(selectedProject.kpis, 'current') ?? 0) /
+                              (readNumber(selectedProject.kpis, 'goal') ?? 100)) *
+                              100
+                          )
+                        )}%`,
+                      }}
+                    />
                   </div>
                 </div>
 
-                <div className="text-sm text-muted-foreground mt-2">
-                  <p>Cada tarea marcada como **Completada** suma sus puntos en tiempo real para visualizar el rendimiento acumulado frente a la meta.</p>
+                <div className="text-sm text-muted-foreground mt-1">
+                  <p>Cada tarea marcada como **Completada** suma sus puntos reales en tiempo real para visualizar el rendimiento acumulado frente a la meta.</p>
                 </div>
               </CardContent>
             </Card>

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ScopeType } from '@prisma/client';
+import { ScopeType, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { CreateProjectDto, CreateServiceDto, UpdateProjectKpisDto } from './dto/projects.dto';
@@ -64,7 +64,7 @@ export class ProjectsService {
         'create',
       );
 
-      return project;
+      return this.injectCurrentKpi(project);
     });
   }
 
@@ -85,7 +85,7 @@ export class ProjectsService {
     });
 
     if (globalAdmin) {
-      return this.prisma.project.findMany({
+      const projects = await this.prisma.project.findMany({
         include: {
           department: true,
           client: true,
@@ -93,6 +93,7 @@ export class ProjectsService {
         },
         orderBy: { createdAt: 'desc' },
       });
+      return Promise.all(projects.map((p) => this.injectCurrentKpi(p)));
     }
 
     // 2. Si no es admin global, leer sus membresías de proyecto y departamento
@@ -111,7 +112,7 @@ export class ProjectsService {
       .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
       .map((m) => m.scopeId);
 
-    return this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where: {
         OR: [
           { id: { in: projectIds } },
@@ -125,6 +126,7 @@ export class ProjectsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return Promise.all(projects.map((p) => this.injectCurrentKpi(p)));
   }
 
   /**
@@ -155,7 +157,7 @@ export class ProjectsService {
       throw new NotFoundException('El proyecto no existe o no tienes acceso.');
     }
 
-    return project;
+    return this.injectCurrentKpi(project);
   }
 
   /**
@@ -207,10 +209,11 @@ export class ProjectsService {
       throw new BadRequestException('No tienes permisos para definir KPIs en este proyecto.');
     }
 
-    return this.prisma.project.update({
+    const updated = await this.prisma.project.update({
       where: { id: projectId },
       data: { kpis: dto.kpis },
     });
+    return this.injectCurrentKpi(updated);
   }
 
   /**
@@ -229,5 +232,29 @@ export class ProjectsService {
     return this.prisma.client.findMany({
       orderBy: { name: 'asc' },
     });
+  }
+
+  private async injectCurrentKpi(project: any) {
+    if (!project) return project;
+    const completedTasksSum = await this.prisma.task.aggregate({
+      where: {
+        projectId: project.id,
+        status: TaskStatus.COMPLETADO,
+      },
+      _sum: {
+        actualPoints: true,
+      },
+    });
+    const current = completedTasksSum._sum.actualPoints || 0;
+
+    const existingKpis = typeof project.kpis === 'object' && project.kpis !== null ? project.kpis : {};
+
+    return {
+      ...project,
+      kpis: {
+        ...existingKpis,
+        current,
+      },
+    };
   }
 }
