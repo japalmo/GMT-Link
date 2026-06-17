@@ -142,7 +142,7 @@ function validDto(overrides: Partial<CreateUserDto> = {}): CreateUserDto {
   return {
     firstName: 'Ana',
     lastName: 'Pérez',
-    email: 'ana@gtm.cl',
+    email: 'ana@gmt.cl',
     roleKeys: ['operator', 'viewer'],
     ...overrides,
   } as CreateUserDto;
@@ -181,7 +181,7 @@ describe('UsersService.create', () => {
       password: string;
       emailVerified?: boolean;
     };
-    expect(fbArg.email).toBe('ana@gtm.cl');
+    expect(fbArg.email).toBe('ana@gmt.cl');
     expect(fbArg.emailVerified).toBe(true);
     expect(fbArg.password).toBe(result.provisionalPassword);
     expect(result.provisionalPassword.length).toBeGreaterThanOrEqual(12);
@@ -195,7 +195,7 @@ describe('UsersService.create', () => {
     // La respuesta expone la vista pública con roleKeys, status PENDING_FIRST_LOGIN.
     expect(result.user).toEqual({
       id: 'user-generated-id',
-      email: 'ana@gtm.cl',
+      email: 'ana@gmt.cl',
       firstName: 'Ana',
       lastName: 'Pérez',
       status: 'PENDING_FIRST_LOGIN',
@@ -294,18 +294,18 @@ describe('UsersService.importBatch', () => {
     const service = new UsersService(prisma, fb.firebase, fga.fga);
 
     const result = await service.importBatch([
-      validDto({ email: 'ok@gtm.cl', roleKeys: ['operator'] }),
-      validDto({ email: 'bad@gtm.cl', roleKeys: ['viewer'] }),
-      validDto({ email: 'ok2@gtm.cl', roleKeys: ['operator'] }),
+      validDto({ email: 'ok@gmt.cl', roleKeys: ['operator'] }),
+      validDto({ email: 'bad@gmt.cl', roleKeys: ['viewer'] }),
+      validDto({ email: 'ok2@gmt.cl', roleKeys: ['operator'] }),
     ]);
 
     expect(result.created).toHaveLength(2);
-    expect(result.created.map((c) => c.email)).toEqual(['ok@gtm.cl', 'ok2@gtm.cl']);
+    expect(result.created.map((c) => c.email)).toEqual(['ok@gmt.cl', 'ok2@gmt.cl']);
     expect(result.created.every((c) => c.provisionalPassword.length >= 12)).toBe(true);
 
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]?.index).toBe(1);
-    expect(result.errors[0]?.email).toBe('bad@gtm.cl');
+    expect(result.errors[0]?.email).toBe('bad@gmt.cl');
     expect(result.errors[0]?.message).toMatch(/viewer/);
   });
 
@@ -322,13 +322,13 @@ describe('UsersService.importBatch', () => {
 
     // Filas CRUDAS (como llegan del CSV): la del medio tiene email inválido.
     const result = await service.importBatch([
-      { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gtm.cl', roleKeys: ['operator'] },
+      { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gmt.cl', roleKeys: ['operator'] },
       { firstName: 'Mal', lastName: 'Correo', email: 'no-es-un-email', roleKeys: ['operator'] },
-      { firstName: 'Eva', lastName: 'Soto', email: 'ok2@gtm.cl', roleKeys: ['operator'] },
+      { firstName: 'Eva', lastName: 'Soto', email: 'ok2@gmt.cl', roleKeys: ['operator'] },
     ]);
 
     // Las dos filas buenas se importan; la mala no tumba el lote.
-    expect(result.created.map((c) => c.email)).toEqual(['ok@gtm.cl', 'ok2@gtm.cl']);
+    expect(result.created.map((c) => c.email)).toEqual(['ok@gmt.cl', 'ok2@gmt.cl']);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]?.index).toBe(1);
     expect(result.errors[0]?.email).toBe('no-es-un-email');
@@ -348,7 +348,7 @@ describe('UsersService.importBatch', () => {
     const service = new UsersService(prisma, fb.firebase, fga.fga);
 
     const result = await service.importBatch([
-      { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gtm.cl', roleKeys: ['operator'] },
+      { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gmt.cl', roleKeys: ['operator'] },
       'fila-corrupta',
     ]);
 

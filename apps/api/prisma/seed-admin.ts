@@ -1,15 +1,15 @@
 /**
  * Seed del administrador de organización (§1.1, prueba de la provisión).
  *
- * Idempotente. Asegura, para `admin@gtm.cl`:
- *  1. Firebase   — cuenta con clave fija 'AdminGtm2026', emailVerified=true.
- *  2. Postgres   — User (status ACTIVE, 'Admin' 'GTM') + Membership org_admin
+ * Idempotente. Asegura, para `admin@gmt.cl`:
+ *  1. Firebase   — cuenta con clave fija 'AdminGmt2026', emailVerified=true.
+ *  2. Postgres   — User (status ACTIVE, 'Admin' 'GMT') + Membership org_admin
  *                  ORGANIZATION ORG_ID (espejo §4.1).
  *  3. OpenFGA    — tupla user:<id> admin organization:gmt (mismo mapeo §4.3 que
  *                  usa FgaService.syncMembershipToFGA).
  * Esto permite ejercer 1.1 (el admin puede llamar a /users).
  *
- * Ejecutar con: pnpm --filter @gtm-link/api seed:admin
+ * Ejecutar con: pnpm --filter @gmt-link/api seed:admin
  * Requiere: Postgres arriba, OpenFGA bootstrapeado (FGA_STORE_ID en .env) y, en
  * dev, el emulador de Firebase (FIREBASE_AUTH_EMULATOR_HOST).
  */
@@ -24,10 +24,10 @@ config({ path: path.resolve(process.cwd(), '../../.env') });
 
 const ORG_ID = 'gmt';
 const ADMIN = {
-  email: 'admin@gtm.cl',
-  password: 'AdminGtm2026',
+  email: 'admin@gmt.cl',
+  password: 'AdminGmt2026',
   firstName: 'Admin',
-  lastName: 'GTM',
+  lastName: 'GMT',
   roleKey: 'org_admin',
 } as const;
 
@@ -35,7 +35,7 @@ const prisma = new PrismaClient();
 
 /** Asegura el usuario en Firebase (crea o actualiza). Devuelve el uid. */
 async function ensureFirebaseUser(): Promise<string> {
-  const projectId = process.env.FIREBASE_PROJECT_ID ?? 'demo-gtm-link';
+  const projectId = process.env.FIREBASE_PROJECT_ID ?? 'demo-gmt-link';
   const app = getApps().length > 0 ? getApps()[0] : initializeApp({ projectId });
   const auth = getAuth(app);
   try {
@@ -94,7 +94,7 @@ async function ensureFgaTuple(userId: string): Promise<void> {
   const storeId = process.env.FGA_STORE_ID;
   if (!storeId) {
     throw new Error(
-      'OpenFGA no inicializado: FGA_STORE_ID vacío. Corre `pnpm --filter @gtm-link/api fga:bootstrap` antes.',
+      'OpenFGA no inicializado: FGA_STORE_ID vacío. Corre `pnpm --filter @gmt-link/api fga:bootstrap` antes.',
     );
   }
   const modelId = process.env.FGA_MODEL_ID || undefined;

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Plus, Upload, UserCog, TriangleAlert, X } from 'lucide-react';
-import type { RoleKey } from '@gtm-link/shared-types';
+import type { RoleKey } from '@gmt-link/shared-types';
 import { Button } from '@/components/ui/button';
 import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
 import { useUsers } from '@/hooks/use-users';

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ROLE_KEYS, type RoleKey } from '@gtm-link/shared-types';
+import { ROLE_KEYS, type RoleKey } from '@gmt-link/shared-types';
 import { ImportWizard, type ImportTemplateColumn } from '@/components/primitives/import-wizard';
 import type { CreateUserDto, ImportUsersResponse } from '@/lib/api';
 import { roleLabel } from '@/lib/role-labels';
@@ -10,7 +10,7 @@ const TEMPLATE_COLUMNS: ImportTemplateColumn[] = [
   { key: 'secondName', label: 'Segundo nombre', example: 'María' },
   { key: 'lastName', label: 'Apellido paterno', example: 'Pérez' },
   { key: 'secondLastName', label: 'Apellido materno', example: 'Soto' },
-  { key: 'email', label: 'Correo', example: 'ana.perez@gtm.cl' },
+  { key: 'email', label: 'Correo', example: 'ana.perez@gmt.cl' },
   { key: 'roleKeys', label: 'Roles (separados por ;)', example: 'operator;viewer' },
 ];
 

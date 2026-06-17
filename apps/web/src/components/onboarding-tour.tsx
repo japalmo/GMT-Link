@@ -28,7 +28,7 @@ export function OnboardingTour(): ReactNode {
             Primeros pasos
           </CardTitle>
           <CardDescription>
-            Completa tu perfil para aprovechar GTM Link. {completed} de {total} listos.
+            Completa tu perfil para aprovechar GMT Link. {completed} de {total} listos.
           </CardDescription>
         </div>
         <Button

@@ -31,7 +31,7 @@ function buildRowWithRequester(
 ): OvertimeRequest & { user: { id: string; firstName: string; lastName: string; email: string } } {
   return {
     ...buildRow(overrides),
-    user: { id: 'u1', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gtm.cl' },
+    user: { id: 'u1', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gmt.cl' },
   };
 }
 
@@ -122,7 +122,7 @@ describe('OvertimeService', () => {
     expect(call.where.status).toBe(FinanceStatus.PENDIENTE);
     expect(call.where.userId).toBe('u9');
     expect(call.include).toBeDefined();
-    expect(views[0]?.requester?.email).toBe('ana@gtm.cl');
+    expect(views[0]?.requester?.email).toBe('ana@gmt.cl');
   });
 
   it('getById: el dueño lo ve (sin requester)', async () => {
@@ -143,7 +143,7 @@ describe('OvertimeService', () => {
 
     const view = await service.getById('o-1', 'manager', true);
 
-    expect(view.requester?.email).toBe('ana@gtm.cl');
+    expect(view.requester?.email).toBe('ana@gmt.cl');
   });
 
   it('getById: un ajeno no-gestor recibe 404', async () => {

@@ -139,7 +139,7 @@ export function NotificationsSection(): ReactNode {
             <div className="divide-y divide-border">
               <ToggleRow
                 title="Notificaciones en la app"
-                description="Avisos dentro de GTM Link (campana del menú)."
+                description="Avisos dentro de GMT Link (campana del menú)."
                 checked={settings.notifyInApp}
                 onChange={() => void handleToggle('notifyInApp')}
                 disabled={savingKey !== null}

@@ -1,6 +1,6 @@
 /**
  * Helper de desarrollo (NO parte del producto): crea/actualiza en el EMULADOR de
- * Firebase el usuario espejo de colaborador@gtm.cl con emailVerified=true, tal como
+ * Firebase el usuario espejo de colaborador@gmt.cl con emailVerified=true, tal como
  * lo haría el admin al aprovisionar cuentas (§1.1). Idempotente.
  * Requiere FIREBASE_AUTH_EMULATOR_HOST en el entorno.
  */
@@ -11,11 +11,11 @@ import { getAuth } from 'firebase-admin/auth';
 
 config({ path: path.resolve(process.cwd(), '../../.env') });
 
-const EMAIL = 'colaborador@gtm.cl';
+const EMAIL = 'colaborador@gmt.cl';
 const PASSWORD = 'TempPass123';
 
 async function main(): Promise<void> {
-  const projectId = process.env.FIREBASE_PROJECT_ID ?? 'demo-gtm-link';
+  const projectId = process.env.FIREBASE_PROJECT_ID ?? 'demo-gmt-link';
   const app = getApps().length > 0 ? getApps()[0] : initializeApp({ projectId });
   const auth = getAuth(app);
 

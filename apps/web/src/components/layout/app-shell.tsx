@@ -22,7 +22,7 @@ function Topbar() {
       >
         <Menu aria-hidden />
       </Button>
-      <img src={logoMid} alt="GTM Link" className="h-6 w-auto object-contain" />
+      <img src={logoMid} alt="GMT Link" className="h-6 w-auto object-contain" />
       <div className="ml-auto">
         <NotificationBell />
       </div>

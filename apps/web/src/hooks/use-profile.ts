@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ProfileMe, UpdateProfileInput } from '@gtm-link/shared-types';
+import type { ProfileMe, UpdateProfileInput } from '@gmt-link/shared-types';
 import {
   ApiError,
   changePassword as apiChangePassword,

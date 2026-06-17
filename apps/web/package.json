@@ -1,8 +1,8 @@
 {
-  "name": "@gtm-link/web",
+  "name": "@gmt-link/web",
   "version": "0.1.0",
   "private": true,
-  "description": "GTM Link — frontend React + Vite",
+  "description": "GMT Link — frontend React + Vite",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.1",
-    "@gtm-link/shared-types": "workspace:*",
+    "@gmt-link/shared-types": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

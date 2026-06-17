@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Eye, Search, Inbox, Users, Building2, AlertCircle } from 'lucide-react';
-import type { DirectoryEntry } from '@gtm-link/shared-types';
+import type { DirectoryEntry } from '@gmt-link/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';

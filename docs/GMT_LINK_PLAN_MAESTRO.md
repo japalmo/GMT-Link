@@ -1,4 +1,4 @@
-# GTM Link — Plan Maestro de Implementación
+# GMT Link — Plan Maestro de Implementación
 
 > **Fuente única de verdad.** Reemplaza los borradores anteriores. Este documento + el prompt de ejecución son todo lo que el modelo necesita.
 > Estructura: decisiones cerradas → arquitectura → primitivas → **roadmap por etapas con tareas pequeñas** → pendientes → assets.
@@ -8,7 +8,7 @@
 
 ## 1. Contexto y objetivo
 
-GTM Link es la plataforma interna de operaciones de GMT (ingeniería/geofísica). Conviven **colaboradores y clientes (ITO)** con acceso finamente segmentado. Cubre: identidad/acceso, finanzas internas, operaciones por proyecto (backlog + documentos con flujo de aprobación), recursos físicos (insumos, proveedores, equipos, vehículos, bodegas) y herramientas técnicas (coordenadas + IA). Todo atravesado por **mínimo privilegio** y **gamificación**. Mobile-first, responsive, limpio.
+GMT Link es la plataforma interna de operaciones de GMT (ingeniería/geofísica). Conviven **colaboradores y clientes (ITO)** con acceso finamente segmentado. Cubre: identidad/acceso, finanzas internas, operaciones por proyecto (backlog + documentos con flujo de aprobación), recursos físicos (insumos, proveedores, equipos, vehículos, bodegas) y herramientas técnicas (coordenadas + IA). Todo atravesado por **mínimo privilegio** y **gamificación**. Mobile-first, responsive, limpio.
 
 **Objetivo de este plan:** construir el sistema por etapas pequeñas y reviewables, una tarea a la vez, optimizando el uso del modelo.
 
@@ -371,7 +371,7 @@ Ej.: `GMT-ALS-...-CA-A4-001`. Cada código máx 4 chars, configurable. Al crear 
 | 4.6 | Esquema de revisiones: numérico vs alfabético |
 | 4.8 | Firma digital: FEA (acreditada) vs FES (simple) |
 | 5.3 | **Adjuntar** código del checklist de camioneta + CSV de items (faltan) |
-| — | Identidad visual / paleta de GTM Link (para assets) |
+| — | Identidad visual / paleta de GMT Link (para assets) |
 
 ---
 

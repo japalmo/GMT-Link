@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { HealthResponse } from '@gtm-link/shared-types';
+import type { HealthResponse } from '@gmt-link/shared-types';
 import { Activity, Inbox, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,7 +127,7 @@ export default function DesignDemo() {
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <header className="mb-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">GTM Link</p>
+          <p className="text-sm font-medium text-muted-foreground">GMT Link</p>
           <h1 className="text-3xl font-bold tracking-tight">Design system</h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
             Etapa 0.6 — tokens neutros re-tematizables y primitivos visuales.

@@ -59,7 +59,7 @@ export default function FirstLoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex justify-center">
-          <img src={logoWideLogin} alt="GTM Link" className="h-16 w-auto object-contain" />
+          <img src={logoWideLogin} alt="GMT Link" className="h-16 w-auto object-contain" />
         </div>
 
         <Card>

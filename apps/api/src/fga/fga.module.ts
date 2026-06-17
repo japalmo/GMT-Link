@@ -25,7 +25,7 @@ import type { FgaClientLike } from './fga.types';
         if (!storeId) {
           const notConfigured = (): never => {
             throw new Error(
-              'OpenFGA no inicializado: FGA_STORE_ID vacío. Ejecuta `pnpm --filter @gtm-link/api fga:bootstrap`.',
+              'OpenFGA no inicializado: FGA_STORE_ID vacío. Ejecuta `pnpm --filter @gmt-link/api fga:bootstrap`.',
             );
           };
           return { check: notConfigured, write: notConfigured };

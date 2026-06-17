@@ -1,5 +1,5 @@
 {
-  "name": "@gtm-link/shared-types",
+  "name": "@gmt-link/shared-types",
   "version": "0.1.0",
   "private": true,
   "description": "Tipos compartidos entre apps/api y apps/web",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoleKey } from '@gtm-link/shared-types';
+import type { RoleKey } from '@gmt-link/shared-types';
 import {
   ApiError,
   assignUserRole,

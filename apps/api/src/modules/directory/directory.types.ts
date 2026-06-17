@@ -1,3 +1,3 @@
-import type { DirectoryEntry, DirectoryEntryExtended } from '@gtm-link/shared-types';
+import type { DirectoryEntry, DirectoryEntryExtended } from '@gmt-link/shared-types';
 
 export type { DirectoryEntry, DirectoryEntryExtended };

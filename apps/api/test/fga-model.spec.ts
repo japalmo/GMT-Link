@@ -1,6 +1,6 @@
 /**
  * Tests del modelo OpenFGA §4.3 contra un servidor REAL (http://localhost:8080).
- * Crea un store efímero propio ("gtm-link-test"), carga el modelo desde fga/model.fga,
+ * Crea un store efímero propio ("gmt-link-test"), carga el modelo desde fga/model.fga,
  * escribe tuplas estructurales + asignaciones de rol y verifica las derivaciones y el
  * aislamiento entre clientes (§3.4). El store se borra en afterAll (re-ejecutable).
  *
@@ -15,7 +15,7 @@ import { FgaService } from '../src/fga/fga.service';
 import type { FgaClientLike, TupleKey } from '../src/fga/fga.types';
 
 const API_URL = process.env.FGA_API_URL ?? 'http://localhost:8080';
-const TEST_STORE = 'gtm-link-test';
+const TEST_STORE = 'gmt-link-test';
 const MODEL_PATH = path.resolve(process.cwd(), 'fga/model.fga');
 
 let client: OpenFgaClient;

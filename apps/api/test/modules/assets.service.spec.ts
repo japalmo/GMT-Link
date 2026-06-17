@@ -16,7 +16,7 @@ function buildUserRow(overrides: Partial<User> = {}): User {
     secondName: null,
     lastName: 'Pérez',
     secondLastName: null,
-    email: 'juan@gtm.cl',
+    email: 'juan@gmt.cl',
     avatarUrl: null,
     status: 'ACTIVE',
     points: 10,

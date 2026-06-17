@@ -1,4 +1,4 @@
-// GTM Link — Esquema núcleo (plan maestro §4.2, verbatim).
+// GMT Link — Esquema núcleo (plan maestro §4.2, verbatim).
 // Postgres = datos de negocio + catálogo legible de roles/permisos (espejo de OpenFGA, §4.1).
 
 generator client {

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Check, TriangleAlert } from 'lucide-react';
-import type { ProfileMe, UpdateProfileInput } from '@gtm-link/shared-types';
+import type { ProfileMe, UpdateProfileInput } from '@gmt-link/shared-types';
 import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

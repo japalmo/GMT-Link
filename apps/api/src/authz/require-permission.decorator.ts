@@ -33,7 +33,7 @@ export interface PermissionMetadata {
   resource: PermissionResource;
 }
 
-export const PERMISSION_METADATA_KEY = 'gtmlink:require_permission';
+export const PERMISSION_METADATA_KEY = 'gmtlink:require_permission';
 
 /**
  * Declara el permiso atómico FGA requerido para ejecutar el handler.

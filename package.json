@@ -1,8 +1,8 @@
 {
-  "name": "gtm-link",
+  "name": "gmt-link",
   "private": true,
   "version": "0.1.0",
-  "description": "GTM Link — plataforma interna de operaciones de GMT (monorepo)",
+  "description": "GMT Link — plataforma interna de operaciones de GMT (monorepo)",
   "engines": {
     "node": ">=22",
     "pnpm": ">=9"

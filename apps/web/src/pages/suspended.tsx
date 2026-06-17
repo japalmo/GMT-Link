@@ -29,7 +29,7 @@ export default function SuspendedPage() {
           </div>
           <CardTitle>Cuenta suspendida</CardTitle>
           <CardDescription>
-            Tu acceso a GTM Link fue suspendido por un administrador. Si crees que
+            Tu acceso a GMT Link fue suspendido por un administrador. Si crees que
             es un error, contacta al equipo de administración.
           </CardDescription>
         </CardHeader>

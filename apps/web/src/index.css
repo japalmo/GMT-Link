@@ -4,7 +4,7 @@
 @import '@fontsource-variable/inter';
 
 /*
- * Design system GTM Link — Etapa 0.6.
+ * Design system GMT Link — Etapa 0.6.
  * La paleta DEFINITIVA está pendiente (§9): estos tokens son NEUTROS y
  * re-tematizables. Todo color vive en una CSS variable bajo :root y se
  * redefine bajo .dark (el toggle de tema llega más adelante). El acento

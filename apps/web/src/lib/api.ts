@@ -37,7 +37,7 @@ import type {
   RoleKey,
   UpdateProfileInput,
   UserStatus,
-} from '@gtm-link/shared-types';
+} from '@gmt-link/shared-types';
 import type {
   ProjectView,
   ServiceView,

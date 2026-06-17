@@ -3,7 +3,7 @@ import { AlertCircle, Award, Mail, RotateCw } from 'lucide-react';
 import type {
   DirectoryEntry,
   DirectoryEntryExtended,
-} from '@gtm-link/shared-types';
+} from '@gmt-link/shared-types';
 import {
   ApiError,
   getDirectoryEntry,

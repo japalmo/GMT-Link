@@ -1,8 +1,8 @@
-# GTM Link — Contexto para agentes
+# GMT Link — Contexto para agentes
 
 ## Fuente única de verdad
 
-**`docs/GTM_LINK_PLAN_MAESTRO.md`** es la autoridad de este proyecto: arquitectura, modelo de datos (§4.2), modelo de autorización OpenFGA (§4.3), primitivas reutilizables (§5), roadmap por etapas (§6), codificación de documentos (§7), catálogo de permisos (§8) y decisiones pendientes (§9). Léelo antes de escribir código. Si algo lo contradice, gana el plan maestro.
+**`docs/GMT_LINK_PLAN_MAESTRO.md`** es la autoridad de este proyecto: arquitectura, modelo de datos (§4.2), modelo de autorización OpenFGA (§4.3), primitivas reutilizables (§5), roadmap por etapas (§6), codificación de documentos (§7), catálogo de permisos (§8) y decisiones pendientes (§9). Léelo antes de escribir código. Si algo lo contradice, gana el plan maestro.
 
 ## Stack (decisiones cerradas — §2, no re-litigar)
 
@@ -13,7 +13,7 @@ PostgreSQL + Prisma · OpenFGA · instancia única con clientes scopeados · mon
 ```
 apps/api/              → NestJS
 apps/web/              → React + Vite
-packages/shared-types/ → tipos compartidos (@gtm-link/shared-types)
+packages/shared-types/ → tipos compartidos (@gmt-link/shared-types)
 docs/                  → plan maestro y documentación
 docker-compose.yml     → PostgreSQL + Redis local
 ```
@@ -40,7 +40,7 @@ docker compose up -d  # PostgreSQL + Redis (alternativa si Docker funciona)
 
 ## Infraestructura local (estado actual)
 
-PostgreSQL 16 y Redis 7 corren en **WSL Ubuntu** (no Docker — Docker Desktop tiene un bug recurrente de sockets en esta máquina). BD del proyecto: `gtm_link` (la `gmt_link` del MVP vive en el volumen Docker, no tocar). Si el puerto 5432 no responde, WSL se durmió:
+PostgreSQL 16 y Redis 7 corren en **WSL Ubuntu** (no Docker — Docker Desktop tiene un bug recurrente de sockets en esta máquina). BD del proyecto: `gmt_link` (la `gmt_link` del MVP vive en el volumen Docker, no tocar). Si el puerto 5432 no responde, WSL se durmió:
 
 ```powershell
 Start-Process wsl -ArgumentList "-d","Ubuntu","--exec","sleep","infinity" -WindowStyle Hidden
@@ -57,5 +57,5 @@ Redis en WSL aún no es accesible desde Windows (bind loopback; pendiente hasta 
 
 ## Git
 
-- `master` → monorepo GTM Link (este código)
+- `master` → monorepo GMT Link (este código)
 - `mvp-v0` → MVP anterior preservado (NestJS + Next.js, no tocar)

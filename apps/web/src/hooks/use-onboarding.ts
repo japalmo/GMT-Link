@@ -29,7 +29,7 @@ export interface UseOnboarding {
  * sesión actual; reaparece en el próximo ingreso mientras no se complete de
  * verdad (decisión §9 1.2: "Omitir" pospone, no marca como hecho).
  */
-const DISMISS_KEY = 'gtm.onboarding.dismissed';
+const DISMISS_KEY = 'gmt.onboarding.dismissed';
 
 function readDismissed(): boolean {
   if (typeof window === 'undefined') return false;

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 
-const STORAGE_KEY = 'gtm.sidebar.collapsed';
+const STORAGE_KEY = 'gmt.sidebar.collapsed';
 
 function readCollapsed(): boolean {
   if (typeof window === 'undefined') return false;

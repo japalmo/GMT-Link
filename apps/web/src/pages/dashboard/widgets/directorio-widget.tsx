@@ -5,7 +5,7 @@ import { ApiError, listDirectory } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WidgetShell } from './widget-shell';
-import type { DirectoryEntry, RoleKey } from '@gtm-link/shared-types';
+import type { DirectoryEntry, RoleKey } from '@gmt-link/shared-types';
 
 /** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
 function toMessage(error: unknown, fallback: string): string {

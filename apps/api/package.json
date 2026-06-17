@@ -1,8 +1,8 @@
 {
-  "name": "@gtm-link/api",
+  "name": "@gmt-link/api",
   "version": "0.1.0",
   "private": true,
-  "description": "GTM Link — API NestJS",
+  "description": "GMT Link — API NestJS",
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
@@ -16,7 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@gtm-link/shared-types": "workspace:*",
+    "@gmt-link/shared-types": "workspace:*",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",

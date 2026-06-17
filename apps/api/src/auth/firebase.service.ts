@@ -19,7 +19,7 @@ export interface CreateFirebaseUserInput {
  *
  * Inicialización idempotente: si el SDK ya tiene una app inicializada
  * (`getApps().length > 0`) la reutiliza; si no, llama a `initializeApp`.
- * El `projectId` sale de `FIREBASE_PROJECT_ID` (o 'demo-gtm-link' como
+ * El `projectId` sale de `FIREBASE_PROJECT_ID` (o 'demo-gmt-link' como
  * fallback de desarrollo). Si están las credenciales de service account
  * (`FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY`) se usan; de lo contrario
  * se inicializa sin credenciales (suficiente para el emulador).
@@ -44,7 +44,7 @@ export class FirebaseService {
       return first as App;
     }
 
-    const projectId = process.env.FIREBASE_PROJECT_ID ?? 'demo-gtm-link';
+    const projectId = process.env.FIREBASE_PROJECT_ID ?? 'demo-gmt-link';
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 

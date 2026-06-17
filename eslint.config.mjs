@@ -1,4 +1,4 @@
-// ESLint flat config unico del monorepo GTM Link.
+// ESLint flat config unico del monorepo GMT Link.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';

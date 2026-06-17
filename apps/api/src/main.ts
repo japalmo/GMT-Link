@@ -1,3 +1,9 @@
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+
+// Load .env from monorepo root BEFORE any NestJS/Prisma imports touch process.env
+config({ path: resolve(__dirname, '../../../.env') });
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 

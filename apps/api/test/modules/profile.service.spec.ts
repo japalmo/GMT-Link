@@ -28,7 +28,7 @@ function baseUser(overrides: Partial<FakeUserRow> = {}): FakeUserRow {
     secondName: 'María',
     lastName: 'Pérez',
     secondLastName: 'Soto',
-    email: 'ana@gtm.cl',
+    email: 'ana@gmt.cl',
     avatarUrl: null,
     status: 'ACTIVE',
     points: 10,
@@ -77,7 +77,7 @@ describe('ProfileService.getMe', () => {
       secondName: 'María',
       lastName: 'Pérez',
       secondLastName: 'Soto',
-      email: 'ana@gtm.cl',
+      email: 'ana@gmt.cl',
       avatarUrl: null,
       status: 'ACTIVE',
       isClientUser: false,
@@ -123,7 +123,7 @@ describe('ProfileService.updateMe', () => {
     // `data` a mano: solo los campos editables llegan a Prisma.
     const dirty = {
       firstName: 'Anita',
-      avatarUrl: 'https://cdn.gtm.cl/a.png',
+      avatarUrl: 'https://cdn.gmt.cl/a.png',
       email: 'hacker@evil.cl',
       status: 'SUSPENDED',
       points: 9999,
@@ -134,7 +134,7 @@ describe('ProfileService.updateMe', () => {
     await service.updateMe('me-1', dirty);
 
     const arg = update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
-    expect(arg.data).toEqual({ firstName: 'Anita', avatarUrl: 'https://cdn.gtm.cl/a.png' });
+    expect(arg.data).toEqual({ firstName: 'Anita', avatarUrl: 'https://cdn.gmt.cl/a.png' });
     expect(arg.data).not.toHaveProperty('email');
     expect(arg.data).not.toHaveProperty('status');
     expect(arg.data).not.toHaveProperty('points');
@@ -177,7 +177,7 @@ describe('ProfileService.updateMe', () => {
 
     expect(result.firstName).toBe('Anita');
     expect(result.avatarUrl).toBe('https://x/y.png');
-    expect(result.email).toBe('ana@gtm.cl');
+    expect(result.email).toBe('ana@gmt.cl');
     expect(result.roleKeys).toEqual(['operator', 'viewer']);
   });
 

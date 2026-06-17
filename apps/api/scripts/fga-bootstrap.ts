@@ -1,6 +1,6 @@
 /**
  * Bootstrap idempotente de OpenFGA (§6-0.3).
- * 1. Busca el store "gtm-link" (o lo crea).
+ * 1. Busca el store "gmt-link" (o lo crea).
  * 2. Transforma el DSL fga/model.fga (§4.3) a JSON y escribe el authorization model.
  * 3. Persiste FGA_STORE_ID y FGA_MODEL_ID en el .env de la raíz del monorepo.
  * Ejecutar desde apps/api: `pnpm run fga:bootstrap`.
@@ -13,7 +13,7 @@ import { transformer } from '@openfga/syntax-transformer';
 
 const ENV_PATH = path.resolve(process.cwd(), '../../.env');
 const MODEL_PATH = path.resolve(process.cwd(), 'fga/model.fga');
-const STORE_NAME = 'gtm-link';
+const STORE_NAME = 'gmt-link';
 
 config({ path: ENV_PATH });
 

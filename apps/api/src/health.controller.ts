@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import type { HealthResponse } from '@gtm-link/shared-types';
+import type { HealthResponse } from '@gmt-link/shared-types';
 
 @Controller('health')
 export class HealthController {
@@ -7,7 +7,7 @@ export class HealthController {
   health(): HealthResponse {
     return {
       status: 'ok',
-      service: 'gtm-link-api',
+      service: 'gmt-link-api',
       timestamp: new Date().toISOString(),
     };
   }

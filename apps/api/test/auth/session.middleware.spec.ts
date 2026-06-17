@@ -66,8 +66,8 @@ const RES = {} as Response;
 describe('SessionMiddleware', () => {
   it('setea authUser y firebaseUid con token válido y usuario existente', async () => {
     const { firebase, prisma, findUnique } = buildMocks({
-      decoded: { uid: 'fb-uid', email: 'colaborador@gtm.cl', email_verified: true },
-      user: { id: 'u1', email: 'colaborador@gtm.cl' },
+      decoded: { uid: 'fb-uid', email: 'colaborador@gmt.cl', email_verified: true },
+      user: { id: 'u1', email: 'colaborador@gmt.cl' },
     });
     const mw = new SessionMiddleware(firebase, prisma);
     const req = buildReq('Bearer good-token');
@@ -75,8 +75,8 @@ describe('SessionMiddleware', () => {
 
     await mw.use(req, RES, next);
 
-    expect(findUnique).toHaveBeenCalledWith({ where: { email: 'colaborador@gtm.cl' } });
-    expect(req.authUser).toEqual({ id: 'u1', email: 'colaborador@gtm.cl' });
+    expect(findUnique).toHaveBeenCalledWith({ where: { email: 'colaborador@gmt.cl' } });
+    expect(req.authUser).toEqual({ id: 'u1', email: 'colaborador@gmt.cl' });
     expect(req.firebaseUid).toBe('fb-uid');
     expect(next).toHaveBeenCalledTimes(1);
   });
@@ -110,8 +110,8 @@ describe('SessionMiddleware', () => {
 
   it('no setea authUser cuando el email no está verificado (§3 endurecimiento)', async () => {
     const { firebase, prisma, findUnique } = buildMocks({
-      decoded: { email: 'colaborador@gtm.cl', email_verified: false },
-      user: { id: 'u1', email: 'colaborador@gtm.cl' },
+      decoded: { email: 'colaborador@gmt.cl', email_verified: false },
+      user: { id: 'u1', email: 'colaborador@gmt.cl' },
     });
     const mw = new SessionMiddleware(firebase, prisma);
     const req = buildReq('Bearer token-sin-verificar');
@@ -126,7 +126,7 @@ describe('SessionMiddleware', () => {
 
   it('no setea authUser cuando no existe User espejo en Postgres', async () => {
     const { firebase, prisma } = buildMocks({
-      decoded: { email: 'fantasma@gtm.cl', email_verified: true },
+      decoded: { email: 'fantasma@gmt.cl', email_verified: true },
       user: null,
     });
     const mw = new SessionMiddleware(firebase, prisma);

@@ -1,3 +1,3 @@
-import type { ChangePasswordResponse, ProfileMe } from '@gtm-link/shared-types';
+import type { ChangePasswordResponse, ProfileMe } from '@gmt-link/shared-types';
 
 export type { ChangePasswordResponse, ProfileMe };

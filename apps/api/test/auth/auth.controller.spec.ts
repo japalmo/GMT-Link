@@ -51,7 +51,7 @@ function dto(newPassword: string): CompleteFirstLoginDto {
   return d;
 }
 
-const ACTIVE_USER: AuthUser = { id: 'u1', email: 'colaborador@gtm.cl' };
+const ACTIVE_USER: AuthUser = { id: 'u1', email: 'colaborador@gmt.cl' };
 
 describe('AuthController · GET /auth/me', () => {
   it('lanza 401 cuando no hay authUser', async () => {
@@ -63,7 +63,7 @@ describe('AuthController · GET /auth/me', () => {
     const { controller, findUnique } = buildController({
       user: {
         id: 'u1',
-        email: 'colaborador@gtm.cl',
+        email: 'colaborador@gmt.cl',
         firstName: 'Colaborador',
         lastName: 'Prueba',
         status: 'ACTIVE',
@@ -78,7 +78,7 @@ describe('AuthController · GET /auth/me', () => {
     });
     expect(result).toEqual({
       id: 'u1',
-      email: 'colaborador@gtm.cl',
+      email: 'colaborador@gmt.cl',
       firstName: 'Colaborador',
       lastName: 'Prueba',
       status: 'ACTIVE',

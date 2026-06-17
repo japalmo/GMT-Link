@@ -4,7 +4,7 @@
  * (`/permission-requests`). Las fechas viajan como string ISO-8601.
  */
 
-import type { RoleKey, ScopeType } from '@gtm-link/shared-types';
+import type { RoleKey, ScopeType } from '@gmt-link/shared-types';
 
 /** Preferencia de tema del usuario. `system` sigue al sistema operativo. */
 export type ThemePreference = 'system' | 'light' | 'dark';

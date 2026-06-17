@@ -270,7 +270,7 @@ describe('PermissionRequestsService.listMine / listPending', () => {
   it('listPending filtra status PENDIENTE, incluye al solicitante y lo expone en la vista', async () => {
     const rowWithUser = {
       ...buildRow({ userId: 'u7' }),
-      user: { id: 'u7', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gtm.cl' },
+      user: { id: 'u7', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gmt.cl' },
     };
     const findMany = vi.fn(() => Promise.resolve([rowWithUser]));
     const { prisma } = buildPrisma({ findMany });
@@ -292,7 +292,7 @@ describe('PermissionRequestsService.listMine / listPending', () => {
       id: 'u7',
       firstName: 'Ana',
       lastName: 'Pérez',
-      email: 'ana@gtm.cl',
+      email: 'ana@gmt.cl',
     });
   });
 });

@@ -120,9 +120,9 @@ export function SidebarContent({
         )}
       >
         {collapsed ? (
-          <img src={logoCompact} alt="GTM" className="h-8 w-auto object-contain" />
+          <img src={logoCompact} alt="GMT" className="h-8 w-auto object-contain" />
         ) : (
-          <img src={logoMid} alt="GTM Link" className="h-8 w-auto object-contain" />
+          <img src={logoMid} alt="GMT Link" className="h-8 w-auto object-contain" />
         )}
         {!forceExpanded && (
           <Button

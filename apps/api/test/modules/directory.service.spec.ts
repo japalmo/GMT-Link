@@ -25,7 +25,7 @@ function makeUser(overrides: Partial<FakeUserRow> & Pick<FakeUserRow, 'id'>): Fa
     secondName: null,
     lastName: 'Ape',
     secondLastName: null,
-    email: `${overrides.id}@gtm.cl`,
+    email: `${overrides.id}@gmt.cl`,
     avatarUrl: null,
     status: 'ACTIVE',
     points: 0,
@@ -41,8 +41,8 @@ function makeUser(overrides: Partial<FakeUserRow> & Pick<FakeUserRow, 'id'>): Fa
  * la combinación `{ AND: [...] }`. Suficiente para verificar aislamiento + search.
  */
 const DB: FakeUserRow[] = [
-  makeUser({ id: 'colab-ana', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gtm.cl', isClientUser: false }),
-  makeUser({ id: 'colab-beto', firstName: 'Beto', lastName: 'Lagos', email: 'beto@gtm.cl', isClientUser: false }),
+  makeUser({ id: 'colab-ana', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gmt.cl', isClientUser: false }),
+  makeUser({ id: 'colab-beto', firstName: 'Beto', lastName: 'Lagos', email: 'beto@gmt.cl', isClientUser: false }),
   makeUser({
     id: 'cli-carla',
     firstName: 'Carla',

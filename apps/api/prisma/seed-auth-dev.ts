@@ -5,7 +5,7 @@
  * de Firebase. El usuario equivalente EN el emulador lo crea el orquestador
  * durante la verificación; este script solo toca Postgres.
  *
- * Idempotente. Ejecutar con: pnpm --filter @gtm-link/api seed:auth-dev
+ * Idempotente. Ejecutar con: pnpm --filter @gmt-link/api seed:auth-dev
  */
 import path from 'node:path';
 import { config } from 'dotenv';
@@ -17,7 +17,7 @@ config({ path: path.resolve(process.cwd(), '../../.env') });
 const prisma = new PrismaClient();
 
 const TEST_USER = {
-  email: 'colaborador@gtm.cl',
+  email: 'colaborador@gmt.cl',
   firstName: 'Colaborador',
   lastName: 'Prueba',
   status: UserStatus.PENDING_FIRST_LOGIN,
