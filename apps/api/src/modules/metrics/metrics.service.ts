@@ -243,58 +243,61 @@ export class MetricsService {
 
   // ── Cloud Functions Mock para Cliente PyQt ──────────────────────────────────
 
-  async saveCubicacion(userId: string, body: { reservorio_codigo: string; datos: any }) {
+  async saveCubicacion(userId: string, body: { reservorio_codigo: string; datos: any; phase_code?: string }) {
     const element = await this.prisma.element.findUnique({
       where: { code: body.reservorio_codigo },
+      include: { project: { include: { services: true } } },
     });
     if (!element) {
       throw new NotFoundException(`Elemento con código ${body.reservorio_codigo} no encontrado.`);
     }
 
-    // Obtener la fase activa
+    // Obtener la fase activa — prioridad: phase_code del body > más reciente del proyecto
+    const serviceIds = element.project.services.map((s) => s.id);
     const phase = await this.prisma.phase.findFirst({
-      where: { code: 'anual-2026' },
+      where: body.phase_code
+        ? { code: body.phase_code }
+        : serviceIds.length > 0
+          ? { serviceId: { in: serviceIds } }
+          : {},
       include: { variables: true },
+      orderBy: { createdAt: 'desc' },
     });
     if (!phase) {
-      throw new NotFoundException('Fase activa "anual-2026" no encontrada.');
+      throw new NotFoundException('No se encontró ninguna fase activa para este elemento. Crea una fase en el servicio del proyecto primero.');
     }
 
-    const createdPoints = [];
+    // Construir data points para las variables que existan en la fase
+    const dataToInsert = Object.entries(body.datos)
+      .map(([variableCode, val]) => {
+        const variable = phase.variables.find((v) => v.code === variableCode);
+        if (!variable) return null;
+        return {
+          value: String(val),
+          variableId: variable.id,
+          elementId: element.id,
+          phaseId: phase.id,
+          createdById: userId,
+        };
+      })
+      .filter((d): d is NonNullable<typeof d> => d !== null);
 
-    // Iterar sobre las variables y guardarlas en dataPoints
-    for (const variableCode of Object.keys(body.datos)) {
-      const val = body.datos[variableCode];
-      const variable = phase.variables.find((v) => v.code === variableCode);
-      if (variable) {
-        const dataPoint = await this.prisma.dataPoint.create({
-          data: {
-            value: String(val),
-            variableId: variable.id,
-            elementId: element.id,
-            phaseId: phase.id,
-            createdById: userId,
-          },
-        });
-        createdPoints.push(dataPoint);
-      }
+    if (dataToInsert.length === 0) {
+      return { success: true, doc_id: null };
     }
 
-    // Registrar en logs de gamificación
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { points: { increment: 15 } },
-    });
+    const [createdPoints] = await this.prisma.$transaction([
+      this.prisma.dataPoint.createManyAndReturn({ data: dataToInsert }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { points: { increment: 15 } },
+      }),
+      this.prisma.pointsLog.create({
+        data: { userId, action: 'MEASUREMENT_UPLOAD', points: 15 },
+      }),
+    ]);
 
-    await this.prisma.pointsLog.create({
-      data: {
-        userId,
-        action: 'MEASUREMENT_UPLOAD',
-        points: 15,
-      },
-    });
-
-    return { success: true, doc_id: createdPoints[0]?.id || 'mock-doc-id' };
+    return { success: true, doc_id: createdPoints[0]?.id || null };
   }
 
   async createDemUploadUrl(body: { reservorio_codigo: string; filename: string }) {
@@ -311,25 +314,32 @@ export class MetricsService {
     };
   }
 
-  async registerDemMetadata(userId: string, body: { reservorio_codigo: string; archivo: string; blob_path: string }) {
+  async registerDemMetadata(userId: string, body: { reservorio_codigo: string; archivo: string; blob_path: string; phase_code?: string }) {
     const element = await this.prisma.element.findUnique({
       where: { code: body.reservorio_codigo },
+      include: { project: { include: { services: true } } },
     });
     if (!element) {
       throw new NotFoundException(`Elemento con código ${body.reservorio_codigo} no encontrado.`);
     }
 
+    const serviceIds = element.project.services.map((s) => s.id);
     const phase = await this.prisma.phase.findFirst({
-      where: { code: 'anual-2026' },
+      where: body.phase_code
+        ? { code: body.phase_code }
+        : serviceIds.length > 0
+          ? { serviceId: { in: serviceIds } }
+          : {},
       include: { variables: true },
+      orderBy: { createdAt: 'desc' },
     });
     if (!phase) {
-      throw new NotFoundException('Fase activa "anual-2026" no encontrada.');
+      throw new NotFoundException('No se encontró ninguna fase activa para este elemento.');
     }
 
     const demVariable = phase.variables.find((v) => v.code === 'dem_file');
     if (!demVariable) {
-      throw new NotFoundException('Variable "dem_file" no configurada.');
+      throw new NotFoundException('Variable "dem_file" no configurada en la fase activa.');
     }
 
     const dataPoint = await this.prisma.dataPoint.create({
@@ -349,40 +359,30 @@ export class MetricsService {
   async getLatestDem(body: { reservorio_codigo: string }) {
     const element = await this.prisma.element.findUnique({
       where: { code: body.reservorio_codigo },
+      include: { project: { include: { services: true } } },
     });
     if (!element) {
       throw new NotFoundException(`Elemento con código ${body.reservorio_codigo} no encontrado.`);
     }
 
-    const phase = await this.prisma.phase.findFirst({
-      where: { code: 'anual-2026' },
-      include: { variables: true },
-    });
-    if (!phase) {
-      throw new NotFoundException('Fase activa "anual-2026" no encontrada.');
-    }
-
-    const demVariable = phase.variables.find((v) => v.code === 'dem_file');
-    if (!demVariable) {
-      throw new NotFoundException('Variable "dem_file" no configurada.');
-    }
-
-    const latest = await this.prisma.dataPoint.findFirst({
+    // Buscar variable dem_file en cualquier fase del proyecto, la más reciente
+    const serviceIds = element.project.services.map((s) => s.id);
+    const demDataPoint = await this.prisma.dataPoint.findFirst({
       where: {
         elementId: element.id,
-        variableId: demVariable.id,
-        phaseId: phase.id,
+        variable: { code: 'dem_file' },
+        phase: serviceIds.length > 0 ? { serviceId: { in: serviceIds } } : undefined,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!latest) {
+    if (!demDataPoint) {
       throw new NotFoundException(`No hay DEM registrado para ${body.reservorio_codigo}`);
     }
 
     return {
-      blob_path: latest.fileUrl,
-      filename: latest.value,
+      blob_path: demDataPoint.fileUrl,
+      filename: demDataPoint.value,
     };
   }
 
@@ -395,29 +395,18 @@ export class MetricsService {
   async listDems(body: { reservorio_codigo: string }) {
     const element = await this.prisma.element.findUnique({
       where: { code: body.reservorio_codigo },
+      include: { project: { include: { services: true } } },
     });
     if (!element) {
       return { rows: [] };
     }
 
-    const phase = await this.prisma.phase.findFirst({
-      where: { code: 'anual-2026' },
-      include: { variables: true },
-    });
-    if (!phase) {
-      return { rows: [] };
-    }
-
-    const demVariable = phase.variables.find((v) => v.code === 'dem_file');
-    if (!demVariable) {
-      return { rows: [] };
-    }
-
+    const serviceIds = element.project.services.map((s) => s.id);
     const list = await this.prisma.dataPoint.findMany({
       where: {
         elementId: element.id,
-        variableId: demVariable.id,
-        phaseId: phase.id,
+        variable: { code: 'dem_file' },
+        phase: serviceIds.length > 0 ? { serviceId: { in: serviceIds } } : undefined,
       },
       include: {
         createdBy: true,
