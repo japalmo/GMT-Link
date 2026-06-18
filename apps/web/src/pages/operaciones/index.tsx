@@ -1,11 +1,22 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { OperacionesTabs, type OperacionesTab } from './operaciones-tabs';
 import { ProyectosTab } from './proyectos';
 import { BacklogTab } from './backlog';
 import { DocumentosTab } from './documentos';
 
 export default function OperacionesPage(): ReactNode {
-  const [tab, setTab] = useState<OperacionesTab>('proyectos');
+  const { tab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+
+  // Validate the tab parameter, fallback to 'proyectos'
+  const activeTab: OperacionesTab = (tab === 'proyectos' || tab === 'backlog' || tab === 'documentos')
+    ? tab
+    : 'proyectos';
+
+  const handleTabChange = (newTab: OperacionesTab) => {
+    navigate(`/operaciones/${newTab}`);
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6 sm:p-8">
@@ -16,12 +27,13 @@ export default function OperacionesPage(): ReactNode {
             Gestión de proyectos, backlog Kanban y documentos técnicos aprobados.
           </p>
         </div>
-        <OperacionesTabs active={tab} onChange={setTab} />
+        <OperacionesTabs active={activeTab} onChange={handleTabChange} />
       </header>
 
-      {tab === 'proyectos' && <ProyectosTab />}
-      {tab === 'backlog' && <BacklogTab />}
-      {tab === 'documentos' && <DocumentosTab />}
+      {activeTab === 'proyectos' && <ProyectosTab />}
+      {activeTab === 'backlog' && <BacklogTab />}
+      {activeTab === 'documentos' && <DocumentosTab />}
     </div>
   );
 }
+

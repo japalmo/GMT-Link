@@ -1,7 +1,8 @@
-import { Controller, Get, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import { Controller, Get, UnauthorizedException } from '@nestjs/common';
 import { GamificationService } from './gamification.service';
 import type { GamificationProfile } from './gamification.service';
+import { CurrentUser } from '../../auth/current-user.decorator';
+import type { AuthUser } from '../../authz/auth-user.types';
 
 /**
  * Controlador de gamificación (§6-7.1).
@@ -13,8 +14,11 @@ export class GamificationController {
 
   /** GET /gamification/profile — puntos, logros desbloqueados, y progreso. */
   @Get('profile')
-  getProfile(@Req() req: Request): Promise<GamificationProfile> {
-    const userId = (req as Request & { userId: string }).userId;
-    return this.gamification.getProfile(userId);
+  getProfile(@CurrentUser() authUser: AuthUser | undefined): Promise<GamificationProfile> {
+    if (!authUser) {
+      throw new UnauthorizedException('Se requiere un usuario autenticado.');
+    }
+    return this.gamification.getProfile(authUser.id);
   }
 }
+

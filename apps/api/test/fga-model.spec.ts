@@ -8,11 +8,16 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import dotenv from 'dotenv';
 import { OpenFgaClient } from '@openfga/sdk';
 import { transformer } from '@openfga/syntax-transformer';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FgaService } from '../src/fga/fga.service';
 import type { FgaClientLike, TupleKey } from '../src/fga/fga.types';
+
+// Cargar .env de la raíz o de la carpeta local de la API
+dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const API_URL = process.env.FGA_API_URL ?? 'http://localhost:8080';
 const TEST_STORE = 'gmt-link-test';

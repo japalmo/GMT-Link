@@ -28,6 +28,12 @@ GMT Link es la plataforma interna de operaciones de GMT (ingeniería/geofísica)
 | Storage | Cloudflare R2 (o Firebase Storage) |
 | GIS/coords | proj4js + MapLibre/Leaflet |
 | IA (app) | API de Gemini desde el backend (cuota 3/día/usuario) |
+| "Omitir" de onboarding | **Pospone**, no completa. El tour reaparece hasta completar de verdad. |
+| Modelo de aporte de KPI | **Dinámico**, sumando los `actualPoints` de tareas `COMPLETADO` al avance. |
+| Esquema de revisiones | **Alfabético** (`rev0` borrador, `revA` QA, `revB`... correcciones). |
+| Firma digital | **Firma Electrónica Simple (FES)** por hash SHA-256 en auditoría PDF. |
+| Checklist de camioneta | **Carga automática** estándar desde `docs/checklist_camioneta.csv` al inicializar. |
+| Identidad visual / paleta | **Gris neutro y HSL oscuro/claro** personalizables por el usuario. |
 
 ---
 
@@ -364,14 +370,7 @@ Ej.: `GMT-ALS-...-CA-A4-001`. Cada código máx 4 chars, configurable. Al crear 
 
 ## 9. Decisiones pendientes (cerrar al llegar a su etapa)
 
-| Etapa | Decisión |
-|---|---|
-| 1.2 | "Omitir" del tour: ¿completa el paso o lo pospone hasta llenarlo de verdad? |
-| 4.2 | Modelo de aporte de KPI: ¿valor por tarea que se suma al proyecto? |
-| 4.6 | Esquema de revisiones: numérico vs alfabético |
-| 4.8 | Firma digital: FEA (acreditada) vs FES (simple) |
-| 5.3 | **Adjuntar** código del checklist de camioneta + CSV de items (faltan) |
-| — | Identidad visual / paleta de GMT Link (para assets) |
+*Todas las decisiones operacionales y de diseño técnico han sido cerradas y documentadas en la sección §2.*
 
 ---
 

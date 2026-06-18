@@ -55,6 +55,7 @@ model User {
   geminiUsages          GeminiUsage[]     @relation("GeminiUsageActor")
   pointsLogs            PointsLog[]       @relation("PointsLogUser")
   achievements          UserAchievement[] @relation("UserAchievements")
+  dataPointsCreated     DataPoint[]       @relation("DataPointCreator")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -95,6 +96,7 @@ model Project {
   tasks        Task[]
   documents    ProjectDocument[]
   assets       Asset[]           @relation("ProjectAssets")
+  elements     Element[]         @relation("ProjectElements")
   createdAt    DateTime   @default(now())
 
   @@unique([departmentId, code])
@@ -109,6 +111,7 @@ model Service {
   docCodingConfig Json
   tasks           Task[]
   documents       ProjectDocument[]
+  phases          Phase[]           @relation("ServicePhases")
 
   @@unique([projectId, code])
 }
@@ -725,4 +728,77 @@ model UserAchievement {
 
   @@unique([userId, achievementKey])
   @@map("user_achievements")
+}
+
+// ============ METRICS / PROJECTS DATA INTEGRACIÓN ============
+
+model Element {
+  id              String         @id @default(cuid())
+  code            String         @unique
+  name            String
+  type            String         // "POZA" | "ACOPIO" | "RESERVORIO"
+  locationPolygon String?        // Contorno en formato WKT o GeoJSON string
+  metadata        Json?          // Niveles/cotas de referencia estáticas: cota_fondo, cota_segura, etc.
+  projectId       String
+  project         Project        @relation("ProjectElements", fields: [projectId], references: [id], onDelete: Cascade)
+  dataPoints      DataPoint[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("elements")
+}
+
+model Phase {
+  id        String          @id @default(cuid())
+  code      String          // e.g. "mayo-2026", "semana-12"
+  name      String
+  serviceId String
+  service   Service         @relation("ServicePhases", fields: [serviceId], references: [id], onDelete: Cascade)
+  variables Variable[]
+  dataPoints DataPoint[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([serviceId, code])
+  @@map("phases")
+}
+
+model Variable {
+  id         String        @id @default(cuid())
+  code       String        // e.g. "vol_salmuera", "cota_espejo", "dem_file"
+  name       String
+  type       VariableType
+  unit       String?       // e.g. "m³", "m"
+  phaseId    String
+  phase      Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  dataPoints DataPoint[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([phaseId, code])
+  @@map("variables")
+}
+
+enum VariableType {
+  SCALAR
+  FILE
+  LIST
+}
+
+model DataPoint {
+  id         String          @id @default(cuid())
+  value      String          // El valor en formato string (o JSON string si es LIST)
+  fileUrl    String?         // URL de descarga del archivo si es tipo FILE (almacenamiento asíncrono)
+  variableId String
+  variable   Variable        @relation(fields: [variableId], references: [id], onDelete: Cascade)
+  elementId  String?
+  element    Element?        @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  phaseId    String
+  phase      Phase           @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy  User            @relation("DataPointCreator", fields: [createdById], references: [id])
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@map("data_points")
 }

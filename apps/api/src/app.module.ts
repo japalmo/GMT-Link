@@ -32,6 +32,7 @@ import { SuppliesModule } from './modules/supplies/supplies.module';
 import { ProvidersModule } from './modules/providers/providers.module';
 import { ToolsModule } from './modules/tools/tools.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { GamificationModule } from './modules/gamification/gamification.module';
     ProvidersModule,
     ToolsModule,
     GamificationModule,
+    MetricsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],

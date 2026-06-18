@@ -4,7 +4,7 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gtm-link/web", "dev"],
+      "runtimeArgs": ["--filter", "@gmt-link/web", "dev"],
       "port": 5173,
       "autoPort": false
     }

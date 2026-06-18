@@ -5,6 +5,7 @@ import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { CreateProjectDocumentDto } from './dto/project-documents.dto';
 import { createHash } from 'node:crypto';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 
 @Injectable()
 export class ProjectDocumentsService {
@@ -95,17 +96,40 @@ export class ProjectDocumentsService {
       dto.areaCode,
     );
 
+    // 2.5 Estampar el archivo PDF con metadatos oficiales y marca de agua
+    let finalBuffer = file.buffer;
+    if (file.mimetype === 'application/pdf') {
+      const project = await this.prisma.project.findUnique({
+        where: { id: dto.projectId },
+        include: { client: true },
+      });
+      const dateStr = new Date().toLocaleDateString('es-CL', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      finalBuffer = await this.stampDocumentPdf(file.buffer, {
+        code,
+        revision: 'rev0', // Inicial es rev0
+        projectName: project?.name || 'S/N',
+        clientName: project?.client?.name || 'S/C',
+        date: dateStr,
+      });
+    }
+
     // 3. Subir archivo a R2/Storage
     const folder = `projects/${dto.projectId}/documents`;
     const saved = await this.storage.save({
-      buffer: file.buffer,
+      buffer: finalBuffer,
       filename: file.originalname,
       contentType: file.mimetype,
       folder,
     });
 
     // 4. Calcular Hash SHA-256 para FES
-    const fileHash = createHash('sha256').update(file.buffer).digest('hex');
+    const fileHash = createHash('sha256').update(finalBuffer).digest('hex');
 
     return this.prisma.$transaction(async (tx) => {
       // Crear registro en Postgres
@@ -161,20 +185,44 @@ export class ProjectDocumentsService {
       throw new BadRequestException('No tienes permiso para subir revisiones de este documento.');
     }
 
+    // Determinar la nueva versión
+    // Si era revA (version 1) y subimos revisión, es revB en draft (version 2)
+    const nextVersion = doc.status === ProjectDocumentStatus.APROBADO ? doc.version + 1 : doc.version;
+    const revisionString = `rev${nextVersion === 0 ? '0' : String.fromCharCode(64 + nextVersion)}`;
+
+    // Estampar el archivo PDF de la revisión con metadatos oficiales
+    let finalBuffer = file.buffer;
+    if (file.mimetype === 'application/pdf') {
+      const project = await this.prisma.project.findUnique({
+        where: { id: doc.projectId },
+        include: { client: true },
+      });
+      const dateStr = new Date().toLocaleDateString('es-CL', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      finalBuffer = await this.stampDocumentPdf(file.buffer, {
+        code: doc.code,
+        revision: revisionString,
+        projectName: project?.name || 'S/N',
+        clientName: project?.client?.name || 'S/C',
+        date: dateStr,
+      });
+    }
+
     // Subir nuevo archivo a storage
     const folder = `projects/${doc.projectId}/documents`;
     const saved = await this.storage.save({
-      buffer: file.buffer,
+      buffer: finalBuffer,
       filename: file.originalname,
       contentType: file.mimetype,
       folder,
     });
 
-    const fileHash = createHash('sha256').update(file.buffer).digest('hex');
-
-    // Determinar la nueva versión
-    // Si era revA (version 1) y subimos revisión, es revB en draft (version 2)
-    const nextVersion = doc.status === ProjectDocumentStatus.APROBADO ? doc.version + 1 : doc.version;
+    const fileHash = createHash('sha256').update(finalBuffer).digest('hex');
 
     return this.prisma.projectDocument.update({
       where: { id },
@@ -449,5 +497,123 @@ export class ProjectDocumentsService {
       // Eliminar registro
       return tx.projectDocument.delete({ where: { id } });
     });
+  }
+
+  /**
+   * Estampa un PDF con membrete superior, nomenclatura correlativa y marca de agua.
+   */
+  private async stampDocumentPdf(
+    pdfBuffer: Buffer,
+    metadata: {
+      code: string;
+      revision: string;
+      projectName: string;
+      clientName: string;
+      date: string;
+    },
+  ): Promise<Buffer> {
+    try {
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      const pages = pdfDoc.getPages();
+      const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      const cleanProjectName = metadata.projectName.toUpperCase();
+      const cleanClientName = metadata.clientName.toUpperCase();
+      const headerRightText = `PROYECTO: ${cleanProjectName} | CLIENTE: ${cleanClientName}`;
+      const footerLeftText = `CÓDIGO: ${metadata.code} | REV: ${metadata.revision}`;
+      const footerRightText = `FECHA DE ESTAMPADO: ${metadata.date}`;
+      const watermarkText = 'GMT LINK - OFICIAL';
+
+      for (const page of pages) {
+        const { width, height } = page.getSize();
+
+        // 1. Dibujar línea y texto de encabezado superior (margen de 35px)
+        page.drawLine({
+          start: { x: 30, y: height - 35 },
+          end: { x: width - 30, y: height - 35 },
+          thickness: 0.5,
+          color: rgb(0.8, 0.8, 0.8),
+        });
+
+        page.drawText('GMT LINK · CONTROL DE CALIDAD', {
+          x: 30,
+          y: height - 28,
+          size: 7,
+          font: helveticaBold,
+          color: rgb(0.11, 0.23, 0.42), // Azul marino corporativo (#1C3A6B aprox)
+        });
+
+        // Limitar tamaño de texto derecho para que no se traslape
+        const maxHeaderRightWidth = width - 250;
+        let headerRight = headerRightText;
+        if (helvetica.widthOfTextAtSize(headerRight, 7) > maxHeaderRightWidth) {
+          headerRight = `PROYECTO: ${cleanProjectName.slice(0, 15)}... | CLIENTE: ${cleanClientName.slice(0, 15)}...`;
+        }
+
+        page.drawText(headerRight, {
+          x: width - 30 - helvetica.widthOfTextAtSize(headerRight, 7),
+          y: height - 28,
+          size: 7,
+          font: helvetica,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+
+        // 2. Dibujar línea y texto de pie de página inferior (margen de 35px)
+        page.drawLine({
+          start: { x: 30, y: 35 },
+          end: { x: width - 30, y: 35 },
+          thickness: 0.5,
+          color: rgb(0.8, 0.8, 0.8),
+        });
+
+        page.drawText(footerLeftText, {
+          x: 30,
+          y: 22,
+          size: 7,
+          font: helveticaBold,
+          color: rgb(0.11, 0.23, 0.42),
+        });
+
+        page.drawText(footerRightText, {
+          x: width - 30 - helvetica.widthOfTextAtSize(footerRightText, 7),
+          y: 22,
+          size: 7,
+          font: helvetica,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+
+        // 3. Marca de agua diagonal en el centro de la página
+        const watermarkSize = 36;
+        const textWidth = helveticaBold.widthOfTextAtSize(watermarkText, watermarkSize);
+        // Centrar con respecto a la diagonal
+        const rad = (30 * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        
+        // Coordenadas aproximadas para centrar el texto rotado en el centro físico de la página
+        const centerX = width / 2;
+        const centerY = height / 2;
+        // Ajuste del offset para centrar el origen del texto rotado
+        const textOffsetX = (textWidth / 2) * cos;
+        const textOffsetY = (textWidth / 2) * sin;
+
+        page.drawText(watermarkText, {
+          x: centerX - textOffsetX,
+          y: centerY - textOffsetY,
+          size: watermarkSize,
+          font: helveticaBold,
+          color: rgb(0.9, 0.9, 0.9), // Muy suave gris
+          opacity: 0.12, // Translúcido
+          rotate: degrees(30),
+        });
+      }
+
+      const savedBytes = await pdfDoc.save();
+      return Buffer.from(savedBytes);
+    } catch (error) {
+      this.logger.warn(`No se pudo estampar el PDF, se usará el original. Razón: ${error instanceof Error ? error.message : String(error)}`);
+      return pdfBuffer;
+    }
   }
 }

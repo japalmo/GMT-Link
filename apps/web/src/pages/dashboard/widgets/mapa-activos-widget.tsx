@@ -6,7 +6,7 @@ import { buttonVariants } from '@/components/ui/button';
 import type { AssetView } from '@/types/assets';
 import { WidgetShell } from './widget-shell';
 
-import L from 'leaflet';
+import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 /** Mensaje legible de error. */
@@ -21,6 +21,7 @@ function toMessage(error: unknown, fallback: string): string {
  * centrado en los activos que tienen coordenadas de telemetría válidas.
  */
 export function MapaActivosWidget(): ReactNode {
+  const [LModule, setLModule] = useState<typeof L | null>(null);
   const [assets, setAssets] = useState<AssetView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +30,12 @@ export function MapaActivosWidget(): ReactNode {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
+
+  useEffect(() => {
+    import('leaflet').then((module) => {
+      setLModule(module.default);
+    });
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -72,20 +79,20 @@ export function MapaActivosWidget(): ReactNode {
 
   // Inicializar mapa de Leaflet
   useEffect(() => {
-    if (loading || error || !mapContainerRef.current || mapRef.current) return;
+    if (!LModule || loading || error || !mapContainerRef.current || mapRef.current) return;
 
     // Crear mapa (Santiago, Chile fallback inicial)
-    const map = L.map(mapContainerRef.current, {
+    const map = LModule.map(mapContainerRef.current, {
       center: [-33.4569, -70.6483],
       zoom: 11,
       zoomControl: false,
     });
 
     // Control del zoom abajo a la derecha
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    LModule.control.zoom({ position: 'bottomright' }).addTo(map);
 
     // Voyager minimal basemap
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    LModule.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; CartoDB',
       maxZoom: 20,
     }).addTo(map);
@@ -98,12 +105,12 @@ export function MapaActivosWidget(): ReactNode {
         mapRef.current = null;
       }
     };
-  }, [loading, error]);
+  }, [LModule, loading, error, locatedAssets.length]);
 
   // Sincronizar marcadores de activos ubicados
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!LModule || !map) return;
 
     // Limpiar marcadores viejos
     markersRef.current.forEach((m) => m.remove());
@@ -115,7 +122,7 @@ export function MapaActivosWidget(): ReactNode {
       return;
     }
 
-    const bounds = L.latLngBounds([]);
+    const bounds = LModule.latLngBounds([]);
 
     locatedAssets.forEach((asset) => {
       const loc = (asset.metadata as { location?: { latitude?: number; longitude?: number } }).location;
@@ -138,7 +145,7 @@ export function MapaActivosWidget(): ReactNode {
         </div>
       `;
 
-      const customIcon = L.divIcon({
+      const customIcon = LModule.divIcon({
         html: iconHtml,
         className: 'custom-asset-marker',
         iconSize: [32, 32],
@@ -158,7 +165,7 @@ export function MapaActivosWidget(): ReactNode {
         <div style="font-family: sans-serif; padding: 4px; font-size: 11px; min-width: 140px;">
           <p style="margin: 0; font-weight: bold; font-size: 13px; color: #0f172a;">${asset.name}</p>
           <p style="margin: 0 0 6px 0; font-family: monospace; font-size: 9px; color: #64748b;">${asset.code}</p>
-          <div style="display: grid; grid-template-cols: 1fr 1fr; gap: 4px; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 4px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 4px;">
             <span style="color: #64748b;">Estado:</span>
             <span class="${statusColor}">${asset.status}</span>
             <span style="color: #64748b;">Velocidad:</span>
@@ -167,7 +174,7 @@ export function MapaActivosWidget(): ReactNode {
         </div>
       `;
 
-      const marker = L.marker(latLng, { icon: customIcon })
+      const marker = LModule.marker(latLng, { icon: customIcon })
         .bindPopup(popupHtml)
         .addTo(map);
 
@@ -180,12 +187,12 @@ export function MapaActivosWidget(): ReactNode {
     } catch {
       // Ignorar fallas si la caja de límites está vacía o inválida
     }
-  }, [locatedAssets, loading, error]);
+  }, [LModule, locatedAssets, loading, error]);
 
   return (
     <WidgetShell
       title="Ubicación de Activos"
-      description="Telemetría en tiempo real"
+      description="Ubicación registrada de flota y equipos"
       icon={Navigation}
       loading={loading}
       error={error}
@@ -195,9 +202,9 @@ export function MapaActivosWidget(): ReactNode {
         {locatedAssets.length === 0 && !loading && !error ? (
           <div className="flex flex-col items-center justify-center flex-1 text-center bg-accent/20 rounded-xl border border-dashed border-border p-4">
             <AlertCircle className="size-6 text-muted-foreground mb-1.5" />
-            <p className="text-xs font-semibold text-foreground">Sin telemetría activa</p>
+            <p className="text-xs font-semibold text-foreground">Sin ubicación activa</p>
             <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px]">
-              No hay vehículos transmitiendo coordenadas en este momento.
+              No hay vehículos con coordenadas de georreferenciación cargadas.
             </p>
           </div>
         ) : (
@@ -205,7 +212,7 @@ export function MapaActivosWidget(): ReactNode {
             <div ref={mapContainerRef} className="w-full h-full z-0" />
             {locatedAssets.length > 0 && (
               <div className="absolute top-2 left-2 z-[10] bg-card/90 backdrop-blur-sm border border-border shadow px-2 py-1 rounded-md text-[9px] font-bold text-foreground">
-                📡 {locatedAssets.length} activos transmitiendo
+                📍 {locatedAssets.length} activos ubicados
               </div>
             )}
           </div>

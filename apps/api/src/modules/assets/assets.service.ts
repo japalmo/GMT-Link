@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AssetStatus, AssetType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -860,6 +862,55 @@ export class AssetsService {
     };
   }
 
+  private loadDefaultVehicleChecklist(): Record<string, unknown>[] {
+    try {
+      const pathsToTry = [
+        path.resolve(process.cwd(), '../../docs/checklist_camioneta.csv'),
+        path.resolve(process.cwd(), './docs/checklist_camioneta.csv'),
+        path.resolve(__dirname, '../../../../../docs/checklist_camioneta.csv'),
+      ];
+      
+      let csvPath = '';
+      for (const p of pathsToTry) {
+        if (fs.existsSync(p)) {
+          csvPath = p;
+          break;
+        }
+      }
+      
+      if (!csvPath) {
+        this.logger.warn(`Checklist CSV not found in search paths, returning empty items`);
+        return [];
+      }
+      
+      const content = fs.readFileSync(csvPath, 'utf8');
+      const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
+      // Skip header: id,label,type,required
+      const items: Record<string, unknown>[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+        const parts = line.split(',');
+        const id = parts[0];
+        const label = parts[1];
+        const type = parts[2];
+        const requiredStr = parts[3];
+        if (id && label && type && requiredStr) {
+          items.push({
+            id: id.trim(),
+            label: label.trim(),
+            type: type.trim(),
+            required: requiredStr.trim().toLowerCase() === 'true',
+          });
+        }
+      }
+      return items;
+    } catch (error) {
+      this.logger.error('Error reading checklist_camioneta.csv', error);
+      return [];
+    }
+  }
+
   async getChecklistTemplate(assetId: string): Promise<ChecklistTemplateView> {
     const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
     if (!asset) {
@@ -872,11 +923,12 @@ export class AssetsService {
     });
 
     if (!template) {
+      const defaultItems = asset.type === AssetType.VEHICULO ? this.loadDefaultVehicleChecklist() : [];
       template = await this.prisma.checklistTemplate.create({
         data: {
           assetId,
           name: `Checklist de ${asset.name}`,
-          items: [],
+          items: defaultItems as unknown as Prisma.InputJsonValue,
           status: DocumentStatus.APROBADO,
         },
         include: { reviewedBy: true },

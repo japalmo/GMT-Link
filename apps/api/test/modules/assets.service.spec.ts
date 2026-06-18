@@ -468,13 +468,37 @@ describe('AssetsService', () => {
   });
 
   describe('checklists', () => {
-    it('obtiene o inicializa una plantilla de checklist', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow());
+    it('obtiene o inicializa una plantilla de checklist vacía para EQUIPO', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.EQUIPO }));
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
 
       const res = await service.getChecklistTemplate('a-1');
 
-      expect(prismaMock.checklistTemplate.create).toHaveBeenCalled();
+      expect(prismaMock.checklistTemplate.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            items: [],
+          }),
+        }),
+      );
+      expect(res.status).toBe(DocumentStatus.APROBADO);
+    });
+
+    it('inicializa una plantilla de checklist con ítems desde CSV para VEHICULO', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
+
+      const res = await service.getChecklistTemplate('a-1');
+
+      expect(prismaMock.checklistTemplate.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            items: expect.arrayContaining([
+              expect.objectContaining({ id: 'kilometraje', label: expect.any(String), type: 'NUMBER', required: true }),
+            ]),
+          }),
+        }),
+      );
       expect(res.status).toBe(DocumentStatus.APROBADO);
     });
 

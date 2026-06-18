@@ -25,6 +25,7 @@ import OperacionesPage from '@/pages/operaciones';
 import RecursosPage from '@/pages/recursos';
 import PublicAssetPage from '@/pages/public/activo';
 import GisToolsPage from '@/pages/gis-tools';
+import MetricsDashboard from '@/pages/v-metric';
 
 /** Redirección de rutas inexistentes a la raíz (que aplica los guards). */
 function NotFoundRedirect() {
@@ -67,6 +68,7 @@ const router = createBrowserRouter([
           { path: '/configuracion', element: <ConfiguracionPage /> },
           { path: '/finanzas', element: <FinanzasPage /> },
           { path: '/operaciones', element: <OperacionesPage /> },
+          { path: '/operaciones/:tab', element: <OperacionesPage /> },
           { path: '/recursos', element: <RecursosPage /> },
           {
             path: '/herramientas',
@@ -74,12 +76,7 @@ const router = createBrowserRouter([
           },
           {
             path: '/v-metric',
-            element: (
-              <PlaceholderPage
-                title="V-metric"
-                description="Módulo en evaluación."
-              />
-            ),
+            element: <MetricsDashboard />,
           },
           // QA del design system.
           { path: '/design', element: <DesignDemo /> },

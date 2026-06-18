@@ -82,10 +82,11 @@ export function TareasResumenWidget(): ReactNode {
 
   // Clasificar tareas en su respectiva semana
   tasks.forEach((task) => {
-    const taskDate = new Date(task.createdAt);
+    const isCompleted = task.status === 'COMPLETADO';
+    const taskDate = new Date(isCompleted ? task.updatedAt : task.createdAt);
     for (const week of weeks) {
       if (taskDate >= week.start && taskDate < week.end) {
-        if (task.status === 'COMPLETADO') {
+        if (isCompleted) {
           week.completed++;
         } else {
           week.pending++;

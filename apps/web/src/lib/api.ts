@@ -1558,3 +1558,81 @@ export function getGamificationProfile(): Promise<GamificationProfile> {
   return request<GamificationProfile>('/gamification/profile');
 }
 
+/* -------------------------------------------------------------------------- */
+/* Métricas Jerárquicas (V-Metric & otros)                                    */
+/* -------------------------------------------------------------------------- */
+
+export interface MetricElement {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  locationPolygon: string | null;
+  metadata: Record<string, any> | null;
+  projectId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MetricPhase {
+  id: string;
+  code: string;
+  name: string;
+  serviceId: string;
+  createdAt: string;
+  updatedAt: string;
+  variables?: MetricVariable[];
+}
+
+export interface MetricVariable {
+  id: string;
+  code: string;
+  name: string;
+  type: 'SCALAR' | 'FILE' | 'LIST';
+  unit: string | null;
+  phaseId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MetricDataPoint {
+  id: string;
+  value: string;
+  fileUrl: string | null;
+  variableId: string;
+  elementId: string | null;
+  phaseId: string;
+  createdById: string;
+  createdAt: string;
+  createdBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  variable?: MetricVariable;
+  element?: MetricElement;
+}
+
+export function listMetricElements(projectId: string): Promise<MetricElement[]> {
+  return request<MetricElement[]>(`/metrics/elements?projectId=${encodeURIComponent(projectId)}`);
+}
+
+export function getMetricElementByCode(code: string): Promise<MetricElement> {
+  return request<MetricElement>(`/metrics/elements/code/${encodeURIComponent(code)}`);
+}
+
+export function listMetricPhases(serviceId: string): Promise<MetricPhase[]> {
+  return request<MetricPhase[]>(`/metrics/phases?serviceId=${encodeURIComponent(serviceId)}`);
+}
+
+export function listMetricVariables(phaseId: string): Promise<MetricVariable[]> {
+  return request<MetricVariable[]>(`/metrics/variables?phaseId=${encodeURIComponent(phaseId)}`);
+}
+
+export function getMetricDataPoints(phaseId: string, elementId?: string): Promise<MetricDataPoint[]> {
+  const query = elementId ? `?elementId=${encodeURIComponent(elementId)}` : '';
+  return request<MetricDataPoint[]>(`/metrics/data/${encodeURIComponent(phaseId)}${query}`);
+}
+
+

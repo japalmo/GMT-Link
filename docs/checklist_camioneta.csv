@@ -1,0 +1,7 @@
+id,label,type,required
+motor,Motor: Nivel de aceite e inspección visual,YES_NO,true
+frenos,Frenos: Nivel de líquido e inspección visual,YES_NO,true
+neumaticos,Neumáticos: Presión y estado general,YES_NO,true
+luces,Luces: Altas, bajas, intermitentes y freno,YES_NO,true
+kilometraje,Kilometraje actual del vehículo (odómetro),NUMBER,true
+observaciones,Observaciones generales o novedades,TEXT,false
