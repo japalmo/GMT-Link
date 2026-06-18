@@ -143,9 +143,8 @@ export default function MetricsDashboard(): ReactNode {
         const data = await listMetricPhases(selectedService.id);
         setPhases(data);
         if (data.length > 0) {
-          // Prioritize phase "anual-2026"
-          const activePhase = data.find((p) => p.code === 'anual-2026') || data[0];
-          setSelectedPhase(activePhase || null);
+          const activePhase = data[0];
+          setSelectedPhase(activePhase ?? null);
         } else {
           setSelectedPhase(null);
           setLoading(false);
