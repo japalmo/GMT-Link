@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { MetricsService } from './metrics.service';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -9,6 +9,7 @@ import { join } from 'path';
 @Controller('metrics')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 export class MetricsController {
+  private readonly logger = new Logger(MetricsController.name);
   constructor(private readonly service: MetricsService) {}
 
   // ── Elementos ────────────────────────────────────────────────────────────────
@@ -192,7 +193,7 @@ export class MetricsController {
     @Body() body: { accion: string; detalle: any },
   ) {
     this.requireUser(user);
-    console.log(`[PyQt Client Activity] Action: ${body.accion}`, body.detalle);
+    this.logger.log(`[PyQt Client Activity] Action: ${body.accion} | Detail: ${JSON.stringify(body.detalle)}`);
     return { success: true };
   }
 
@@ -256,7 +257,7 @@ export class MetricsController {
       req.on('end', () => {
         // Ejecutar procesamiento/simulación de cola en segundo plano (asíncrono)
         setTimeout(() => {
-          console.log(`[Background Worker] Procesando archivo pesado: ${filename}`);
+          this.logger.log(`[Background Worker] Procesando archivo pesado: ${filename}`);
           // Aquí iría el traslado a R2/S3.
         }, 1000);
 

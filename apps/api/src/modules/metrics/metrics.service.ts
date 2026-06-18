@@ -114,64 +114,65 @@ export class MetricsService {
   // ── Datos de Medición / Cubicaciones ─────────────────────────────────────────
 
   async saveDataPoints(userId: string, points: SaveDataPointDto[]) {
+    if (points.length === 0) {
+      return { success: true, count: 0, points: [] };
+    }
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException('Usuario no válido.');
     }
 
-    const createdPoints = [];
+    // Pre-fetch all referenced IDs en una sola pasada para evitar N queries
+    const variableIds = [...new Set(points.map((p) => p.variableId))];
+    const phaseIds = [...new Set(points.map((p) => p.phaseId))];
+    const elementIds = [...new Set(points.filter((p) => p.elementId).map((p) => p.elementId!))];
 
+    const [variables, phases, elements] = await Promise.all([
+      this.prisma.variable.findMany({ where: { id: { in: variableIds } }, select: { id: true } }),
+      this.prisma.phase.findMany({ where: { id: { in: phaseIds } }, select: { id: true } }),
+      elementIds.length > 0
+        ? this.prisma.element.findMany({ where: { id: { in: elementIds } }, select: { id: true } })
+        : Promise.resolve([]),
+    ]);
+
+    const variableSet = new Set(variables.map((v) => v.id));
+    const phaseSet = new Set(phases.map((p) => p.id));
+    const elementSet = new Set(elements.map((e) => e.id));
+
+    // Validar referencias
     for (const point of points) {
-      const variable = await this.prisma.variable.findUnique({
-        where: { id: point.variableId },
-      });
-      if (!variable) {
+      if (!variableSet.has(point.variableId)) {
         throw new NotFoundException(`Variable ${point.variableId} no encontrada.`);
       }
-
-      const phase = await this.prisma.phase.findUnique({
-        where: { id: point.phaseId },
-      });
-      if (!phase) {
+      if (!phaseSet.has(point.phaseId)) {
         throw new NotFoundException(`Fase ${point.phaseId} no encontrada.`);
       }
-
-      if (point.elementId) {
-        const element = await this.prisma.element.findUnique({
-          where: { id: point.elementId },
-        });
-        if (!element) {
-          throw new NotFoundException(`Elemento ${point.elementId} no encontrado.`);
-        }
+      if (point.elementId && !elementSet.has(point.elementId)) {
+        throw new NotFoundException(`Elemento ${point.elementId} no encontrado.`);
       }
-
-      const dataPoint = await this.prisma.dataPoint.create({
-        data: {
-          value: point.value,
-          fileUrl: point.fileUrl || null,
-          variableId: point.variableId,
-          elementId: point.elementId || null,
-          phaseId: point.phaseId,
-          createdById: userId,
-        },
-      });
-
-      createdPoints.push(dataPoint);
     }
 
-    // Registrar en logs de gamificación
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { points: { increment: 15 } },
-    });
-
-    await this.prisma.pointsLog.create({
-      data: {
-        userId,
-        action: 'MEASUREMENT_UPLOAD',
-        points: 15,
-      },
-    });
+    // Inserción masiva en transacción
+    const [createdPoints] = await this.prisma.$transaction([
+      this.prisma.dataPoint.createManyAndReturn({
+        data: points.map((p) => ({
+          value: p.value,
+          fileUrl: p.fileUrl ?? null,
+          variableId: p.variableId,
+          elementId: p.elementId ?? null,
+          phaseId: p.phaseId,
+          createdById: userId,
+        })),
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { points: { increment: 15 } },
+      }),
+      this.prisma.pointsLog.create({
+        data: { userId, action: 'MEASUREMENT_UPLOAD', points: 15 },
+      }),
+    ]);
 
     return { success: true, count: createdPoints.length, points: createdPoints };
   }
@@ -447,9 +448,11 @@ export class MetricsService {
       if (user?.userProjects?.length > 0) {
         targetProjectId = user.userProjects[0].projectId;
       } else {
-        // Fallback global de emergencia si el usuario no tiene proyectos, 
-        // para mantener compatibilidad con tests sin romper.
-        targetProjectId = 'cmqis1abu0003isc03bl1vl6t'; 
+        // Si el usuario no pertenece a ningún proyecto, no podemos crear el elemento.
+        // Se lanza error explícito en lugar de usar un ID hardcodeado.
+        throw new BadRequestException(
+          'El usuario no pertenece a ningún proyecto. No se puede registrar el reservorio sin un proyecto_id explícito.',
+        );
       }
     }
 
