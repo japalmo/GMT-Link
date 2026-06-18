@@ -153,10 +153,10 @@ export class MetricsController {
   @Post('saveReservorioMetadata')
   saveReservorioMetadata(
     @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { reservorio_codigo: string; nombre: string; extra: any },
+    @Body() body: { reservorio_codigo: string; nombre: string; extra: any; proyecto_id?: string },
   ) {
-    this.requireUser(user);
-    return this.service.saveReservorioMetadata(body);
+    const userId = this.requireUserId(user);
+    return this.service.saveReservorioMetadata(userId, body);
   }
 
   @Post('saveCubicacion')

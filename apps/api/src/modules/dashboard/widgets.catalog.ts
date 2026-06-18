@@ -77,6 +77,6 @@ export const WIDGET_CATALOG: readonly WidgetDefinition[] = [
   {
     key: 'mapa-activos',
     title: 'Ubicación de Activos',
-    description: 'Telemetría y ubicación en tiempo real.',
+    description: 'Última ubicación registrada de vehículos y equipos.',
   },
 ] as const;

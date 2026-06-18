@@ -165,11 +165,15 @@ export function MapaActivosWidget(): ReactNode {
         <div style="font-family: sans-serif; padding: 4px; font-size: 11px; min-width: 140px;">
           <p style="margin: 0; font-weight: bold; font-size: 13px; color: #0f172a;">${asset.name}</p>
           <p style="margin: 0 0 6px 0; font-family: monospace; font-size: 9px; color: #64748b;">${asset.code}</p>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 4px;">
-            <span style="color: #64748b;">Estado:</span>
-            <span class="${statusColor}">${asset.status}</span>
-            <span style="color: #64748b;">Velocidad:</span>
-            <span style="font-weight: bold; color: #0f172a;">${speed} km/h</span>
+          <div style="display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 4px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Estado:</span>
+              <span class="${statusColor}">${asset.status}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Velocidad:</span>
+              <span style="font-weight: bold; color: #0f172a;">${speed} km/h</span>
+            </div>
           </div>
         </div>
       `;

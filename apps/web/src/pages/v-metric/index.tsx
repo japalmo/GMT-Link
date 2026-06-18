@@ -40,6 +40,7 @@ import type { ProjectView, ServiceView } from '@/types/operations';
 
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { toast } from 'sonner';
 
 // Satellite vs Vector maps
 const TILE_LAYERS = {
@@ -381,6 +382,12 @@ export default function MetricsDashboard(): ReactNode {
       maxZoom: 19,
     }).addTo(map);
 
+    tileLayer.on('tileerror', () => {
+      toast.error('Error al cargar el mapa', {
+        description: 'No se pudieron cargar algunos sectores. Verifique su conexión.',
+      });
+    });
+
     tileLayerRef.current = tileLayer;
     mapRef.current = map;
 
@@ -407,6 +414,12 @@ export default function MetricsDashboard(): ReactNode {
       attribution: config.attribution,
       maxZoom: 19,
     }).addTo(map);
+
+    newLayer.on('tileerror', () => {
+      toast.error('Error al cargar el mapa', {
+        description: 'No se pudieron cargar algunos sectores. Verifique su conexión.',
+      });
+    });
 
     tileLayerRef.current = newLayer;
   }, [LModule, mapType]);
@@ -973,7 +986,7 @@ export default function MetricsDashboard(): ReactNode {
                   Plano Cartográfico Satelital de Evaporadores
                 </CardTitle>
                 <CardDescription>
-                  Georreferenciación en vivo del estado de los vasos en el salar.
+                  Georreferenciación de los vasos con sus últimas mediciones de nivel.
                 </CardDescription>
               </div>
 

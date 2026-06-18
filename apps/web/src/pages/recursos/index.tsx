@@ -1955,15 +1955,15 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                   <div className="flex flex-row items-center justify-between">
                     <div>
                       <CardTitle className="text-lg flex items-center gap-2">
-                        <MapPin className="size-4 text-primary animate-pulse" /> Monitoreo y Telemetría en Tiempo Real
+                        <MapPin className="size-4 text-primary" /> Monitoreo de Ubicación y Trayecto
                       </CardTitle>
                       <CardDescription>
-                        Ubicación satelital GPS, velocidad actual y simulación de trayecto.
+                        Última ubicación registrada, velocidad y simulación de trayecto.
                       </CardDescription>
                     </div>
                     <Badge variant={simulating ? "default" : "outline"} className={simulating ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 animate-pulse" : "text-muted-foreground"}>
                       <Wifi className="size-3 mr-1.5" />
-                      {simulating ? 'Simulación Activa' : 'Satélite Conectado'}
+                      {simulating ? 'Simulación Activa' : 'Sin señal activa'}
                     </Badge>
                   </div>
                 </CardHeader>

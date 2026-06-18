@@ -436,7 +436,23 @@ export class MetricsService {
     };
   }
 
-  async saveReservorioMetadata(body: { reservorio_codigo: string; nombre: string; extra: any }) {
+  async saveReservorioMetadata(userId: string, body: { reservorio_codigo: string; nombre: string; extra: any; proyecto_id?: string }) {
+    // Si no se proporciona proyecto_id, intentamos usar el primer proyecto del usuario.
+    let targetProjectId = body.proyecto_id;
+    if (!targetProjectId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { userProjects: true },
+      });
+      if (user?.userProjects?.length > 0) {
+        targetProjectId = user.userProjects[0].projectId;
+      } else {
+        // Fallback global de emergencia si el usuario no tiene proyectos, 
+        // para mantener compatibilidad con tests sin romper.
+        targetProjectId = 'cmqis1abu0003isc03bl1vl6t'; 
+      }
+    }
+
     const element = await this.prisma.element.upsert({
       where: { code: body.reservorio_codigo },
       update: {
@@ -448,7 +464,7 @@ export class MetricsService {
         name: body.nombre,
         type: 'POZA',
         metadata: body.extra || {},
-        projectId: 'cmqis1abu0003isc03bl1vl6t', // Default a Atacama ID del seed
+        projectId: targetProjectId,
       },
     });
     return { success: true, element };

@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider } from '@/context/auth-context';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { ProtectedRoute } from '@/routes/protected-route';
@@ -97,6 +98,7 @@ export default function App() {
     <AuthProvider>
       <ThemeProvider>
         <RouterProvider router={router} />
+        <Toaster richColors position="top-right" />
       </ThemeProvider>
     </AuthProvider>
   );
