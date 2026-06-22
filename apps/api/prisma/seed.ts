@@ -1,9 +1,13 @@
 /**
- * Seed mínimo — Etapa 0.2 (plan maestro §6).
- * Inserta el catálogo de permisos (§8) y los roles espejo del modelo OpenFGA (§4.3),
- * con sus bundles rol→permiso. Este catálogo es el espejo LEGIBLE para la UI de
- * configuración (§4.1); la fuente de verdad de autorización es OpenFGA (Etapa 0.3).
- * Idempotente: usa upsert en todo.
+ * Seed del catálogo de permisos (§8 + módulos nuevos) y los roles espejo del
+ * modelo OpenFGA (§4.3), ahora con METADATA de scope del Módulo 4 (ADR-0001):
+ *  - Permission.{module,kind,fgaRelation,scopeable}
+ *  - RolePermission.scope  (OWN | PROJECT | GLOBAL)
+ *  - Role.isSystem  (roles sembrados: no editables por el admin)
+ *
+ * Convención de claves: `:` (consistente con el catálogo §8 existente).
+ * La fachada `PermissionService` resuelve los permisos FUNCTIONAL contra estos
+ * grants; los STRUCTURAL delegan en OpenFGA vía `fgaRelation`. Idempotente (upsert).
  */
 import path from 'node:path';
 import { config } from 'dotenv';
@@ -14,126 +18,136 @@ config({ path: path.resolve(process.cwd(), '../../.env') });
 
 const prisma = new PrismaClient();
 
-/** Catálogo de permisos atómicos (§8). */
-const PERMISSIONS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'project:create', label: 'Crear proyectos' },
-  { key: 'project:kpi:define', label: 'Definir KPIs' },
-  { key: 'task:create', label: 'Crear tareas' },
-  { key: 'task:assign', label: 'Asignar tareas' },
-  { key: 'document:upload', label: 'Subir documento' },
-  { key: 'document:sign:qa', label: 'Firmar QA' },
-  { key: 'document:sign:client', label: 'Firmar cliente' },
-  { key: 'asset:checklist:run', label: 'Ejecutar checklist' },
-  { key: 'asset:location:view', label: 'Ver ubicación de activo' },
-  { key: 'asset:history:view', label: 'Ver históricos de activo' },
-  { key: 'asset:create', label: 'Crear activo' },
-  { key: 'asset:doc:upload', label: 'Subir doc de activo' },
-  { key: 'asset:doc:approve', label: 'Aprobar doc de activo' },
-  { key: 'finance:reimbursement:import', label: 'Importar reembolsos' },
-  { key: 'finance:print:batch', label: 'Impresión en lote' },
-  { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio' },
-  // Revisión de documentos personales (§6-1.5). Espejo legible; la autorización
-  // real es FGA (organization#can_review_documents = admin). Solo org_admin.
-  { key: 'document:review', label: 'Revisar documentos' },
-  // Gestión de finanzas (§6-3.1/3.3). Espejo legible; la autorización real es FGA
-  // (organization#can_manage_finance = admin). Solo org_admin (aprobar/rechazar/
-  // pagar reembolsos y horas extra, y ver todas las solicitudes).
-  { key: 'finance:manage', label: 'Gestionar finanzas' },
-  // Provisión de usuarios (§1.1). Espejo legible; la autorización real es FGA
-  // (organization#can_manage_users = admin). Solo el rol org_admin los porta.
-  { key: 'user:create', label: 'Crear usuarios' },
-  { key: 'user:read', label: 'Ver usuarios' },
-  { key: 'user:update', label: 'Editar usuarios' },
-  { key: 'role:assign', label: 'Asignar roles a usuarios' },
+type Kind = 'FUNCTIONAL' | 'STRUCTURAL';
+type Scope = 'OWN' | 'PROJECT' | 'GLOBAL';
+
+interface PermDef {
+  key: string;
+  label: string;
+  module: string;
+  kind: Kind;
+  fgaRelation?: string; // solo STRUCTURAL: relación FGA a consultar para el scope PROJECT
+  scopeable: boolean; // false = sin selector de scope en la matriz (siempre GLOBAL)
+}
+
+/** Catálogo de permisos atómicos (§8 + tareas/v-metric del Módulo 5). */
+const PERMISSIONS: ReadonlyArray<PermDef> = [
+  // ── sistema / rbac ──
+  { key: 'user:create', label: 'Crear usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'user:read', label: 'Ver usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'user:update', label: 'Editar usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'role:assign', label: 'Asignar roles a usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: true },
+  // ── directorio ──
+  { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'directorio', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
+  // ── proyectos ──
+  { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'project:read', label: 'Ver proyectos', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
+  { key: 'project:update', label: 'Editar proyecto', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'project:kpi:define', label: 'Definir KPIs', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_define_kpi', scopeable: true },
+  { key: 'service:read', label: 'Ver servicios', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
+  { key: 'service:create', label: 'Crear servicios', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_create_service', scopeable: true },
+  { key: 'measurement:submit', label: 'Subir cubicaciones/mediciones', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_submit_measurements', scopeable: true },
+  { key: 'measurement:read', label: 'Ver mediciones', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
+  // ── tareas (Módulo 5) ──
+  { key: 'task:read', label: 'Ver tareas / backlog', module: 'tareas', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
+  { key: 'task:create', label: 'Crear tareas', module: 'tareas', kind: 'STRUCTURAL', fgaRelation: 'can_create_task', scopeable: true },
+  { key: 'task:assign', label: 'Asignar tareas', module: 'tareas', kind: 'STRUCTURAL', fgaRelation: 'can_assign_task', scopeable: true },
+  { key: 'task:update', label: 'Mover / editar tareas', module: 'tareas', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'task:time:log', label: 'Registrar inicio/fin de actividad', module: 'tareas', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'task:time:read', label: 'Ver tiempos de tareas', module: 'tareas', kind: 'FUNCTIONAL', scopeable: true },
+  // ── documentos ──
+  { key: 'document:read', label: 'Ver documentos', module: 'documentos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
+  { key: 'document:upload', label: 'Subir documento', module: 'documentos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_revision', scopeable: true },
+  { key: 'document:sign:qa', label: 'Firmar QA', module: 'documentos', kind: 'STRUCTURAL', fgaRelation: 'can_sign_qa', scopeable: true },
+  { key: 'document:sign:client', label: 'Firmar cliente', module: 'documentos', kind: 'STRUCTURAL', fgaRelation: 'can_sign_client', scopeable: true },
+  { key: 'document:review', label: 'Revisar documentos', module: 'documentos', kind: 'STRUCTURAL', fgaRelation: 'can_review_documents', scopeable: false },
+  // ── v-metric (Módulo 5) ──
+  { key: 'vmetric:view', label: 'Acceder a V-metric', module: 'v-metric', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'vmetric:dem:view', label: 'Ver visor 3D de DEM', module: 'v-metric', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'vmetric:dem:compare', label: 'Comparar DEMs', module: 'v-metric', kind: 'FUNCTIONAL', scopeable: true },
+  // ── finanzas ──
+  { key: 'finance:reimbursement:import', label: 'Importar reembolsos', module: 'finanzas', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'finance:print:batch', label: 'Impresión en lote', module: 'finanzas', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'finance:manage', label: 'Gestionar finanzas', module: 'finanzas', kind: 'STRUCTURAL', fgaRelation: 'can_manage_finance', scopeable: false },
+  // ── activos ──
+  { key: 'asset:create', label: 'Crear activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_create', scopeable: true },
+  { key: 'asset:checklist:run', label: 'Ejecutar checklist', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_run_checklist', scopeable: true },
+  { key: 'asset:location:view', label: 'Ver ubicación de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_location', scopeable: true },
+  { key: 'asset:history:view', label: 'Ver históricos de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_history', scopeable: true },
+  { key: 'asset:doc:upload', label: 'Subir doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_doc', scopeable: true },
+  { key: 'asset:doc:approve', label: 'Aprobar doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_and_approve_doc', scopeable: true },
 ];
 
-/** Permisos de gestión de usuarios (§1.1) — solo para org_admin. */
-const USER_MANAGEMENT_PERMISSIONS = ['user:create', 'user:read', 'user:update', 'role:assign'];
+interface RoleDef {
+  key: string;
+  label: string;
+  grants: ReadonlyArray<{ perm: string; scope: Scope }>;
+}
+
+/** Helper: grant con scope (default PROJECT). */
+const g = (perm: string, scope: Scope = 'PROJECT'): { perm: string; scope: Scope } => ({ perm, scope });
 
 /**
- * Roles = bundles (§3.1). Keys alineadas con las relaciones de asignación directa de §4.3.
- * El mapeo refleja las derivaciones del DSL:
- *  - org_admin / department_admin derivan project_creator (admin from department).
- *  - project_creator → can_create_task, can_assign_task, can_define_kpi, can_create_service
- *    (asset.can_create deriva de can_create_service).
- *  - operator → can_create_task, can_upload_revision (document:upload).
- *  - qa → can_sign_qa · client_ito → can_sign_client · finance → permisos finance:*.
- *  - viewer → solo can_view (sin permiso atómico en el catálogo §8): bundle vacío.
- *  - asset:checklist:run es relación "assigned" (por asignación, no por rol): sin bundle.
+ * Roles = bundles (§3.1). Keys alineadas con las relaciones de §4.3. `isSystem`.
+ * org_admin recibe TODO el catálogo a scope GLOBAL (el admin de FGA deriva el resto).
  */
-const ROLES: ReadonlyArray<{ key: string; label: string; permissions: string[] }> = [
-  {
-    key: 'org_admin',
-    // admin deriva a todo (§4.3): el catálogo completo incluye los permisos de
-    // gestión de usuarios (§1.1). El dedup vía Set deja explícita la inclusión.
-    label: 'Administrador de organización',
-    permissions: [...new Set([...PERMISSIONS.map((p) => p.key), ...USER_MANAGEMENT_PERMISSIONS])],
-  },
+const ROLES: ReadonlyArray<RoleDef> = [
+  { key: 'org_admin', label: 'Administrador de organización', grants: PERMISSIONS.map((p) => g(p.key, 'GLOBAL')) },
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
-    // 'directory:view:extended' NO se incluye: el modelo OpenFGA deriva
-    // can_view_directory_extended solo de organization#admin (org_admin). El
-    // espejo del catálogo debe coincidir con FGA para no prometer un acceso que
-    // el guard niega (§4.1). Si más adelante los dept admins deben verlo, hay que
-    // extender la relación en fga/model.fga primero.
-    permissions: [
-      'project:create',
-      'project:kpi:define',
-      'task:create',
-      'task:assign',
-      'asset:create',
-    ],
+    grants: [g('project:create', 'GLOBAL'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:create')],
   },
   {
     key: 'project_creator',
     label: 'Creador de proyecto',
-    permissions: ['project:create', 'project:kpi:define', 'task:create', 'task:assign', 'asset:create'],
+    grants: [g('project:read'), g('project:kpi:define'), g('service:create'), g('task:create'), g('task:assign'), g('task:read'), g('asset:create')],
   },
   {
     key: 'operator',
     label: 'Operador',
-    permissions: ['task:create', 'document:upload', 'asset:doc:upload'],
+    grants: [g('task:create'), g('task:read'), g('measurement:submit'), g('document:upload'), g('asset:doc:upload')],
   },
-  { key: 'qa', label: 'QA', permissions: ['document:sign:qa'] },
+  { key: 'qa', label: 'QA', grants: [g('document:read'), g('document:sign:qa'), g('task:read'), g('measurement:read')] },
+  { key: 'finance', label: 'Finanzas', grants: [g('finance:reimbursement:import'), g('finance:print:batch')] },
+  { key: 'viewer', label: 'Visualizador', grants: [g('project:read'), g('document:read'), g('task:read')] },
   {
-    key: 'finance',
-    label: 'Finanzas',
-    permissions: ['finance:reimbursement:import', 'finance:print:batch'],
+    key: 'client_ito',
+    label: 'Cliente ITO',
+    grants: [g('project:read'), g('document:read'), g('document:sign:client'), g('task:read'), g('vmetric:view'), g('vmetric:dem:view'), g('vmetric:dem:compare')],
   },
-  { key: 'viewer', label: 'Visualizador', permissions: [] },
-  { key: 'client_ito', label: 'Cliente ITO', permissions: ['document:sign:client'] },
 ];
 
 async function main(): Promise<void> {
-  for (const perm of PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { key: perm.key },
-      update: { label: perm.label },
-      create: perm,
-    });
+  for (const p of PERMISSIONS) {
+    const data = {
+      label: p.label,
+      module: p.module,
+      kind: p.kind,
+      fgaRelation: p.fgaRelation ?? null,
+      scopeable: p.scopeable,
+    };
+    await prisma.permission.upsert({ where: { key: p.key }, update: data, create: { key: p.key, ...data } });
   }
   console.log(`Permisos asegurados: ${PERMISSIONS.length}`);
 
   for (const role of ROLES) {
     const created = await prisma.role.upsert({
       where: { key: role.key },
-      update: { label: role.label },
-      create: { key: role.key, label: role.label },
+      update: { label: role.label, isSystem: true },
+      create: { key: role.key, label: role.label, isSystem: true },
     });
-    for (const permKey of role.permissions) {
-      const perm = await prisma.permission.findUniqueOrThrow({ where: { key: permKey } });
+    for (const grant of role.grants) {
+      const perm = await prisma.permission.findUniqueOrThrow({ where: { key: grant.perm } });
       await prisma.rolePermission.upsert({
         where: { roleId_permissionId: { roleId: created.id, permissionId: perm.id } },
-        update: {},
-        create: { roleId: created.id, permissionId: perm.id },
+        update: { scope: grant.scope },
+        create: { roleId: created.id, permissionId: perm.id, scope: grant.scope },
       });
     }
   }
   console.log(`Roles asegurados: ${ROLES.map((r) => r.key).join(', ')}`);
-
-  const bundles = await prisma.rolePermission.count();
-  console.log(`Bundles rol→permiso: ${bundles}`);
+  console.log(`Bundles rol→permiso: ${await prisma.rolePermission.count()}`);
 }
 
 main()
