@@ -51,6 +51,12 @@ export const MEMBERSHIP_RELATION_MAP: Readonly<
     finance: 'finance',
     viewer: 'viewer',
     client_ito: 'client_ito',
+    // Roles MVP por cliente (Módulo 5) → mapean a relaciones ESTRUCTURALES para FGA;
+    // sus permisos FUNCIONALES (task:time:log, vmetric:*, etc.) vienen de RolePermission.scope.
+    supervisor: 'project_creator',
+    adm_contrato: 'project_creator',
+    operador: 'operator',
+    ito: 'client_ito',
   },
   SERVICE: {
     operator: 'operator',

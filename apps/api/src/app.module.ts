@@ -5,6 +5,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { SessionMiddleware } from './auth/session.middleware';
 import { PermissionsGuard } from './authz/permissions.guard';
+import { AuthzModule } from './authz/authz.module';
 import { CommonModule } from './common/common.module';
 import { StorageModule } from './common/storage/storage.module';
 import { DevUserMiddleware } from './dev/dev-user.middleware';
@@ -41,6 +42,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     StorageModule,
     PrismaModule,
     FgaModule,
+    AuthzModule,
     AuthModule,
     UsersModule,
     ProfileModule,
