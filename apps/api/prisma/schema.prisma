@@ -427,12 +427,33 @@ model Task {
   recurrence      String?    // cron expression para tareas cíclicas
   clientUserId    String?    // ITO/cliente que solicitó la tarea
   clientUser      User?      @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
+  // Módulo 5 — instancia de ejecución (captura de datos SEPARADA; soft-links opcionales):
+  phaseId         String?    // contexto de captura (fase/periodo)
+  elementId       String?    // poza/sector objetivo
+  dataSpec        Json?      // "datos a obtener" que define el Supervisor (variable codes + labels)
+  timeLogs        TaskTimeLog[]
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   @@index([projectId, status])
   @@index([assignedToId])
   @@map("tasks")
+}
+
+// Módulo 5 — registro append-only de inicio/fin de actividad (Operador). Soporta pausas/reanudaciones.
+model TaskTimeLog {
+  id        String    @id @default(cuid())
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String    // el operador que ejecuta
+  startedAt DateTime
+  endedAt   DateTime? // null = en curso
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("task_time_logs")
 }
 
 enum ProjectDocumentStatus {
@@ -822,6 +843,7 @@ model DataPoint {
   phase      Phase           @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   createdById String
   createdBy  User            @relation("DataPointCreator", fields: [createdById], references: [id])
+  taskId     String?         // Módulo 5 — traza OPCIONAL a la Tarea de ejecución (sin FK dura)
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
