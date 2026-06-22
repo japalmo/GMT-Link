@@ -121,21 +121,31 @@ model Role {
   id          String           @id @default(cuid())
   key         String           @unique
   label       String
+  description String?
+  isSystem    Boolean          @default(false) // rol sembrado (estructural/SuperAdmin): no editable/borrable por admin
+  createdById String?                           // quién lo creó (null = semilla del sistema)
   permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Permission {
-  id    String           @id @default(cuid())
-  key   String           @unique
-  label String
-  roles RolePermission[]
+  id          String           @id @default(cuid())
+  key         String           @unique
+  label       String
+  module      String           @default("system") // agrupador de la matriz UI (Módulo 4)
+  kind        PermissionKind   @default(FUNCTIONAL) // FUNCTIONAL = filtro de datos; STRUCTURAL = relación FGA
+  fgaRelation String?                              // si STRUCTURAL: relación FGA a consultar
+  scopeable   Boolean          @default(true)      // false = sin selector de scope (siempre GLOBAL)
+  roles       RolePermission[]
 }
 
 model RolePermission {
   roleId       String
   permissionId String
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  scope        PermissionScope @default(PROJECT) // "Solo propios / Proyecto / Todo" de la matriz (ADR-0001)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
 }
@@ -157,6 +167,19 @@ enum ScopeType {
   DEPARTMENT
   PROJECT
   SERVICE
+}
+
+// Alcance de un permiso dentro de un rol (Módulo 4, ADR-0001).
+enum PermissionScope {
+  OWN     // Solo propios — predicado SQL createdById = userId
+  PROJECT // Solo proyectos asociados — membresía vía FGA/Membership
+  GLOBAL  // Todo / org-wide
+}
+
+// Cómo se enforcea un permiso: filtro de datos (FUNCTIONAL) vs. relación FGA (STRUCTURAL).
+enum PermissionKind {
+  FUNCTIONAL
+  STRUCTURAL
 }
 
 // ============ PERFIL — CV (§6-1.4) ============
@@ -484,6 +507,8 @@ model Asset {
   inUseById    String?
   inUseBy      User?       @relation("InUseAssets", fields: [inUseById], references: [id], onDelete: SetNull)
   inUseSince   DateTime?
+  // Ancla "Solo propios" (Módulo 4, ADR-0001): quién creó el activo.
+  createdById  String?
   // Campos específicos por subtipo (ciclos de carga/calibración en equipos; km/ubicación en vehículos).
   metadata     Json?
   documents    AssetDocument[]
