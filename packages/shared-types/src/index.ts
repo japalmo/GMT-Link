@@ -104,3 +104,32 @@ export interface DirectoryEntryExtended extends DirectoryEntry {
   secondName: string | null;
   secondLastName: string | null;
 }
+
+// ============ RBAC dinámico — contrato de scope (Módulo 4, ADR-0001) ============
+
+/**
+ * Filtro de fila que la fachada `PermissionService` resuelve por permiso y que el
+ * backend aplica SERVER-SIDE (nunca confía en el body del cliente):
+ *  - `none`     → GLOBAL: sin restricción de fila.
+ *  - `own`      → OWN: WHERE createdById = userId.
+ *  - `projects` → PROJECT: WHERE projectId IN (ids del usuario).
+ */
+export type ScopeFilter =
+  | { kind: 'none' }
+  | { kind: 'own' }
+  | { kind: 'projects'; ids: string[] };
+
+/** Decisión de autorización para un recurso individual. */
+export interface PermissionDecision {
+  effect: 'allow' | 'deny';
+  filter: ScopeFilter;
+}
+
+/** Referencia mínima de un recurso para decidir un permiso de 1 instancia. */
+export interface ResourceRef {
+  projectId?: string;
+  createdById?: string;
+}
+
+/** Alcance de un permiso dentro de un rol (espejo del enum Prisma `PermissionScope`). */
+export type PermissionScopeValue = 'OWN' | 'PROJECT' | 'GLOBAL';
