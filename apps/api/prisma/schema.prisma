@@ -802,3 +802,18 @@ model DataPoint {
 
   @@map("data_points")
 }
+
+// OTP de no-repudio para subida de cubicaciones/datos (D3 — reemplaza el Map en memoria).
+// codeHash en vez de texto plano; attempts habilita lockout tras intentos fallidos.
+model OtpCode {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+  @@map("otp_codes")
+}

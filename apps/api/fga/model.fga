@@ -43,6 +43,7 @@ type project
     define can_assign_task: project_creator or admin from department
     define can_define_kpi: project_creator
     define can_create_service: project_creator
+    define can_submit_measurements: operator or qa or project_creator
 
 type service
   relations
