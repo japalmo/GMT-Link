@@ -44,6 +44,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # OpenFGA — servidor de autorización (§4.3). Almacenamiento in-memory (dev):
+  # se resetea al reiniciar, por eso hay que correr `pnpm run fga:bootstrap`
+  # (apps/api) después de levantarlo para recrear el store + authorization model.
+  openfga:
+    image: openfga/openfga:latest
+    container_name: gmt_openfga
+    restart: unless-stopped
+    command: run
+    ports:
+      - "8080:8080" # HTTP API (FGA_API_URL)
+      - "8081:8081" # gRPC
+
 volumes:
   postgres_data:
   redis_data:
