@@ -115,14 +115,14 @@ export function SidebarContent({
       {/* Marca + colapso */}
       <div
         className={cn(
-          'flex h-14 items-center gap-2 border-b border-border px-3',
+          'flex h-16 items-center gap-2 border-b border-border px-3',
           collapsed && 'justify-center px-0',
         )}
       >
         {collapsed ? (
-          <img src={logoCompact} alt="GMT" className="h-8 w-auto object-contain" />
+          <img src={logoCompact} alt="GMT" className="h-10 w-auto object-contain" />
         ) : (
-          <img src={logoMid} alt="GMT Link" className="h-8 w-auto object-contain" />
+          <img src={logoMid} alt="GMT Link" className="h-11 w-auto max-w-[170px] object-contain" />
         )}
         {!forceExpanded && (
           <Button
