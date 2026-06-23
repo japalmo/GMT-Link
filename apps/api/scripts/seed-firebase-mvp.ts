@@ -16,6 +16,7 @@ const EMAILS = [
   // Capstone Copper / Mantos Blancos (operaciones, tareas/tiempos)
   'supervisor@capstone.cl',
   'operador@capstone.cl',
+  'operador2@capstone.cl',
   'ito@capstone.cl',
   'adm@capstone.cl',
   // Albemarle / Salar de Atacama (v-metric, visor DEM)

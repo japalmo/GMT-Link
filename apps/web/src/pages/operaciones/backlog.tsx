@@ -1,8 +1,9 @@
 import { useState, type ReactNode, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import * as api from '@/lib/api';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
-import { useProjects, useTasks } from '@/hooks/use-operations';
+import { useProjects, useTasks, useProjectDocuments } from '@/hooks/use-operations';
 import { useUsers } from '@/hooks/use-users';
 import { useProfile } from '@/hooks/use-profile';
 import {
@@ -127,6 +128,11 @@ export function BacklogTab(): ReactNode {
 
   const { tasks, loading, create, updateStatus, update, remove, startTime, finishTime } = useTasks(taskFilters);
 
+  const { documents: projectDocs, refetch: refetchDocs } = useProjectDocuments(
+    filterProject !== 'all' ? filterProject : undefined,
+    filterService !== 'all' ? filterService : undefined
+  );
+
   // Modal states
   const [createOpen, setCreateOpen] = useState(false);
   const [editTask, setEditTask] = useState<TaskView | null>(null);
@@ -143,7 +149,19 @@ export function BacklogTab(): ReactNode {
   const [taskEstPoints, setTaskEstPoints] = useState(10);
   const [taskRecurrence, setTaskRecurrence] = useState('');
   const [taskClientId, setTaskClientId] = useState('');
+  const [taskProduct, setTaskProduct] = useState<'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics'>('time_only');
+  const [deliverableFile, setDeliverableFile] = useState<File | null>(null);
+  const [metricCotaEspejo, setMetricCotaEspejo] = useState<string>('');
+  const [metricVolSalmuera, setMetricVolSalmuera] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Form states - ITO Request
+  const [itoRequestOpen, setItoRequestOpen] = useState(false);
+  const [itoName, setItoName] = useState('');
+  const [itoDesc, setItoDesc] = useState('');
+  const [itoProjId, setItoProjId] = useState('');
+  const [itoProduct, setItoProduct] = useState<'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics'>('time_only');
+  const [itoFormError, setItoFormError] = useState<string | null>(null);
 
   // Form states - Points Completion Prompt
   const [actualPointsVal, setActualPointsVal] = useState<number>(10);
@@ -186,6 +204,67 @@ export function BacklogTab(): ReactNode {
     return list;
   }, [tasks]);
 
+  const visibleTasks = useMemo(() => {
+    if (isIto) {
+      return tasks.filter((t) => t.status === 'COMPLETADO');
+    }
+    return tasks;
+  }, [tasks, isIto]);
+
+  const visibleColumns = useMemo((): TaskStatus[] => {
+    if (isIto) {
+      return ['COMPLETADO'];
+    }
+    return ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
+  }, [isIto]);
+
+  const handleItoRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setItoFormError(null);
+    if (!itoName || !itoProjId) {
+      setItoFormError('Por favor completa el nombre del requerimiento y selecciona un proyecto.');
+      return;
+    }
+
+    try {
+      let dataSpec: any = null;
+      if (itoProduct === 'time_only') {
+        dataSpec = { type: 'time_only', label: 'Solo registro de tiempo' };
+      } else if (itoProduct === 'pdf_report') {
+        dataSpec = { type: 'pdf_report', label: 'Informe en PDF' };
+      } else if (itoProduct === 'file_generic') {
+        dataSpec = { type: 'file_generic', label: 'Archivo genérico' };
+      } else if (itoProduct === 'custom_metrics') {
+        dataSpec = {
+          type: 'custom_metrics',
+          label: 'Ingreso de datos / Mediciones',
+          fields: {
+            cota_espejo: 'Cota espejo (m)',
+            vol_salmuera: 'Volumen salmuera (m³)',
+          },
+        };
+      }
+
+      await create({
+        name: itoName,
+        description: itoDesc.trim() || undefined,
+        projectId: itoProjId,
+        clientUserId: profile?.id,
+        estimatedPoints: 10,
+        dataSpec,
+      });
+
+      setItoName('');
+      setItoDesc('');
+      setItoProjId('');
+      setItoProduct('time_only');
+      setItoRequestOpen(false);
+      toast.success('Solicitud de actividad creada correctamente.');
+    } catch (err) {
+      setItoFormError(err instanceof Error ? err.message : 'Error al crear la solicitud.');
+    }
+  };
+
   // Compute column points totals
   const columnPoints = useMemo(() => {
     const pts: Record<TaskStatus, { est: number; act: number }> = {
@@ -210,6 +289,24 @@ export function BacklogTab(): ReactNode {
     }
 
     try {
+      let dataSpec: any = null;
+      if (taskProduct === 'time_only') {
+        dataSpec = { type: 'time_only', label: 'Solo registro de tiempo' };
+      } else if (taskProduct === 'pdf_report') {
+        dataSpec = { type: 'pdf_report', label: 'Informe en PDF' };
+      } else if (taskProduct === 'file_generic') {
+        dataSpec = { type: 'file_generic', label: 'Archivo genérico' };
+      } else if (taskProduct === 'custom_metrics') {
+        dataSpec = {
+          type: 'custom_metrics',
+          label: 'Ingreso de datos / Mediciones',
+          fields: {
+            cota_espejo: 'Cota espejo (m)',
+            vol_salmuera: 'Volumen salmuera (m³)',
+          },
+        };
+      }
+
       await create({
         name: taskName,
         description: taskDesc.trim() || undefined,
@@ -219,6 +316,7 @@ export function BacklogTab(): ReactNode {
         estimatedPoints: Number(taskEstPoints),
         recurrence: taskRecurrence.trim() || undefined,
         clientUserId: taskClientId || undefined,
+        dataSpec,
       });
 
       // Clear form
@@ -230,6 +328,8 @@ export function BacklogTab(): ReactNode {
       setTaskEstPoints(10);
       setTaskRecurrence('');
       setTaskClientId('');
+      setTaskProduct('time_only');
+      setWizardStep(1);
       setCreateOpen(false);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error al crear la tarea.');
@@ -316,10 +416,50 @@ export function BacklogTab(): ReactNode {
       } else {
         await finishTime(timeLogTask.id, note);
         toast.success('Actividad finalizada.');
+
+        // Subir archivo si se especificó y la tarea lo requiere
+        if (deliverableFile && (timeLogTask.dataSpec?.type === 'pdf_report' || timeLogTask.dataSpec?.type === 'file_generic')) {
+          await api.uploadProjectDocument({
+            name: `Entregable - ${timeLogTask.name}`,
+            projectId: timeLogTask.projectId,
+            serviceId: timeLogTask.serviceId || '',
+            documentType: 'INFORME',
+            areaCode: 'OPS',
+          }, deliverableFile);
+          toast.success('Entregable subido con éxito.');
+        }
+
+        // Ingresar mediciones de cubicación si se especificaron
+        if (timeLogTask.dataSpec?.type === 'custom_metrics' && (metricCotaEspejo || metricVolSalmuera)) {
+          const elementId = timeLogTask.elementId || undefined;
+          const phaseId = timeLogTask.phaseId || undefined;
+
+          if (phaseId && elementId) {
+            const vars = await api.listMetricVariables(phaseId);
+            const cotaVar = vars.find(v => v.code === 'cota_espejo');
+            const volVar = vars.find(v => v.code === 'vol_total_salmuera');
+
+            const points: any[] = [];
+            if (cotaVar && metricCotaEspejo) {
+              points.push({ value: metricCotaEspejo, variableId: cotaVar.id, elementId, phaseId, taskId: timeLogTask.id });
+            }
+            if (volVar && metricVolSalmuera) {
+              points.push({ value: metricVolSalmuera, variableId: volVar.id, elementId, phaseId, taskId: timeLogTask.id });
+            }
+
+            if (points.length > 0) {
+              await api.submitMetricDataPoints(points);
+              toast.success('Mediciones de cubicación registradas.');
+            }
+          }
+        }
       }
       setTimeLogModalOpen(false);
       setTimeLogTask(null);
       setTimeLogNote('');
+      setDeliverableFile(null);
+      setMetricCotaEspejo('');
+      setMetricVolSalmuera('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al registrar actividad.');
     }
@@ -381,6 +521,12 @@ export function BacklogTab(): ReactNode {
               <Button size="sm" onClick={() => { setWizardStep(1); setCreateOpen(true); }}>
                 <Plus className="size-4 mr-2" />
                 Nueva Tarea
+              </Button>
+            )}
+            {isIto && (
+              <Button size="sm" onClick={() => { setItoName(''); setItoDesc(''); setItoProjId(''); setItoProduct('time_only'); setItoFormError(null); setItoRequestOpen(true); }}>
+                <Plus className="size-4 mr-2" />
+                Solicitud de Actividad
               </Button>
             )}
           </div>
@@ -460,15 +606,15 @@ export function BacklogTab(): ReactNode {
       </div>
 
       {/* Tablero Kanban o Tabla */}
-      {loading ? (
+{loading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="h-96 animate-pulse rounded-xl bg-muted/40 border border-border" />
           ))}
         </div>
       ) : viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-          {(Object.keys(columns) as TaskStatus[]).map((status) => {
+        <div className={`grid grid-cols-1 gap-6 ${isIto ? 'max-w-2xl mx-auto w-full' : 'md:grid-cols-4'}`}>
+          {visibleColumns.map((status) => {
             const columnTasks = columns[status];
             const pts = columnPoints[status];
             const isCompletedCol = status === 'COMPLETADO';
@@ -596,6 +742,63 @@ export function BacklogTab(): ReactNode {
                             </div>
                           )}
 
+                          {/* Deliverable link / upload for completed/reviewed tasks */}
+                          {(t.status === 'COMPLETADO' || t.status === 'REVISADO') && (t.dataSpec?.type === 'pdf_report' || t.dataSpec?.type === 'file_generic') && (
+                            <div className="flex flex-col gap-1.5 w-full border-t border-border/40 pt-2 mt-1">
+                              <span className="text-[10px] font-semibold text-muted-foreground">
+                                Entregable esperado: {t.dataSpec?.label}
+                              </span>
+                              {(() => {
+                                const taskDoc = projectDocs?.find(d => d.name === `Entregable - ${t.name}`);
+                                return (
+                                  <div className="flex flex-col gap-1.5">
+                                    {taskDoc ? (
+                                      <a
+                                        href={taskDoc.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-primary hover:underline flex items-center gap-1 font-medium bg-primary/5 border border-primary/10 rounded-md p-1.5"
+                                      >
+                                        <Plus className="size-3 rotate-45 text-primary" />
+                                        Descargar {t.dataSpec?.type === 'pdf_report' ? 'PDF' : 'Archivo'}
+                                      </a>
+                                    ) : (
+                                      <span className="text-[10px] text-amber-500 italic">Pendiente de subida</span>
+                                    )}
+                                    
+                                    {!isReadOnly && (t.assignedToId === profile?.id || isSupervisorOrAdmin) && (
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          type="file"
+                                          accept={t.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
+                                          className="h-7 text-[10px] py-0.5 bg-card border-dashed border-border"
+                                          onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            try {
+                                              await api.uploadProjectDocument({
+                                                name: `Entregable - ${t.name}`,
+                                                projectId: t.projectId,
+                                                serviceId: t.serviceId || '',
+                                                documentType: 'INFORME',
+                                                areaCode: 'OPS',
+                                              }, file);
+                                              toast.success('Entregable subido con éxito.');
+                                              e.target.value = '';
+                                              void refetchDocs();
+                                            } catch (err) {
+                                              toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+
                           {/* Quick Actions */}
                           <div className="flex justify-between items-center w-full">
                             <div className="flex gap-1.5">
@@ -690,16 +893,69 @@ export function BacklogTab(): ReactNode {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {tasks.map((t) => {
+              {visibleTasks.map((t) => {
                 const activeLogForUser = profile && t.timeLogs?.find((log) => log.userId === profile.id && log.endedAt === null);
                 const hasVariance = t.actualPoints !== null && t.actualPoints !== t.estimatedPoints;
                 const variance = t.actualPoints !== null ? t.actualPoints - t.estimatedPoints : 0;
                 return (
                   <tr key={t.id} className="hover:bg-muted/20 transition-colors">
                     <td className="p-3 font-medium">
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         <span className="text-foreground">{t.name}</span>
                         {t.description && <span className="text-xs text-muted-foreground line-clamp-1">{t.description}</span>}
+                        {/* Deliverable link / upload for completed/reviewed tasks in Table */}
+                        {(t.status === 'COMPLETADO' || t.status === 'REVISADO') && (t.dataSpec?.type === 'pdf_report' || t.dataSpec?.type === 'file_generic') && (
+                          <div className="mt-1 flex flex-col gap-1 bg-muted/20 border rounded-lg p-2 max-w-xs">
+                            <span className="text-[9px] text-muted-foreground font-semibold">
+                              Entregable ({t.dataSpec?.label}):
+                            </span>
+                            {(() => {
+                              const taskDoc = projectDocs?.find(d => d.name === `Entregable - ${t.name}`);
+                              return (
+                                <div className="flex flex-col gap-1.5">
+                                  {taskDoc ? (
+                                    <a
+                                      href={taskDoc.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-primary hover:underline font-medium"
+                                    >
+                                      Descargar entregable
+                                    </a>
+                                  ) : (
+                                    <span className="text-[10px] text-amber-500 italic">Pendiente</span>
+                                  )}
+                                  
+                                  {!isReadOnly && (t.assignedToId === profile?.id || isSupervisorOrAdmin) && (
+                                    <Input
+                                      type="file"
+                                      accept={t.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
+                                      className="h-6 text-[9px] py-0 bg-card border-dashed border-border"
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        try {
+                                          await api.uploadProjectDocument({
+                                            name: `Entregable - ${t.name}`,
+                                            projectId: t.projectId,
+                                            serviceId: t.serviceId || '',
+                                            documentType: 'INFORME',
+                                            areaCode: 'OPS',
+                                          }, file);
+                                          toast.success('Entregable subido con éxito.');
+                                          e.target.value = '';
+                                          void refetchDocs();
+                                        } catch (err) {
+                                          toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
+                                        }
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-3">
@@ -827,7 +1083,7 @@ export function BacklogTab(): ReactNode {
                   </tr>
                 );
               })}
-              {tasks.length === 0 && (
+              {visibleTasks.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-muted-foreground">
                     No se encontraron tareas con los filtros seleccionados.
@@ -846,7 +1102,7 @@ export function BacklogTab(): ReactNode {
             <ModalHeader>
               <ModalTitle>Nueva Tarea de Backlog</ModalTitle>
               <ModalDescription>
-                Paso {wizardStep} de 3 — {wizardStep === 1 ? 'Detalles Básicos' : wizardStep === 2 ? 'Proyecto & Estimación' : 'Asignación & Mandante'}
+                Paso {wizardStep} de 4 — {wizardStep === 1 ? 'Detalles Básicos' : wizardStep === 2 ? 'Proyecto & Estimación' : wizardStep === 3 ? 'Producto / Entregable' : 'Asignación & Mandante'}
               </ModalDescription>
             </ModalHeader>
             <div className="flex flex-col gap-4 py-4 min-h-[250px]">
@@ -952,6 +1208,29 @@ export function BacklogTab(): ReactNode {
               {wizardStep === 3 && (
                 <div className="flex flex-col gap-4 animate-in fade-in duration-200">
                   <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-product">Producto / Entregable Esperado</Label>
+                    <select
+                      id="task-product"
+                      required
+                      value={taskProduct}
+                      onChange={(e) => setTaskProduct(e.target.value as any)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
+                    >
+                      <option value="time_only">Solo registro de tiempo</option>
+                      <option value="pdf_report">Informe en PDF</option>
+                      <option value="file_generic">Archivo genérico / Entregable pesado</option>
+                      <option value="custom_metrics">Ingreso de datos / Mediciones (Atacama)</option>
+                    </select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Define qué debe ingresar u ocurrir al finalizar la tarea.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {wizardStep === 4 && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-assigned">Responsable de Ejecución</Label>
                     <select
                       id="task-assigned"
@@ -995,6 +1274,13 @@ export function BacklogTab(): ReactNode {
                       </div>
                     )}
                     <div><span className="text-muted-foreground">Puntos Estimados:</span> {taskEstPoints} pts</div>
+                    <div>
+                      <span className="text-muted-foreground">Entregable esperado:</span>{' '}
+                      {taskProduct === 'time_only' ? 'Solo registro de tiempo' :
+                       taskProduct === 'pdf_report' ? 'Informe en PDF' :
+                       taskProduct === 'file_generic' ? 'Archivo genérico' :
+                       'Mediciones de cubicación'}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1008,10 +1294,10 @@ export function BacklogTab(): ReactNode {
                 )}
               </div>
               <div className="flex gap-2">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setCreateOpen(false); setWizardStep(1); }}>
                   Cancelar
                 </Button>
-                {wizardStep < 3 ? (
+                {wizardStep < 4 ? (
                   <Button
                     type="button"
                     size="sm"
@@ -1033,6 +1319,89 @@ export function BacklogTab(): ReactNode {
                   <Button type="submit" size="sm">Crear Tarea</Button>
                 )}
               </div>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL SOLICITUD DE ACTIVIDAD (ITO) */}
+      <Modal open={itoRequestOpen} onOpenChange={setItoRequestOpen}>
+        <ModalContent className="max-w-md bg-card border border-border shadow-lg">
+          <form onSubmit={handleItoRequestSubmit}>
+            <ModalHeader>
+              <ModalTitle>Solicitud de Actividad / Requerimiento</ModalTitle>
+              <ModalDescription>
+                Describe el requerimiento y lo que esperas como producto final para que el Supervisor lo gestione.
+              </ModalDescription>
+            </ModalHeader>
+            <div className="flex flex-col gap-4 py-4 min-h-[250px]">
+              {itoFormError && (
+                <div className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-medium">
+                  {itoFormError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ito-name">Nombre del Requerimiento</Label>
+                <Input
+                  id="ito-name"
+                  required
+                  value={itoName}
+                  onChange={(e) => setItoName(e.target.value)}
+                  placeholder="Ej. Medición de espesor de sal de poza R2"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ito-desc">Descripción detallada</Label>
+                <textarea
+                  id="ito-desc"
+                  value={itoDesc}
+                  onChange={(e) => setItoDesc(e.target.value)}
+                  className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="Detalla qué necesitas y por qué..."
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ito-proj">Proyecto Mandante</Label>
+                <select
+                  id="ito-proj"
+                  required
+                  value={itoProjId}
+                  onChange={(e) => setItoProjId(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
+                >
+                  <option value="">Selecciona proyecto</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ito-product">Producto / Entregable Esperado</Label>
+                <select
+                  id="ito-product"
+                  required
+                  value={itoProduct}
+                  onChange={(e) => setItoProduct(e.target.value as any)}
+                  className="flex h-9 w-full rounded-md border border-input bg-slate-900 px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
+                >
+                  <option value="time_only">Solo registro de tiempo</option>
+                  <option value="pdf_report">Informe en PDF</option>
+                  <option value="file_generic">Archivo genérico / Entregable pesado</option>
+                  <option value="custom_metrics">Ingreso de datos / Mediciones (Atacama)</option>
+                </select>
+              </div>
+            </div>
+            <ModalFooter className="flex justify-end gap-2 border-t pt-4">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setItoRequestOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm">Enviar Solicitud</Button>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -1237,6 +1606,58 @@ export function BacklogTab(): ReactNode {
                   placeholder="Detalla qué actividad vas a realizar o qué avance lograste..."
                 />
               </div>
+
+              {timeLogType === 'finish' && timeLogTask && (
+                <>
+                  {(timeLogTask.dataSpec?.type === 'pdf_report' || timeLogTask.dataSpec?.type === 'file_generic') && (
+                    <div className="flex flex-col gap-1.5 border-t pt-3 mt-2">
+                      <Label htmlFor="deliverable-file" className="font-semibold text-xs text-foreground">
+                        Subir Entregable / Producto ({timeLogTask.dataSpec?.label})
+                      </Label>
+                      <Input
+                        id="deliverable-file"
+                        type="file"
+                        accept={timeLogTask.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
+                        onChange={(e) => setDeliverableFile(e.target.files?.[0] || null)}
+                        className="bg-card text-xs border border-border"
+                      />
+                    </div>
+                  )}
+
+                  {timeLogTask.dataSpec?.type === 'custom_metrics' && (
+                    <div className="flex flex-col gap-3 border-t pt-3 mt-2">
+                      <Label className="font-semibold text-xs text-foreground">
+                        Ingreso de Mediciones de Campo
+                      </Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="metric-cota" className="text-[10px] text-muted-foreground">Cota espejo (m)</Label>
+                          <Input
+                            id="metric-cota"
+                            placeholder="Ej. 2301.7"
+                            type="number"
+                            step="0.001"
+                            value={metricCotaEspejo}
+                            onChange={(e) => setMetricCotaEspejo(e.target.value)}
+                            className="h-8 text-xs bg-card"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="metric-vol" className="text-[10px] text-muted-foreground">Volumen salmuera (m³)</Label>
+                          <Input
+                            id="metric-vol"
+                            placeholder="Ej. 32000"
+                            type="number"
+                            value={metricVolSalmuera}
+                            onChange={(e) => setMetricVolSalmuera(e.target.value)}
+                            className="h-8 text-xs bg-card"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <ModalFooter>
               <Button type="button" variant="ghost" onClick={() => setTimeLogModalOpen(false)}>

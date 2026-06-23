@@ -311,11 +311,18 @@ export class TasksService {
       }
     }
 
-    const open = await this.prisma.taskTimeLog.findFirst({
-      where: { taskId: id, userId, endedAt: null },
+    // Lock de concurrencia (Módulo 5): una sola actividad activa por tarea.
+    // Si ya hay un log abierto de OTRO operador, solo ese puede cerrarla (regla acompañante).
+    const openAny = await this.prisma.taskTimeLog.findFirst({
+      where: { taskId: id, endedAt: null },
     });
-    if (open) {
-      throw new BadRequestException('Ya hay una actividad en curso para esta tarea.');
+    if (openAny) {
+      if (openAny.userId === userId) {
+        throw new BadRequestException('Ya tienes una actividad en curso para esta tarea.');
+      }
+      throw new BadRequestException(
+        'La actividad ya fue iniciada por otro operador; solo quien la inició puede cerrarla.',
+      );
     }
 
     return this.prisma.taskTimeLog.create({
@@ -349,6 +356,11 @@ export class TasksService {
       orderBy: { startedAt: 'desc' },
     });
     if (!open) {
+      // Lock de concurrencia: si la inició otro operador, solo ese puede cerrarla.
+      const openOther = await this.prisma.taskTimeLog.findFirst({ where: { taskId: id, endedAt: null } });
+      if (openOther) {
+        throw new BadRequestException('Solo el operador que inició la actividad puede cerrarla.');
+      }
       throw new BadRequestException('No hay una actividad en curso.');
     }
 

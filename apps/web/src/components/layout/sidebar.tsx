@@ -110,6 +110,12 @@ export function SidebarContent({
 
   const handleNavigate = onNavigate ?? (() => undefined);
 
+  const isCapstone = user?.email?.endsWith('@capstone.cl');
+  const filteredSecondaryNav = SECONDARY_NAV.filter(item => {
+    if (item.label === 'V-metric' && isCapstone) return false;
+    return true;
+  });
+
   return (
     <div className="flex h-full flex-col bg-card">
       {/* Marca + colapso */}
@@ -122,7 +128,7 @@ export function SidebarContent({
         {collapsed ? (
           <img src={logoCompact} alt="GMT" className="h-10 w-auto object-contain" />
         ) : (
-          <img src={logoMid} alt="GMT Link" className="h-11 w-auto max-w-[170px] object-contain" />
+          <img src={logoMid} alt="GMT Link" className="h-14 w-auto max-w-[170px] object-contain" />
         )}
         {!forceExpanded && (
           <Button
@@ -164,7 +170,7 @@ export function SidebarContent({
           </p>
         )}
         <ul className="flex flex-col gap-1">
-          {SECONDARY_NAV.map((item) => (
+          {filteredSecondaryNav.map((item) => (
             <li key={item.to}>
               <NavRow
                 item={item}

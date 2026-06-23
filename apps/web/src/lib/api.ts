@@ -1654,4 +1654,18 @@ export function getMetricDataPoints(phaseId: string, elementId?: string): Promis
   return request<MetricDataPoint[]>(`/metrics/data/${encodeURIComponent(phaseId)}${query}`);
 }
 
+export function submitMetricDataPoints(points: Array<{
+  value: string;
+  variableId: string;
+  elementId: string;
+  phaseId: string;
+  taskId?: string;
+}>): Promise<void> {
+  return request<void>('/metrics/data', {
+    method: 'POST',
+    body: JSON.stringify({ points }),
+  });
+}
+
+
 

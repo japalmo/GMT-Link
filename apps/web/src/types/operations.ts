@@ -50,6 +50,9 @@ export interface TaskView {
   clientUserId: string | null;
   clientUser: { id: string; firstName: string; lastName: string; email: string } | null;
   timeLogs?: TaskTimeLogView[];
+  dataSpec?: Record<string, any> | null;
+  phaseId?: string | null;
+  elementId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +67,9 @@ export interface CreateTaskInput {
   estimatedPoints?: number;
   recurrence?: string;
   clientUserId?: string;
+  dataSpec?: Record<string, any> | null;
+  phaseId?: string | null;
+  elementId?: string | null;
 }
 
 /** Entrada para actualizar una tarea (campos editables). */

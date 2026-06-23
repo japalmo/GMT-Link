@@ -1,22 +1,17 @@
 /**
- * Seed del flujo MVP "Capstone Copper / Mantos Blancos" (Módulo 5).
+ * Seed del flujo MVP "Capstone Copper / Mantos Blancos" y "Albemarle / Salar de Atacama" (Módulo 5).
  *
  * Idempotente (upsert en todo). Asegura, end-to-end, un proyecto demostrable:
  *  1. 4 ROLES MVP (Role.isSystem=true) con grants RolePermission (scope) que
- *     reusan los Permission ya sembrados por `seed.ts` (convención ':'). Si algún
- *     permiso faltara, se crea con upsert (metadata razonable).
- *  2. Cliente Capstone Copper → Departamento Mantos Blancos → Proyecto Mantos
- *     Blancos → Servicio Topografía.
- *  3. 4 usuarios (uno por rol MVP) status ACTIVE.
- *  4. Membership PROJECT por usuario + sincronización a OpenFGA: se escribe la
- *     tupla ESTRUCTURAL (user:<id> <relación> project:<id>) usando el mapeo
- *     MEMBERSHIP_RELATION_MAP (supervisor/adm_contrato→project_creator,
- *     operador→operator, ito→client_ito). Idempotente (ignora "ya existe").
- *  5. 2-3 Task de ejemplo (status PENDIENTE) asignadas al operador, con dataSpec.
- *
- * Requiere: Postgres arriba, `seed.ts` corrido (catálogo de permisos) y, para
- * la sincronización FGA, OpenFGA bootstrapeado (FGA_STORE_ID en .env). Si
- * FGA_STORE_ID no está, el seed siembra Postgres igual y avisa que omite FGA.
+ *     reusan los Permission ya sembrados por `seed.ts` (convención ':').
+ *  2. Clientes Capstone Copper y Albemarle.
+ *  3. Proyectos Mantos Blancos (MBL) y Salar de Atacama (ATA).
+ *  4. Servicios Topografía (TOP) y Control V-Metric (CUB).
+ *  5. 8 usuarios MVP (5 Capstone, 4 Albemarle - supervisor@capstone es compartido o separado).
+ *  6. Memberships PROJECT por usuario + sincronización a OpenFGA.
+ *  7. Element R2 (Reservorio 2) y sus variables de cubicación para Albemarle.
+ *  8. Historial de DataPoints para R2 para poblar el dashboard.
+ *  9. Tareas de ejemplo para ambos proyectos (incluyendo dataSpec).
  *
  * Ejecutar con: pnpm --filter @gmt-link/api seed:capstone
  */
@@ -30,6 +25,7 @@ import {
   ScopeType,
   TaskStatus,
   UserStatus,
+  VariableType,
 } from '@prisma/client';
 import { MEMBERSHIP_RELATION_MAP, SCOPE_OBJECT_TYPE } from '../src/fga/fga.types';
 
@@ -42,11 +38,6 @@ const prisma = new PrismaClient();
 // 1) Permisos de respaldo + Roles MVP
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Permisos que estos roles MVP referencian. `seed.ts` ya siembra todos los
- * usados aquí; estas defs son el respaldo idempotente por si `seed.ts` no corrió.
- * Convención ':' (NO duplicar con '.'). metadata alineada a seed.ts.
- */
 interface PermDef {
   key: string;
   label: string;
@@ -90,7 +81,6 @@ interface RoleDef {
 
 const g = (perm: string, scope: PermissionScope = S.PROJECT): { perm: string; scope: PermissionScope } => ({ perm, scope });
 
-/** Roles MVP del cliente (Módulo 5). isSystem=true: no editables por el admin. */
 const MVP_ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'supervisor',
@@ -100,7 +90,7 @@ const MVP_ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'operador',
     label: 'Operador',
-    grants: [g('task:read', S.OWN), g('task:time:log'), g('measurement:submit'), g('document:upload')],
+    grants: [g('task:read', S.PROJECT), g('task:time:log'), g('measurement:submit'), g('document:upload')],
   },
   {
     key: 'ito',
@@ -115,16 +105,51 @@ const MVP_ROLES: ReadonlyArray<RoleDef> = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2) Organización: Cliente → Departamento → Proyecto → Servicio
+// 2) Organizaciones MVP
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CLIENT = { code: 'CAP', name: 'Capstone Copper' } as const;
-const DEPARTMENT = { code: 'MB', name: 'Mantos Blancos' } as const;
-const PROJECT = { code: 'MBL', name: 'Mantos Blancos' } as const;
-const SERVICE = { code: 'TOP', name: 'Topografía' } as const;
+// Capstone Copper / Mantos Blancos
+const CAP_CLIENT = { code: 'CAP', name: 'Capstone Copper' } as const;
+const CAP_DEPT = { code: 'MB', name: 'Mantos Blancos' } as const;
+const CAP_PROJ = { code: 'MBL', name: 'Mantos Blancos' } as const;
+const CAP_SERV = { code: 'TOP', name: 'Topografía' } as const;
+
+// Albemarle / Salar de Atacama
+const ALB_CLIENT = { code: 'ALB', name: 'Albemarle' } as const;
+const ALB_DEPT = { code: 'SLA', name: 'Salar de Atacama' } as const;
+const ALB_PROJ = { code: 'ATA', name: 'Salar de Atacama' } as const;
+const ALB_SERV = { code: 'CUB', name: 'Control V-Metric' } as const;
+
+// Variables de Albemarle
+const ALB_VARIABLES = [
+  { code: 'borde_libre', name: 'Borde libre', type: VariableType.SCALAR, unit: 'm' },
+  { code: 'altura_salmuera', name: 'Altura de salmuera', type: VariableType.SCALAR, unit: 'm' },
+  { code: 'altura_sal', name: 'Altura de sal', type: VariableType.SCALAR, unit: 'm' },
+  { code: 'vol_salmuera_libre', name: 'Volumen Salmuera Libre', type: VariableType.SCALAR, unit: 'm³' },
+  { code: 'vol_sal', name: 'Volumen de Sal', type: VariableType.SCALAR, unit: 'm³' },
+  { code: 'vol_salmuera_ocluida', name: 'Volumen Salmuera Ocluida', type: VariableType.SCALAR, unit: 'm³' },
+  { code: 'vol_total_salmuera', name: 'Volumen Total Salmuera', type: VariableType.SCALAR, unit: 'm³' },
+  { code: 'cota_espejo', name: 'Cota de Espejo de Agua', type: VariableType.SCALAR, unit: 'm' },
+  { code: 'cota_sal', name: 'Cota de Sal', type: VariableType.SCALAR, unit: 'm' },
+];
+
+const ALB_R2_ELEMENT = {
+  code: 'R2',
+  name: 'Reservorio 2',
+  type: 'POZA',
+  metadata: {
+    cota_lamina_critica: 2302.13,
+    cota_salm: 2301.737,
+    cota_sal_ref: 2301.17,
+    cota_fondo: 2300.74,
+    cota_segura: 2301.83,
+    sistema: 1,
+    tipo: 'reservorio',
+  },
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3) Usuarios MVP (uno por rol)
+// 3) Usuarios MVP
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface UserDef {
@@ -135,52 +160,66 @@ interface UserDef {
 }
 
 const USERS: ReadonlyArray<UserDef> = [
+  // Capstone Copper
   { email: 'supervisor@capstone.cl', firstName: 'Camila', lastName: 'Tapia', roleKey: 'supervisor' },
   { email: 'operador@capstone.cl', firstName: 'Diego', lastName: 'Rojas', roleKey: 'operador' },
+  { email: 'operador2@capstone.cl', firstName: 'Matías', lastName: 'Soto', roleKey: 'operador' },
   { email: 'ito@capstone.cl', firstName: 'Fernanda', lastName: 'Núñez', roleKey: 'ito' },
   { email: 'adm@capstone.cl', firstName: 'Rodrigo', lastName: 'Vásquez', roleKey: 'adm_contrato' },
+  // Albemarle
+  { email: 'supervisor@albemarle.cl', firstName: 'Sofía', lastName: 'Contreras', roleKey: 'supervisor' },
+  { email: 'operador@albemarle.cl', firstName: 'Cristián', lastName: 'Muñoz', roleKey: 'operador' },
+  { email: 'ito@albemarle.cl', firstName: 'Claudio', lastName: 'Jara', roleKey: 'ito' },
+  { email: 'adm@albemarle.cl', firstName: 'Patricia', lastName: 'Gómez', roleKey: 'adm_contrato' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4) Tareas de ejemplo
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DATA_SPEC = {
-  cota_espejo: { label: 'Cota espejo (m)' },
-  vol_salmuera: { label: 'Volumen salmuera (m³)' },
+const DATA_SPEC_TOP = {
+  type: 'custom_metrics',
+  label: 'Ingreso de datos / Mediciones',
+  fields: {
+    cota_espejo: 'Cota espejo (m)',
+    vol_salmuera: 'Volumen salmuera (m³)',
+  },
+} as const;
+
+const DATA_SPEC_PDF = {
+  type: 'pdf_report',
+  label: 'Informe en PDF',
 } as const;
 
 interface TaskDef {
-  key: string; // identificador lógico para idempotencia (name único dentro del proyecto)
+  key: string;
   name: string;
   description: string;
+  dataSpec: Record<string, any>;
+  isAlbemarle: boolean;
 }
 
 const TASKS: ReadonlyArray<TaskDef> = [
-  { key: 'TOP-LEV-R1', name: 'Levantamiento topográfico Reservorio 1', description: 'Medición de cota de espejo y volumen de salmuera en R1.' },
-  { key: 'TOP-LEV-R2', name: 'Levantamiento topográfico Reservorio 2', description: 'Medición de cota de espejo y volumen de salmuera en R2.' },
-  { key: 'TOP-DEM-MENSUAL', name: 'Captura DEM mensual del sector', description: 'Vuelo y procesamiento de modelo de elevación del sector Mantos Blancos.' },
+  // Capstone
+  { key: 'TOP-LEV-R1', name: 'Levantamiento topográfico Reservorio 1', description: 'Medición de cota de espejo y volumen de salmuera en R1.', dataSpec: DATA_SPEC_TOP, isAlbemarle: false },
+  { key: 'TOP-LEV-R2', name: 'Levantamiento topográfico Reservorio 2', description: 'Medición de cota de espejo y volumen de salmuera en R2.', dataSpec: DATA_SPEC_TOP, isAlbemarle: false },
+  { key: 'TOP-DEM-MENSUAL', name: 'Captura DEM mensual del sector', description: 'Vuelo y procesamiento de modelo de elevación del sector Mantos Blancos.', dataSpec: DATA_SPEC_PDF, isAlbemarle: false },
+  // Albemarle
+  { key: 'ATA-VME-R2', name: 'Cubicación Reservorio 2', description: 'Realizar vuelo e importación de DEM para R2.', dataSpec: DATA_SPEC_TOP, isAlbemarle: true },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers FGA
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Cliente FGA configurado desde .env, o null si OpenFGA no está inicializado. */
 function makeFgaClient(): OpenFgaClient | null {
   const storeId = process.env.FGA_STORE_ID;
-  if (!storeId) {
-    return null;
-  }
+  if (!storeId) return null;
   const apiUrl = process.env.FGA_API_URL ?? 'http://localhost:8080';
   const modelId = process.env.FGA_MODEL_ID || undefined;
   return new OpenFgaClient({ apiUrl, storeId, authorizationModelId: modelId });
 }
 
-/**
- * Escribe la tupla estructural de una Membership PROJECT (idempotente: ignora
- * "ya existe"). Devuelve true si quedó escrita/existente, false si se omitió.
- */
 async function writeProjectTuple(
   client: OpenFgaClient,
   userId: string,
@@ -189,7 +228,7 @@ async function writeProjectTuple(
 ): Promise<boolean> {
   const relation = MEMBERSHIP_RELATION_MAP.PROJECT[roleKey];
   if (relation === undefined) {
-    console.warn(`  FGA: rol "${roleKey}" no mapeado a relación PROJECT (§4.3) — tupla omitida`);
+    console.warn(`  FGA: rol "${roleKey}" no mapeado a relación PROJECT — tupla omitida`);
     return false;
   }
   const tuple = {
@@ -216,7 +255,7 @@ async function writeProjectTuple(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // ── 1a. Permisos de respaldo (no duplica los de seed.ts: upsert por key) ──
+  // ── 1a. Permisos de respaldo ──
   for (const p of FALLBACK_PERMISSIONS) {
     const data = {
       label: p.label,
@@ -246,37 +285,84 @@ async function main(): Promise<void> {
   }
   console.log(`Roles MVP asegurados: ${MVP_ROLES.map((r) => r.key).join(', ')}`);
 
-  // ── 2. Cliente → Departamento → Proyecto → Servicio ──
-  const client = await prisma.client.upsert({
-    where: { code: CLIENT.code },
-    update: { name: CLIENT.name },
-    create: { code: CLIENT.code, name: CLIENT.name },
+  // ── 2a. Capstone: Cliente → Departamento → Proyecto → Servicio ──
+  const capClient = await prisma.client.upsert({
+    where: { code: CAP_CLIENT.code },
+    update: { name: CAP_CLIENT.name },
+    create: { code: CAP_CLIENT.code, name: CAP_CLIENT.name },
   });
 
-  const department = await prisma.department.upsert({
-    where: { code: DEPARTMENT.code },
-    update: { name: DEPARTMENT.name },
-    create: { code: DEPARTMENT.code, name: DEPARTMENT.name },
+  const capDepartment = await prisma.department.upsert({
+    where: { code: CAP_DEPT.code },
+    update: { name: CAP_DEPT.name },
+    create: { code: CAP_DEPT.code, name: CAP_DEPT.name },
   });
 
-  const project = await prisma.project.upsert({
-    where: { departmentId_code: { departmentId: department.id, code: PROJECT.code } },
-    update: { name: PROJECT.name, clientId: client.id },
-    create: { code: PROJECT.code, name: PROJECT.name, departmentId: department.id, clientId: client.id },
+  const capProject = await prisma.project.upsert({
+    where: { departmentId_code: { departmentId: capDepartment.id, code: CAP_PROJ.code } },
+    update: { name: CAP_PROJ.name, clientId: capClient.id },
+    create: { code: CAP_PROJ.code, name: CAP_PROJ.name, departmentId: capDepartment.id, clientId: capClient.id },
   });
 
-  const service = await prisma.service.upsert({
-    where: { projectId_code: { projectId: project.id, code: SERVICE.code } },
-    update: { name: SERVICE.name },
-    create: { code: SERVICE.code, name: SERVICE.name, projectId: project.id, docCodingConfig: {} },
+  const capService = await prisma.service.upsert({
+    where: { projectId_code: { projectId: capProject.id, code: CAP_SERV.code } },
+    update: { name: CAP_SERV.name },
+    create: { code: CAP_SERV.code, name: CAP_SERV.name, projectId: capProject.id, docCodingConfig: {} },
   });
-  console.log(
-    `Organización: ${client.name} (${client.code}) → ${department.name} (${department.code}) → ` +
-      `${project.name} (${project.code}) → ${service.name} (${service.code})`,
-  );
+  console.log(`Capstone: ${capClient.name} -> ${capProject.name}`);
 
-  // ── 3. Usuarios MVP ──
-  const userIdByRole = new Map<string, string>();
+  // ── 2b. Albemarle: Cliente → Departamento → Proyecto → Servicio ──
+  const albClient = await prisma.client.upsert({
+    where: { code: ALB_CLIENT.code },
+    update: { name: ALB_CLIENT.name },
+    create: { code: ALB_CLIENT.code, name: ALB_CLIENT.name },
+  });
+
+  const albDepartment = await prisma.department.upsert({
+    where: { code: ALB_DEPT.code },
+    update: { name: ALB_DEPT.name },
+    create: { code: ALB_DEPT.code, name: ALB_DEPT.name },
+  });
+
+  const albProject = await prisma.project.upsert({
+    where: { departmentId_code: { departmentId: albDepartment.id, code: ALB_PROJ.code } },
+    update: { name: ALB_PROJ.name, clientId: albClient.id },
+    create: { code: ALB_PROJ.code, name: ALB_PROJ.name, departmentId: albDepartment.id, clientId: albClient.id },
+  });
+
+  const albService = await prisma.service.upsert({
+    where: { projectId_code: { projectId: albProject.id, code: ALB_SERV.code } },
+    update: { name: ALB_SERV.name },
+    create: { code: ALB_SERV.code, name: ALB_SERV.name, projectId: albProject.id, docCodingConfig: {} },
+  });
+  console.log(`Albemarle: ${albClient.name} -> ${albProject.name}`);
+
+  // ── 2c. Albemarle: Elemento R2, Fase, Variables y Puntos de cubicación de muestra ──
+  const elementR2 = await prisma.element.upsert({
+    where: { code: ALB_R2_ELEMENT.code },
+    update: { name: ALB_R2_ELEMENT.name, type: ALB_R2_ELEMENT.type, metadata: ALB_R2_ELEMENT.metadata, projectId: albProject.id },
+    create: { code: ALB_R2_ELEMENT.code, name: ALB_R2_ELEMENT.name, type: ALB_R2_ELEMENT.type, metadata: ALB_R2_ELEMENT.metadata, projectId: albProject.id },
+  });
+
+  const phase = await prisma.phase.upsert({
+    where: { serviceId_code: { serviceId: albService.id, code: 'anual-2026' } },
+    update: { name: 'Campaña Anual 2026' },
+    create: { code: 'anual-2026', name: 'Campaña Anual 2026', serviceId: albService.id },
+  });
+
+  const varMap = new Map<string, any>();
+  for (const v of ALB_VARIABLES) {
+    const createdVar = await prisma.variable.upsert({
+      where: { phaseId_code: { phaseId: phase.id, code: v.code } },
+      update: { name: v.name, type: v.type, unit: v.unit },
+      create: { code: v.code, name: v.name, type: v.type, unit: v.unit, phaseId: phase.id },
+    });
+    varMap.set(v.code, createdVar);
+  }
+  console.log(`Variables de cubicación Albemarle sembradas.`);
+
+  // ── 3. Usuarios MVP (Mapeados por email) ──
+  const userIdByEmail = new Map<string, string>();
   for (const u of USERS) {
     const user = await prisma.user.upsert({
       where: { email: u.email },
@@ -286,67 +372,115 @@ async function main(): Promise<void> {
         firstName: u.firstName,
         lastName: u.lastName,
         status: UserStatus.ACTIVE,
-        isClientUser: false,
+        isClientUser: u.roleKey === 'ito',
       },
     });
-    userIdByRole.set(u.roleKey, user.id);
+    userIdByEmail.set(u.email, user.id);
   }
-  console.log(`Usuarios asegurados: ${USERS.length} (${USERS.map((u) => u.email).join(', ')})`);
+  console.log(`Usuarios asegurados: ${USERS.length}`);
+
+  // ── 3.1. Sembrar DataPoints históricos para R2 (Albemarle) ──
+  const operadorAlbId = userIdByEmail.get('operador@albemarle.cl');
+  if (operadorAlbId) {
+    const seriesData = [
+      { fecha: '2025-12-15T12:00:00Z', borde_libre: 1.05, altura_salmuera: 2.95, altura_sal: 0.98, vol_salmuera_libre: 26800, vol_sal: 12350, vol_salmuera_ocluida: 6900, vol_total_salmuera: 33700, cota_espejo: 2301.737, cota_sal: 2301.17 },
+      { fecha: '2026-01-15T12:00:00Z', borde_libre: 1.12, altura_salmuera: 2.88, altura_sal: 1.00, vol_salmuera_libre: 26100, vol_sal: 12600, vol_salmuera_ocluida: 6850, vol_total_salmuera: 32950, cota_espejo: 2301.680, cota_sal: 2301.15 },
+      { fecha: '2026-02-15T12:00:00Z', borde_libre: 1.20, altura_salmuera: 2.80, altura_sal: 1.03, vol_salmuera_libre: 25300, vol_sal: 12900, vol_salmuera_ocluida: 6780, vol_total_salmuera: 32080, cota_espejo: 2301.590, cota_sal: 2301.12 },
+      { fecha: '2026-03-15T12:00:00Z', borde_libre: 1.31, altura_salmuera: 2.69, altura_sal: 1.06, vol_salmuera_libre: 24200, vol_sal: 13250, vol_salmuera_ocluida: 6700, vol_total_salmuera: 30900, cota_espejo: 2301.480, cota_sal: 2301.09 },
+      { fecha: '2026-04-15T12:00:00Z', borde_libre: 1.44, altura_salmuera: 2.56, altura_sal: 1.10, vol_salmuera_libre: 22950, vol_sal: 13600, vol_salmuera_ocluida: 6600, vol_total_salmuera: 29550, cota_espejo: 2301.350, cota_sal: 2301.05 },
+      { fecha: '2026-05-15T12:00:00Z', borde_libre: 1.58, altura_salmuera: 2.42, altura_sal: 1.14, vol_salmuera_libre: 21600, vol_sal: 14000, vol_salmuera_ocluida: 6480, vol_total_salmuera: 28080, cota_espejo: 2301.210, cota_sal: 2301.01 },
+    ];
+
+    for (const record of seriesData) {
+      for (const [vCode, value] of Object.entries(record)) {
+        if (vCode === 'fecha') continue;
+        const variable = varMap.get(vCode);
+        if (!variable) continue;
+        const exist = await prisma.dataPoint.findFirst({
+          where: {
+            elementId: elementR2.id,
+            variableId: variable.id,
+            phaseId: phase.id,
+            createdAt: new Date(record.fecha),
+          },
+        });
+        if (!exist) {
+          await prisma.dataPoint.create({
+            data: {
+              value: String(value),
+              variableId: variable.id,
+              elementId: elementR2.id,
+              phaseId: phase.id,
+              createdById: operadorAlbId,
+              createdAt: new Date(record.fecha),
+            },
+          });
+        }
+      }
+    }
+    console.log(`Puntos de medición históricos sembrados para Reservorio 2.`);
+  }
 
   // ── 4. Memberships PROJECT + sincronización a FGA ──
   const fga = makeFgaClient();
   if (!fga) {
     console.warn('OpenFGA: FGA_STORE_ID vacío — se omite la escritura de tuplas estructurales.');
-    console.warn('         Corre `pnpm --filter @gmt-link/api fga:bootstrap` y vuelve a sembrar para sincronizar FGA.');
   }
+
   let memberships = 0;
   let fgaTuples = 0;
   for (const u of USERS) {
-    const userId = userIdByRole.get(u.roleKey);
-    if (userId === undefined) {
-      continue;
-    }
+    const userId = userIdByEmail.get(u.email);
+    if (!userId) continue;
+
+    const isAlb = u.email.endsWith('@albemarle.cl');
+    const projId = isAlb ? albProject.id : capProject.id;
+
     await prisma.membership.upsert({
       where: {
         userId_roleKey_scopeType_scopeId: {
           userId,
           roleKey: u.roleKey,
           scopeType: ScopeType.PROJECT,
-          scopeId: project.id,
+          scopeId: projId,
         },
       },
       update: {},
-      create: { userId, roleKey: u.roleKey, scopeType: ScopeType.PROJECT, scopeId: project.id },
+      create: { userId, roleKey: u.roleKey, scopeType: ScopeType.PROJECT, scopeId: projId },
     });
     memberships += 1;
+
     if (fga) {
-      const ok = await writeProjectTuple(fga, userId, u.roleKey, project.id);
-      if (ok) {
-        fgaTuples += 1;
-      }
+      const ok = await writeProjectTuple(fga, userId, u.roleKey, projId);
+      if (ok) fgaTuples += 1;
     }
   }
   console.log(`Memberships PROJECT aseguradas: ${memberships}`);
 
-  // ── 5. Tareas de ejemplo (assignedTo = operador, createdBy = supervisor) ──
-  const operadorId = userIdByRole.get('operador');
-  const supervisorId = userIdByRole.get('supervisor');
-  if (operadorId === undefined || supervisorId === undefined) {
-    throw new Error('No se pudo resolver operador/supervisor para las tareas de ejemplo.');
-  }
+  // ── 5. Tareas de ejemplo ──
   let tasks = 0;
   for (const t of TASKS) {
-    // Idempotencia: buscar por (projectId, name) — no hay unique compuesto en Task.
-    const existing = await prisma.task.findFirst({ where: { projectId: project.id, name: t.name } });
+    const proj = t.isAlbemarle ? albProject : capProject;
+    const serv = t.isAlbemarle ? albService : capService;
+
+    const domain = t.isAlbemarle ? '@albemarle.cl' : '@capstone.cl';
+    const opId = userIdByEmail.get(`operador${domain}`);
+    const supId = userIdByEmail.get(`supervisor${domain}`);
+
+    if (!opId || !supId) continue;
+
+    const existing = await prisma.task.findFirst({ where: { projectId: proj.id, name: t.name } });
     if (existing) {
       await prisma.task.update({
         where: { id: existing.id },
         data: {
           description: t.description,
           status: TaskStatus.PENDIENTE,
-          serviceId: service.id,
-          assignedToId: operadorId,
-          dataSpec: DATA_SPEC,
+          serviceId: serv.id,
+          assignedToId: opId,
+          dataSpec: t.dataSpec,
+          phaseId: t.isAlbemarle ? phase.id : null,
+          elementId: t.isAlbemarle ? elementR2.id : null,
         },
       });
     } else {
@@ -355,27 +489,28 @@ async function main(): Promise<void> {
           name: t.name,
           description: t.description,
           status: TaskStatus.PENDIENTE,
-          projectId: project.id,
-          serviceId: service.id,
-          assignedToId: operadorId,
-          createdById: supervisorId,
-          dataSpec: DATA_SPEC,
+          projectId: proj.id,
+          serviceId: serv.id,
+          assignedToId: opId,
+          createdById: supId,
+          dataSpec: t.dataSpec,
+          phaseId: t.isAlbemarle ? phase.id : null,
+          elementId: t.isAlbemarle ? elementR2.id : null,
         },
       });
     }
     tasks += 1;
   }
-  console.log(`Tareas de ejemplo aseguradas: ${tasks} (assignedTo=${USERS.find((u) => u.roleKey === 'operador')?.email})`);
+  console.log(`Tareas de ejemplo aseguradas: ${tasks}`);
 
   // ── Resumen ──
-  console.log('\n=== Resumen seed Capstone / Mantos Blancos ===');
-  console.log(`  Roles MVP:            ${MVP_ROLES.length}`);
-  console.log(`  Grants rol→permiso:   ${await prisma.rolePermission.count({ where: { role: { key: { in: MVP_ROLES.map((r) => r.key) } } } })}`);
+  console.log('\n=== Resumen seed Capstone / Albemarle MVP ===');
   console.log(`  Usuarios:             ${USERS.length}`);
   console.log(`  Memberships PROJECT:  ${memberships}`);
   console.log(`  Tuplas FGA escritas:  ${fga ? fgaTuples : 'omitidas (FGA_STORE_ID vacío)'}`);
   console.log(`  Tareas (PENDIENTE):   ${tasks}`);
-  console.log(`  Proyecto:             ${project.name} (id=${project.id})`);
+  console.log(`  Capstone Project:     ${capProject.name} (id=${capProject.id})`);
+  console.log(`  Albemarle Project:    ${albProject.name} (id=${albProject.id})`);
   console.log('==============================================');
 }
 

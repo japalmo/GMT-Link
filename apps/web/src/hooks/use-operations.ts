@@ -111,16 +111,7 @@ export interface UseTasksResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  create: (dto: {
-    name: string;
-    description?: string;
-    projectId: string;
-    serviceId?: string;
-    assignedToId?: string;
-    estimatedPoints?: number;
-    recurrence?: string;
-    clientUserId?: string;
-  }) => Promise<TaskView>;
+  create: (dto: CreateTaskInput) => Promise<TaskView>;
   update: (
     id: string,
     dto: {
