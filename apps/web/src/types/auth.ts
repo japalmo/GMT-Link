@@ -17,4 +17,6 @@ export interface AuthedUser {
   firstName: string;
   lastName: string;
   status: UserStatus;
+  /** Módulos del sidebar visibles para este usuario (derivados de su cliente). */
+  modules: string[];
 }

@@ -25,7 +25,31 @@ interface MeResponse {
   firstName: string;
   lastName: string;
   status: string;
+  /** Módulos del sidebar visibles para este usuario (derivados de su cliente). */
+  modules: string[];
 }
+
+/** Todos los módulos del sidebar. */
+const ALL_MODULES = [
+  'dashboard',
+  'usuarios',
+  'directorio',
+  'finanzas',
+  'operaciones',
+  'recursos',
+  'herramientas',
+  'v-metric',
+] as const;
+
+/**
+ * Módulos visibles por código de cliente (Módulo 5 — "limitar acceso estricto").
+ * Reemplaza el filtro por dominio de email del sidebar. Un usuario sin cliente
+ * conocido (p. ej. org_admin) ve TODOS los módulos.
+ */
+const CLIENT_MODULES: Record<string, readonly string[]> = {
+  CAP: ['dashboard', 'operaciones'], // Capstone / Mantos Blancos
+  ALB: ['dashboard', 'v-metric'], // Albemarle / Salar de Atacama
+};
 
 /** Respuesta de completar el primer login. */
 interface FirstLoginCompleteResponse {
@@ -72,7 +96,40 @@ export class AuthController {
       firstName: user.firstName,
       lastName: user.lastName,
       status: user.status,
+      modules: await this.resolveModules(user.id),
     };
+  }
+
+  /**
+   * Deriva los módulos visibles del usuario a partir de su(s) cliente(s) reales
+   * (vía Membership PROJECT → Project → Client). org_admin o cliente desconocido
+   * → todos los módulos (no se restringe).
+   */
+  private async resolveModules(userId: string): Promise<string[]> {
+    const memberships = await this.prisma.membership.findMany({ where: { userId } });
+    if (memberships.length === 0 || memberships.some((m) => m.roleKey === 'org_admin')) {
+      return [...ALL_MODULES];
+    }
+    const projectIds = memberships
+      .filter((m) => m.scopeType === 'PROJECT')
+      .map((m) => m.scopeId);
+    const projects = projectIds.length
+      ? await this.prisma.project.findMany({
+          where: { id: { in: projectIds } },
+          select: { client: { select: { code: true } } },
+        })
+      : [];
+    const knownCodes = [...new Set(projects.map((p) => p.client.code))].filter(
+      (code) => CLIENT_MODULES[code] !== undefined,
+    );
+    if (knownCodes.length === 0) {
+      return [...ALL_MODULES];
+    }
+    const set = new Set<string>();
+    for (const code of knownCodes) {
+      for (const mod of CLIENT_MODULES[code] ?? []) set.add(mod);
+    }
+    return [...set];
   }
 
   /**

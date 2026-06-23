@@ -34,6 +34,8 @@ function buildController(options: {
 
   const prisma = {
     user: { findUnique, update },
+    membership: { findMany: vi.fn(() => Promise.resolve([])) },
+    project: { findMany: vi.fn(() => Promise.resolve([])) },
   } as unknown as PrismaService;
   const firebase = { setPassword } as unknown as FirebaseService;
   const gamification = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
@@ -82,6 +84,8 @@ describe('AuthController · GET /auth/me', () => {
       firstName: 'Colaborador',
       lastName: 'Prueba',
       status: 'ACTIVE',
+      // sin memberships → todos los módulos (no se restringe el acceso)
+      modules: ['dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'recursos', 'herramientas', 'v-metric'],
     });
   });
 });

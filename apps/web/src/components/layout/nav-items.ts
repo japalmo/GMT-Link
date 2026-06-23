@@ -15,6 +15,8 @@ export interface NavItem {
   label: string;
   to: string;
   icon: LucideIcon;
+  /** Clave de módulo para filtrar la visibilidad por cliente (ver GET /auth/me). */
+  module: string;
   /** Marca placeholders aún no implementados (etapas posteriores). */
   placeholder?: boolean;
 }
@@ -25,12 +27,12 @@ export interface NavItem {
  * Recursos E5). Apuntan a rutas que muestran un estado "en construcción".
  */
 export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
-  { label: 'Dashboard', to: '/', icon: LayoutDashboard },
-  { label: 'Usuarios', to: '/usuarios', icon: Users },
-  { label: 'Directorio', to: '/directorio', icon: Contact },
-  { label: 'Finanzas', to: '/finanzas', icon: Wallet },
-  { label: 'Operaciones', to: '/operaciones', icon: Boxes },
-  { label: 'Recursos', to: '/recursos', icon: Package },
+  { label: 'Dashboard', to: '/', icon: LayoutDashboard, module: 'dashboard' },
+  { label: 'Usuarios', to: '/usuarios', icon: Users, module: 'usuarios' },
+  { label: 'Directorio', to: '/directorio', icon: Contact, module: 'directorio' },
+  { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
+  { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },
+  { label: 'Recursos', to: '/recursos', icon: Package, module: 'recursos' },
 ];
 
 /**
@@ -38,6 +40,6 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
  * V-metric (§6-2.4).
  */
 export const SECONDARY_NAV: ReadonlyArray<NavItem> = [
-  { label: 'Herramientas', to: '/herramientas', icon: Wrench },
-  { label: 'V-metric', to: '/v-metric', icon: Gauge, placeholder: true },
+  { label: 'Herramientas', to: '/herramientas', icon: Wrench, module: 'herramientas' },
+  { label: 'V-metric', to: '/v-metric', icon: Gauge, module: 'v-metric' },
 ];

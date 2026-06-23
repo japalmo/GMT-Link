@@ -110,11 +110,13 @@ export function SidebarContent({
 
   const handleNavigate = onNavigate ?? (() => undefined);
 
-  const isCapstone = user?.email?.endsWith('@capstone.cl');
-  const filteredSecondaryNav = SECONDARY_NAV.filter(item => {
-    if (item.label === 'V-metric' && isCapstone) return false;
-    return true;
-  });
+  // Visibilidad de módulos por cliente (Módulo 5): el backend (GET /auth/me) expone
+  // `user.modules` según el cliente real del usuario. Sin modules (cargando / sesión
+  // vieja) no se restringe. Reemplaza el filtro por dominio de email.
+  const allowedModules = user?.modules;
+  const canSeeModule = (item: NavItem): boolean => !allowedModules || allowedModules.includes(item.module);
+  const filteredPrimaryNav = PRIMARY_NAV.filter(canSeeModule);
+  const filteredSecondaryNav = SECONDARY_NAV.filter(canSeeModule);
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -150,7 +152,7 @@ export function SidebarContent({
       {/* Navegación */}
       <nav className="flex-1 overflow-y-auto p-2" aria-label="Navegación principal">
         <ul className="flex flex-col gap-1">
-          {PRIMARY_NAV.map((item) => (
+          {filteredPrimaryNav.map((item) => (
             <li key={item.to}>
               <NavRow
                 item={item}
@@ -162,25 +164,29 @@ export function SidebarContent({
           ))}
         </ul>
 
-        <div className="my-3 border-t border-border" />
+        {filteredSecondaryNav.length > 0 && (
+          <>
+            <div className="my-3 border-t border-border" />
 
-        {!collapsed && (
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Herramientas
-          </p>
+            {!collapsed && (
+              <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Herramientas
+              </p>
+            )}
+            <ul className="flex flex-col gap-1">
+              {filteredSecondaryNav.map((item) => (
+                <li key={item.to}>
+                  <NavRow
+                    item={item}
+                    collapsed={collapsed}
+                    active={isActive(item.to)}
+                    onNavigate={handleNavigate}
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
         )}
-        <ul className="flex flex-col gap-1">
-          {filteredSecondaryNav.map((item) => (
-            <li key={item.to}>
-              <NavRow
-                item={item}
-                collapsed={collapsed}
-                active={isActive(item.to)}
-                onNavigate={handleNavigate}
-              />
-            </li>
-          ))}
-        </ul>
       </nav>
 
       {/* Footer: perfil + acciones */}

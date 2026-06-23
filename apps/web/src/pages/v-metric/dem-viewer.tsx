@@ -204,9 +204,24 @@ export function DemViewer({ code = 'R2' }: { code?: string }): ReactNode {
   }
   if (!grid || !cub || !selectedVar) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">Cargando visor 3D…</CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardContent className="flex h-[480px] items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <svg className="size-8 animate-spin text-primary" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+              </svg>
+              <span className="text-sm">Cargando terreno 3D y datos de cubicación…</span>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="lg:col-span-2">
+          <Card>
+            <CardContent className="h-[480px] animate-pulse rounded-lg bg-muted/30" />
+          </Card>
+        </div>
+      </div>
     );
   }
 
