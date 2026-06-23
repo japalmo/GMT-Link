@@ -1,0 +1,24 @@
+{
+  "elementCode": "R2",
+  "elementName": "Reservorio 2",
+  "sistema": 1,
+  "tipo": "reservorio",
+  "nota": "Datos de cubicación de muestra para la demo (vol_total_salmuera = libre + ocluida).",
+  "variables": [
+    { "key": "borde_libre", "label": "Borde libre", "unit": "m" },
+    { "key": "altura_salmuera", "label": "Altura de salmuera", "unit": "m" },
+    { "key": "altura_sal", "label": "Altura de sal", "unit": "m" },
+    { "key": "vol_salmuera_libre", "label": "Vol. salmuera libre", "unit": "m³" },
+    { "key": "vol_sal", "label": "Vol. sal", "unit": "m³" },
+    { "key": "vol_salmuera_ocluida", "label": "Vol. salmuera ocluida", "unit": "m³" },
+    { "key": "vol_total_salmuera", "label": "Vol. total salmuera", "unit": "m³" }
+  ],
+  "series": [
+    { "fecha": "2025-12-15", "borde_libre": 1.05, "altura_salmuera": 2.95, "altura_sal": 0.98, "vol_salmuera_libre": 26800, "vol_sal": 12350, "vol_salmuera_ocluida": 6900, "vol_total_salmuera": 33700 },
+    { "fecha": "2026-01-15", "borde_libre": 1.12, "altura_salmuera": 2.88, "altura_sal": 1.00, "vol_salmuera_libre": 26100, "vol_sal": 12600, "vol_salmuera_ocluida": 6850, "vol_total_salmuera": 32950 },
+    { "fecha": "2026-02-15", "borde_libre": 1.20, "altura_salmuera": 2.80, "altura_sal": 1.03, "vol_salmuera_libre": 25300, "vol_sal": 12900, "vol_salmuera_ocluida": 6780, "vol_total_salmuera": 32080 },
+    { "fecha": "2026-03-15", "borde_libre": 1.31, "altura_salmuera": 2.69, "altura_sal": 1.06, "vol_salmuera_libre": 24200, "vol_sal": 13250, "vol_salmuera_ocluida": 6700, "vol_total_salmuera": 30900 },
+    { "fecha": "2026-04-15", "borde_libre": 1.44, "altura_salmuera": 2.56, "altura_sal": 1.10, "vol_salmuera_libre": 22950, "vol_sal": 13600, "vol_salmuera_ocluida": 6600, "vol_total_salmuera": 29550 },
+    { "fecha": "2026-05-15", "borde_libre": 1.58, "altura_salmuera": 2.42, "altura_sal": 1.14, "vol_salmuera_libre": 21600, "vol_sal": 14000, "vol_salmuera_ocluida": 6480, "vol_total_salmuera": 28080 }
+  ]
+}
