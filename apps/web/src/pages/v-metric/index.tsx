@@ -35,6 +35,7 @@ import {
   type MetricDataPoint,
 } from '@/lib/api';
 import type { ProjectView, ServiceView } from '@/types/operations';
+import { DemViewer } from './dem-viewer';
 
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -79,6 +80,7 @@ export default function MetricsDashboard(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'satellite' | 'vector'>('satellite');
+  const [view, setView] = useState<'mapa' | 'visor3d'>('visor3d');
 
   // Leaflet references
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -841,6 +843,45 @@ export default function MetricsDashboard(): ReactNode {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
   }, [dataPoints, elements, variables]);
 
+  const viewToggle = (
+    <div className="inline-flex rounded-xl border border-border/80 bg-accent/25 p-0.5 text-xs font-semibold">
+      <button
+        type="button"
+        onClick={() => setView('visor3d')}
+        className={`rounded-lg px-3 py-1.5 transition-colors ${view === 'visor3d' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+      >
+        Visor 3D
+      </button>
+      <button
+        type="button"
+        onClick={() => setView('mapa')}
+        className={`rounded-lg px-3 py-1.5 transition-colors ${view === 'mapa' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+      >
+        Mapa
+      </button>
+    </div>
+  );
+
+  if (view === 'visor3d') {
+    return (
+      <div className="flex flex-col gap-4 w-full max-w-7xl mx-auto px-4 py-6">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card/45 backdrop-blur-md border border-border/60 rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="bg-orange-500/10 border border-orange-500/25 size-12 rounded-xl flex items-center justify-center text-orange-500 shadow-inner">
+              <Layers className="size-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">V-Metric — Reservorio 2</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Salar de Atacama · visor 3D de DEM + cubicación</p>
+            </div>
+          </div>
+          {viewToggle}
+        </header>
+        <DemViewer code="R2" />
+      </div>
+    );
+  }
+
   if (loading && projects.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] gap-3">
@@ -881,6 +922,7 @@ export default function MetricsDashboard(): ReactNode {
 
         {/* Project Selector Config */}
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {viewToggle}
           {selectedProject && (
             <div className="flex items-center gap-1.5 bg-accent/25 border border-border/80 rounded-xl px-3 py-1.5 text-xs">
               <Sliders className="size-3.5 text-muted-foreground" />
