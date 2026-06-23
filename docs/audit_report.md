@@ -82,32 +82,27 @@ pnpm --filter @gmt-link/api exec tsx scripts/seed-firebase-mvp.ts   # recrear us
 
 ### 🟡 MEDIA
 
-**Fix #3 — Visibilidad de módulos por "hack" de email, no por permisos.**
-*Ubicación:* `apps/web/src/components/layout/sidebar.tsx`
-```ts
-const isCapstone = user?.email?.endsWith('@capstone.cl');
-const filteredSecondaryNav = SECONDARY_NAV.filter(item => {
-  if (item.label === 'V-metric' && isCapstone) return false;
-  return true;
-});
-```
-*Problema:* acopla la UI al dominio del email; frágil y no escala. *Recomendación:* derivar la visibilidad de `Client.enabledModules` o de los permisos efectivos del usuario (`GET /me/permissions` / `vmetric:view`). Para la demo funciona, pero anotar como deuda.
+**Fix #3 — Visibilidad de módulos por "hack" de email, no por permisos. [APLICADO]**
+*Antes:* `apps/web/src/components/layout/sidebar.tsx` filtraba por dominio de email (`user?.email?.endsWith('@capstone.cl')`), frágil y acoplado.
+*Fix aplicado (commit `130bb22`):* el backend `GET /auth/me` ahora devuelve `user.modules` derivado del cliente real (`Membership PROJECT → Project → Client.code` → `CLIENT_MODULES`). El sidebar filtra por `item.module` con un único `canSeeModule`. CAP → `[dashboard, operaciones]`; ALB → `[dashboard, v-metric]`; org_admin / cliente desconocido → todos. Ver `auth.controller.ts:resolveModules()`.
 
-**Fix #4 — "Limitación estricta de acceso" no implementada.**
-*Hallazgo:* el brief pide que las cuentas Capstone se limiten a **Dashboard + Operaciones**, pero el sidebar muestra además Usuarios, Directorio, Finanzas, Recursos y Herramientas a `supervisor@capstone.cl`.
-*Recomendación:* filtrar también `PRIMARY_NAV` por rol/permisos (mismo mecanismo del Fix #3). Para la demo, evitar navegar a esos módulos, o implementar el filtro si hay tiempo.
+**Fix #4 — "Limitación estricta de acceso" no implementada. [APLICADO]**
+*Hallazgo:* el brief pide que Capstone se limite a **Dashboard + Operaciones** y Albemarle a **Dashboard + V-metric**.
+*Fix aplicado (commit `130bb22`):* el mismo `canSeeModule` del Fix #3 filtra **tanto `PRIMARY_NAV` como `SECONDARY_NAV`**, por lo que `supervisor@capstone.cl` ya NO ve Usuarios/Directorio/Finanzas/Recursos/Herramientas. Verificado en navegador: Capstone = `[Dashboard, Operaciones]`, Albemarle = `[Dashboard, V-metric]`.
 
-**Fix #5 — Feedback de carga en login.**
-*Ubicación:* `apps/web/src/pages/login.tsx`. Deshabilitar el botón + spinner mientras la promesa de `login()` está pendiente (evita doble submit y da feedback si la API tarda).
+**Fix #5 — Feedback de carga en login. [YA IMPLEMENTADO — falso positivo]**
+*Verificación:* `login.tsx` ya mantiene `submitting` durante **todo** el flujo (`login()` en `auth-context.tsx` espera `signInWithEmailAndPassword` **y** `getMe`). El `Button` (`components/ui/button.tsx`) con `loading` renderiza spinner (`Loader2 animate-spin`), aplica `disabled` + `aria-busy`, y los inputs se deshabilitan; el texto cambia a "Ingresando…". No requiere cambios.
 
 ### 🟢 BAJA
 
-**Fix #6 — Badge "Pronto" en V-metric ya implementado.**
-*Ubicación:* `apps/web/src/components/layout/nav-items.ts` → `{ label: 'V-metric', to: '/v-metric', icon: Gauge, placeholder: true }`. Quitar `placeholder: true` (ya no es placeholder) para que no pinte el badge "Pronto".
+**Fix #6 — Badge "Pronto" en V-metric ya implementado. [APLICADO]**
+*Fix aplicado (commit `130bb22`):* se quitó `placeholder: true` de la entrada V-metric en `nav-items.ts`; ya no pinta el badge "Pronto".
 
-**Fix #7 — Loader/skeleton del visor 3D.** Reemplazar el texto "Cargando visor 3D…" por un skeleton del canvas + spinner mientras se descarga el grid (731 KB) y se monta la malla.
+**Fix #7 — Loader/skeleton del visor 3D. [APLICADO]**
+*Fix aplicado (commit `130bb22`):* `dem-viewer.tsx` reemplaza "Cargando visor 3D…" por un skeleton del canvas (`animate-pulse`) + spinner SVG mientras se descarga el grid (731 KB) y se monta la malla.
 
-**Fix #8 — Verificar entrypoint del Wizard de tareas.** El smoke test automatizado no localizó el botón "Nueva tarea" por texto en `/operaciones/backlog`. Confirmar manualmente que el supervisor ve el botón de creación (y que el wizard de 4 pasos captura el entregable en `dataSpec`).
+**Fix #8 — Verificar entrypoint del Wizard de tareas. [RESUELTO — falso negativo del smoke]**
+*Verificación:* el botón existe en `backlog.tsx:521` con el texto **"Nueva Tarea"** (T mayúscula); el smoke automatizado buscó "Nueva tarea" (minúscula) → falso negativo por sensibilidad a mayúsculas. Está correctamente gateado: `!isReadOnly` (supervisor/operador) abre el wizard (`setWizardStep(1); setCreateOpen(true)`); el ITO (`isIto`, read-only) ve en su lugar "Solicitud de Actividad".
 
 ---
 
