@@ -351,6 +351,7 @@ Ej.: `GMT-ALS-...-CA-A4-001`. Cada código máx 4 chars, configurable. Al crear 
 |---|---|
 | `project:create` | Crear proyectos |
 | `project:kpi:define` | Definir KPIs |
+| `project:measurements:submit` | Subir cubicaciones/mediciones (módulo metrics, D3) |
 | `task:create` / `task:assign` | Crear / asignar tareas |
 | `document:upload` | Subir documento |
 | `document:sign:qa` / `document:sign:client` | Firmar QA / cliente |

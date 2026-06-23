@@ -32,6 +32,9 @@ function authErrorMessage(error: unknown): string {
         return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
     }
   }
+  if (error instanceof Error) {
+    return error.message;
+  }
   return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
 }
 

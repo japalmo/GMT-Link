@@ -27,6 +27,10 @@ export const ROLE_KEYS = [
   'finance',
   'viewer',
   'client_ito',
+  'supervisor',
+  'operador',
+  'ito',
+  'adm_contrato',
 ] as const;
 
 /** Unión de claves de rol válidas. */

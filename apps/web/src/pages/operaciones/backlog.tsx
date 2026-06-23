@@ -1,9 +1,10 @@
-import { useState, type ReactNode, useMemo } from 'react';
+import { useState, type ReactNode, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { useProjects, useTasks } from '@/hooks/use-operations';
 import { useUsers } from '@/hooks/use-users';
+import { useProfile } from '@/hooks/use-profile';
 import {
   Plus,
   Search,
@@ -15,6 +16,11 @@ import {
   Trash2,
   User,
   Edit2,
+  Table,
+  Clock,
+  Play,
+  Square,
+  Kanban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,9 +36,45 @@ import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFo
 import type { TaskView, TaskStatus } from '@/types/operations';
 
 export function BacklogTab(): ReactNode {
+  const { profile } = useProfile();
   const { projects } = useProjects();
   const { users } = useUsers();
   
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [wizardStep, setWizardStep] = useState(1);
+  
+  const [timeLogModalOpen, setTimeLogModalOpen] = useState(false);
+  const [timeLogTask, setTimeLogTask] = useState<TaskView | null>(null);
+  const [timeLogType, setTimeLogType] = useState<'start' | 'finish'>('start');
+  const [timeLogNote, setTimeLogNote] = useState('');
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const isSupervisorOrAdmin = useMemo(() => {
+    if (!profile) return false;
+    return (
+      profile.roleKeys.includes('org_admin') ||
+      profile.roleKeys.includes('supervisor') ||
+      profile.roleKeys.includes('adm_contrato')
+    );
+  }, [profile]);
+
+  const isOperator = useMemo(() => {
+    if (!profile) return false;
+    return profile.roleKeys.includes('operador') || profile.roleKeys.includes('operator');
+  }, [profile]);
+
+  const isIto = useMemo(() => {
+    if (!profile) return false;
+    return profile.roleKeys.includes('ito') || profile.roleKeys.includes('client_ito');
+  }, [profile]);
+
+  const isReadOnly = isIto || (!isSupervisorOrAdmin && !isOperator);
+
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read initial states from search params, fallback to 'all' or empty
@@ -83,7 +125,7 @@ export function BacklogTab(): ReactNode {
     };
   }, [filterProject, filterService, filterAssignee, filterSearch]);
 
-  const { tasks, loading, create, updateStatus, update, remove } = useTasks(taskFilters);
+  const { tasks, loading, create, updateStatus, update, remove, startTime, finishTime } = useTasks(taskFilters);
 
   // Modal states
   const [createOpen, setCreateOpen] = useState(false);
@@ -263,6 +305,35 @@ export function BacklogTab(): ReactNode {
     }
   };
 
+  const handleTimeLogSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!timeLogTask) return;
+    try {
+      const note = timeLogNote.trim() || undefined;
+      if (timeLogType === 'start') {
+        await startTime(timeLogTask.id, note);
+        toast.success('Actividad iniciada.');
+      } else {
+        await finishTime(timeLogTask.id, note);
+        toast.success('Actividad finalizada.');
+      }
+      setTimeLogModalOpen(false);
+      setTimeLogTask(null);
+      setTimeLogNote('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar actividad.');
+    }
+  };
+
+  const formatElapsedTime = (startedAt: string) => {
+    const elapsed = now - new Date(startedAt).getTime();
+    if (elapsed < 0) return '00:00';
+    const secs = Math.floor(elapsed / 1000) % 60;
+    const mins = Math.floor(elapsed / (1000 * 60)) % 60;
+    const hours = Math.floor(elapsed / (1000 * 60 * 60));
+    return `${hours > 0 ? `${hours}h ` : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const getStatusColor = (status: TaskStatus) => {
     switch (status) {
       case 'PENDIENTE':
@@ -285,10 +356,34 @@ export function BacklogTab(): ReactNode {
             <Filter className="size-4 text-primary" />
             <span>Filtros de Backlog</span>
           </div>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="size-4 mr-2" />
-            Nueva Tarea
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-lg border border-border p-0.5 bg-muted/40 mr-2">
+              <Button
+                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => setViewMode('kanban')}
+              >
+                <Kanban className="size-3.5 mr-1.5" />
+                Kanban
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => setViewMode('table')}
+              >
+                <Table className="size-3.5 mr-1.5" />
+                Tabla
+              </Button>
+            </div>
+            {!isReadOnly && (
+              <Button size="sm" onClick={() => { setWizardStep(1); setCreateOpen(true); }}>
+                <Plus className="size-4 mr-2" />
+                Nueva Tarea
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
@@ -364,14 +459,14 @@ export function BacklogTab(): ReactNode {
         </div>
       </div>
 
-      {/* Tablero Kanban */}
+      {/* Tablero Kanban o Tabla */}
       {loading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="h-96 animate-pulse rounded-xl bg-muted/40 border border-border" />
           ))}
         </div>
-      ) : (
+      ) : viewMode === 'kanban' ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
           {(Object.keys(columns) as TaskStatus[]).map((status) => {
             const columnTasks = columns[status];
@@ -406,6 +501,7 @@ export function BacklogTab(): ReactNode {
                 {/* Column Cards Container */}
                 <div className="flex flex-col gap-3 overflow-y-auto max-h-[600px] pr-1">
                   {columnTasks.map((t) => {
+                    const activeLogForUser = profile && t.timeLogs?.find((log) => log.userId === profile.id && log.endedAt === null);
                     const hasVariance = t.actualPoints !== null && t.actualPoints !== t.estimatedPoints;
                     const variance = t.actualPoints !== null ? t.actualPoints - t.estimatedPoints : 0;
                     
@@ -459,32 +555,77 @@ export function BacklogTab(): ReactNode {
                             </div>
                           </div>
 
+                          {/* Time logs tracking controls */}
+                          {!isReadOnly && (
+                            <div className="flex items-center justify-between w-full border-t border-border/40 pt-2 mt-1">
+                              {activeLogForUser ? (
+                                <div className="flex items-center gap-1 text-red-500 font-mono text-xs">
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                  </span>
+                                  <span>{formatElapsedTime(activeLogForUser.startedAt)}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">Tiempo de tarea</span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant={activeLogForUser ? 'destructive' : 'outline'}
+                                className="h-6 px-2 text-[10px] gap-1"
+                                onClick={() => {
+                                  setTimeLogTask(t);
+                                  setTimeLogType(activeLogForUser ? 'finish' : 'start');
+                                  setTimeLogNote('');
+                                  setTimeLogModalOpen(true);
+                                }}
+                                disabled={!isSupervisorOrAdmin && t.assignedToId !== profile?.id}
+                              >
+                                {activeLogForUser ? (
+                                  <>
+                                    <Square className="size-2.5 fill-current" />
+                                    Detener
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="size-2.5 fill-current" />
+                                    Iniciar
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+
                           {/* Quick Actions */}
                           <div className="flex justify-between items-center w-full">
                             <div className="flex gap-1.5">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-6 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleOpenEdit(t)}
-                                title="Editar"
-                              >
-                                <Edit2 className="size-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-6 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteTaskId(t.id)}
-                                title="Eliminar"
-                              >
-                                <Trash2 className="size-3" />
-                              </Button>
+                              {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id || t.assignedToId === profile?.id) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-6 text-muted-foreground hover:text-foreground"
+                                  onClick={() => handleOpenEdit(t)}
+                                  title="Editar"
+                                >
+                                  <Edit2 className="size-3" />
+                                </Button>
+                              )}
+                              {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-6 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setDeleteTaskId(t.id)}
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="size-3" />
+                                </Button>
+                              )}
                             </div>
 
                             {/* Transition buttons */}
                             <div className="flex gap-1">
-                              {status !== 'PENDIENTE' && (
+                              {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && status !== 'PENDIENTE' && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -499,7 +640,7 @@ export function BacklogTab(): ReactNode {
                                   <ArrowLeft className="size-3" />
                                 </Button>
                               )}
-                              {status !== 'COMPLETADO' && (
+                              {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && status !== 'COMPLETADO' && (
                                 <Button
                                   variant="outline"
                                   size="icon"
@@ -532,150 +673,366 @@ export function BacklogTab(): ReactNode {
             );
           })}
         </div>
+      ) : (
+        /* Vista de Tabla */
+        <div className="overflow-x-auto rounded-xl border border-border bg-card/40">
+          <table className="w-full border-collapse text-sm text-left">
+            <thead className="bg-muted/50 border-b border-border text-xs font-semibold uppercase text-muted-foreground">
+              <tr>
+                <th className="p-3">Tarea</th>
+                <th className="p-3">Proyecto / Servicio</th>
+                <th className="p-3">Estado</th>
+                <th className="p-3">Est.</th>
+                <th className="p-3">Real</th>
+                <th className="p-3">Responsable</th>
+                <th className="p-3">Registro de Tiempo</th>
+                <th className="p-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {tasks.map((t) => {
+                const activeLogForUser = profile && t.timeLogs?.find((log) => log.userId === profile.id && log.endedAt === null);
+                const hasVariance = t.actualPoints !== null && t.actualPoints !== t.estimatedPoints;
+                const variance = t.actualPoints !== null ? t.actualPoints - t.estimatedPoints : 0;
+                return (
+                  <tr key={t.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="p-3 font-medium">
+                      <div className="flex flex-col">
+                        <span className="text-foreground">{t.name}</span>
+                        {t.description && <span className="text-xs text-muted-foreground line-clamp-1">{t.description}</span>}
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/20 bg-primary/5 text-primary">
+                          {t.project.code}
+                        </Badge>
+                        {t.service && (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1 border-muted bg-muted/30 text-muted-foreground">
+                            {t.service.code}
+                          </Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <Badge className={getStatusColor(t.status)}>{t.status}</Badge>
+                    </td>
+                    <td className="p-3 font-medium font-mono">{t.estimatedPoints}</td>
+                    <td className="p-3 font-medium font-mono">
+                      {t.actualPoints !== null ? (
+                        <span className={hasVariance ? (variance > 0 ? 'text-destructive font-semibold' : 'text-emerald-500 font-semibold') : 'text-muted-foreground'}>
+                          {t.actualPoints}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <User className="size-3 text-muted-foreground/60" />
+                        <span>{t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}</span>
+                      </div>
+                    </td>
+                    <td className="p-3 font-medium">
+                      {!isReadOnly && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant={activeLogForUser ? 'destructive' : 'outline'}
+                            className="h-7 px-2 text-[10px] gap-1"
+                            onClick={() => {
+                              setTimeLogTask(t);
+                              setTimeLogType(activeLogForUser ? 'finish' : 'start');
+                              setTimeLogNote('');
+                              setTimeLogModalOpen(true);
+                            }}
+                            disabled={!isSupervisorOrAdmin && t.assignedToId !== profile?.id}
+                          >
+                            {activeLogForUser ? <Square className="size-2.5 fill-current" /> : <Play className="size-2.5 fill-current" />}
+                            {activeLogForUser ? 'Detener' : 'Iniciar'}
+                          </Button>
+                          {activeLogForUser && (
+                            <span className="text-red-500 font-mono text-xs flex items-center gap-1">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                              </span>
+                              {formatElapsedTime(activeLogForUser.startedAt)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id || t.assignedToId === profile?.id) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={() => handleOpenEdit(t)}
+                            title="Editar"
+                          >
+                            <Edit2 className="size-3.5" />
+                          </Button>
+                        )}
+                        {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteTaskId(t.id)}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                        {/* Status Shift Buttons */}
+                        {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && (
+                          <>
+                            {t.status !== 'PENDIENTE' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  const states: TaskStatus[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
+                                  const prev = states[states.indexOf(t.status) - 1];
+                                  if (prev) void handleMoveStatus(t, prev);
+                                }}
+                                title="Retroceder"
+                              >
+                                <ArrowLeft className="size-3.5" />
+                              </Button>
+                            )}
+                            {t.status !== 'COMPLETADO' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  const states: TaskStatus[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
+                                  const next = states[states.indexOf(t.status) + 1];
+                                  if (next) void handleMoveStatus(t, next);
+                                }}
+                                title="Avanzar"
+                              >
+                                <ArrowRight className="size-3.5" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {tasks.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                    No se encontraron tareas con los filtros seleccionados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {/* MODAL CREAR TAREA */}
+      {/* MODAL CREAR TAREA (WIZARD) */}
       <Modal open={createOpen} onOpenChange={setCreateOpen}>
-        <ModalContent className="max-w-md">
+        <ModalContent className="max-w-md bg-card border border-border shadow-lg">
           <form onSubmit={handleCreateTask}>
             <ModalHeader>
               <ModalTitle>Nueva Tarea de Backlog</ModalTitle>
-              <ModalDescription>Crea un ítem de backlog y asígnale estimaciones.</ModalDescription>
+              <ModalDescription>
+                Paso {wizardStep} de 3 — {wizardStep === 1 ? 'Detalles Básicos' : wizardStep === 2 ? 'Proyecto & Estimación' : 'Asignación & Mandante'}
+              </ModalDescription>
             </ModalHeader>
-            <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-4 py-4 min-h-[250px]">
               {formError && (
                 <div className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-medium">
                   {formError}
                 </div>
               )}
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="task-name">Nombre de la Tarea</Label>
-                <Input
-                  id="task-name"
-                  required
-                  value={taskName}
-                  onChange={(e) => setTaskName(e.target.value)}
-                  placeholder="Ej. Revisar informe de resistividad"
-                />
-              </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="task-desc">Descripción</Label>
-                <textarea
-                  id="task-desc"
-                  value={taskDesc}
-                  onChange={(e) => setTaskDesc(e.target.value)}
-                  className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  placeholder="Detalles sobre lo que se espera..."
-                />
-              </div>
+              {wizardStep === 1 && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-name">Nombre de la Tarea</Label>
+                    <Input
+                      id="task-name"
+                      required
+                      value={taskName}
+                      onChange={(e) => setTaskName(e.target.value)}
+                      placeholder="Ej. Revisar informe de resistividad"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-proj">Proyecto</Label>
-                  <select
-                    id="task-proj"
-                    required
-                    value={taskProjId}
-                    onChange={(e) => {
-                      setTaskProjId(e.target.value);
-                      setTaskSrvId(''); // reset service
-                    }}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    <option value="">Selecciona proyecto</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-desc">Descripción</Label>
+                    <textarea
+                      id="task-desc"
+                      value={taskDesc}
+                      onChange={(e) => setTaskDesc(e.target.value)}
+                      className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="Detalles sobre lo que se espera..."
+                    />
+                  </div>
                 </div>
+              )}
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-srv">Servicio (Opcional)</Label>
-                  <select
-                    id="task-srv"
-                    value={taskSrvId}
-                    disabled={!taskProjId}
-                    onChange={(e) => setTaskSrvId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-                  >
-                    <option value="">Ninguno</option>
-                    {projectServices.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              {wizardStep === 2 && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-proj">Proyecto</Label>
+                    <select
+                      id="task-proj"
+                      required
+                      value={taskProjId}
+                      onChange={(e) => {
+                        setTaskProjId(e.target.value);
+                        setTaskSrvId(''); // reset service
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
+                    >
+                      <option value="">Selecciona proyecto</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-assigned">Responsable</Label>
-                  <select
-                    id="task-assigned"
-                    value={taskAssignedId}
-                    onChange={(e) => setTaskAssignedId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    <option value="">Sin Asignar</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.firstName} {u.lastName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-srv">Servicio (Opcional)</Label>
+                    <select
+                      id="task-srv"
+                      value={taskSrvId}
+                      disabled={!taskProjId}
+                      onChange={(e) => setTaskSrvId(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 bg-slate-900"
+                    >
+                      <option value="">Ninguno</option>
+                      {projectServices.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-est-pts">Puntos Estimados</Label>
-                  <Input
-                    id="task-est-pts"
-                    type="number"
-                    min={0}
-                    required
-                    value={taskEstPoints}
-                    onChange={(e) => setTaskEstPoints(Number(e.target.value))}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="task-est-pts">Puntos Estimados</Label>
+                      <Input
+                        id="task-est-pts"
+                        type="number"
+                        min={0}
+                        required
+                        value={taskEstPoints}
+                        onChange={(e) => setTaskEstPoints(Number(e.target.value))}
+                      />
+                    </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-client">Mandante/ITO Solicita</Label>
-                  <select
-                    id="task-client"
-                    value={taskClientId}
-                    onChange={(e) => setTaskClientId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    <option value="">Ninguno</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.firstName} {u.lastName}
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="task-rec">Recurrencia (Opcional)</Label>
+                      <Input
+                        id="task-rec"
+                        value={taskRecurrence}
+                        onChange={(e) => setTaskRecurrence(e.target.value)}
+                        placeholder="Ej. 0 0 * * 1 (Cada Lunes)"
+                      />
+                    </div>
+                  </div>
                 </div>
+              )}
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-rec">Recurrencia (Opcional)</Label>
-                  <Input
-                    id="task-rec"
-                    value={taskRecurrence}
-                    onChange={(e) => setTaskRecurrence(e.target.value)}
-                    placeholder="Ej. 0 0 * * 1 (Cada Lunes)"
-                  />
+              {wizardStep === 3 && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-assigned">Responsable de Ejecución</Label>
+                    <select
+                      id="task-assigned"
+                      value={taskAssignedId}
+                      onChange={(e) => setTaskAssignedId(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
+                    >
+                      <option value="">Sin Asignar</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.firstName} {u.lastName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="task-client">Mandante/ITO Solicitante</Label>
+                    <select
+                      id="task-client"
+                      value={taskClientId}
+                      onChange={(e) => setTaskClientId(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
+                    >
+                      <option value="">Ninguno</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.firstName} {u.lastName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="border rounded-lg p-3 bg-muted/20 text-xs flex flex-col gap-2 mt-2">
+                    <span className="font-semibold text-foreground">Resumen de Tarea:</span>
+                    <div><span className="text-muted-foreground">Nombre:</span> {taskName}</div>
+                    {taskProjId && (
+                      <div>
+                        <span className="text-muted-foreground">Proyecto:</span>{' '}
+                        {projects.find((p) => p.id === taskProjId)?.name}
+                      </div>
+                    )}
+                    <div><span className="text-muted-foreground">Puntos Estimados:</span> {taskEstPoints} pts</div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-            <ModalFooter>
-              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">Crear Tarea</Button>
+            <ModalFooter className="flex justify-between items-center gap-2 border-t pt-4">
+              <div>
+                {wizardStep > 1 && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setWizardStep(wizardStep - 1)}>
+                    Anterior
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>
+                  Cancelar
+                </Button>
+                {wizardStep < 3 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      if (wizardStep === 1 && !taskName) {
+                        toast.error('Completa el nombre de la tarea.');
+                        return;
+                      }
+                      if (wizardStep === 2 && !taskProjId) {
+                        toast.error('Selecciona un proyecto.');
+                        return;
+                      }
+                      setWizardStep(wizardStep + 1);
+                    }}
+                  >
+                    Siguiente
+                  </Button>
+                ) : (
+                  <Button type="submit" size="sm">Crear Tarea</Button>
+                )}
+              </div>
             </ModalFooter>
           </form>
         </ModalContent>
@@ -840,6 +1197,56 @@ export function BacklogTab(): ReactNode {
             </Button>
             <Button onClick={handleCompleteWithPoints}>Completar y Registrar Puntos</Button>
           </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL REGISTRO DE TIEMPO / ACTIVIDAD */}
+      <Modal open={timeLogModalOpen} onOpenChange={setTimeLogModalOpen}>
+        <ModalContent className="max-w-md bg-card border border-border shadow-lg">
+          <form onSubmit={handleTimeLogSubmit}>
+            <ModalHeader>
+              <ModalTitle>{timeLogType === 'start' ? 'Iniciar Actividad' : 'Finalizar Actividad'}</ModalTitle>
+              <ModalDescription>
+                {timeLogType === 'start'
+                  ? 'Registra el inicio de tu tiempo de trabajo para esta tarea.'
+                  : 'Registra el término del tiempo de trabajo para esta tarea.'}
+              </ModalDescription>
+            </ModalHeader>
+            <div className="flex flex-col gap-4 py-4">
+              {timeLogTask && (
+                <div className="border rounded-lg p-3 bg-muted/20 text-xs flex flex-col gap-1">
+                  <div><span className="font-semibold text-foreground">Tarea:</span> {timeLogTask.name}</div>
+                  {timeLogType === 'finish' && timeLogTask.timeLogs && (
+                    <div>
+                      <span className="font-semibold text-foreground">Iniciada:</span>{' '}
+                      {(() => {
+                        const log = timeLogTask.timeLogs.find((l) => l.userId === profile?.id && l.endedAt === null);
+                        return log ? new Date(log.startedAt).toLocaleString() : '—';
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="time-log-note">Nota / Comentario (Opcional)</Label>
+                <textarea
+                  id="time-log-note"
+                  value={timeLogNote}
+                  onChange={(e) => setTimeLogNote(e.target.value)}
+                  className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="Detalla qué actividad vas a realizar o qué avance lograste..."
+                />
+              </div>
+            </div>
+            <ModalFooter>
+              <Button type="button" variant="ghost" onClick={() => setTimeLogModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant={timeLogType === 'start' ? 'default' : 'destructive'}>
+                {timeLogType === 'start' ? 'Iniciar Tiempo' : 'Finalizar Actividad'}
+              </Button>
+            </ModalFooter>
+          </form>
         </ModalContent>
       </Modal>
 

@@ -1,4 +1,12 @@
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { TaskStatus } from '@prisma/client';
 
 export class CreateTaskDto {
@@ -34,6 +42,19 @@ export class CreateTaskDto {
   @IsString()
   @IsOptional()
   clientUserId?: string;
+
+  // Módulo 5 — captura de ejecución (datos a obtener, contexto de fase/elemento).
+  @IsObject()
+  @IsOptional()
+  dataSpec?: Record<string, unknown>;
+
+  @IsString()
+  @IsOptional()
+  phaseId?: string;
+
+  @IsString()
+  @IsOptional()
+  elementId?: string;
 }
 
 export class UpdateTaskDto {
@@ -76,4 +97,11 @@ export class UpdateTaskStatusDto {
   @Min(0)
   @IsOptional()
   actualPoints?: number;
+}
+
+/** Nota opcional al iniciar/finalizar una actividad (time-log) de la tarea. */
+export class TaskTimeNoteDto {
+  @IsString()
+  @IsOptional()
+  note?: string;
 }

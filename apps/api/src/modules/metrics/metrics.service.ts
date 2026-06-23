@@ -1,30 +1,97 @@
-import { Injectable, NotFoundException, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email.service';
-import { CreateElementDto, CreatePhaseDto, SaveDataPointDto } from './dto/metrics.dto';
-import { randomUUID } from 'crypto';
-import { join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { FgaService } from '../../fga/fga.service';
+import { sanitizeFilename } from '../../common/storage/local-storage.service';
+import {
+  CreateElementDto,
+  CreatePhaseDto,
+  SaveDataPointDto,
+  SaveCubicacionDto,
+  SaveReservorioMetadataDto,
+} from './dto/metrics.dto';
+import { randomUUID, randomInt, createHash } from 'crypto';
 
-interface OtpData {
-  otp: string;
-  expiresAt: number;
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutos de validez
+const OTP_MAX_ATTEMPTS = 5;
+
+function hashOtp(otp: string): string {
+  return createHash('sha256').update(otp).digest('hex');
+}
+
+/** Bolsa JSON dinámica validada solo como "objeto" → cruce explícito al tipo Json de Prisma. */
+function toInputJson(value: Record<string, unknown> | undefined): Prisma.InputJsonValue {
+  return (value ?? {}) as Prisma.InputJsonValue;
 }
 
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
-  private readonly otps = new Map<string, OtpData>();
   private readonly tokens = new Map<string, string>(); // token -> filename
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-  ) {
-    // Asegurar directorio de subidas
-    const uploadDir = join(process.cwd(), 'uploads');
-    if (!existsSync(uploadDir)) {
-      mkdirSync(uploadDir, { recursive: true });
+    private readonly fga: FgaService,
+  ) {}
+
+  // ── Resolución de projectId para autorización (D3) ──────────────────────────
+  // Los endpoints del cliente PyQt no llevan projectId directo; estos resolvers
+  // lo derivan desde el código de elemento/servicio/fase que sí traen.
+
+  async getProjectIdForElementCode(code: string): Promise<string> {
+    const element = await this.prisma.element.findUnique({
+      where: { code },
+      select: { projectId: true },
+    });
+    if (!element) {
+      throw new NotFoundException(`Elemento con código ${code} no encontrado.`);
+    }
+    return element.projectId;
+  }
+
+  async getProjectIdForServiceId(serviceId: string): Promise<string> {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { projectId: true },
+    });
+    if (!service) {
+      throw new NotFoundException(`Servicio con ID ${serviceId} no encontrado.`);
+    }
+    return service.projectId;
+  }
+
+  async getProjectIdForPhaseId(phaseId: string): Promise<string> {
+    const phase = await this.prisma.phase.findUnique({
+      where: { id: phaseId },
+      select: { service: { select: { projectId: true } } },
+    });
+    if (!phase) {
+      throw new NotFoundException(`Fase con ID ${phaseId} no encontrada.`);
+    }
+    return phase.service.projectId;
+  }
+
+  async getProjectIdForDemBlobPath(blobPath: string): Promise<string> {
+    const dataPoint = await this.prisma.dataPoint.findFirst({
+      where: { fileUrl: blobPath },
+      select: { element: { select: { projectId: true } } },
+    });
+    if (!dataPoint?.element?.projectId) {
+      throw new NotFoundException(`No se encontró proyecto para el archivo: ${blobPath}`);
+    }
+    return dataPoint.element.projectId;
+  }
+
+  private async requireProjectPermission(userId: string, projectId: string, relation: string): Promise<void> {
+    const allowed = await this.fga.check({
+      user: `user:${userId}`,
+      relation,
+      object: `project:${projectId}`,
+    });
+    if (!allowed) {
+      throw new ForbiddenException(`No tienes el permiso "${relation}" sobre este proyecto.`);
     }
   }
 
@@ -44,7 +111,7 @@ export class MetricsService {
         name: dto.name,
         type: dto.type,
         locationPolygon: dto.locationPolygon,
-        metadata: dto.metadata || {},
+        metadata: toInputJson(dto.metadata),
         projectId: dto.projectId,
       },
       create: {
@@ -52,7 +119,7 @@ export class MetricsService {
         name: dto.name,
         type: dto.type,
         locationPolygon: dto.locationPolygon,
-        metadata: dto.metadata || {},
+        metadata: toInputJson(dto.metadata),
         projectId: dto.projectId,
       },
     });
@@ -130,7 +197,10 @@ export class MetricsService {
 
     const [variables, phases, elements] = await Promise.all([
       this.prisma.variable.findMany({ where: { id: { in: variableIds } }, select: { id: true } }),
-      this.prisma.phase.findMany({ where: { id: { in: phaseIds } }, select: { id: true } }),
+      this.prisma.phase.findMany({
+        where: { id: { in: phaseIds } },
+        select: { id: true, service: { select: { projectId: true } } },
+      }),
       elementIds.length > 0
         ? this.prisma.element.findMany({ where: { id: { in: elementIds } }, select: { id: true } })
         : Promise.resolve([]),
@@ -151,6 +221,13 @@ export class MetricsService {
       if (point.elementId && !elementSet.has(point.elementId)) {
         throw new NotFoundException(`Elemento ${point.elementId} no encontrado.`);
       }
+    }
+
+    // Autorización: el usuario debe poder enviar mediciones en CADA proyecto referenciado
+    // (un batch malicioso podría mezclar fases de proyectos distintos).
+    const projectIds = new Set(phases.map((p) => p.service.projectId));
+    for (const projectId of projectIds) {
+      await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     }
 
     // Inserción masiva en transacción
@@ -202,11 +279,20 @@ export class MetricsService {
   // ── OTP Seguridad (No Repudio) ───────────────────────────────────────────────
 
   async generateOtp(email: string): Promise<{ success: boolean; message: string }> {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const ttl = 5 * 60 * 1000; // 5 minutos de validez
-    const expiresAt = Date.now() + ttl;
+    const otp = randomInt(100000, 1000000).toString();
+    const codeHash = hashOtp(otp);
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-    this.otps.set(email, { otp, expiresAt });
+    await this.prisma.$transaction([
+      // Un solo OTP activo por email: invalida cualquier código previo sin consumir.
+      this.prisma.otpCode.updateMany({
+        where: { email, consumedAt: null },
+        data: { consumedAt: new Date() },
+      }),
+      this.prisma.otpCode.create({
+        data: { email, codeHash, expiresAt },
+      }),
+    ]);
 
     await this.emailService.send({
       to: email,
@@ -214,7 +300,9 @@ export class MetricsService {
       body: `Tu código de seguridad temporal para autorizar la subida de cubicaciones/datos es: ${otp}. Válido por 5 minutos.`,
     });
 
-    this.logger.log(`[DEV OTP BYPASS] Clave temporal generada para ${email}: ${otp}`);
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.debug(`[DEV OTP] Clave temporal generada para ${email}: ${otp}`);
+    }
 
     return {
       success: true,
@@ -223,27 +311,44 @@ export class MetricsService {
   }
 
   async verifyOtp(email: string, otp: string): Promise<boolean> {
-    const data = this.otps.get(email);
-    if (!data) {
+    const record = await this.prisma.otpCode.findFirst({
+      where: { email, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!record) {
       throw new BadRequestException('No se ha generado ningún código OTP para este correo.');
     }
 
-    if (Date.now() > data.expiresAt) {
-      this.otps.delete(email);
+    if (record.expiresAt.getTime() < Date.now()) {
+      await this.prisma.otpCode.update({
+        where: { id: record.id },
+        data: { consumedAt: new Date() },
+      });
       throw new BadRequestException('El código OTP ha expirado.');
     }
 
-    if (data.otp !== otp) {
+    if (record.attempts >= OTP_MAX_ATTEMPTS) {
+      throw new BadRequestException('Demasiados intentos fallidos. Solicita un nuevo código.');
+    }
+
+    if (record.codeHash !== hashOtp(otp)) {
+      await this.prisma.otpCode.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
       throw new BadRequestException('Código OTP incorrecto.');
     }
 
-    this.otps.delete(email);
+    await this.prisma.otpCode.update({
+      where: { id: record.id },
+      data: { consumedAt: new Date() },
+    });
     return true;
   }
 
   // ── Cloud Functions Mock para Cliente PyQt ──────────────────────────────────
 
-  async saveCubicacion(userId: string, body: { reservorio_codigo: string; datos: any; phase_code?: string }) {
+  async saveCubicacion(userId: string, body: SaveCubicacionDto) {
     const element = await this.prisma.element.findUnique({
       where: { code: body.reservorio_codigo },
       include: { project: { include: { services: true } } },
@@ -303,7 +408,7 @@ export class MetricsService {
   async createDemUploadUrl(body: { reservorio_codigo: string; filename: string }) {
     const uuid = randomUUID();
     const token = randomUUID();
-    const cleanFilename = `${uuid}-${body.filename}`;
+    const cleanFilename = `${uuid}-${sanitizeFilename(body.filename)}`;
 
     this.tokens.set(token, cleanFilename);
 
@@ -426,16 +531,15 @@ export class MetricsService {
     };
   }
 
-  async saveReservorioMetadata(userId: string, body: { reservorio_codigo: string; nombre: string; extra: any; proyecto_id?: string }) {
+  async saveReservorioMetadata(userId: string, body: SaveReservorioMetadataDto) {
     // Si no se proporciona proyecto_id, intentamos usar el primer proyecto del usuario.
     let targetProjectId = body.proyecto_id;
     if (!targetProjectId) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        include: { userProjects: true },
+      const membership = await this.prisma.membership.findFirst({
+        where: { userId, scopeType: 'PROJECT' },
       });
-      if (user?.userProjects?.length > 0) {
-        targetProjectId = user.userProjects[0].projectId;
+      if (membership) {
+        targetProjectId = membership.scopeId;
       } else {
         // Si el usuario no pertenece a ningún proyecto, no podemos crear el elemento.
         // Se lanza error explícito en lugar de usar un ID hardcodeado.
@@ -445,17 +549,19 @@ export class MetricsService {
       }
     }
 
+    await this.requireProjectPermission(userId, targetProjectId, 'can_submit_measurements');
+
     const element = await this.prisma.element.upsert({
       where: { code: body.reservorio_codigo },
       update: {
         name: body.nombre,
-        metadata: body.extra || {},
+        metadata: toInputJson(body.extra),
       },
       create: {
         code: body.reservorio_codigo,
         name: body.nombre,
         type: 'POZA',
-        metadata: body.extra || {},
+        metadata: toInputJson(body.extra),
         projectId: targetProjectId,
       },
     });
@@ -466,7 +572,7 @@ export class MetricsService {
   async getAssetUploadUrl(body: { filename: string }) {
     const uuid = randomUUID();
     const token = randomUUID();
-    const cleanFilename = `${uuid}-${body.filename}`;
+    const cleanFilename = `${uuid}-${sanitizeFilename(body.filename)}`;
 
     this.tokens.set(token, cleanFilename);
 

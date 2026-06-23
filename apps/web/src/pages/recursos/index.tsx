@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
+import { RejectDialog } from './reject-dialog';
 import {
   Table,
   TableBody,
@@ -760,6 +761,9 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   // Tabs for detailed view
   const [detailTab, setDetailTab] = useState<'documentos' | 'accesorios' | 'checklist' | 'telemetria'>('documentos');
 
+  const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
+  const [rejectingTpl, setRejectingTpl] = useState(false);
+
   // Accesorios state
   const [accName, setAccName] = useState('');
   const [accDesc, setAccDesc] = useState('');
@@ -993,9 +997,11 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     }
   };
 
-  const handleReviewDoc = async (docId: string, status: 'APROBADO' | 'RECHAZADO') => {
-    const reason = status === 'RECHAZADO' ? prompt('Ingrese el motivo del rechazo:') : undefined;
-    if (status === 'RECHAZADO' && reason === null) return; // cancelado
+  const handleReviewDoc = async (docId: string, status: 'APROBADO' | 'RECHAZADO', reason?: string) => {
+    if (status === 'RECHAZADO' && reason === undefined) {
+      setRejectingDocId(docId);
+      return;
+    }
     try {
       await reviewDoc(id, docId, { status, reason: reason || undefined });
       toast.success(`Documento ${status === 'APROBADO' ? 'aprobado' : 'rechazado'} con éxito.`);
@@ -1090,9 +1096,11 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     }
   };
 
-  const handleReviewTpl = async (status: 'APROBADO' | 'RECHAZADO') => {
-    const reason = status === 'RECHAZADO' ? prompt('Ingrese el motivo del rechazo:') : undefined;
-    if (status === 'RECHAZADO' && reason === null) return;
+  const handleReviewTpl = async (status: 'APROBADO' | 'RECHAZADO', reason?: string) => {
+    if (status === 'RECHAZADO' && reason === undefined) {
+      setRejectingTpl(true);
+      return;
+    }
     try {
       await reviewTemplate(id, { status, reason: reason || undefined });
       toast.success(`Plantilla ${status === 'APROBADO' ? 'aprobada' : 'rechazada'} con éxito.`);
@@ -2385,6 +2393,28 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
           if (deleteAccId) {
             await handleDeleteAccessory(deleteAccId);
           }
+        }}
+      />
+
+      <RejectDialog
+        open={rejectingDocId !== null}
+        onOpenChange={(open) => !open && setRejectingDocId(null)}
+        title="Rechazar Documento"
+        description="Ingrese el motivo por el cual rechaza este documento. Este motivo quedará registrado en la trazabilidad."
+        onConfirm={async (reason) => {
+          if (rejectingDocId) {
+            await handleReviewDoc(rejectingDocId, 'RECHAZADO', reason);
+          }
+        }}
+      />
+
+      <RejectDialog
+        open={rejectingTpl}
+        onOpenChange={(open) => !open && setRejectingTpl(false)}
+        title="Rechazar Plantilla de Checklist"
+        description="Ingrese el motivo por el cual rechaza esta plantilla. Este motivo se mostrará al operador."
+        onConfirm={async (reason) => {
+          await handleReviewTpl('RECHAZADO', reason);
         }}
       />
     </div>

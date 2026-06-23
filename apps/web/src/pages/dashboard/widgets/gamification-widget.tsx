@@ -94,7 +94,8 @@ export function GamificationWidget(): ReactNode {
                     cy={size / 2}
                     r={radius}
                     fill="transparent"
-                    stroke="rgba(var(--border), 0.15)"
+                    stroke="var(--border)"
+                    strokeOpacity={0.15}
                     strokeWidth={strokeWidth}
                   />
                   {/* Progress Ring */}

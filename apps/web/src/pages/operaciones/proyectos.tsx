@@ -1,8 +1,9 @@
-import { useState, type ReactNode, useMemo } from 'react';
+import { useState, type ReactNode, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useProjects } from '@/hooks/use-operations';
 import { useProfile } from '@/hooks/use-profile';
+import { listDepartments, listClients } from '@/lib/api';
 import {
   Briefcase,
   Plus,
@@ -69,9 +70,30 @@ export function ProyectosTab(): ReactNode {
   // Form states
   const [projName, setProjName] = useState('');
   const [projCode, setProjCode] = useState('');
-  const [projDept, setProjDept] = useState('dept-geo'); // Default GEO
-  const [projClient, setProjClient] = useState('cli-als'); // Default ALS
+  const [projDept, setProjDept] = useState('');
+  const [projClient, setProjClient] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string; code: string }>>([]);
+  const [clients, setClients] = useState<Array<{ id: string; name: string; code: string }>>([]);
+
+  useEffect(() => {
+    async function loadDeptsAndClients() {
+      try {
+        const deptsData = await listDepartments();
+        const clientsData = await listClients();
+        setDepartments(deptsData);
+        setClients(clientsData);
+        const firstDept = deptsData[0];
+        const firstClient = clientsData[0];
+        if (firstDept) setProjDept(firstDept.id);
+        if (firstClient) setProjClient(firstClient.id);
+      } catch (err) {
+        console.error('Error al cargar departamentos/clientes:', err);
+      }
+    }
+    void loadDeptsAndClients();
+  }, []);
 
   const [srvName, setSrvName] = useState('');
   const [srvCode, setSrvCode] = useState('');
@@ -400,8 +422,11 @@ export function ProyectosTab(): ReactNode {
                       onChange={(e) => setProjDept(e.target.value)}
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
-                      <option value="dept-geo">Geofísica (GEO)</option>
-                      <option value="dept-ing">Ingeniería (ING)</option>
+                      {departments.map((dept) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name} ({dept.code})
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -413,8 +438,11 @@ export function ProyectosTab(): ReactNode {
                     onChange={(e) => setProjClient(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
-                    <option value="cli-als">Alamos Gold (ALS)</option>
-                    <option value="cli-anto">Antofagasta Minerals (ANTO)</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name} ({client.code})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </CardContent>

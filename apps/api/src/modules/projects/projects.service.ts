@@ -64,6 +64,20 @@ export class ProjectsService {
         'create',
       );
 
+      // 4. Escribir relaciones estructurales en OpenFGA
+      await this.fga.writeTuples([
+        {
+          user: `department:${project.departmentId}`,
+          relation: 'department',
+          object: `project:${project.id}`,
+        },
+        {
+          user: `client:${project.clientId}`,
+          relation: 'client',
+          object: `project:${project.id}`,
+        },
+      ]);
+
       return this.injectCurrentKpi(project);
     });
   }
@@ -186,13 +200,25 @@ export class ProjectsService {
       );
     }
 
-    return this.prisma.service.create({
-      data: {
-        code: dto.code.toUpperCase(),
-        name: dto.name,
-        projectId,
-        docCodingConfig: dto.docCodingConfig,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const service = await tx.service.create({
+        data: {
+          code: dto.code.toUpperCase(),
+          name: dto.name,
+          projectId,
+          docCodingConfig: dto.docCodingConfig,
+        },
+      });
+
+      await this.fga.writeTuples([
+        {
+          user: `project:${projectId}`,
+          relation: 'project',
+          object: `service:${service.id}`,
+        },
+      ]);
+
+      return service;
     });
   }
 

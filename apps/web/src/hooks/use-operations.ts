@@ -135,6 +135,9 @@ export interface UseTasksResult {
   ) => Promise<TaskView>;
   updateStatus: (id: string, status: TaskStatus, actualPoints?: number) => Promise<TaskView>;
   remove: (id: string) => Promise<void>;
+  startTime: (id: string, note?: string) => Promise<void>;
+  finishTime: (id: string, note?: string) => Promise<void>;
+  getAssignees: (projectId: string) => Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>>;
 }
 
 export function useTasks(filters: {
@@ -210,6 +213,29 @@ export function useTasks(filters: {
     [load],
   );
 
+  const startTime = useCallback(
+    async (id: string, note?: string) => {
+      await api.startTaskTime(id, note);
+      await load();
+    },
+    [load],
+  );
+
+  const finishTime = useCallback(
+    async (id: string, note?: string) => {
+      await api.finishTaskTime(id, note);
+      await load();
+    },
+    [load],
+  );
+
+  const getAssignees = useCallback(
+    async (projectId: string) => {
+      return api.getTaskAssignees(projectId);
+    },
+    [],
+  );
+
   return {
     tasks,
     loading,
@@ -219,6 +245,9 @@ export function useTasks(filters: {
     update,
     updateStatus,
     remove,
+    startTime,
+    finishTime,
+    getAssignees,
   };
 }
 

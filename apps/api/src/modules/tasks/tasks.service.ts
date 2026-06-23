@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { TaskStatus, ScopeType, Prisma } from '@prisma/client';
+import { TaskStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { GamificationService } from '../gamification/gamification.service';
+import { PermissionService } from '../../authz/permission.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/tasks.dto';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     private readonly fga: FgaService,
     private readonly gamification: GamificationService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /**
@@ -41,6 +43,9 @@ export class TasksService {
         estimatedPoints: dto.estimatedPoints ?? 0,
         recurrence: dto.recurrence || null,
         clientUserId: dto.clientUserId || null,
+        phaseId: dto.phaseId || null,
+        elementId: dto.elementId || null,
+        dataSpec: dto.dataSpec === undefined ? Prisma.JsonNull : (dto.dataSpec as Prisma.InputJsonValue),
         status: TaskStatus.PENDIENTE,
       },
       include: {
@@ -71,56 +76,27 @@ export class TasksService {
       search?: string;
     },
   ) {
-    // 1. Obtener los proyectos permitidos del usuario
-    const globalAdmin = await this.prisma.membership.findFirst({
-      where: {
-        userId,
-        roleKey: 'org_admin',
-        scopeType: ScopeType.ORGANIZATION,
-      },
-    });
-
-    let allowedProjectIds: string[] | undefined;
-
-    if (!globalAdmin) {
-      const memberships = await this.prisma.membership.findMany({
-        where: {
-          userId,
-          scopeType: { in: [ScopeType.PROJECT, ScopeType.DEPARTMENT] },
-        },
-      });
-
-      const projectIds = memberships
-        .filter((m) => m.scopeType === ScopeType.PROJECT)
-        .map((m) => m.scopeId);
-
-      const departmentIds = memberships
-        .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
-        .map((m) => m.scopeId);
-
-      const projects = await this.prisma.project.findMany({
-        where: {
-          OR: [
-            { id: { in: projectIds } },
-            { departmentId: { in: departmentIds } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      allowedProjectIds = projects.map((p) => p.id);
+    // 1. Resolver el scope vía la fachada de permisos (ADR-0001). null = denegado.
+    const scope = await this.permissions.scopeFilter(userId, 'task:read');
+    if (scope === null) {
+      return [];
     }
 
-    // 2. Construir la consulta where
+    // 2. Construir la consulta where según el scope.
     const where: Prisma.TaskWhereInput = {};
 
-    if (allowedProjectIds) {
-      where.projectId = { in: allowedProjectIds };
+    if (scope.kind === 'own') {
+      // OWN: solo tareas que asignaron al usuario o que él creó.
+      where.OR = [{ assignedToId: userId }, { createdById: userId }];
+    } else if (scope.kind === 'projects') {
+      // PROJECT: limitar a los proyectos asociados al usuario.
+      where.projectId = { in: scope.ids };
     }
+    // scope.kind === 'none' (GLOBAL): sin restricción de fila.
 
     if (filters.projectId) {
-      // Si el filtro específico se proporciona, validar que esté en los permitidos
-      if (allowedProjectIds && !allowedProjectIds.includes(filters.projectId)) {
+      // Un projectId del filtro solo se aplica si está dentro del scope permitido.
+      if (scope.kind === 'projects' && !scope.ids.includes(filters.projectId)) {
         throw new BadRequestException('No tienes acceso a este proyecto.');
       }
       where.projectId = filters.projectId;
@@ -139,10 +115,17 @@ export class TasksService {
     }
 
     if (filters.search) {
-      where.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { description: { contains: filters.search, mode: 'insensitive' } },
+      const search = [
+        { name: { contains: filters.search, mode: 'insensitive' as const } },
+        { description: { contains: filters.search, mode: 'insensitive' as const } },
       ];
+      // Si el scope OWN ya ocupó `where.OR`, intersectar con AND para no ampliar el alcance.
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: search }];
+        delete where.OR;
+      } else {
+        where.OR = search;
+      }
     }
 
     return this.prisma.task.findMany({
@@ -153,6 +136,7 @@ export class TasksService {
         assignedTo: true,
         createdBy: true,
         clientUser: true,
+        timeLogs: { orderBy: { startedAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -170,6 +154,7 @@ export class TasksService {
         assignedTo: true,
         createdBy: true,
         clientUser: true,
+        timeLogs: { orderBy: { startedAt: 'asc' } },
       },
     });
 
@@ -306,6 +291,94 @@ export class TasksService {
 
     return this.prisma.task.delete({
       where: { id },
+    });
+  }
+
+  /**
+   * Inicia una actividad (time-log) sobre la tarea para el operador en sesión.
+   * Rechaza si ya existe un log abierto (endedAt = null) para (tarea, usuario).
+   */
+  async startTime(id: string, userId: string, note?: string) {
+    const task = await this.getById(id, userId);
+
+    // Autorización: el asignado puede registrar tiempo; cualquier otro requiere task:time:log.
+    if (task.assignedToId !== userId) {
+      const decision = await this.permissions.can(userId, 'task:time:log', {
+        projectId: task.projectId,
+      });
+      if (decision.effect !== 'allow') {
+        throw new BadRequestException('No tienes permiso para registrar tiempo en esta tarea.');
+      }
+    }
+
+    const open = await this.prisma.taskTimeLog.findFirst({
+      where: { taskId: id, userId, endedAt: null },
+    });
+    if (open) {
+      throw new BadRequestException('Ya hay una actividad en curso para esta tarea.');
+    }
+
+    return this.prisma.taskTimeLog.create({
+      data: {
+        taskId: id,
+        userId,
+        startedAt: new Date(),
+        note: note ?? null,
+      },
+    });
+  }
+
+  /**
+   * Finaliza la actividad en curso (time-log abierto) del operador sobre la tarea.
+   * Rechaza si no hay ninguna actividad abierta.
+   */
+  async finishTime(id: string, userId: string, note?: string) {
+    const task = await this.getById(id, userId);
+
+    if (task.assignedToId !== userId) {
+      const decision = await this.permissions.can(userId, 'task:time:log', {
+        projectId: task.projectId,
+      });
+      if (decision.effect !== 'allow') {
+        throw new BadRequestException('No tienes permiso para registrar tiempo en esta tarea.');
+      }
+    }
+
+    const open = await this.prisma.taskTimeLog.findFirst({
+      where: { taskId: id, userId, endedAt: null },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!open) {
+      throw new BadRequestException('No hay una actividad en curso.');
+    }
+
+    return this.prisma.taskTimeLog.update({
+      where: { id: open.id },
+      data: {
+        endedAt: new Date(),
+        note: note !== undefined ? note : undefined,
+      },
+    });
+  }
+
+  /**
+   * Devuelve los usuarios asignables (que pueden ver/ejecutar tareas) en un proyecto.
+   * Requiere que el solicitante pueda ver el proyecto (can_view / task:read).
+   */
+  async getAssignees(projectId: string, userId: string) {
+    const decision = await this.permissions.can(userId, 'task:read', { projectId });
+    if (decision.effect !== 'allow') {
+      throw new BadRequestException('No tienes acceso a este proyecto.');
+    }
+
+    const ids = await this.permissions.usersWithPermissionOnProject('task:read', projectId);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    return this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, firstName: true, lastName: true, email: true },
     });
   }
 }

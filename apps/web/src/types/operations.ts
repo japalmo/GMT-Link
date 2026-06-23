@@ -21,6 +21,16 @@ export interface ServiceView {
 
 export type TaskStatus = 'PENDIENTE' | 'EN_PROGRESO' | 'REVISADO' | 'COMPLETADO';
 
+export interface TaskTimeLogView {
+  id: string;
+  taskId: string;
+  userId: string;
+  startedAt: string;
+  endedAt: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
 export interface TaskView {
   id: string;
   name: string;
@@ -39,6 +49,7 @@ export interface TaskView {
   recurrence: string | null;
   clientUserId: string | null;
   clientUser: { id: string; firstName: string; lastName: string; email: string } | null;
+  timeLogs?: TaskTimeLogView[];
   createdAt: string;
   updatedAt: string;
 }

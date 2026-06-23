@@ -72,6 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** Inicia sesión; el observer de arriba poblará `user` con el perfil real. */
   const login = useCallback(async (email: string, password: string): Promise<void> => {
     await signInWithEmailAndPassword(auth, email, password);
+    try {
+      const me = await getMe();
+      setUser(me);
+    } catch (err) {
+      await signOut(auth);
+      setUser(null);
+      throw err;
+    }
   }, []);
 
   const logout = useCallback(async (): Promise<void> => {

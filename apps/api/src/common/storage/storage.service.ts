@@ -10,6 +10,8 @@ export interface StorageSaveInput {
   contentType: string;
   /** Carpeta lógica destino (ej. 'diplomas', 'documents'). */
   folder: string;
+  /** Nombre personalizado opcional para guardar el archivo. */
+  customFilename?: string;
 }
 
 /** Resultado de persistir un archivo. */

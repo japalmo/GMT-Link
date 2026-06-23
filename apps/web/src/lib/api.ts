@@ -44,6 +44,7 @@ import type {
   TaskView,
   ProjectDocumentView,
   TaskStatus,
+  TaskTimeLogView,
 } from '@/types/operations';
 import type {
   AssetView,
@@ -1029,6 +1030,24 @@ export function deleteTask(id: string): Promise<void> {
   });
 }
 
+export function startTaskTime(id: string, note?: string): Promise<TaskTimeLogView> {
+  return request<TaskTimeLogView>(`/tasks/${encodeURIComponent(id)}/time/start`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function finishTaskTime(id: string, note?: string): Promise<TaskTimeLogView> {
+  return request<TaskTimeLogView>(`/tasks/${encodeURIComponent(id)}/time/finish`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function getTaskAssignees(projectId: string): Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>> {
+  return request<Array<{ id: string; firstName: string; lastName: string; email: string }>>(`/tasks/assignees?projectId=${encodeURIComponent(projectId)}`);
+}
+
 /* --- Documentos de Proyecto --- */
 
 export function listProjectDocuments(projectId?: string, serviceId?: string): Promise<ProjectDocumentView[]> {
@@ -1568,7 +1587,7 @@ export interface MetricElement {
   name: string;
   type: string;
   locationPolygon: string | null;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
   projectId: string;
   createdAt: string;
   updatedAt: string;

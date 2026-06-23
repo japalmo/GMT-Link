@@ -16,7 +16,6 @@ import DirectorioPage from '@/pages/directorio';
 import FinanzasPage from '@/pages/finanzas';
 import NotificacionesPage from '@/pages/notificaciones';
 import ConfiguracionPage from '@/pages/configuracion';
-import PlaceholderPage from '@/pages/placeholder';
 import SuspendedPage from '@/pages/suspended';
 import DesignDemo from '@/pages/DesignDemo';
 import RoleScopedListDemo from '@/pages/primitives/role-scoped-list-demo';

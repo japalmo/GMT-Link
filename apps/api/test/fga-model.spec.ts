@@ -118,6 +118,12 @@ describe('Modelo OpenFGA §4.3 — derivaciones', () => {
     expect(await allowed('user:bob', 'can_define_kpi', 'project:p1')).toBe(false);
   });
 
+  it('c2) operator/qa pueden can_submit_measurements; client_ito no (D3)', async () => {
+    expect(await allowed('user:bob', 'can_submit_measurements', 'project:p1')).toBe(true);
+    expect(await allowed('user:dana', 'can_submit_measurements', 'project:p1')).toBe(true);
+    expect(await allowed('user:carla', 'can_submit_measurements', 'project:p1')).toBe(false);
+  });
+
   it('d) client_ito ve su proyecto pero NO crea tareas ni ve otro proyecto (aislamiento §3.4)', async () => {
     expect(await allowed('user:carla', 'can_view', 'project:p1')).toBe(true);
     expect(await allowed('user:carla', 'can_create_task', 'project:p1')).toBe(false);

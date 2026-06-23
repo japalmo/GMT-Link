@@ -105,7 +105,7 @@ export function MapaActivosWidget(): ReactNode {
         mapRef.current = null;
       }
     };
-  }, [LModule, loading, error, locatedAssets.length]);
+  }, [LModule, loading, error]);
 
   // Sincronizar marcadores de activos ubicados
   useEffect(() => {
@@ -203,24 +203,25 @@ export function MapaActivosWidget(): ReactNode {
       onRetry={load}
     >
       <div className="flex flex-col gap-4 h-56 justify-between select-none">
-        {locatedAssets.length === 0 && !loading && !error ? (
-          <div className="flex flex-col items-center justify-center flex-1 text-center bg-accent/20 rounded-xl border border-dashed border-border p-4">
-            <AlertCircle className="size-6 text-muted-foreground mb-1.5" />
-            <p className="text-xs font-semibold text-foreground">Sin ubicación activa</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px]">
-              No hay vehículos con coordenadas de georreferenciación cargadas.
-            </p>
-          </div>
-        ) : (
-          <div className="flex-1 w-full bg-accent/10 rounded-xl overflow-hidden border border-border relative">
-            <div ref={mapContainerRef} className="w-full h-full z-0" />
-            {locatedAssets.length > 0 && (
-              <div className="absolute top-2 left-2 z-[10] bg-card/90 backdrop-blur-sm border border-border shadow px-2 py-1 rounded-md text-[9px] font-bold text-foreground">
-                📍 {locatedAssets.length} activos ubicados
-              </div>
-            )}
-          </div>
-        )}
+        <div className="flex-1 w-full bg-accent/10 rounded-xl overflow-hidden border border-border relative">
+          <div ref={mapContainerRef} className="w-full h-full z-0" />
+          
+          {locatedAssets.length === 0 && !loading && !error && (
+            <div className="absolute inset-0 z-[10] flex flex-col items-center justify-center text-center bg-card/90 backdrop-blur-sm p-4">
+              <AlertCircle className="size-6 text-muted-foreground mb-1.5" />
+              <p className="text-xs font-semibold text-foreground">Sin ubicación activa</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[200px]">
+                No hay vehículos con coordenadas de georreferenciación cargadas.
+              </p>
+            </div>
+          )}
+
+          {locatedAssets.length > 0 && !loading && !error && (
+            <div className="absolute top-2 left-2 z-[10] bg-card/90 backdrop-blur-sm border border-border shadow px-2 py-1 rounded-md text-[9px] font-bold text-foreground">
+              📍 {locatedAssets.length} activos ubicados
+            </div>
+          )}
+        </div>
 
         {/* Footer link to resources catalog */}
         <div className="flex items-center justify-between border-t border-border/50 pt-2 shrink-0">

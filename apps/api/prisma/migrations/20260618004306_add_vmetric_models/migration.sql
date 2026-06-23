@@ -1,8 +1,8 @@
 -- CreateEnum
-CREATE TYPE "VmetricVarType" AS ENUM ('SCALAR', 'FILE', 'LIST');
+CREATE TYPE "VariableType" AS ENUM ('SCALAR', 'FILE', 'LIST');
 
 -- CreateTable
-CREATE TABLE "vmetric_elements" (
+CREATE TABLE "elements" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -13,11 +13,11 @@ CREATE TABLE "vmetric_elements" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "vmetric_elements_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "elements_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "vmetric_phases" (
+CREATE TABLE "phases" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -25,25 +25,25 @@ CREATE TABLE "vmetric_phases" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "vmetric_phases_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "phases_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "vmetric_variables" (
+CREATE TABLE "variables" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "type" "VmetricVarType" NOT NULL,
+    "type" "VariableType" NOT NULL,
     "unit" TEXT,
     "phaseId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "vmetric_variables_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "variables_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "vmetric_data_points" (
+CREATE TABLE "data_points" (
     "id" TEXT NOT NULL,
     "value" TEXT NOT NULL,
     "fileUrl" TEXT,
@@ -54,35 +54,35 @@ CREATE TABLE "vmetric_data_points" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "vmetric_data_points_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "data_points_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "vmetric_elements_code_key" ON "vmetric_elements"("code");
+CREATE UNIQUE INDEX "elements_code_key" ON "elements"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "vmetric_phases_serviceId_code_key" ON "vmetric_phases"("serviceId", "code");
+CREATE UNIQUE INDEX "phases_serviceId_code_key" ON "phases"("serviceId", "code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "vmetric_variables_phaseId_code_key" ON "vmetric_variables"("phaseId", "code");
+CREATE UNIQUE INDEX "variables_phaseId_code_key" ON "variables"("phaseId", "code");
 
 -- AddForeignKey
-ALTER TABLE "vmetric_elements" ADD CONSTRAINT "vmetric_elements_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "elements" ADD CONSTRAINT "elements_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vmetric_phases" ADD CONSTRAINT "vmetric_phases_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "phases" ADD CONSTRAINT "phases_serviceId_fkey" FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vmetric_variables" ADD CONSTRAINT "vmetric_variables_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "vmetric_phases"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "variables" ADD CONSTRAINT "variables_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "phases"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vmetric_data_points" ADD CONSTRAINT "vmetric_data_points_variableId_fkey" FOREIGN KEY ("variableId") REFERENCES "vmetric_variables"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "data_points" ADD CONSTRAINT "data_points_variableId_fkey" FOREIGN KEY ("variableId") REFERENCES "variables"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vmetric_data_points" ADD CONSTRAINT "vmetric_data_points_elementId_fkey" FOREIGN KEY ("elementId") REFERENCES "vmetric_elements"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "data_points" ADD CONSTRAINT "data_points_elementId_fkey" FOREIGN KEY ("elementId") REFERENCES "elements"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vmetric_data_points" ADD CONSTRAINT "vmetric_data_points_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "vmetric_phases"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "data_points" ADD CONSTRAINT "data_points_phaseId_fkey" FOREIGN KEY ("phaseId") REFERENCES "phases"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "vmetric_data_points" ADD CONSTRAINT "vmetric_data_points_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "data_points" ADD CONSTRAINT "data_points_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

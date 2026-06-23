@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createTransport, type Transporter } from 'nodemailer';
 
 /** Mensaje a enviar por un proveedor de email enchufable (§9). */
 export interface EmailMessage {
@@ -34,5 +35,46 @@ export class NoopEmailService extends EmailService {
       `EmailService no integrado (§9): se omite envío a ${message.to} ("${message.subject}").`,
     );
     return Promise.resolve();
+  }
+}
+
+/**
+ * Implementación real usando SMTP (D6).
+ * Se activa si están configuradas las variables de entorno SMTP en producción/desarrollo.
+ */
+@Injectable()
+export class SmtpEmailService extends EmailService {
+  private readonly logger = new Logger(SmtpEmailService.name);
+  private readonly transporter: Transporter;
+
+  constructor() {
+    super();
+    const host = process.env.SMTP_HOST;
+    const port = Number(process.env.SMTP_PORT || 587);
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    this.transporter = createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: user && pass ? { user, pass } : undefined,
+    });
+  }
+
+  async send(message: EmailMessage): Promise<void> {
+    const from = process.env.EMAIL_FROM || 'no-reply@gmt.cl';
+    try {
+      await this.transporter.sendMail({
+        from,
+        to: message.to,
+        subject: message.subject,
+        text: message.body,
+      });
+      this.logger.log(`Email enviado con éxito a ${message.to}`);
+    } catch (error) {
+      this.logger.error(`Error al enviar email a ${message.to}:`, error);
+      throw error;
+    }
   }
 }

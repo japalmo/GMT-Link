@@ -23,6 +23,10 @@ const ROLE_LABELS: Record<RoleKey, string> = {
   finance: 'Finanzas',
   viewer: 'Visor',
   client_ito: 'Cliente ITO',
+  supervisor: 'Supervisor',
+  operador: 'Operador',
+  ito: 'Inspector Técnico (ITO)',
+  adm_contrato: 'Adm. Contrato',
 };
 
 /**

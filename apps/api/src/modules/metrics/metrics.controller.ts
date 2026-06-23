@@ -1,72 +1,99 @@
-import { Body, Controller, Get, Logger, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Logger, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { MetricsService } from './metrics.service';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
-import { CreateElementDto, CreatePhaseDto, BulkSaveDataDto, GenerateOtpDto, VerifyOtpDto } from './dto/metrics.dto';
-import { createWriteStream } from 'fs';
-import { join } from 'path';
+import { FgaService } from '../../fga/fga.service';
+import { StorageService } from '../../common/storage/storage.service';
+import { sanitizeFilename } from '../../common/storage/local-storage.service';
+import {
+  CreateElementDto,
+  CreatePhaseDto,
+  BulkSaveDataDto,
+  GenerateOtpDto,
+  VerifyOtpDto,
+  SaveCubicacionDto,
+  SaveReservorioMetadataDto,
+  LogActivityDto,
+  ExportCubicacionToSheetsDto,
+} from './dto/metrics.dto';
+
 
 @Controller('metrics')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 export class MetricsController {
   private readonly logger = new Logger(MetricsController.name);
-  constructor(private readonly service: MetricsService) {}
+  constructor(
+    private readonly service: MetricsService,
+    private readonly fga: FgaService,
+    private readonly storage: StorageService,
+  ) {}
 
   // ── Elementos ────────────────────────────────────────────────────────────────
 
   @Post('elements')
-  createPool(
+  async createPool(
     @CurrentUser() user: AuthUser | undefined,
     @Body() dto: CreateElementDto,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    await this.requireProjectPermission(userId, dto.projectId, 'can_submit_measurements');
     return this.service.createPool(dto);
   }
 
   @Get('elements')
-  getPools(
+  async getPools(
     @CurrentUser() user: AuthUser | undefined,
     @Query('projectId') projectId: string,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getPools(projectId);
   }
 
   @Get('elements/code/:code')
-  getPoolByCode(
+  async getPoolByCode(
     @CurrentUser() user: AuthUser | undefined,
     @Param('code') code: string,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(code);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getPoolByCode(code);
   }
 
   // ── Fases & Variables ────────────────────────────────────────────────────────
 
   @Post('phases')
-  createPhase(
+  async createPhase(
     @CurrentUser() user: AuthUser | undefined,
     @Body() dto: CreatePhaseDto,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForServiceId(dto.serviceId);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     return this.service.createPhase(dto);
   }
 
   @Get('phases')
-  getPhases(
+  async getPhases(
     @CurrentUser() user: AuthUser | undefined,
     @Query('serviceId') serviceId: string,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForServiceId(serviceId);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getPhases(serviceId);
   }
 
   @Get('variables')
-  getVariables(
+  async getVariables(
     @CurrentUser() user: AuthUser | undefined,
     @Query('phaseId') phaseId: string,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForPhaseId(phaseId);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getVariables(phaseId);
   }
 
@@ -82,24 +109,34 @@ export class MetricsController {
   }
 
   @Get('data/:phaseId')
-  getDataPoints(
+  async getDataPoints(
     @CurrentUser() user: AuthUser | undefined,
     @Param('phaseId') phaseId: string,
     @Query('elementId') elementId?: string,
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForPhaseId(phaseId);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getDataPoints(phaseId, elementId);
   }
 
   // ── OTP Seguridad ────────────────────────────────────────────────────────────
 
   @Post('otp/generate')
-  generateOtp(@Body() dto: GenerateOtpDto) {
+  generateOtp(
+    @CurrentUser() user: AuthUser | undefined,
+    @Body() dto: GenerateOtpDto,
+  ) {
+    this.requireMatchingEmail(user, dto.email);
     return this.service.generateOtp(dto.email);
   }
 
   @Post('otp/verify')
-  async verifyOtp(@Body() dto: VerifyOtpDto) {
+  async verifyOtp(
+    @CurrentUser() user: AuthUser | undefined,
+    @Body() dto: VerifyOtpDto,
+  ) {
+    this.requireMatchingEmail(user, dto.email);
     const isValid = await this.service.verifyOtp(dto.email, dto.otp);
     return { success: isValid };
   }
@@ -107,65 +144,77 @@ export class MetricsController {
   // ── Mock Cloud Functions (Desktop PyQt Client) ───────────────────────────────
 
   @Post('createDemUploadUrl')
-  createDemUploadUrl(
+  async createDemUploadUrl(
     @CurrentUser() user: AuthUser | undefined,
     @Body() body: { reservorio_codigo: string; filename: string },
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(body.reservorio_codigo);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     return this.service.createDemUploadUrl(body);
   }
 
   @Post('registerDemMetadata')
-  registerDemMetadata(
+  async registerDemMetadata(
     @CurrentUser() user: AuthUser | undefined,
     @Body() body: { reservorio_codigo: string; archivo: string; blob_path: string },
   ) {
     const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(body.reservorio_codigo);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     return this.service.registerDemMetadata(userId, body);
   }
 
   @Post('getLatestDem')
-  getLatestDem(
+  async getLatestDem(
     @CurrentUser() user: AuthUser | undefined,
     @Body() body: { reservorio_codigo: string },
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(body.reservorio_codigo);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getLatestDem(body);
   }
 
   @Post('getDemDownloadUrl')
-  getDemDownloadUrl(
+  async getDemDownloadUrl(
     @CurrentUser() user: AuthUser | undefined,
     @Body() body: { blob_path: string },
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForDemBlobPath(body.blob_path);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getDemDownloadUrl(body);
   }
 
   @Post('listDems')
-  listDems(
+  async listDems(
     @CurrentUser() user: AuthUser | undefined,
     @Body() body: { reservorio_codigo: string },
   ) {
-    this.requireUser(user);
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(body.reservorio_codigo);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.listDems(body);
   }
 
   @Post('saveReservorioMetadata')
   saveReservorioMetadata(
     @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { reservorio_codigo: string; nombre: string; extra: any; proyecto_id?: string },
+    @Body() body: SaveReservorioMetadataDto,
   ) {
     const userId = this.requireUserId(user);
     return this.service.saveReservorioMetadata(userId, body);
   }
 
   @Post('saveCubicacion')
-  saveCubicacion(
+  async saveCubicacion(
     @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { reservorio_codigo: string; datos: any },
+    @Body() body: SaveCubicacionDto,
   ) {
     const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(body.reservorio_codigo);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     return this.service.saveCubicacion(userId, body);
   }
 
@@ -190,87 +239,106 @@ export class MetricsController {
   @Post('logActivity')
   logActivity(
     @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { accion: string; detalle: any },
+    @Body() body: LogActivityDto,
   ) {
     this.requireUser(user);
     this.logger.log(`[PyQt Client Activity] Action: ${body.accion} | Detail: ${JSON.stringify(body.detalle)}`);
     return { success: true };
   }
 
-  @Post('submitForReview')
-  submitForReview(
-    @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { documentId: string },
-  ) {
-    this.requireUser(user);
-    return { success: true, status: 'submitted' };
-  }
 
-  @Post('approveDocument')
-  approveDocument(
-    @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { documentId: string },
-  ) {
-    this.requireUser(user);
-    return { success: true, status: 'approved' };
-  }
 
-  @Post('rejectDocument')
-  rejectDocument(
-    @CurrentUser() user: AuthUser | undefined,
-    @Body() body: { documentId: string },
-  ) {
-    this.requireUser(user);
-    return { success: true, status: 'rejected' };
-  }
 
-  @Post('exportCubicacionToSheets')
-  exportCubicacionToSheets(
-    @CurrentUser() user: AuthUser | undefined,
-    @Body() body: any,
-  ) {
-    this.requireUser(user);
-    return { success: true, worksheet_title: 'Planilla Cubicaciones Atacama' };
-  }
+
+
+
+
 
   // ── Raw Upload / Download Handlers ───────────────────────────────────────────
 
-  @Put('upload')
-  async handleRawUpload(
-    @Query('token') token: string,
-    @Req() req: any,
-  ) {
-    if (!token) {
-      throw new UnauthorizedException('Token de carga requerido.');
-    }
-    const filename = this.service.resolveToken(token);
-    if (!filename) {
-      throw new UnauthorizedException('Token de carga no válido.');
-    }
+   @Put('upload')
+   async handleRawUpload(
+     @Query('token') token: string,
+     @Req() req: Request,
+   ) {
+     if (!token) {
+       throw new UnauthorizedException('Token de carga requerido.');
+     }
+     const filename = this.service.resolveToken(token);
+     if (!filename) {
+       throw new UnauthorizedException('Token de carga no válido.');
+     }
 
-    const filePath = join(process.cwd(), 'uploads', filename);
-    const writeStream = createWriteStream(filePath);
+     // Check Content-Length header first
+     const contentLength = req.headers['content-length'];
+     if (contentLength) {
+       const size = parseInt(contentLength, 10);
+       const maxBytes = await this.getMaxBytes();
+       if (size > maxBytes) {
+         throw new ForbiddenException(`El archivo supera el máximo permitido (${maxBytes} bytes).`);
+       }
+     }
 
-    req.pipe(writeStream);
+     // Stream with size limit to prevent memory exhaustion
+     const chunks: Buffer[] = [];
+     let receivedBytes = 0;
+     const maxBytes = await this.getMaxBytes();
 
-    return new Promise((resolve, reject) => {
-      req.on('end', () => {
-        // Ejecutar procesamiento/simulación de cola en segundo plano (asíncrono)
-        setTimeout(() => {
-          this.logger.log(`[Background Worker] Procesando archivo pesado: ${filename}`);
-          // Aquí iría el traslado a R2/S3.
-        }, 1000);
+     const buffer = await new Promise<Buffer>((resolve, reject) => {
+       req.on('data', (chunk) => {
+         receivedBytes += chunk.length;
+         if (receivedBytes > maxBytes) {
+           req.destroy(); // Destroy the socket to stop receiving data
+           reject(new ForbiddenException(`El archivo supera el máximo permitido (${maxBytes} bytes).`));
+           return;
+         }
+         chunks.push(chunk);
+       });
+       req.on('end', () => resolve(Buffer.concat(chunks)));
+       req.on('error', (err) => reject(err));
+     });
 
-        resolve({ success: true, filename });
-      });
-      req.on('error', (err: any) => reject(err));
-    });
-  }
+     const contentType = req.headers['content-type'] || 'application/octet-stream';
+     await this.storage.save({
+       buffer,
+       filename,
+       contentType,
+       folder: 'metrics',
+       customFilename: filename,
+     });
+
+     // Ejecutar procesamiento/simulación de cola en segundo plano (asíncrono)
+     setTimeout(() => {
+       this.logger.log(`[Background Worker] Procesando archivo pesado: ${filename}`);
+       // Aquí iría el traslado a R2/S3.
+     }, 1000);
+
+     return { success: true, filename };
+   }
+
+   private async getMaxBytes(): Promise<number> {
+     const raw = process.env.STORAGE_MAX_BYTES;
+     if (raw === undefined) {
+       return 10 * 1024 * 1024; // 10 MB default
+     }
+     const parsed = Number(raw);
+     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 10 * 1024 * 1024;
+   }
 
   @Get('uploads/:filename')
-  downloadUploadedFile(@Param('filename') filename: string, @Res() res: any) {
-    const filePath = join(process.cwd(), 'uploads', filename);
-    return res.sendFile(filePath);
+  async downloadUploadedFile(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    // Requiere sesión (antes era de acceso público total — el riesgo residual de
+    // un usuario autenticado de OTRO proyecto adivinando un filename UUID-prefijado
+    // queda documentado y pendiente para una iteración futura, ver plan §1.2).
+    this.requireUser(user);
+    const buffer = await this.storage.read(`metrics/${filename}`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(filename)}"`);
+    res.end(buffer);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,5 +354,23 @@ export class MetricsController {
       throw new UnauthorizedException('Debe iniciar sesión para realizar esta acción.');
     }
     return user.id;
+  }
+
+  /** El OTP solo puede solicitarse/verificarse para el correo de la sesión activa. */
+  private requireMatchingEmail(user: AuthUser | undefined, email: string): void {
+    if (!user || !user.email || user.email !== email) {
+      throw new ForbiddenException('Debes iniciar sesión con el correo correspondiente para esta operación.');
+    }
+  }
+
+  private async requireProjectPermission(userId: string, projectId: string, relation: string): Promise<void> {
+    const allowed = await this.fga.check({
+      user: `user:${userId}`,
+      relation,
+      object: `project:${projectId}`,
+    });
+    if (!allowed) {
+      throw new ForbiddenException(`No tienes el permiso "${relation}" sobre este proyecto.`);
+    }
   }
 }

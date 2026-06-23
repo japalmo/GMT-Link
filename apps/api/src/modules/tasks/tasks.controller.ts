@@ -15,7 +15,12 @@ import {
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/tasks.dto';
+import {
+  CreateTaskDto,
+  TaskTimeNoteDto,
+  UpdateTaskDto,
+  UpdateTaskStatusDto,
+} from './dto/tasks.dto';
 import { TaskStatus } from '@prisma/client';
 
 @Controller('tasks')
@@ -43,6 +48,15 @@ export class TasksController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.tasks.list(userId, { projectId, serviceId, status, assignedToId, search });
+  }
+
+  @Get('assignees')
+  getAssignees(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('projectId') projectId: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.tasks.getAssignees(projectId, userId);
   }
 
   @Get(':id')
@@ -73,6 +87,28 @@ export class TasksController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.tasks.updateStatus(id, userId, dto);
+  }
+
+  @Post(':id/time/start')
+  @HttpCode(200)
+  startTime(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: TaskTimeNoteDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.tasks.startTime(id, userId, dto.note);
+  }
+
+  @Post(':id/time/finish')
+  @HttpCode(200)
+  finishTime(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: TaskTimeNoteDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.tasks.finishTime(id, userId, dto.note);
   }
 
   @Delete(':id')

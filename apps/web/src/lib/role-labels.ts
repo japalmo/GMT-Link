@@ -15,6 +15,10 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   finance: 'Finanzas',
   viewer: 'Visor',
   client_ito: 'Cliente ITO',
+  supervisor: 'Supervisor',
+  operador: 'Operador',
+  ito: 'Inspector Técnico (ITO)',
+  adm_contrato: 'Administrador de Contrato',
 };
 
 /** Devuelve la etiqueta legible de un rol, con fallback al propio key. */

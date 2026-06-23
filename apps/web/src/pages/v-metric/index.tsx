@@ -5,7 +5,6 @@ import {
   Map as MapIcon,
   TrendingUp,
   Calendar,
-  ChevronRight,
   Download,
   Database,
   AlertTriangle,
@@ -13,7 +12,6 @@ import {
   User,
   RefreshCw,
   Sliders,
-  AlertCircle,
   HelpCircle,
 } from 'lucide-react';
 import {
@@ -67,7 +65,6 @@ export default function MetricsDashboard(): ReactNode {
   const [projects, setProjects] = useState<ProjectView[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectView | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceView | null>(null);
-  const [phases, setPhases] = useState<MetricPhase[]>([]);
   const [selectedPhase, setSelectedPhase] = useState<MetricPhase | null>(null);
 
   // Core Data States
@@ -125,7 +122,6 @@ export default function MetricsDashboard(): ReactNode {
       setSelectedService(cub || null);
     } else {
       setSelectedService(null);
-      setPhases([]);
       setSelectedPhase(null);
       setElements([]);
       setVariables([]);
@@ -141,7 +137,6 @@ export default function MetricsDashboard(): ReactNode {
     const fetchPhases = async () => {
       try {
         const data = await listMetricPhases(selectedService.id);
-        setPhases(data);
         if (data.length > 0) {
           const activePhase = data[0];
           setSelectedPhase(activePhase ?? null);
@@ -312,7 +307,7 @@ export default function MetricsDashboard(): ReactNode {
     const elDps = dataPoints.filter((dp) => dp.elementId === selectedElementId);
 
     // Group by timestamp/date
-    const grouped: Record<string, { date: string; createdBy: string; timestamp: number; [key: string]: any }> = {};
+    const grouped: Record<string, { date: string; createdBy: string; timestamp: number; [key: string]: string | number | undefined | null }> = {};
 
     elDps.forEach((dp) => {
       const dateObj = new Date(dp.createdAt);
@@ -354,7 +349,7 @@ export default function MetricsDashboard(): ReactNode {
 
   // Leaflet Map Initialization and Synchronization
   useEffect(() => {
-    if (!LModule || loading || error || !mapContainerRef.current) return;
+    if (!LModule || !mapContainerRef.current) return;
 
     // Destroy existing map if any
     if (mapRef.current) {
@@ -397,7 +392,7 @@ export default function MetricsDashboard(): ReactNode {
         polygonsRef.current.clear();
       }
     };
-  }, [LModule, loading, error]);
+  }, [LModule]);
 
   // Sync Map layer type
   useEffect(() => {
@@ -556,9 +551,9 @@ export default function MetricsDashboard(): ReactNode {
 
     // Find min and max values
     const allVals = timeline.flatMap((d) => [
-      d['vol_salmuera_total'] || 0,
-      d['vol_salmuera_libre'] || 0,
-      d['vol_sal'] || 0,
+      Number(d['vol_salmuera_total'] || 0),
+      Number(d['vol_salmuera_libre'] || 0),
+      Number(d['vol_sal'] || 0),
     ]);
     const maxVal = Math.max(...allVals, 1000) * 1.1; // padding top
     const minVal = 0; // standard floor
@@ -570,7 +565,7 @@ export default function MetricsDashboard(): ReactNode {
     const buildPath = (key: string) => {
       return timeline
         .map((d, i) => {
-          const val = d[key] || 0;
+          const val = Number(d[key] || 0);
           return `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(val)}`;
         })
         .join(' ');
@@ -652,7 +647,7 @@ export default function MetricsDashboard(): ReactNode {
         {/* Interactive nodes */}
         {timeline.map((d, i) => {
           const cx = getX(i);
-          const totY = getY(d['vol_salmuera_total'] || 0);
+          const totY = getY(Number(d['vol_salmuera_total'] || 0));
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={cx} cy={totY} r="3" className="fill-orange-500 hover:r-5 transition-all" />
@@ -679,8 +674,8 @@ export default function MetricsDashboard(): ReactNode {
     const cotaFondo = metadata.cota_fondo ?? 2300.5;
 
     const allVals = timeline.flatMap((d) => [
-      d['cota_espejo'] || 0,
-      d['cota_sal'] || 0,
+      Number(d['cota_espejo'] || 0),
+      Number(d['cota_sal'] || 0),
     ]).concat([cotaCritica, cotaSegura, cotaFondo]);
 
     const maxVal = Math.max(...allVals) + 0.1;
@@ -692,7 +687,7 @@ export default function MetricsDashboard(): ReactNode {
     const buildPath = (key: string) => {
       return timeline
         .map((d, i) => {
-          const val = d[key] || 0;
+          const val = Number(d[key] || 0);
           return `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(val)}`;
         })
         .join(' ');
@@ -775,11 +770,11 @@ export default function MetricsDashboard(): ReactNode {
         {/* Nodes */}
         {timeline.map((d, i) => {
           const cx = getX(i);
-          const espY = getY(d['cota_espejo'] || 0);
+          const espY = getY(Number(d['cota_espejo'] || 0));
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={cx} cy={espY} r="3" className="fill-blue-600 hover:r-5 transition-all" />
-              <title>{`Fecha: ${d.date}\nCota Espejo: ${d['cota_espejo']?.toFixed(3)} m\nCota Sal: ${d['cota_sal']?.toFixed(3)} m`}</title>
+              <title>{`Fecha: ${d.date}\nCota Espejo: ${Number(d['cota_espejo'] || 0).toFixed(3)} m\nCota Sal: ${Number(d['cota_sal'] || 0).toFixed(3)} m`}</title>
             </g>
           );
         })}

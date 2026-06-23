@@ -36,8 +36,9 @@ export class LocalStorageService extends StorageService {
     }
 
     const folder = sanitizeSegment(input.folder) || 'misc';
-    const safeName = sanitizeFilename(input.filename);
-    const objectName = `${randomUUID()}-${safeName}`;
+    const objectName = input.customFilename
+      ? sanitizeFilename(input.customFilename)
+      : `${randomUUID()}-${sanitizeFilename(input.filename)}`;
     const key = `${folder}/${objectName}`;
 
     const folderDir = path.join(UPLOADS_ROOT, folder);
@@ -100,7 +101,7 @@ function parseMaxBytes(raw: string | undefined): number {
  * en la medida en que sobreviva al filtrado. Nunca puede contener separadores de
  * ruta ni '..'.
  */
-function sanitizeFilename(filename: string): string {
+export function sanitizeFilename(filename: string): string {
   const base = path.basename(filename);
   const cleaned = base
     .replace(/[^a-zA-Z0-9._-]/g, '_')
