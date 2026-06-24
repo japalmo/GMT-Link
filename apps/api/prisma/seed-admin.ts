@@ -93,9 +93,8 @@ async function ensureFgaTuple(userId: string): Promise<void> {
   const apiUrl = process.env.FGA_API_URL ?? 'http://localhost:8080';
   const storeId = process.env.FGA_STORE_ID;
   if (!storeId) {
-    throw new Error(
-      'OpenFGA no inicializado: FGA_STORE_ID vacío. Corre `pnpm --filter @gmt-link/api fga:bootstrap` antes.',
-    );
+    console.log('OpenFGA omitido: FGA_STORE_ID vacío. El login de desarrollo sigue funcionando sin la tupla.');
+    return;
   }
   const modelId = process.env.FGA_MODEL_ID || undefined;
   const client = new OpenFgaClient({ apiUrl, storeId, authorizationModelId: modelId });

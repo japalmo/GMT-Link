@@ -1,16 +1,95 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  GMT Link — Docker Compose (entorno local de desarrollo)
 #
-#  Solo levanta la infraestructura (PostgreSQL + Redis).
-#  El backend y el frontend los corres por separado con "npm run dev".
+#  Levanta la infraestructura y un contenedor de la app para ver la web en
+#  Docker Desktop y abrirla desde el navegador en http://localhost:5173.
 #
 #  Comandos:
-#    docker compose up -d        → levanta en segundo plano
-#    docker compose down         → apaga y elimina contenedores
-#    docker compose down -v      → apaga y borra también los datos
+#    docker compose up -d --build  → levanta en segundo plano y reconstruye
+#    docker compose down           → apaga y elimina contenedores
+#    docker compose down -v        → apaga y borra también los datos
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
+
+  firebase-auth:
+    image: node:22-alpine
+    container_name: gmt_firebase_auth
+    working_dir: /workspace
+    command: >-
+      sh -c "npm install -g firebase-tools &&
+      firebase emulators:start --only auth --project demo-gmt-link"
+    volumes:
+      - .:/workspace
+    ports:
+      - "9099:9099"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const net=require('net');const s=net.connect(9099,'127.0.0.1');s.on('connect',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));"
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  firebase-seed:
+    image: gmt-link-app
+    container_name: gmt_firebase_seed
+    working_dir: /workspace/apps/api
+    depends_on:
+      firebase-auth:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://gmt_admin:gmt_dev_2024@postgres:5432/gmt_link
+      FIREBASE_PROJECT_ID: demo-gmt-link
+      FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
+      NODE_ENV: development
+    command: >-
+      sh -c "pnpm exec prisma migrate deploy &&
+      pnpm exec tsx prisma/seed-admin.ts &&
+      pnpm exec tsx scripts/seed-firebase-dev.ts &&
+      pnpm exec tsx prisma/seed-auth-dev.ts"
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gmt_app
+    restart: unless-stopped
+    depends_on:
+      firebase-auth:
+        condition: service_started
+      firebase-seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      openfga:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://gmt_admin:gmt_dev_2024@postgres:5432/gmt_link
+      REDIS_URL: redis://redis:6379
+      FGA_API_URL: http://openfga:8080
+      FGA_STORE_ID: ""
+      FGA_MODEL_ID: ""
+      FIREBASE_PROJECT_ID: demo-gmt-link
+      FIREBASE_AUTH_EMULATOR_HOST: firebase-auth:9099
+      PORT: "3001"
+      NODE_ENV: development
+      CORS_ORIGINS: http://localhost:5173
+      API_PUBLIC_URL: http://localhost:3001
+      VITE_API_URL: http://localhost:3001
+      VITE_FIREBASE_API_KEY: demo
+      VITE_FIREBASE_AUTH_DOMAIN: demo-gmt-link.firebaseapp.com
+      VITE_FIREBASE_PROJECT_ID: demo-gmt-link
+      VITE_FIREBASE_AUTH_EMULATOR: http://localhost:9099
+    ports:
+      - "3001:3001"
+      - "5173:5173"
 
   postgres:
     image: postgres:16-alpine
