@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from '@/context/auth-context';
@@ -5,27 +6,50 @@ import { ThemeProvider } from '@/components/theme/theme-provider';
 import { ProtectedRoute } from '@/routes/protected-route';
 import { PublicRoute } from '@/routes/public-route';
 import { AppShell } from '@/components/layout/app-shell';
+// Páginas críticas (eager): login, first-login, dashboard y estados de sesión.
 import LoginPage from '@/pages/login';
 import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
-import UsuariosPage from '@/pages/usuarios';
-import PerfilPage from '@/pages/perfil';
-import CvPage from '@/pages/perfil/cv';
-import DocumentsPage from '@/pages/documentos';
-import DirectorioPage from '@/pages/directorio';
-import FinanzasPage from '@/pages/finanzas';
-import NotificacionesPage from '@/pages/notificaciones';
-import ConfiguracionPage from '@/pages/configuracion';
 import SuspendedPage from '@/pages/suspended';
-import DesignDemo from '@/pages/DesignDemo';
-import RoleScopedListDemo from '@/pages/primitives/role-scoped-list-demo';
-import ImportWizardDemo from '@/pages/primitives/import-wizard-demo';
-import ApprovalWorkflowDemo from '@/pages/primitives/approval-workflow-demo';
-import OperacionesPage from '@/pages/operaciones';
-import RecursosPage from '@/pages/recursos';
 import PublicAssetPage from '@/pages/public/activo';
-import GisToolsPage from '@/pages/gis-tools';
-import MetricsDashboard from '@/pages/v-metric';
+
+// Páginas secundarias y pesadas (lazy): se cargan al navegar. Esto saca del
+// bundle inicial las dependencias grandes (Three.js en v-metric, mapas en
+// herramientas) y reduce el tiempo de carga inicial en producción.
+const UsuariosPage = lazy(() => import('@/pages/usuarios'));
+const PerfilPage = lazy(() => import('@/pages/perfil'));
+const CvPage = lazy(() => import('@/pages/perfil/cv'));
+const DocumentsPage = lazy(() => import('@/pages/documentos'));
+const DirectorioPage = lazy(() => import('@/pages/directorio'));
+const FinanzasPage = lazy(() => import('@/pages/finanzas'));
+const NotificacionesPage = lazy(() => import('@/pages/notificaciones'));
+const ConfiguracionPage = lazy(() => import('@/pages/configuracion'));
+const OperacionesPage = lazy(() => import('@/pages/operaciones'));
+const RecursosPage = lazy(() => import('@/pages/recursos'));
+const GisToolsPage = lazy(() => import('@/pages/gis-tools'));
+const MetricsDashboard = lazy(() => import('@/pages/v-metric'));
+const DesignDemo = lazy(() => import('@/pages/DesignDemo'));
+const RoleScopedListDemo = lazy(() => import('@/pages/primitives/role-scoped-list-demo'));
+const ImportWizardDemo = lazy(() => import('@/pages/primitives/import-wizard-demo'));
+const ApprovalWorkflowDemo = lazy(() => import('@/pages/primitives/approval-workflow-demo'));
+
+/** Fallback mientras se descarga el chunk de una ruta lazy. */
+function RouteFallback() {
+  return (
+    <div
+      className="flex min-h-[40vh] items-center justify-center"
+      role="status"
+      aria-label="Cargando"
+    >
+      <div className="size-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+    </div>
+  );
+}
+
+/** Envuelve un elemento lazy en un boundary de Suspense con su fallback. */
+function lazyRoute(element: ReactNode): ReactNode {
+  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
+}
 
 /** Redirección de rutas inexistentes a la raíz (que aplica los guards). */
 function NotFoundRedirect() {
@@ -59,31 +83,25 @@ const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: '/', element: <DashboardPage /> },
-          { path: '/usuarios', element: <UsuariosPage /> },
-          { path: '/perfil', element: <PerfilPage /> },
-          { path: '/perfil/cv', element: <CvPage /> },
-          { path: '/perfil/documentos', element: <DocumentsPage /> },
-          { path: '/directorio', element: <DirectorioPage /> },
-          { path: '/notificaciones', element: <NotificacionesPage /> },
-          { path: '/configuracion', element: <ConfiguracionPage /> },
-          { path: '/finanzas', element: <FinanzasPage /> },
-          { path: '/operaciones', element: <OperacionesPage /> },
-          { path: '/operaciones/:tab', element: <OperacionesPage /> },
-          { path: '/recursos', element: <RecursosPage /> },
-          {
-            path: '/herramientas',
-            element: <GisToolsPage />,
-          },
-          {
-            path: '/v-metric',
-            element: <MetricsDashboard />,
-          },
+          { path: '/usuarios', element: lazyRoute(<UsuariosPage />) },
+          { path: '/perfil', element: lazyRoute(<PerfilPage />) },
+          { path: '/perfil/cv', element: lazyRoute(<CvPage />) },
+          { path: '/perfil/documentos', element: lazyRoute(<DocumentsPage />) },
+          { path: '/directorio', element: lazyRoute(<DirectorioPage />) },
+          { path: '/notificaciones', element: lazyRoute(<NotificacionesPage />) },
+          { path: '/configuracion', element: lazyRoute(<ConfiguracionPage />) },
+          { path: '/finanzas', element: lazyRoute(<FinanzasPage />) },
+          { path: '/operaciones', element: lazyRoute(<OperacionesPage />) },
+          { path: '/operaciones/:tab', element: lazyRoute(<OperacionesPage />) },
+          { path: '/recursos', element: lazyRoute(<RecursosPage />) },
+          { path: '/herramientas', element: lazyRoute(<GisToolsPage />) },
+          { path: '/v-metric', element: lazyRoute(<MetricsDashboard />) },
           // QA del design system.
-          { path: '/design', element: <DesignDemo /> },
+          { path: '/design', element: lazyRoute(<DesignDemo />) },
           // Demos aisladas de las primitivas §5 (Etapa 0.8, QA).
-          { path: '/primitives/role-scoped-list', element: <RoleScopedListDemo /> },
-          { path: '/primitives/import-wizard', element: <ImportWizardDemo /> },
-          { path: '/primitives/approval-workflow', element: <ApprovalWorkflowDemo /> },
+          { path: '/primitives/role-scoped-list', element: lazyRoute(<RoleScopedListDemo />) },
+          { path: '/primitives/import-wizard', element: lazyRoute(<ImportWizardDemo />) },
+          { path: '/primitives/approval-workflow', element: lazyRoute(<ApprovalWorkflowDemo />) },
         ],
       },
     ],
