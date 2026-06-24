@@ -13,6 +13,10 @@ import {
   RefreshCw,
   Sliders,
   HelpCircle,
+  Plus,
+  Search,
+  ChevronLeft,
+  Filter,
 } from 'lucide-react';
 import {
   Card,
@@ -23,12 +27,26 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalTitle,
+  ModalDescription,
+  ModalFooter,
+  ModalClose,
+} from '@/components/ui/modal';
 import {
   listProjects,
   listMetricPhases,
   listMetricVariables,
   listMetricElements,
   getMetricDataPoints,
+  createMetricElement,
+  updateMetricElement,
+  deleteMetricElement,
   type MetricElement,
   type MetricPhase,
   type MetricVariable,
@@ -76,11 +94,37 @@ export default function MetricsDashboard(): ReactNode {
   // Selected pool/element state
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
+  // UI Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'safe' | 'warning' | 'danger'>('all');
+
+  // Create Element Form Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newPoolName, setNewPoolName] = useState('');
+  const [newPoolCode, setNewPoolCode] = useState('');
+  const [newPoolCoords, setNewPoolCoords] = useState('');
+  const [newPoolEffectiveArea, setNewPoolEffectiveArea] = useState('');
+  const [newPoolSafeCapacity, setNewPoolSafeCapacity] = useState('');
+  const [newPoolMaxCapacity, setNewPoolMaxCapacity] = useState('');
+
+  // Edit Element Form Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editPoolId, setEditPoolId] = useState('');
+  const [editPoolName, setEditPoolName] = useState('');
+  const [editPoolCode, setEditPoolCode] = useState('');
+  const [editPoolCoords, setEditPoolCoords] = useState('');
+  const [editPoolEffectiveArea, setEditPoolEffectiveArea] = useState('');
+  const [editPoolSafeCapacity, setEditPoolSafeCapacity] = useState('');
+  const [editPoolMaxCapacity, setEditPoolMaxCapacity] = useState('');
+
+  // Date Filters for Detail View
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+
   // UI States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'satellite' | 'vector'>('satellite');
-  const [view, setView] = useState<'mapa' | 'visor3d'>('visor3d');
 
   // Leaflet references
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -140,7 +184,7 @@ export default function MetricsDashboard(): ReactNode {
       try {
         const data = await listMetricPhases(selectedService.id);
         if (data.length > 0) {
-          const activePhase = data[0];
+          const activePhase = data.find((p) => p.code === 'anual-2026') || data[0];
           setSelectedPhase(activePhase ?? null);
         } else {
           setSelectedPhase(null);
@@ -156,34 +200,27 @@ export default function MetricsDashboard(): ReactNode {
   }, [selectedService]);
 
   // 4. Fetch Elements, Variables, and DataPoints for Selected Phase & Project
-  useEffect(() => {
+  const fetchAllData = async () => {
     if (!selectedProject || !selectedPhase) return;
+    setLoading(true);
+    try {
+      const [elData, varData, dpData] = await Promise.all([
+        listMetricElements(selectedProject.id),
+        listMetricVariables(selectedPhase.id),
+        getMetricDataPoints(selectedPhase.id),
+      ]);
 
-    const fetchAllData = async () => {
-      setLoading(true);
-      try {
-        const [elData, varData, dpData] = await Promise.all([
-          listMetricElements(selectedProject.id),
-          listMetricVariables(selectedPhase.id),
-          getMetricDataPoints(selectedPhase.id),
-        ]);
+      setElements(elData);
+      setVariables(varData);
+      setDataPoints(dpData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar datos del proyecto');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        setElements(elData);
-        setVariables(varData);
-        setDataPoints(dpData);
-
-        if (elData.length > 0) {
-          setSelectedElementId(elData[0]?.id || null);
-        } else {
-          setSelectedElementId(null);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al cargar datos del proyecto');
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     void fetchAllData();
   }, [selectedProject, selectedPhase]);
 
@@ -195,8 +232,8 @@ export default function MetricsDashboard(): ReactNode {
     const col = (num - 1) % 2; // 0..1
 
     // Scale coordinates to resemble real Atacama pond grids
-    const baseLat = -23.520 - row * 0.005;
-    const baseLng = -68.270 + col * 0.007;
+    const baseLat = -23.639 - row * 0.005;
+    const baseLng = -68.324 + col * 0.007;
 
     return [
       [baseLat, baseLng],
@@ -338,6 +375,20 @@ export default function MetricsDashboard(): ReactNode {
     return Object.values(grouped).sort((a, b) => a.timestamp - b.timestamp);
   }, [selectedElementId, dataPoints, variables]);
 
+  // Filtered timeline of metrics based on selected date range
+  const filteredElementTimeline = useMemo(() => {
+    let list = selectedElementTimeline;
+    if (startDateFilter) {
+      const startMs = new Date(`${startDateFilter}T00:00:00`).getTime();
+      list = list.filter((row) => row.timestamp >= startMs);
+    }
+    if (endDateFilter) {
+      const endMs = new Date(`${endDateFilter}T23:59:59`).getTime();
+      list = list.filter((row) => row.timestamp <= endMs);
+    }
+    return list;
+  }, [selectedElementTimeline, startDateFilter, endDateFilter]);
+
   // Active element list sorted by alert status
   const sortedElements = useMemo(() => {
     return [...elements].sort((a, b) => {
@@ -349,9 +400,23 @@ export default function MetricsDashboard(): ReactNode {
     });
   }, [elements, latestPoolMetrics]);
 
+  // Filter elements by Search & Status
+  const filteredElements = useMemo(() => {
+    return sortedElements.filter((el) => {
+      const matchesSearch =
+        el.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        el.code.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const status = getPoolStatus(el);
+      const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [sortedElements, searchQuery, statusFilter, latestPoolMetrics]);
+
   // Leaflet Map Initialization and Synchronization
   useEffect(() => {
-    if (!LModule || !mapContainerRef.current) return;
+    if (!LModule || !mapContainerRef.current || selectedElementId) return;
 
     // Destroy existing map if any
     if (mapRef.current) {
@@ -361,7 +426,7 @@ export default function MetricsDashboard(): ReactNode {
     }
 
     // Centering coordinate helper (defaults to Atacama pond grid center)
-    const initialCenter: [number, number] = [-23.535, -68.255];
+    const initialCenter: [number, number] = [-23.639, -68.324];
 
     const map = LModule.map(mapContainerRef.current, {
       center: initialCenter,
@@ -394,12 +459,12 @@ export default function MetricsDashboard(): ReactNode {
         polygonsRef.current.clear();
       }
     };
-  }, [LModule]);
+  }, [LModule, selectedElementId]);
 
   // Sync Map layer type
   useEffect(() => {
     const map = mapRef.current;
-    if (!LModule || !map) return;
+    if (!LModule || !map || selectedElementId) return;
 
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
@@ -418,12 +483,12 @@ export default function MetricsDashboard(): ReactNode {
     });
 
     tileLayerRef.current = newLayer;
-  }, [LModule, mapType]);
+  }, [LModule, mapType, selectedElementId]);
 
   // Render/update Polygons on the Map
   useEffect(() => {
     const map = mapRef.current;
-    if (!LModule || !map || elements.length === 0) return;
+    if (!LModule || !map || elements.length === 0 || selectedElementId) return;
 
     // Clear existing polygons
     polygonsRef.current.forEach((polygon) => polygon.remove());
@@ -436,7 +501,6 @@ export default function MetricsDashboard(): ReactNode {
       coordinates.forEach((coord) => bounds.extend(coord));
 
       const status = getPoolStatus(el);
-      const isSelected = el.id === selectedElementId;
 
       // Color mapping
       let fillColor = '#10b981'; // safe emerald
@@ -446,19 +510,19 @@ export default function MetricsDashboard(): ReactNode {
         fillColor = '#ef4444'; // red
         strokeColor = '#b91c1c';
       } else if (status === 'warning') {
-        fillColor = '#f97316'; // orange/copper accent
+        fillColor = '#f97316'; // orange
         strokeColor = '#ea580c';
       } else if (status === 'neutral') {
-        fillColor = '#94a3b8'; // slate/grey
+        fillColor = '#94a3b8'; // slate
         strokeColor = '#64748b';
       }
 
       const polygon = LModule.polygon(coordinates, {
         fillColor,
-        fillOpacity: isSelected ? 0.65 : 0.35,
-        color: isSelected ? '#ffffff' : strokeColor,
-        weight: isSelected ? 3.5 : 1.8,
-        dashArray: isSelected ? undefined : '3, 4',
+        fillOpacity: 0.35,
+        color: strokeColor,
+        weight: 1.8,
+        dashArray: '3, 4',
       }).addTo(map);
 
       // Tooltip/Popup info
@@ -498,7 +562,7 @@ export default function MetricsDashboard(): ReactNode {
     }
   }, [LModule, elements, latestPoolMetrics, selectedElementId]);
 
-  // Center map on selected element
+  // Center map on selected element helper
   const centerOnElement = (el: MetricElement) => {
     const map = mapRef.current;
     if (!LModule || !map) return;
@@ -512,36 +576,184 @@ export default function MetricsDashboard(): ReactNode {
 
   // CSV Exporter
   const handleExportCSV = () => {
-    if (!selectedElement || selectedElementTimeline.length === 0) return;
+    if (!selectedElement || filteredElementTimeline.length === 0) return;
 
     let csvContent = 'data:text/csv;charset=utf-8,';
-    csvContent += 'Fecha,Operador,Cota Espejo (m),Cota Sal (m),Volumen Total Salmuera (m3),Volumen Salmuera Libre (m3),Volumen Sal decantada (m3)\n';
+    csvContent += 'Fecha,Operador,Cota Espejo (m),Borde Libre (m),Altura Salmuera (m),Altura Sal (m),Volumen Total Salmuera (m3),Volumen Salmuera Libre (m3),Volumen Salmuera Ocluida (m3),Volumen Sal (m3),Area Espejo (m2),Perimetro (m)\n';
 
-    selectedElementTimeline.forEach((row) => {
+    filteredElementTimeline.forEach((row) => {
       const cotaEsp = row['cota_espejo'] ?? '';
-      const cotaSal = row['cota_sal'] ?? '';
+      const bordeLib = row['borde_libre'] ?? '';
+      const altSalmuera = row['altura_salmuera'] ?? '';
+      const altSal = row['altura_sal'] ?? '';
       const volTot = row['vol_salmuera_total'] ?? '';
       const volLib = row['vol_salmuera_libre'] ?? '';
+      const volOcl = row['vol_salmuera_ocluida'] ?? '';
       const volS = row['vol_sal'] ?? '';
+      const areaEsp = row['area_espejo'] ?? '';
+      const per = row['perimetro'] ?? '';
 
-      csvContent += `"${row.date}","${row.createdBy}",${cotaEsp},${cotaSal},${volTot},${volLib},${volS}\n`;
+      csvContent += `"${row.date}","${row.createdBy}",${cotaEsp},${bordeLib},${altSalmuera},${altSal},${volTot},${volLib},${volOcl},${volS},${areaEsp},${per}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `cubicaciones_${selectedElement.code}_${selectedPhase?.code}.csv`);
+    link.setAttribute('download', `cubicacion_${selectedElement.code}_${selectedPhase?.code}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Custom SVG Chart Components (Zero dependency, high styling compatibility)
-  const renderVolumesChart = () => {
-    const timeline = selectedElementTimeline;
+  // Editing and Deleting pools
+  const handleOpenEditModal = (el: MetricElement) => {
+    setEditPoolId(el.id);
+    setEditPoolName(el.name);
+    setEditPoolCode(el.code);
+    setEditPoolCoords(el.locationPolygon || '');
+    
+    const limits = ((el.metadata as any)?.limits) || {};
+    setEditPoolEffectiveArea(limits.effective_area ? String(limits.effective_area) : '');
+    setEditPoolSafeCapacity(limits.safe_capacity ? String(limits.safe_capacity) : '');
+    setEditPoolMaxCapacity(limits.max_nominal_capacity ? String(limits.max_nominal_capacity) : '');
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdatePool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPoolName || !editPoolCode) {
+      toast.error('El nombre y código son campos requeridos.');
+      return;
+    }
+
+    try {
+      let polygonStr: string | null = null;
+      if (editPoolCoords.trim()) {
+        try {
+          const parsed = JSON.parse(editPoolCoords);
+          if (Array.isArray(parsed) && parsed.every(pt => Array.isArray(pt) && pt.length === 2)) {
+            polygonStr = JSON.stringify(parsed);
+          } else {
+            throw new Error();
+          }
+        } catch {
+          toast.error('Formato de coordenadas inválido. Debe ser una matriz JSON: [[lat, lon], ...]');
+          return;
+        }
+      } else {
+        polygonStr = null;
+      }
+
+      const metadata = {
+        limits: {
+          effective_area: parseFloat(editPoolEffectiveArea) || 0,
+          safe_capacity: parseFloat(editPoolSafeCapacity) || 0,
+          max_nominal_capacity: parseFloat(editPoolMaxCapacity) || 0,
+        },
+      };
+
+      await updateMetricElement(editPoolId, {
+        code: editPoolCode,
+        name: editPoolName,
+        type: 'POZA',
+        locationPolygon: polygonStr,
+        metadata,
+        projectId: selectedProject?.id || '',
+      });
+
+      toast.success('Vaso de evaporación actualizado correctamente.');
+      setIsEditModalOpen(false);
+      
+      // Reload
+      await fetchAllData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar el vaso de evaporación.');
+    }
+  };
+
+  const handleDeletePool = async (id: string) => {
+    if (!window.confirm('¿Está seguro de que desea eliminar este reservorio? Se eliminarán también todas sus mediciones históricas asociadas.')) {
+      return;
+    }
+
+    try {
+      await deleteMetricElement(id);
+      toast.success('Vaso de evaporación eliminado correctamente.');
+      setSelectedElementId(null);
+      await fetchAllData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al eliminar el vaso de evaporación.');
+    }
+  };
+
+  // Creating a new pool
+  const handleCreatePool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPoolName || !newPoolCode) {
+      toast.error('El nombre y código son campos requeridos.');
+      return;
+    }
+
+    try {
+      let polygonStr: string | null = null;
+      if (newPoolCoords.trim()) {
+        try {
+          const parsed = JSON.parse(newPoolCoords);
+          if (Array.isArray(parsed) && parsed.every(pt => Array.isArray(pt) && pt.length === 2)) {
+            polygonStr = JSON.stringify(parsed);
+          } else {
+            throw new Error();
+          }
+        } catch {
+          toast.error('Formato de coordenadas inválido. Debe ser una matriz JSON: [[lat, lon], ...]');
+          return;
+        }
+      } else {
+        // Generate default coords relative to center
+        polygonStr = JSON.stringify(getDefaultPolygon(newPoolCode));
+      }
+
+      const metadata = {
+        limits: {
+          effective_area: parseFloat(newPoolEffectiveArea) || 0,
+          safe_capacity: parseFloat(newPoolSafeCapacity) || 0,
+          max_nominal_capacity: parseFloat(newPoolMaxCapacity) || 0,
+        },
+      };
+
+      await createMetricElement({
+        code: newPoolCode,
+        name: newPoolName,
+        type: 'POZA',
+        locationPolygon: polygonStr,
+        metadata,
+        projectId: selectedProject?.id || '',
+      });
+
+      toast.success('Vasode evaporación creado correctamente.');
+      setIsCreateModalOpen(false);
+      
+      // Clean inputs
+      setNewPoolName('');
+      setNewPoolCode('');
+      setNewPoolCoords('');
+      setNewPoolEffectiveArea('');
+      setNewPoolSafeCapacity('');
+      setNewPoolMaxCapacity('');
+
+      // Reload
+      await fetchAllData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al registrar el vaso de evaporación.');
+    }
+  };
+
+  // Custom SVGs for Volume vs Date (only total volume and salt volume)
+  const renderDetailVolumesChart = () => {
+    const timeline = filteredElementTimeline;
     if (timeline.length < 2) {
       return (
-        <div className="h-48 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/80 rounded-xl bg-accent/5">
+        <div className="h-full flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/80 rounded-xl bg-accent/5">
           Se requieren al menos 2 mediciones históricas para proyectar tendencias.
         </div>
       );
@@ -554,7 +766,6 @@ export default function MetricsDashboard(): ReactNode {
     // Find min and max values
     const allVals = timeline.flatMap((d) => [
       Number(d['vol_salmuera_total'] || 0),
-      Number(d['vol_salmuera_libre'] || 0),
       Number(d['vol_sal'] || 0),
     ]);
     const maxVal = Math.max(...allVals, 1000) * 1.1; // padding top
@@ -585,15 +796,11 @@ export default function MetricsDashboard(): ReactNode {
     return (
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full text-foreground select-none">
         <defs>
-          <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="gradTotalDetail" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#f97316" stopOpacity="0.3" />
             <stop offset="100%" stopColor="#f97316" stopOpacity="0.0" />
           </linearGradient>
-          <linearGradient id="gradLibre" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
-          </linearGradient>
-          <linearGradient id="gradSal" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="gradSalDetail" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#eab308" stopOpacity="0.3" />
             <stop offset="100%" stopColor="#eab308" stopOpacity="0.0" />
           </linearGradient>
@@ -626,7 +833,7 @@ export default function MetricsDashboard(): ReactNode {
           );
         })}
 
-        {/* X Axis dates (shows first and last date) */}
+        {/* X Axis dates */}
         <g className="opacity-70">
           <text x={padding} y={height - 10} textAnchor="start" className="fill-muted-foreground text-[8px] font-semibold">
             {timeline[0]?.date.split(' ')[0] || ''}
@@ -637,13 +844,11 @@ export default function MetricsDashboard(): ReactNode {
         </g>
 
         {/* Areas */}
-        <path d={buildAreaPath('vol_salmuera_total')} fill="url(#gradTotal)" />
-        <path d={buildAreaPath('vol_salmuera_libre')} fill="url(#gradLibre)" />
-        <path d={buildAreaPath('vol_sal')} fill="url(#gradSal)" />
+        <path d={buildAreaPath('vol_salmuera_total')} fill="url(#gradTotalDetail)" />
+        <path d={buildAreaPath('vol_sal')} fill="url(#gradSalDetail)" />
 
         {/* Lines */}
         <path d={buildPath('vol_salmuera_total')} fill="none" stroke="#f97316" strokeWidth="2.2" />
-        <path d={buildPath('vol_salmuera_libre')} fill="none" stroke="#06b6d4" strokeWidth="2.2" />
         <path d={buildPath('vol_sal')} fill="none" stroke="#eab308" strokeWidth="1.8" />
 
         {/* Interactive nodes */}
@@ -653,7 +858,7 @@ export default function MetricsDashboard(): ReactNode {
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={cx} cy={totY} r="3" className="fill-orange-500 hover:r-5 transition-all" />
-              <title>{`Fecha: ${d.date}\nVol. Total: ${d['vol_salmuera_total']?.toLocaleString('es-CL')} m³\nVol. Libre: ${d['vol_salmuera_libre']?.toLocaleString('es-CL')} m³\nVol. Sal: ${d['vol_sal']?.toLocaleString('es-CL')} m³`}</title>
+              <title>{`Fecha: ${d.date}\nVol. Total: ${d['vol_salmuera_total']?.toLocaleString('es-CL')} m³\nVol. Sal: ${d['vol_sal']?.toLocaleString('es-CL')} m³`}</title>
             </g>
           );
         })}
@@ -661,130 +866,7 @@ export default function MetricsDashboard(): ReactNode {
     );
   };
 
-  const renderLevelsChart = () => {
-    const timeline = selectedElementTimeline;
-    if (timeline.length < 2) return null;
-
-    const width = 500;
-    const height = 180;
-    const padding = 35;
-
-    // Retrieve reference limits from Selected Pool Metadata
-    const metadata = (selectedElement?.metadata as Record<string, number> | null) || {};
-    const cotaCritica = metadata.cota_lamina_critica ?? 2302.2;
-    const cotaSegura = metadata.cota_segura ?? 2301.8;
-    const cotaFondo = metadata.cota_fondo ?? 2300.5;
-
-    const allVals = timeline.flatMap((d) => [
-      Number(d['cota_espejo'] || 0),
-      Number(d['cota_sal'] || 0),
-    ]).concat([cotaCritica, cotaSegura, cotaFondo]);
-
-    const maxVal = Math.max(...allVals) + 0.1;
-    const minVal = Math.min(...allVals) - 0.1;
-
-    const getX = (index: number) => padding + (index / (timeline.length - 1)) * (width - 2 * padding);
-    const getY = (val: number) => height - padding - ((val - minVal) / (maxVal - minVal)) * (height - 2 * padding);
-
-    const buildPath = (key: string) => {
-      return timeline
-        .map((d, i) => {
-          const val = Number(d[key] || 0);
-          return `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(val)}`;
-        })
-        .join(' ');
-    };
-
-    return (
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full text-foreground select-none">
-        {/* Safe, Warning and Critical limits zones */}
-        <rect
-          x={padding}
-          y={getY(maxVal)}
-          width={width - 2 * padding}
-          height={Math.max(0, getY(cotaCritica) - getY(maxVal))}
-          className="fill-red-500/10"
-        />
-        <rect
-          x={padding}
-          y={getY(cotaCritica)}
-          width={width - 2 * padding}
-          height={Math.max(0, getY(cotaSegura) - getY(cotaCritica))}
-          className="fill-orange-500/10"
-        />
-        <rect
-          x={padding}
-          y={getY(cotaSegura)}
-          width={width - 2 * padding}
-          height={Math.max(0, getY(cotaFondo) - getY(cotaSegura))}
-          className="fill-emerald-500/10"
-        />
-
-        {/* Reference Level lines */}
-        {[
-          { val: cotaCritica, label: 'Lám. Crítica', color: '#ef4444' },
-          { val: cotaSegura, label: 'Lím. Seguro', color: '#f97316' },
-          { val: cotaFondo, label: 'Fondo Poza', color: '#64748b' },
-        ].map((lim, idx) => {
-          const y = getY(lim.val);
-          return (
-            <g key={idx} className="opacity-95">
-              <line
-                x1={padding}
-                y1={y}
-                x2={width - padding}
-                y2={y}
-                stroke={lim.color}
-                strokeWidth="1"
-                strokeDasharray="4, 3"
-              />
-              <text
-                x={width - padding + 5}
-                y={y + 3}
-                textAnchor="start"
-                fill={lim.color}
-                className="font-bold text-[7px]"
-              >
-                {lim.label} ({lim.val.toFixed(2)}m)
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Y Axis ticks */}
-        {[0, 0.5, 1].map((ratio, idx) => {
-          const val = minVal + ratio * (maxVal - minVal);
-          const y = getY(val);
-          return (
-            <g key={idx} className="opacity-40">
-              <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="currentColor" strokeWidth="0.5" />
-              <text x={padding - 5} y={y + 3} textAnchor="end" className="fill-muted-foreground font-mono text-[9px]">
-                {val.toFixed(2)}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Lines */}
-        <path d={buildPath('cota_espejo')} fill="none" stroke="#2563eb" strokeWidth="2.2" />
-        <path d={buildPath('cota_sal')} fill="none" stroke="#78350f" strokeWidth="2" strokeDasharray="3, 2" />
-
-        {/* Nodes */}
-        {timeline.map((d, i) => {
-          const cx = getX(i);
-          const espY = getY(Number(d['cota_espejo'] || 0));
-          return (
-            <g key={i} className="group cursor-pointer">
-              <circle cx={cx} cy={espY} r="3" className="fill-blue-600 hover:r-5 transition-all" />
-              <title>{`Fecha: ${d.date}\nCota Espejo: ${Number(d['cota_espejo'] || 0).toFixed(3)} m\nCota Sal: ${Number(d['cota_sal'] || 0).toFixed(3)} m`}</title>
-            </g>
-          );
-        })}
-      </svg>
-    );
-  };
-
-  // Recent Uploads History List
+  // Recent Uploads list (across all elements)
   const recentUploads = useMemo(() => {
     const list: Array<{
       id: string;
@@ -798,7 +880,6 @@ export default function MetricsDashboard(): ReactNode {
       volSal?: string;
     }> = [];
 
-    // Group dataPoints by unique createdAt and createdById
     const grouped: Record<string, { createdAt: string; elId: string; userId: string; dps: MetricDataPoint[] }> = {};
 
     dataPoints.forEach((dp) => {
@@ -833,7 +914,7 @@ export default function MetricsDashboard(): ReactNode {
         pozaName: el.name,
         pozaCode: el.code,
         operator: firstDp.createdBy ? `${firstDp.createdBy.firstName} ${firstDp.createdBy.lastName}` : 'Sistema',
-        otpVerified: true, // OTP verification is required at desktop submit
+        otpVerified: true,
         cotaEspejo: metrics['cota_espejo'],
         volSalmuera: metrics['vol_salmuera_total'],
         volSal: metrics['vol_sal'],
@@ -843,86 +924,288 @@ export default function MetricsDashboard(): ReactNode {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
   }, [dataPoints, elements, variables]);
 
-  const viewToggle = (
-    <div className="inline-flex rounded-xl border border-border/80 bg-accent/25 p-0.5 text-xs font-semibold">
-      <button
-        type="button"
-        onClick={() => setView('visor3d')}
-        className={`rounded-lg px-3 py-1.5 transition-colors ${view === 'visor3d' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-      >
-        Visor 3D
-      </button>
-      <button
-        type="button"
-        onClick={() => setView('mapa')}
-        className={`rounded-lg px-3 py-1.5 transition-colors ${view === 'mapa' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-      >
-        Mapa
-      </button>
-    </div>
-  );
+  /* ======================================================================== */
+  /* DETAIL VIEW SCREEN                                                       */
+  /* ======================================================================== */
+  if (selectedElementId && selectedElement) {
+    const limits = ((selectedElement.metadata as any)?.limits) || {
+      effective_area: 0,
+      safe_capacity: 0,
+      max_nominal_capacity: 0,
+    };
 
-  if (view === 'visor3d') {
     return (
-      <div className="flex flex-col gap-4 w-full max-w-7xl mx-auto px-4 py-6">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card/45 backdrop-blur-md border border-border/60 rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="bg-orange-500/10 border border-orange-500/25 size-12 rounded-xl flex items-center justify-center text-orange-500 shadow-inner">
-              <Layers className="size-6" />
-            </div>
+      <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 py-6">
+        {/* Detail Header */}
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card/45 backdrop-blur-md border border-border/60 rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setSelectedElementId(null);
+                setStartDateFilter('');
+                setEndDateFilter('');
+              }}
+              className="size-10 rounded-xl border-border/80 hover:bg-primary/5 shrink-0"
+              aria-label="Volver al mapa"
+            >
+              <ChevronLeft className="size-5" />
+            </Button>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">V-Metric — Reservorio 2</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Salar de Atacama · visor 3D de DEM + cubicación</p>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                {selectedElement.name}
+                <Badge variant="outline" className="font-mono text-[10px] bg-accent/30 font-bold border-border">
+                  {selectedElement.code}
+                </Badge>
+              </h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Campaña: {selectedPhase?.name} · Detalle de cubicación volumétrica y modelo 3D
+              </p>
             </div>
           </div>
-          {viewToggle}
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenEditModal(selectedElement)}
+              className="text-xs font-bold border-border/80 hover:bg-primary/5 h-9 rounded-xl"
+            >
+              Editar Poza
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => handleDeletePool(selectedElement.id)}
+              className="text-xs font-bold bg-red-600 hover:bg-red-700 text-white h-9 rounded-xl border-none"
+            >
+              Eliminar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={filteredElementTimeline.length === 0}
+              className="text-xs font-bold border-border/80 hover:bg-primary/5 h-9 rounded-xl"
+            >
+              <Download className="size-3.5 mr-1" /> Exportar CSV
+            </Button>
+          </div>
         </header>
-        <DemViewer code="R2" />
+
+        {/* Harvest Limits Cards */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="border border-border/60 shadow-sm bg-card/65 relative overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Área Operacional Efectiva
+              </CardDescription>
+              <CardTitle className="text-2xl font-black text-emerald-500">
+                {limits.effective_area ? Number(limits.effective_area).toLocaleString('es-CL') : '—'}{' '}
+                <span className="text-sm font-medium text-muted-foreground">m²</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-[10px] text-muted-foreground">Superficie disponible de evaporación útil.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-border/60 shadow-sm bg-card/65 relative overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Capacidad Operativa de Seguridad
+              </CardDescription>
+              <CardTitle className="text-2xl font-black text-orange-500">
+                {limits.safe_capacity ? Number(limits.safe_capacity).toLocaleString('es-CL') : '—'}{' '}
+                <span className="text-sm font-medium text-muted-foreground">m³</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-[10px] text-muted-foreground">Límite volumétrico operacional seguro del vaso.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-border/60 shadow-sm bg-card/65 relative overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Capacidad Hidráulica Máxima
+              </CardDescription>
+              <CardTitle className="text-2xl font-black text-red-500">
+                {limits.max_nominal_capacity ? Number(limits.max_nominal_capacity).toLocaleString('es-CL') : '—'}{' '}
+                <span className="text-sm font-medium text-muted-foreground">m³</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-[10px] text-muted-foreground">Capacidad extrema antes de reventar o desborde.</p>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Date Filter Toolbar */}
+        <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card/35 border border-border/50 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Calendar className="size-4 text-orange-500" />
+            <span className="text-xs font-bold text-foreground">Filtrar cubicaciones por rango de fecha:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label htmlFor="startDate" className="text-[10px] font-semibold text-muted-foreground uppercase">Desde</label>
+              <input
+                id="startDate"
+                type="date"
+                value={startDateFilter}
+                onChange={(e) => setStartDateFilter(e.target.value)}
+                className="rounded-lg border border-input bg-background px-2.5 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="endDate" className="text-[10px] font-semibold text-muted-foreground uppercase">Hasta</label>
+              <input
+                id="endDate"
+                type="date"
+                value={endDateFilter}
+                onChange={(e) => setEndDateFilter(e.target.value)}
+                className="rounded-lg border border-input bg-background px-2.5 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-500"
+              />
+            </div>
+            {(startDateFilter || endDateFilter) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setStartDateFilter('');
+                  setEndDateFilter('');
+                }}
+                className="text-[10px] font-bold text-red-500 hover:text-red-600 px-2 py-1 h-7"
+              >
+                Limpiar Filtros
+              </Button>
+            )}
+          </div>
+        </section>
+
+        {/* 3D Viewer & Vol Chart */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7">
+            <DemViewer code={selectedElement.code} />
+          </div>
+
+          <Card className="lg:col-span-5 border border-border/60 shadow-md bg-card/50 backdrop-blur-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="size-4 text-orange-500" />
+                Histórico de Volúmenes (m³)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Volumen total de salmuera libre + ocluida vs. volumen de sal
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="h-[400px] flex flex-col justify-between">
+              <div className="flex-1 min-h-0 bg-accent/10 border border-border/60 rounded-xl p-3">
+                {renderDetailVolumesChart()}
+              </div>
+              <div className="flex items-center justify-center gap-6 text-[10px] font-bold mt-4 pt-2 border-t border-border/30">
+                <span className="flex items-center gap-1.5"><span className="size-3 rounded bg-orange-500" /> Vol. Total Salmuera</span>
+                <span className="flex items-center gap-1.5"><span className="size-3 rounded bg-yellow-500" /> Vol. de Sal</span>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Table of Pool Records */}
+        <Card className="border border-border/60 shadow-sm bg-card/45 backdrop-blur-md">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Historial Completo de Cubicaciones</CardTitle>
+            <CardDescription className="text-xs">
+              Todas las mediciones almacenadas para este reservorio ordenadas cronológicamente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0 border-t border-border/60">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border/60 bg-accent/10 font-semibold text-muted-foreground">
+                  <th className="p-3">Fecha</th>
+                  <th className="p-3">Operador</th>
+                  <th className="p-3 text-right">Cota Esp. (m)</th>
+                  <th className="p-3 text-right">Borde Lib. (m)</th>
+                  <th className="p-3 text-right">Alt. Salm. (m)</th>
+                  <th className="p-3 text-right">Alt. Sal (m)</th>
+                  <th className="p-3 text-right">Área Esp. (m²)</th>
+                  <th className="p-3 text-right">Perím. (m)</th>
+                  <th className="p-3 text-right">Vol. Lib. (m³)</th>
+                  <th className="p-3 text-right">Vol. Sal (m³)</th>
+                  <th className="p-3 text-right">Vol. Ocl. (m³)</th>
+                  <th className="p-3 text-right">Vol. Total (m³)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredElementTimeline.length > 0 ? (
+                  filteredElementTimeline.map((row, idx) => {
+                    const cotaEspejo = row.cota_espejo !== undefined ? Number(row.cota_espejo).toFixed(3) : '—';
+                    const bordeLibre = row.borde_libre !== undefined ? Number(row.borde_libre).toFixed(2) : '—';
+                    const alturaSalmuera = row.altura_salmuera !== undefined ? Number(row.altura_salmuera).toFixed(2) : '—';
+                    const alturaSal = row.altura_sal !== undefined ? Number(row.altura_sal).toFixed(2) : '—';
+                    const areaEspejo = row.area_espejo !== undefined ? Number(row.area_espejo).toLocaleString('es-CL') : '—';
+                    const perimetro = row.perimetro !== undefined ? Number(row.perimetro).toLocaleString('es-CL') : '—';
+                    const volLibre = row.vol_salmuera_libre !== undefined ? Number(row.vol_salmuera_libre).toLocaleString('es-CL') : '—';
+                    const volSal = row.vol_sal !== undefined ? Number(row.vol_sal).toLocaleString('es-CL') : '—';
+                    const volOcl = row.vol_salmuera_ocluida !== undefined ? Number(row.vol_salmuera_ocluida).toLocaleString('es-CL') : '—';
+                    const volTotal = row.vol_salmuera_total !== undefined ? Number(row.vol_salmuera_total).toLocaleString('es-CL') : '—';
+
+                    return (
+                      <tr key={idx} className="border-b border-border/40 hover:bg-accent/5">
+                        <td className="p-3 font-medium font-mono text-muted-foreground">{row.date}</td>
+                        <td className="p-3">{row.createdBy}</td>
+                        <td className="p-3 text-right font-mono font-semibold text-blue-600">{cotaEspejo}</td>
+                        <td className="p-3 text-right font-mono">{bordeLibre}</td>
+                        <td className="p-3 text-right font-mono">{alturaSalmuera}</td>
+                        <td className="p-3 text-right font-mono">{alturaSal}</td>
+                        <td className="p-3 text-right font-mono">{areaEspejo}</td>
+                        <td className="p-3 text-right font-mono">{perimetro}</td>
+                        <td className="p-3 text-right font-mono text-cyan-600">{volLibre}</td>
+                        <td className="p-3 text-right font-mono text-amber-600">{volSal}</td>
+                        <td className="p-3 text-right font-mono text-muted-foreground">{volOcl}</td>
+                        <td className="p-3 text-right font-mono font-bold text-orange-600">{volTotal}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={12} className="p-8 text-center text-muted-foreground">
+                      No se han encontrado registros de cubicaciones para este reservorio.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  if (loading && projects.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-3">
-        <RefreshCw className="size-8 text-primary animate-spin" />
-        <p className="text-sm font-semibold text-muted-foreground">Sincronizando con GMT Link...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 max-w-md mx-auto text-center px-4">
-        <AlertTriangle className="size-12 text-destructive" />
-        <h2 className="text-lg font-bold">Error de sincronización</h2>
-        <p className="text-sm text-muted-foreground">{error}</p>
-        <Button onClick={loadProjects} className="bg-primary text-primary-foreground font-bold">
-          <RefreshCw className="size-4 mr-2" /> Reintentar
-        </Button>
-      </div>
-    );
-  }
-
+  /* ======================================================================== */
+  /* MAIN MAP & GIS LIST SCREEN                                               */
+  /* ======================================================================== */
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 py-6">
-      {/* Top Filter Bar & Nav */}
+      {/* Main Header */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card/45 backdrop-blur-md border border-border/60 rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="bg-orange-500/10 border border-orange-500/25 size-12 rounded-xl flex items-center justify-center text-orange-500 shadow-inner">
             <Layers className="size-6 animate-pulse" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">V-Metric Dashboard</h1>
+            <h1 className="text-2xl font-bold tracking-tight">V-Metric — Salar de Atacama</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Cubicación y monitoreo volumétrico de Pozas de Salmuera (Atacama)
+              Cubicación y monitoreo volumétrico de Pozas de Salmuera en Atacama
             </p>
           </div>
         </div>
 
-        {/* Project Selector Config */}
+        {/* Campaign Info */}
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {viewToggle}
           {selectedProject && (
             <div className="flex items-center gap-1.5 bg-accent/25 border border-border/80 rounded-xl px-3 py-1.5 text-xs">
               <Sliders className="size-3.5 text-muted-foreground" />
@@ -1012,7 +1295,105 @@ export default function MetricsDashboard(): ReactNode {
 
       {/* Main Content Grid: Map & Details */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Side: Map and Pool List */}
+        {/* Left Side: Pool List and Filters */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
+          <Card className="border border-border/60 shadow-sm bg-card/45 backdrop-blur-md">
+            <CardHeader className="pb-3 border-b border-border/60 flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <Filter className="size-4 text-orange-500" />
+                  Filtro y Catálogo de Vasos
+                </CardTitle>
+              </div>
+              
+              {/* Create Pool trigger */}
+              <Button
+                size="sm"
+                className="h-8 text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-md transition-all flex items-center gap-1"
+                onClick={() => setIsCreateModalOpen(true)}
+              >
+                <Plus className="size-3.5" />
+                Crear Poza
+              </Button>
+            </CardHeader>
+
+            <CardContent className="pt-4 flex flex-col gap-4">
+              {/* Filter inputs */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar poza por código o nombre..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 text-xs rounded-xl h-9"
+                  />
+                </div>
+                
+                <select
+                  value={statusFilter}
+                  onChange={(e: any) => setStatusFilter(e.target.value)}
+                  className="rounded-xl border border-input bg-background px-3 h-9 text-xs"
+                >
+                  <option value="all">Todos los Estados</option>
+                  <option value="safe">Seguro</option>
+                  <option value="warning">Precaución</option>
+                  <option value="danger">Crítico</option>
+                </select>
+              </div>
+
+              {/* Elements scrollable box */}
+              <div className="max-h-96 overflow-y-auto pr-2 flex flex-col gap-2">
+                {filteredElements.length > 0 ? (
+                  filteredElements.map((el) => {
+                    const status = getPoolStatus(el);
+                    const metrics = latestPoolMetrics[el.id] || {};
+                    const cotaEspejo = metrics['cota_espejo'] ? `${parseFloat(metrics['cota_espejo']).toFixed(2)} m` : 'S/D';
+
+                    return (
+                      <button
+                        key={el.id}
+                        onClick={() => {
+                          setSelectedElementId(el.id);
+                        }}
+                        className="flex items-center justify-between p-3 rounded-xl border border-border/60 hover:bg-orange-500/5 hover:border-orange-500/40 text-left transition-all group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`size-2.5 rounded-full ${
+                              status === 'danger'
+                                ? 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+                                : status === 'warning'
+                                  ? 'bg-orange-500 shadow-[0_0_8px_#f97316]'
+                                  : status === 'safe'
+                                    ? 'bg-emerald-500'
+                                    : 'bg-slate-400'
+                            }`}
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-foreground group-hover:text-orange-500 transition-colors">{el.name}</p>
+                            <p className="text-[10px] font-mono text-muted-foreground">{el.code}</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-foreground">{cotaEspejo}</p>
+                          <p className="text-[9px] text-muted-foreground">Cota Espejo</p>
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-center text-xs text-muted-foreground py-8 border border-dashed border-border/50 rounded-xl">
+                    No se encontraron pozas que coincidan con los filtros.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Side: Map */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           <Card className="border border-border/60 shadow-sm bg-card/45 backdrop-blur-md overflow-hidden">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -1052,183 +1433,21 @@ export default function MetricsDashboard(): ReactNode {
             </CardHeader>
 
             <CardContent className="p-0 border-t border-border/60">
-              <div className="h-96 w-full relative z-0">
+              <div className="h-[432px] w-full relative z-0">
                 <div ref={mapContainerRef} className="w-full h-full" />
               </div>
             </CardContent>
           </Card>
-
-          {/* Quick Pool Selector List */}
-          <Card className="border border-border/60 shadow-sm bg-card/45 backdrop-blur-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold">Catálogo de Vasos y Niveles</CardTitle>
-            </CardHeader>
-            <CardContent className="max-h-48 overflow-y-auto pr-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {sortedElements.map((el) => {
-                  const status = getPoolStatus(el);
-                  const isSelected = el.id === selectedElementId;
-                  const metrics = latestPoolMetrics[el.id] || {};
-                  const cotaEspejo = metrics['cota_espejo'] ? `${parseFloat(metrics['cota_espejo']).toFixed(2)} m` : 'S/D';
-
-                  return (
-                    <button
-                      key={el.id}
-                      onClick={() => {
-                        setSelectedElementId(el.id);
-                        centerOnElement(el);
-                      }}
-                      className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                        isSelected
-                          ? 'bg-orange-500/10 border-orange-500 text-foreground ring-1 ring-orange-500'
-                          : 'border-border/60 hover:bg-accent/30 text-muted-foreground'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`size-2.5 rounded-full ${
-                            status === 'danger'
-                              ? 'bg-red-500 shadow-[0_0_8px_#ef4444]'
-                              : status === 'warning'
-                                ? 'bg-orange-500 shadow-[0_0_8px_#f97316]'
-                                : status === 'safe'
-                                  ? 'bg-emerald-500'
-                                  : 'bg-slate-400'
-                          }`}
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-foreground">{el.name}</p>
-                          <p className="text-[10px] font-mono">{el.code}</p>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-xs font-bold text-foreground">{cotaEspejo}</p>
-                        <p className="text-[9px] text-muted-foreground">Cota Espejo</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Side: Selected Pool Metric details and Line Charts */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
-          {selectedElement ? (
-            <Card className="border border-border/60 shadow-md bg-card/50 backdrop-blur-md">
-              <CardHeader className="pb-3 border-b border-border/60">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg font-bold flex items-center gap-2">
-                      {selectedElement.name}
-                      <Badge variant="outline" className="font-mono text-[10px] bg-accent/30 font-bold border-border">
-                        {selectedElement.code}
-                      </Badge>
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Detalle métrico histórico y límites operacionales.
-                    </CardDescription>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleExportCSV}
-                    disabled={selectedElementTimeline.length === 0}
-                    className="h-8 text-xs font-bold border-border/80 hover:bg-primary/5"
-                  >
-                    <Download className="size-3.5 mr-1" /> Exportar CSV
-                  </Button>
-                </div>
-              </CardHeader>
-
-              <CardContent className="pt-4 flex flex-col gap-6">
-                {/* Reference Levels Metadata list */}
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
-                    <Sliders className="size-3 text-orange-500" />
-                    Límites de Referencia (Metadata Estática)
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="p-2.5 rounded-xl border border-border/50 bg-red-500/5">
-                      <p className="text-[9px] text-red-500 font-bold">Lám. Crítica</p>
-                      <p className="text-sm font-black text-foreground mt-0.5">
-                        {((selectedElement.metadata as Record<string, number> | null)?.cota_lamina_critica)?.toFixed(2) ?? 'S/R'} <span className="text-[10px] font-normal text-muted-foreground">m</span>
-                      </p>
-                    </div>
-                    <div className="p-2.5 rounded-xl border border-border/50 bg-orange-500/5">
-                      <p className="text-[9px] text-orange-500 font-bold">Lím. Seguro</p>
-                      <p className="text-sm font-black text-foreground mt-0.5">
-                        {((selectedElement.metadata as Record<string, number> | null)?.cota_segura)?.toFixed(2) ?? 'S/R'} <span className="text-[10px] font-normal text-muted-foreground">m</span>
-                      </p>
-                    </div>
-                    <div className="p-2.5 rounded-xl border border-border/50 bg-slate-500/5">
-                      <p className="text-[9px] text-muted-foreground font-bold">Fondo Estanque</p>
-                      <p className="text-sm font-black text-foreground mt-0.5">
-                        {((selectedElement.metadata as Record<string, number> | null)?.cota_fondo)?.toFixed(2) ?? 'S/R'} <span className="text-[10px] font-normal text-muted-foreground">m</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SVG Charts */}
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
-                      <TrendingUp className="size-3 text-orange-500" />
-                      Histórico de Volúmenes (m³)
-                    </h4>
-                    <div className="bg-accent/10 border border-border/60 rounded-xl p-3 h-52">
-                      {renderVolumesChart()}
-                    </div>
-                    {selectedElementTimeline.length >= 2 && (
-                      <div className="flex items-center justify-center gap-4 text-[9px] font-bold mt-2">
-                        <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-orange-500" /> Vol. Total</span>
-                        <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-cyan-500" /> Vol. Libre</span>
-                        <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-yellow-500" /> Vol. Sal</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
-                      <Activity className="size-3 text-orange-500" />
-                      Histórico de Altura / Espejo (m)
-                    </h4>
-                    <div className="bg-accent/10 border border-border/60 rounded-xl p-3 h-52">
-                      {renderLevelsChart()}
-                    </div>
-                    {selectedElementTimeline.length >= 2 && (
-                      <div className="flex items-center justify-center gap-4 text-[9px] font-bold mt-2">
-                        <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-blue-600" /> Cota Espejo</span>
-                        <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-amber-800" /> Cota Sal</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border border-border/60 shadow-sm bg-card/65 h-96 flex flex-col items-center justify-center text-center p-6">
-              <HelpCircle className="size-10 text-muted-foreground mb-3" />
-              <h3 className="text-sm font-bold">Selecciona una Poza</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-[240px]">
-                Haz clic en un estanque en el mapa o en el catálogo inferior para desplegar sus series históricas.
-              </p>
-            </Card>
-          )}
         </div>
       </div>
 
-      {/* Recent Uploads Table */}
+      {/* Recent Uploads Table (Recent Registrations Log) */}
       <section className="bg-card/45 backdrop-blur-md border border-border/60 rounded-2xl p-6 shadow-sm">
         <header className="mb-4 flex justify-between items-center">
           <div>
             <h2 className="text-md font-bold flex items-center gap-2">
               <CheckCircle2 className="size-4 text-emerald-500" />
-              Historial Reciente de Cubicaciones Subidas
+              Log de Últimos Registros
             </h2>
             <p className="text-xs text-muted-foreground">
               Últimas mediciones consolidadas desde el cliente de escritorio V-Metric.
@@ -1300,6 +1519,220 @@ export default function MetricsDashboard(): ReactNode {
           </table>
         </div>
       </section>
+
+      {/* CREATE ELEMENT MODAL DIALOG */}
+      <Modal open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <ModalContent className="max-w-md bg-card border border-border shadow-xl rounded-2xl p-6">
+          <form onSubmit={handleCreatePool} className="flex flex-col gap-4">
+            <ModalHeader>
+              <ModalTitle className="text-lg font-bold">Crear Vaso de Evaporación</ModalTitle>
+              <ModalDescription className="text-xs text-muted-foreground">
+                Registre un nuevo reservorio en el proyecto {selectedProject?.name}.
+              </ModalDescription>
+            </ModalHeader>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="poolCode" className="text-xs font-semibold">Código del Reservorio</Label>
+                <Input
+                  id="poolCode"
+                  placeholder="Ej: R11"
+                  value={newPoolCode}
+                  onChange={(e) => setNewPoolCode(e.target.value)}
+                  className="text-xs h-9 rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="poolName" className="text-xs font-semibold">Nombre descriptivo</Label>
+                <Input
+                  id="poolName"
+                  placeholder="Ej: Reservorio 11"
+                  value={newPoolName}
+                  onChange={(e) => setNewPoolName(e.target.value)}
+                  className="text-xs h-9 rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="poolCoords" className="text-xs font-semibold">Polígono básico delimitador (Opcional)</Label>
+                <Input
+                  id="poolCoords"
+                  placeholder="Ej: [[-23.63, -68.32], [-23.64, -68.33], ...]"
+                  value={newPoolCoords}
+                  onChange={(e) => setNewPoolCoords(e.target.value)}
+                  className="text-xs h-9 rounded-xl font-mono"
+                />
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  Matriz JSON de coordenadas [lat, lon]. Si se deja vacío se generará uno por defecto.
+                </span>
+              </div>
+
+              <div className="my-2 border-t border-border/40" />
+              <p className="text-xs font-bold text-orange-500 uppercase tracking-wider">Límites de Cosecha</p>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="effectiveArea" className="text-[10px] font-semibold text-muted-foreground truncate">Área Oper. Efectiva (m²)</Label>
+                  <Input
+                    id="effectiveArea"
+                    type="number"
+                    step="0.01"
+                    placeholder="4500"
+                    value={newPoolEffectiveArea}
+                    onChange={(e) => setNewPoolEffectiveArea(e.target.value)}
+                    className="text-xs h-8 rounded-lg"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="safeCapacity" className="text-[10px] font-semibold text-muted-foreground truncate">Cap. Oper. Seguridad (m³)</Label>
+                  <Input
+                    id="safeCapacity"
+                    type="number"
+                    step="0.1"
+                    placeholder="5200"
+                    value={newPoolSafeCapacity}
+                    onChange={(e) => setNewPoolSafeCapacity(e.target.value)}
+                    className="text-xs h-8 rounded-lg"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="maxCapacity" className="text-[10px] font-semibold text-muted-foreground truncate">Cap. Hidráulica Máx. (m³)</Label>
+                  <Input
+                    id="maxCapacity"
+                    type="number"
+                    step="0.1"
+                    placeholder="6000"
+                    value={newPoolMaxCapacity}
+                    onChange={(e) => setNewPoolMaxCapacity(e.target.value)}
+                    className="text-xs h-8 rounded-lg"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <ModalFooter className="mt-2">
+              <ModalClose asChild>
+                <Button type="button" variant="ghost" className="text-xs h-9 rounded-xl font-semibold">
+                  Cancelar
+                </Button>
+              </ModalClose>
+              <Button type="submit" className="text-xs h-9 rounded-xl font-bold bg-orange-600 hover:bg-orange-700 text-white">
+                Guardar Vaso
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      {/* EDIT ELEMENT MODAL DIALOG */}
+      <Modal open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <ModalContent className="max-w-md bg-card border border-border shadow-xl rounded-2xl p-6">
+          <form onSubmit={handleUpdatePool} className="flex flex-col gap-4">
+            <ModalHeader>
+              <ModalTitle className="text-lg font-bold">Editar Vaso de Evaporación</ModalTitle>
+              <ModalDescription className="text-xs text-muted-foreground">
+                Modifique la información o límites del reservorio.
+              </ModalDescription>
+            </ModalHeader>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="editPoolCode" className="text-xs font-semibold">Código del Reservorio</Label>
+                <Input
+                  id="editPoolCode"
+                  placeholder="Ej: R11"
+                  value={editPoolCode}
+                  onChange={(e) => setEditPoolCode(e.target.value)}
+                  className="text-xs h-9 rounded-xl font-mono"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="editPoolName" className="text-xs font-semibold">Nombre descriptivo</Label>
+                <Input
+                  id="editPoolName"
+                  placeholder="Ej: Reservorio 11"
+                  value={editPoolName}
+                  onChange={(e) => setEditPoolName(e.target.value)}
+                  className="text-xs h-9 rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="editPoolCoords" className="text-xs font-semibold">Polígono básico delimitador (Opcional)</Label>
+                <Input
+                  id="editPoolCoords"
+                  placeholder="Ej: [[-23.63, -68.32], [-23.64, -68.33], ...]"
+                  value={editPoolCoords}
+                  onChange={(e) => setEditPoolCoords(e.target.value)}
+                  className="text-xs h-9 rounded-xl font-mono"
+                />
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  Matriz JSON de coordenadas [lat, lon].
+                </span>
+              </div>
+
+              <div className="my-2 border-t border-border/40" />
+              <p className="text-xs font-bold text-orange-500 uppercase tracking-wider">Límites de Cosecha</p>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="editEffectiveArea" className="text-[10px] font-semibold text-muted-foreground truncate">Área Oper. Efectiva (m²)</Label>
+                  <Input
+                    id="editEffectiveArea"
+                    type="number"
+                    step="0.01"
+                    placeholder="5000"
+                    value={editPoolEffectiveArea}
+                    onChange={(e) => setEditPoolEffectiveArea(e.target.value)}
+                    className="text-xs h-8 rounded-lg"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="editSafeCapacity" className="text-[10px] font-semibold text-muted-foreground truncate">Cap. Oper. Seguridad (m³)</Label>
+                  <Input
+                    id="editSafeCapacity"
+                    type="number"
+                    step="0.1"
+                    placeholder="6000"
+                    value={editPoolSafeCapacity}
+                    onChange={(e) => setEditPoolSafeCapacity(e.target.value)}
+                    className="text-xs h-8 rounded-lg"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="editMaxCapacity" className="text-[10px] font-semibold text-muted-foreground truncate">Cap. Hidráulica Máx. (m³)</Label>
+                  <Input
+                    id="editMaxCapacity"
+                    type="number"
+                    step="0.1"
+                    placeholder="7000"
+                    value={editPoolMaxCapacity}
+                    onChange={(e) => setEditPoolMaxCapacity(e.target.value)}
+                    className="text-xs h-8 rounded-lg"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <ModalFooter className="mt-2">
+              <ModalClose asChild>
+                <Button type="button" variant="ghost" className="text-xs h-9 rounded-xl font-semibold">
+                  Cancelar
+                </Button>
+              </ModalClose>
+              <Button type="submit" className="text-xs h-9 rounded-xl font-bold bg-orange-600 hover:bg-orange-700 text-white">
+                Actualizar Vaso
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

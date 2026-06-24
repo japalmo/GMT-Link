@@ -15,6 +15,7 @@
  *
  * Ejecutar con: pnpm --filter @gmt-link/api seed:capstone
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { config } from 'dotenv';
 import { OpenFgaClient } from '@openfga/sdk';
@@ -128,25 +129,13 @@ const ALB_VARIABLES = [
   { code: 'vol_salmuera_libre', name: 'Volumen Salmuera Libre', type: VariableType.SCALAR, unit: 'm³' },
   { code: 'vol_sal', name: 'Volumen de Sal', type: VariableType.SCALAR, unit: 'm³' },
   { code: 'vol_salmuera_ocluida', name: 'Volumen Salmuera Ocluida', type: VariableType.SCALAR, unit: 'm³' },
-  { code: 'vol_total_salmuera', name: 'Volumen Total Salmuera', type: VariableType.SCALAR, unit: 'm³' },
+  { code: 'vol_salmuera_total', name: 'Volumen Total Salmuera', type: VariableType.SCALAR, unit: 'm³' },
   { code: 'cota_espejo', name: 'Cota de Espejo de Agua', type: VariableType.SCALAR, unit: 'm' },
   { code: 'cota_sal', name: 'Cota de Sal', type: VariableType.SCALAR, unit: 'm' },
+  { code: 'area_espejo', name: 'Área de Espejo de Agua', type: VariableType.SCALAR, unit: 'm²' },
+  { code: 'perimetro', name: 'Perímetro de la Poza', type: VariableType.SCALAR, unit: 'm' },
+  { code: 'dem_file', name: 'Archivo DEM de Elevación', type: VariableType.FILE, unit: '' },
 ];
-
-const ALB_R2_ELEMENT = {
-  code: 'R2',
-  name: 'Reservorio 2',
-  type: 'POZA',
-  metadata: {
-    cota_lamina_critica: 2302.13,
-    cota_salm: 2301.737,
-    cota_sal_ref: 2301.17,
-    cota_fondo: 2300.74,
-    cota_segura: 2301.83,
-    sistema: 1,
-    tipo: 'reservorio',
-  },
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3) Usuarios MVP
@@ -337,12 +326,19 @@ async function main(): Promise<void> {
   });
   console.log(`Albemarle: ${albClient.name} -> ${albProject.name}`);
 
-  // ── 2c. Albemarle: Elemento R2, Fase, Variables y Puntos de cubicación de muestra ──
-  const elementR2 = await prisma.element.upsert({
-    where: { code: ALB_R2_ELEMENT.code },
-    update: { name: ALB_R2_ELEMENT.name, type: ALB_R2_ELEMENT.type, metadata: ALB_R2_ELEMENT.metadata, projectId: albProject.id },
-    create: { code: ALB_R2_ELEMENT.code, name: ALB_R2_ELEMENT.name, type: ALB_R2_ELEMENT.type, metadata: ALB_R2_ELEMENT.metadata, projectId: albProject.id },
-  });
+  // Load reservoirs JSON data
+  const dataPath = path.join(__dirname, 'data-reservorios.json');
+  let reservoirsData: Record<string, any> = {};
+  try {
+    if (fs.existsSync(dataPath)) {
+      reservoirsData = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+      console.log(`Loaded ${Object.keys(reservoirsData).length} reservoirs from data-reservorios.json`);
+    } else {
+      console.warn(`WARNING: data-reservorios.json not found at ${dataPath}`);
+    }
+  } catch (err) {
+    console.error('Error reading data-reservorios.json:', err);
+  }
 
   const phase = await prisma.phase.upsert({
     where: { serviceId_code: { serviceId: albService.id, code: 'anual-2026' } },
@@ -379,47 +375,112 @@ async function main(): Promise<void> {
   }
   console.log(`Usuarios asegurados: ${USERS.length}`);
 
-  // ── 3.1. Sembrar DataPoints históricos para R2 (Albemarle) ──
+  // ── 3.1. Sembrar Elements y DataPoints históricos desde JSON ──
   const operadorAlbId = userIdByEmail.get('operador@albemarle.cl');
+  
   if (operadorAlbId) {
-    const seriesData = [
-      { fecha: '2025-12-15T12:00:00Z', borde_libre: 1.05, altura_salmuera: 2.95, altura_sal: 0.98, vol_salmuera_libre: 26800, vol_sal: 12350, vol_salmuera_ocluida: 6900, vol_total_salmuera: 33700, cota_espejo: 2301.737, cota_sal: 2301.17 },
-      { fecha: '2026-01-15T12:00:00Z', borde_libre: 1.12, altura_salmuera: 2.88, altura_sal: 1.00, vol_salmuera_libre: 26100, vol_sal: 12600, vol_salmuera_ocluida: 6850, vol_total_salmuera: 32950, cota_espejo: 2301.680, cota_sal: 2301.15 },
-      { fecha: '2026-02-15T12:00:00Z', borde_libre: 1.20, altura_salmuera: 2.80, altura_sal: 1.03, vol_salmuera_libre: 25300, vol_sal: 12900, vol_salmuera_ocluida: 6780, vol_total_salmuera: 32080, cota_espejo: 2301.590, cota_sal: 2301.12 },
-      { fecha: '2026-03-15T12:00:00Z', borde_libre: 1.31, altura_salmuera: 2.69, altura_sal: 1.06, vol_salmuera_libre: 24200, vol_sal: 13250, vol_salmuera_ocluida: 6700, vol_total_salmuera: 30900, cota_espejo: 2301.480, cota_sal: 2301.09 },
-      { fecha: '2026-04-15T12:00:00Z', borde_libre: 1.44, altura_salmuera: 2.56, altura_sal: 1.10, vol_salmuera_libre: 22950, vol_sal: 13600, vol_salmuera_ocluida: 6600, vol_total_salmuera: 29550, cota_espejo: 2301.350, cota_sal: 2301.05 },
-      { fecha: '2026-05-15T12:00:00Z', borde_libre: 1.58, altura_salmuera: 2.42, altura_sal: 1.14, vol_salmuera_libre: 21600, vol_sal: 14000, vol_salmuera_ocluida: 6480, vol_total_salmuera: 28080, cota_espejo: 2301.210, cota_sal: 2301.01 },
-    ];
+    for (const [code, resObj] of Object.entries(reservoirsData)) {
+      // 1. Upsert Element
+      const element = await prisma.element.upsert({
+        where: { code },
+        update: {
+          name: resObj.name,
+          type: 'POZA',
+          locationPolygon: JSON.stringify(resObj.polygon),
+          metadata: resObj.metadata,
+          projectId: albProject.id,
+        },
+        create: {
+          code,
+          name: resObj.name,
+          type: 'POZA',
+          locationPolygon: JSON.stringify(resObj.polygon),
+          metadata: resObj.metadata,
+          projectId: albProject.id,
+        },
+      });
 
-    for (const record of seriesData) {
-      for (const [vCode, value] of Object.entries(record)) {
-        if (vCode === 'fecha') continue;
-        const variable = varMap.get(vCode);
-        if (!variable) continue;
-        const exist = await prisma.dataPoint.findFirst({
+      // 2. Seed measurements (SKIPPED to let reload-volumes do it faster)
+      /*
+      for (const record of resObj.measurements) {
+        const valMap: Record<string, number | null | undefined> = {
+          borde_libre: record.borde_libre,
+          altura_salmuera: record.altura_salmuera,
+          altura_sal: record.altura_sal,
+          vol_salmuera_libre: record.vol_salmuera_libre,
+          vol_sal: record.vol_sal,
+          vol_salmuera_ocluida: record.vol_salmuera_ocluida,
+          vol_salmuera_total: record.vol_total_salmuera,
+          cota_espejo: record.cota_espejo,
+          cota_sal: record.cota_sal,
+          area_espejo: record.area_espejo,
+          perimetro: record.perimetro,
+        };
+
+        for (const [vCode, val] of Object.entries(valMap)) {
+          if (val === null || val === undefined) continue;
+          const variable = varMap.get(vCode);
+          if (!variable) continue;
+
+          const exist = await prisma.dataPoint.findFirst({
+            where: {
+              elementId: element.id,
+              variableId: variable.id,
+              phaseId: phase.id,
+              createdAt: new Date(record.date),
+            },
+          });
+
+          if (!exist) {
+            await prisma.dataPoint.create({
+              data: {
+                value: String(val),
+                variableId: variable.id,
+                elementId: element.id,
+                phaseId: phase.id,
+                createdById: operadorAlbId,
+                createdAt: new Date(record.date),
+              },
+            });
+          }
+        }
+      }
+      */
+
+      // 3. Seed dem_file DataPoint
+      const demVariable = varMap.get('dem_file');
+      if (demVariable) {
+        const demExist = await prisma.dataPoint.findFirst({
           where: {
-            elementId: elementR2.id,
-            variableId: variable.id,
+            elementId: element.id,
+            variableId: demVariable.id,
             phaseId: phase.id,
-            createdAt: new Date(record.fecha),
           },
         });
-        if (!exist) {
+
+        if (!demExist) {
           await prisma.dataPoint.create({
             data: {
-              value: String(value),
-              variableId: variable.id,
-              elementId: elementR2.id,
+              value: `MDE_${code}.tif`,
+              fileUrl: `/dem/${code}.json`,
+              variableId: demVariable.id,
+              elementId: element.id,
               phaseId: phase.id,
               createdById: operadorAlbId,
-              createdAt: new Date(record.fecha),
+              createdAt: new Date('2026-06-18T12:00:00Z'),
             },
           });
         }
       }
+      
+      console.log(`Reservorio ${code}: Elemento y ${resObj.measurements.length} mediciones sembradas.`);
     }
-    console.log(`Puntos de medición históricos sembrados para Reservorio 2.`);
   }
+
+  // Obtener el Elemento R2 para compatibilidad con las tareas posteriores del seed
+  const elementR2 = await prisma.element.findUniqueOrThrow({
+    where: { code: 'R2' },
+  });
 
   // ── 4. Memberships PROJECT + sincronización a FGA ──
   const fga = makeFgaClient();

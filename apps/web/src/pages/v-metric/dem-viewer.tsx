@@ -36,10 +36,8 @@ interface Cubicacion {
   series: CubRow[];
 }
 
-const VERTICAL_EXAGGERATION = 6; // ~4.3 m de relieve sobre ~117 m → realza el relieve
-
 /** Lienzo three.js: heightmap del DEM con OrbitControls y colormap por elevación. */
-function Terrain3D({ grid }: { grid: DemGrid }): ReactNode {
+function Terrain3D({ grid, exaggeration }: { grid: DemGrid; exaggeration: number }): ReactNode {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -74,7 +72,7 @@ function Terrain3D({ grid }: { grid: DemGrid }): ReactNode {
 
     for (let i = 0; i < pos.count; i++) {
       const e = elev[i] ?? grid.minZ;
-      pos.setZ(i, (e - grid.minZ) * VERTICAL_EXAGGERATION);
+      pos.setZ(i, (e - grid.minZ) * exaggeration);
       const t = (e - grid.minZ) / range;
       if (t < 0.5) tmp.lerpColors(lo, mid, t * 2);
       else tmp.lerpColors(mid, hi, (t - 0.5) * 2);
@@ -132,7 +130,7 @@ function Terrain3D({ grid }: { grid: DemGrid }): ReactNode {
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
     };
-  }, [grid]);
+  }, [grid, exaggeration]);
 
   return <div ref={mountRef} className="h-[440px] w-full overflow-hidden rounded-lg border border-border" />;
 }
@@ -169,133 +167,87 @@ function TimeChart({ data, varDef }: { data: CubRow[]; varDef: VarDef }): ReactN
   );
 }
 
-/** Visor completo para un Element (poza/reservorio): 3D + tabla + gráfico. */
 export function DemViewer({ code = 'R2' }: { code?: string }): ReactNode {
   const [grid, setGrid] = useState<DemGrid | null>(null);
-  const [cub, setCub] = useState<Cubicacion | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chartVar, setChartVar] = useState<string>('vol_total_salmuera');
+  const [exaggeration, setExaggeration] = useState(1.0); // original scale by default
 
   useEffect(() => {
     let alive = true;
-    Promise.all([
-      fetch(`/dem/${code}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('DEM no encontrado')))),
-      fetch(`/dem/${code}-cubicacion.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('Cubicación no encontrada')))),
-    ])
-      .then(([g, c]: [DemGrid, Cubicacion]) => {
+    fetch(`/dem/${code}.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('DEM no encontrado'))))
+      .then((g: DemGrid) => {
         if (!alive) return;
         setGrid(g);
-        setCub(c);
       })
-      .catch((e: unknown) => alive && setError(e instanceof Error ? e.message : 'Error al cargar el visor'));
+      .catch((e: unknown) => alive && setError(e instanceof Error ? e.message : 'Error al cargar el visor 3D'));
     return () => {
       alive = false;
     };
   }, [code]);
 
-  const selectedVar = useMemo(() => cub?.variables.find((v) => v.key === chartVar) ?? cub?.variables[0], [cub, chartVar]);
-
   if (error) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">No se pudo cargar el visor: {error}</CardContent>
+      <Card className="border border-border/60 bg-card/50">
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          No se pudo cargar el visor 3D: {error}
+        </CardContent>
       </Card>
     );
   }
-  if (!grid || !cub || !selectedVar) {
+
+  if (!grid) {
     return (
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardContent className="flex h-[480px] items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-muted-foreground">
-              <svg className="size-8 animate-spin text-primary" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
-              </svg>
-              <span className="text-sm">Cargando terreno 3D y datos de cubicación…</span>
-            </div>
-          </CardContent>
-        </Card>
-        <div className="lg:col-span-2">
-          <Card>
-            <CardContent className="h-[480px] animate-pulse rounded-lg bg-muted/30" />
-          </Card>
-        </div>
-      </div>
+      <Card className="border border-border/60 bg-card/50">
+        <CardContent className="flex h-[440px] items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <svg className="size-8 animate-spin text-primary" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+            </svg>
+            <span className="text-sm">Cargando terreno 3D…</span>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-5">
-      <Card className="lg:col-span-3">
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Visor 3D — {cub.elementName}</CardTitle>
-          <Badge variant="secondary">
-            Δ {(grid.maxZ - grid.minZ).toFixed(1)} m · {grid.width}×{grid.height}
-          </Badge>
-        </CardHeader>
-        <CardContent>
-          <Terrain3D grid={grid} />
-          <p className="mt-2 text-xs text-muted-foreground">
-            Arrastrá para orbitar · rueda para zoom. Exageración vertical ×{VERTICAL_EXAGGERATION}. Cota {grid.minZ.toFixed(1)}–{grid.maxZ.toFixed(1)} m s.n.m.
+    <Card className="border border-border/60 bg-card/50 shadow-md">
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-base">Visor de Elevación 3D (DEM)</CardTitle>
+        <Badge variant="secondary">
+          Δ {(grid.maxZ - grid.minZ).toFixed(1)} m · {grid.width}×{grid.height}
+        </Badge>
+      </CardHeader>
+      <CardContent>
+        <Terrain3D grid={grid} exaggeration={exaggeration} />
+        
+        <div className="mt-4 flex flex-col gap-2 p-3 rounded-xl bg-accent/10 border border-border/40">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
+              ⛰️ Exageración vertical del relieve:
+            </span>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="1"
+                max="15"
+                step="0.5"
+                value={exaggeration}
+                onChange={(e) => setExaggeration(parseFloat(e.target.value))}
+                className="h-1.5 w-36 cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-600 dark:bg-orange-950/40"
+              />
+              <span className="text-xs font-mono font-black text-orange-600 dark:text-orange-500 bg-orange-500/10 border border-orange-500/25 px-2 py-0.5 rounded-lg select-none">
+                {exaggeration.toFixed(1)}x
+              </span>
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Arrastra con clic izquierdo para orbitar · clic derecho para desplazar · rueda para zoom. Escala real por defecto (1.0x). Rango de cotas: {grid.minZ.toFixed(1)}–{grid.maxZ.toFixed(1)} m s.n.m.
           </p>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4 lg:col-span-2">
-        <Card>
-          <CardHeader className="space-y-0 pb-2">
-            <CardTitle className="text-base">Evolución temporal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <select
-              value={chartVar}
-              onChange={(e) => setChartVar(e.target.value)}
-              className="mb-2 w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-            >
-              {cub.variables.map((v) => (
-                <option key={v.key} value={v.key}>
-                  {v.label} ({v.unit})
-                </option>
-              ))}
-            </select>
-            <TimeChart data={cub.series} varDef={selectedVar} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="lg:col-span-5">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Datos de cubicación — {cub.elementName}</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Fecha</th>
-                {cub.variables.map((v) => (
-                  <th key={v.key} className="px-3 py-2 text-right font-medium">
-                    {v.label}
-                    <span className="block text-[10px] font-normal">{v.unit}</span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {cub.series.map((row) => (
-                <tr key={row.fecha} className="border-b border-border/50">
-                  <td className="py-2 pr-3 font-medium">{row.fecha}</td>
-                  {cub.variables.map((v) => (
-                    <td key={v.key} className="px-3 py-2 text-right tabular-nums">
-                      {Number(row[v.key]).toLocaleString('es-CL')}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

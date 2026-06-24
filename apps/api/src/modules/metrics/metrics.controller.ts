@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Logger, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Logger, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { MetricsService } from './metrics.service';
 import { CurrentUser } from '../../auth/current-user.decorator';
@@ -39,6 +39,28 @@ export class MetricsController {
     const userId = this.requireUserId(user);
     await this.requireProjectPermission(userId, dto.projectId, 'can_submit_measurements');
     return this.service.createPool(dto);
+  }
+
+  @Put('elements/:id')
+  async updatePool(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: CreateElementDto,
+  ) {
+    const userId = this.requireUserId(user);
+    await this.requireProjectPermission(userId, dto.projectId, 'can_submit_measurements');
+    return this.service.updatePool(id, dto);
+  }
+
+  @Delete('elements/:id')
+  async deletePool(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(user);
+    const element = await this.service.getPoolById(id);
+    await this.requireProjectPermission(userId, element.projectId, 'can_submit_measurements');
+    return this.service.deletePool(id);
   }
 
   @Get('elements')

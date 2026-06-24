@@ -19,6 +19,9 @@ Thumbs.db
 # Uploads del storage local (dev) — los archivos no se versionan (§9)
 apps/api/var/
 
+# Backups de datos generados por reload-volumes.mjs (dumps de BD, no versionar)
+apps/api/prisma/backups/
+
 # IDE
 .vscode/
 .idea/

@@ -27,7 +27,7 @@ export interface NavItem {
  * Recursos E5). Apuntan a rutas que muestran un estado "en construcción".
  */
 export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
-  { label: 'Dashboard', to: '/', icon: LayoutDashboard, module: 'dashboard' },
+  { label: 'Inicio', to: '/', icon: LayoutDashboard, module: 'dashboard' },
   { label: 'Usuarios', to: '/usuarios', icon: Users, module: 'usuarios' },
   { label: 'Directorio', to: '/directorio', icon: Contact, module: 'directorio' },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },

@@ -132,6 +132,38 @@ export class MetricsService {
     });
   }
 
+  async getPoolById(id: string) {
+    const element = await this.prisma.element.findUnique({
+      where: { id },
+    });
+    if (!element) {
+      throw new NotFoundException(`Elemento con ID ${id} no encontrado.`);
+    }
+    return element;
+  }
+
+  async updatePool(id: string, dto: CreateElementDto) {
+    await this.getPoolById(id);
+    return this.prisma.element.update({
+      where: { id },
+      data: {
+        code: dto.code,
+        name: dto.name,
+        type: dto.type,
+        locationPolygon: dto.locationPolygon,
+        metadata: toInputJson(dto.metadata),
+      },
+    });
+  }
+
+  async deletePool(id: string) {
+    await this.getPoolById(id);
+    await this.prisma.element.delete({
+      where: { id },
+    });
+    return { success: true };
+  }
+
   async getPoolByCode(code: string) {
     const element = await this.prisma.element.findUnique({
       where: { code },

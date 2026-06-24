@@ -1652,9 +1652,7 @@ export function listMetricVariables(phaseId: string): Promise<MetricVariable[]> 
 export function getMetricDataPoints(phaseId: string, elementId?: string): Promise<MetricDataPoint[]> {
   const query = elementId ? `?elementId=${encodeURIComponent(elementId)}` : '';
   return request<MetricDataPoint[]>(`/metrics/data/${encodeURIComponent(phaseId)}${query}`);
-}
-
-export function submitMetricDataPoints(points: Array<{
+}export function submitMetricDataPoints(points: Array<{
   value: string;
   variableId: string;
   elementId: string;
@@ -1667,5 +1665,40 @@ export function submitMetricDataPoints(points: Array<{
   });
 }
 
+export function createMetricElement(dto: {
+  code: string;
+  name: string;
+  type: string;
+  locationPolygon: string | null;
+  metadata: Record<string, unknown> | null;
+  projectId: string;
+}): Promise<MetricElement> {
+  return request<MetricElement>('/metrics/elements', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
 
+export function updateMetricElement(
+  id: string,
+  dto: {
+    code: string;
+    name: string;
+    type: string;
+    locationPolygon: string | null;
+    metadata: Record<string, unknown> | null;
+    projectId: string;
+  },
+): Promise<MetricElement> {
+  return request<MetricElement>(`/metrics/elements/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(dto),
+  });
+}
+
+export function deleteMetricElement(id: string): Promise<void> {
+  return request<void>(`/metrics/elements/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
 

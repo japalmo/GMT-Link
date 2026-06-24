@@ -9,8 +9,16 @@ import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: 'http://localhost:5173' });
+  // Orígenes permitidos para CORS: configurable por env para Railway/producción.
+  // `CORS_ORIGINS` = lista separada por comas (p. ej. "https://web.up.railway.app").
+  // En dev cae al frontend local de Vite.
+  const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigins });
   const port = Number(process.env.PORT ?? 3001);
-  await app.listen(port);
+  // Escuchar en 0.0.0.0 para que el contenedor de Railway acepte conexiones externas.
+  await app.listen(port, '0.0.0.0');
 }
 void bootstrap();
