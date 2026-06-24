@@ -56,7 +56,8 @@ necesita el workspace pnpm completo).
 | `FIREBASE_PROJECT_ID` | proyecto Firebase real (§5) | — |
 | `FIREBASE_CLIENT_EMAIL` | del service account | 🔒 |
 | `FIREBASE_PRIVATE_KEY` | del service account (con `\n` escapados) | 🔒 |
-| `GEMINI_API_KEY` | clave Gemini | 🔒 |
+| `NVIDIA_API_KEY` | clave NVIDIA NIM — texto (nemotron-3-ultra-550b) | 🔒 |
+| `NVIDIA_API_KEY_VISION` | clave NVIDIA NIM — visión (nemotron-3-nano-omni) | 🔒 |
 | `CORS_ORIGINS` | URL pública del servicio web, p. ej. `https://gmt-link-web.up.railway.app` | — |
 | `NODE_ENV` | `production` | — |
 | `PORT` | lo inyecta Railway (no fijar) | — |
@@ -82,9 +83,9 @@ Root directory: raíz del repo.
 | Variable | Valor |
 | :-- | :-- |
 | `VITE_API_URL` | URL pública del servicio api, p. ej. `https://gmt-link-api.up.railway.app` |
-| `VITE_FIREBASE_API_KEY` | del proyecto Firebase real (§5) |
-| `VITE_FIREBASE_AUTH_DOMAIN` | `<proyecto>.firebaseapp.com` |
-| `VITE_FIREBASE_PROJECT_ID` | `<proyecto>` |
+| `VITE_FIREBASE_API_KEY` | `AIzaSyBj9V4iLs40rdftaY4w-CQK3vGaAOagNMA` (proyecto `gmt-hub-6d8f7`) |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `gmt-hub-6d8f7.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | `gmt-hub-6d8f7` |
 | `VITE_FIREBASE_AUTH_EMULATOR` | **vacía** en prod (activa el emulador solo si está definida) |
 
 > Tras cambiar `VITE_API_URL` hay que re-desplegar la web (se compila en build).
@@ -108,13 +109,17 @@ Root directory: raíz del repo.
 
 ## 5. Firebase en producción (no emulador)
 
-El emulador NO corre en Railway. Para prod:
-1. Usar un proyecto Firebase real con **Authentication** habilitado (email/password).
-2. Cargar credenciales del service account en el servicio api (`FIREBASE_*`, §2)
-   y la config de cliente en web (`VITE_FIREBASE_*`, §3). **Dejar
-   `FIREBASE_AUTH_EMULATOR_HOST` sin definir.**
+El emulador NO corre en Railway. Proyecto Firebase real: **GMT Link / `gmt-hub-6d8f7`**
+(la config de cliente ya está en §3). Para prod:
+1. Verificar que **Authentication → email/password** esté habilitado en `gmt-hub-6d8f7`.
+2. **Generar un service account** (Firebase Console → Project Settings → Service
+   Accounts → *Generate new private key*). El MVP usaba la REST API con solo la
+   apiKey, pero la API nueva usa `firebase-admin` (necesita service account para
+   `setPassword` del primer login). De ese JSON saca `FIREBASE_CLIENT_EMAIL` y
+   `FIREBASE_PRIVATE_KEY` (con `\n` escapados) para el servicio api (§2).
+   **Dejar `FIREBASE_AUTH_EMULATOR_HOST` sin definir.**
 3. Sembrar los usuarios demo en el proyecto real (adaptar
-   `apps/api/scripts/seed-firebase-mvp.ts` para apuntar al proyecto real, sin
+   `apps/api/scripts/seed-firebase-mvp.ts` apuntando a `gmt-hub-6d8f7`, sin
    `FIREBASE_AUTH_EMULATOR_HOST`).
 
 > ⚠️ Las claves `firebase-adminsdk-*.json` de tu carpeta Downloads son **secretos**:

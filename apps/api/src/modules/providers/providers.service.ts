@@ -9,6 +9,7 @@ import {
 } from './dto/providers.dto';
 import { ProviderProductView, ProviderRatingView, ProviderView } from './providers.types';
 import { Provider, ProviderProduct, ProviderRating, User } from '@prisma/client';
+import { callNvidiaChat, extractJson } from '../../common/nvidia';
 
 @Injectable()
 export class ProvidersService {
@@ -168,7 +169,7 @@ export class ProvidersService {
       );
     }
 
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const apiKey = this.configService.get<string>('NVIDIA_API_KEY');
     if (!apiKey) {
       // In development, if no API key is present, fallback to a mocked clean response so it doesn't block evaluation.
       await this.prisma.geminiUsage.create({
@@ -191,8 +192,10 @@ export class ProvidersService {
       data: { userId, action: 'DATA_CLEANING' },
     });
 
-    // 2. Query Gemini API
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // 2. Query NVIDIA NIM (texto)
+    const model =
+      this.configService.get<string>('NVIDIA_TEXT_MODEL') ??
+      'nvidia/nemotron-3-ultra-550b-a55b';
     const prompt = `Parse the following unstructured text containing provider contact details or products/services catalog information.
 Extract values and return ONLY a valid, raw JSON object matching the JSON schema below. Do not wrap the JSON output in markdown formatting blocks or include any commentary.
 JSON Schema:
@@ -216,33 +219,23 @@ Unstructured text to parse:
 ${rawData}`;
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
+      // NVIDIA NIM (OpenAI-compatible) — limpieza/estructuración de texto.
+      const content = await callNvidiaChat({
+        apiKey,
+        model,
+        maxTokens: 2048,
+        temperature: 0,
+        messages: [{ role: 'user', content: prompt }],
       });
 
-      if (!response.ok) {
-        throw new Error(`Gemini API returned status ${response.status}`);
-      }
-
-      const resBody = (await response.json()) as Record<string, unknown>;
-      const candidates = resBody.candidates as Record<string, unknown>[] | undefined;
-      const firstCandidate = candidates?.[0];
-      const content = firstCandidate?.content as Record<string, unknown> | undefined;
-      const parts = content?.parts as Record<string, unknown>[] | undefined;
-      let rawText = (parts?.[0]?.text as string) || '';
-
-      // Clean up markdown formatting if returned
-      rawText = rawText.trim();
-      if (rawText.startsWith('```')) {
-        rawText = rawText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
-      }
-      rawText = rawText.trim();
-
-      const parsed = JSON.parse(rawText);
+      const parsed = extractJson(content) as {
+        name?: string;
+        rut?: string;
+        email?: string;
+        phone?: string;
+        address?: string;
+        products?: Array<{ name: string; description?: string; price?: number; unit?: string }>;
+      };
       return {
         name: parsed.name || 'Proveedor Extraído con IA',
         rut: parsed.rut || undefined,
@@ -252,7 +245,7 @@ ${rawData}`;
         products: Array.isArray(parsed.products) ? parsed.products : [],
       };
     } catch (err) {
-      console.error('Gemini cleanup API error:', err);
+      console.error('NVIDIA cleanup API error:', err);
       throw new BadRequestException('Error al procesar los datos con la Inteligencia Artificial.');
     }
   }

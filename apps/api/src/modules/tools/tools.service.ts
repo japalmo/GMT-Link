@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConvertDirection, ConvertPointDto } from './dto/tools.dto';
+import { callNvidiaChat, extractJson } from '../../common/nvidia';
 
 // Pure mathematical UTM <-> Lat/Long conversion
 export function utmToLatLong(easting: number, northing: number, zone: number, southernHemisphere: boolean) {
@@ -160,9 +161,11 @@ export class ToolsService {
       rawBase64 = match[2];
     }
 
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const apiKey =
+      this.configService.get<string>('NVIDIA_API_KEY_VISION') ??
+      this.configService.get<string>('NVIDIA_API_KEY');
     if (!apiKey) {
-      // Dev mode placeholder fallback
+      // Dev mode placeholder fallback (sin clave NVIDIA configurada)
       await this.prisma.geminiUsage.create({
         data: { userId, action: 'SHORE_DETECTION' },
       });
@@ -183,7 +186,9 @@ export class ToolsService {
       data: { userId, action: 'SHORE_DETECTION' },
     });
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const model =
+      this.configService.get<string>('NVIDIA_VISION_MODEL') ??
+      'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
     const prompt = `Analyze the attached orthophoto image. Detect the shoreline / land-water boundary.
 Return ONLY a valid, raw JSON object containing a list of normalized coordinates tracing the shoreline polygon.
 Use normalized percentage values from 0 to 100 relative to the image size (where top-left is {"x": 0, "y": 0} and bottom-right is {"x": 100, "y": 100}).
@@ -195,48 +200,28 @@ Do not write markdown formatting wrappers or markdown code blocks, return ONLY t
 }`;
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                {
-                  inlineData: {
-                    mimeType,
-                    data: rawBase64,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
+      // NVIDIA NIM (OpenAI-compatible) — modelo multimodal sobre la ortofoto.
+      const content = await callNvidiaChat({
+        apiKey,
+        model,
+        maxTokens: 3072,
+        temperature: 0,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${rawBase64}` } },
+            ],
+          },
+        ],
       });
 
-      if (!response.ok) {
-        throw new Error(`Gemini API returned status ${response.status}`);
-      }
-
-      const resBody = (await response.json()) as Record<string, unknown>;
-      const candidates = resBody.candidates as Record<string, unknown>[] | undefined;
-      const firstCandidate = candidates?.[0];
-      const content = firstCandidate?.content as Record<string, unknown> | undefined;
-      const parts = content?.parts as Record<string, unknown>[] | undefined;
-      let rawText = (parts?.[0]?.text as string) || '';
-
-      rawText = rawText.trim();
-      if (rawText.startsWith('```')) {
-        rawText = rawText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
-      }
-      rawText = rawText.trim();
-
-      const parsed = JSON.parse(rawText);
+      const parsed = extractJson(content) as { polygon?: Array<{ x: number; y: number }> };
       const polygon = Array.isArray(parsed.polygon) ? parsed.polygon : [];
       return { polygon };
     } catch (err) {
-      console.error('Shore detection Gemini call failed:', err);
+      console.error('Shore detection NVIDIA call failed:', err);
       throw new BadRequestException('Error al procesar la ortofoto mediante la IA.');
     }
   }
