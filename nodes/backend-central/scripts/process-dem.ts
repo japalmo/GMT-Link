@@ -1,11 +1,11 @@
 /**
  * Procesa un DEM GeoTIFF a un grid de elevaciones SIMPLIFICADO (downsampled) en JSON,
- * que el visor 3D de v-metric consume directo desde apps/web/public/dem/<code>.json.
+ * que el visor 3D de v-metric consume directo desde nodes/web/public/dem/<code>.json.
  * Reemplaza el paso que en producción hará el cliente PyQt (subir el raster simplificado).
  *
- * Uso (desde apps/api):  npx tsx scripts/process-dem.ts R2 var/uploads/dem/R2.tif
+ * Uso (desde nodes/backend-central):  npx tsx scripts/process-dem.ts R2 var/uploads/dem/R2.tif
  *   arg1 = code del Element (nombre del json de salida)
- *   arg2 = ruta al .tif (relativa a apps/api)
+ *   arg2 = ruta al .tif (relativa a nodes/backend-central)
  */
 import { fromFile } from 'geotiff';
 import { mkdirSync, writeFileSync } from 'node:fs';

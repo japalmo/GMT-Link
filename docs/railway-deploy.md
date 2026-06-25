@@ -17,8 +17,8 @@ Guía para dejar GMT Link online en Railway con **deploy continuo desde GitHub**
 | **postgres** | BD de la app | Plugin de Railway (Postgres) → inyecta `DATABASE_URL` |
 | **redis** | Caché / colas | Plugin de Railway (Redis) → inyecta `REDIS_URL` |
 | **openfga** | Autorización (§4.3) | Imagen Docker `openfga/openfga` + su propia BD Postgres |
-| **api** | NestJS (apps/api) | Repo GitHub (Nixpacks) |
-| **web** | React/Vite estático (apps/web) | Repo GitHub (Nixpacks) |
+| **api** | NestJS (nodes/backend-central) | Repo GitHub (Nixpacks) |
+| **web** | React/Vite estático (nodes/web) | Repo GitHub (Nixpacks) |
 
 Flujo: `web` (build con `VITE_API_URL`) → llama a `api` → `api` usa `postgres`,
 `redis` y `openfga` (URL interna privada de Railway).
@@ -27,7 +27,7 @@ Flujo: `web` (build con `VITE_API_URL`) → llama a `api` → `api` usa `postgre
 
 ## 2. Servicio API (NestJS, monorepo pnpm)
 
-Root directory del servicio: **raíz del repo** (no `apps/api`, porque el build
+Root directory del servicio: **raíz del repo** (no `nodes/backend-central`, porque el build
 necesita el workspace pnpm completo).
 
 - **Build command:**
@@ -41,7 +41,7 @@ necesita el workspace pnpm completo).
   ```
 - **Start command:**
   ```
-  node apps/api/dist/main.js
+  node nodes/backend-central/dist/main.js
   ```
 - **Healthcheck path:** `/health`
 
@@ -100,7 +100,7 @@ Root directory: raíz del repo.
    - `OPENFGA_DATASTORE_URI=<uri postgres del openfga>`
    - `OPENFGA_HTTP_ADDR=0.0.0.0:8080`
 3. Start command: `./openfga migrate && ./openfga run` (migrate crea las tablas).
-4. **Bootstrap del modelo** (escribe `apps/api/fga/model.fga` y crea el store):
+4. **Bootstrap del modelo** (escribe `nodes/backend-central/fga/model.fga` y crea el store):
    correr una vez `pnpm --filter @gmt-platform/backend-central run fga:bootstrap` apuntando
    `FGA_API_URL` al openfga desplegado. Anota el `FGA_STORE_ID` y `FGA_MODEL_ID`
    que imprime y cárgalos como variables del servicio api (§2).
@@ -119,7 +119,7 @@ El emulador NO corre en Railway. Proyecto Firebase real: **GMT Link / `gmt-hub-6
    `FIREBASE_PRIVATE_KEY` (con `\n` escapados) para el servicio api (§2).
    **Dejar `FIREBASE_AUTH_EMULATOR_HOST` sin definir.**
 3. Sembrar los usuarios demo en el proyecto real (adaptar
-   `apps/api/scripts/seed-firebase-mvp.ts` apuntando a `gmt-hub-6d8f7`, sin
+   `nodes/backend-central/scripts/seed-firebase-mvp.ts` apuntando a `gmt-hub-6d8f7`, sin
    `FIREBASE_AUTH_EMULATOR_HOST`).
 
 > ⚠️ Las claves `firebase-adminsdk-*.json` de tu carpeta Downloads son **secretos**:
@@ -154,10 +154,15 @@ La lógica sigue en Railway; los datos pasan a estar bajo control de Albemarle (
 
 ## 8. Estado del provisioning (PAUSADO — 2026-06-25)
 
+> ⚠️ Las variables `RAILWAY_DOCKERFILE_PATH` viven en el dashboard de Railway,
+> no en el repo. Tras esta reestructura hay que actualizarlas a
+> `nodes/backend-central/Dockerfile` y `nodes/web/Dockerfile` **manualmente**
+> en cada servicio, o el deploy falla.
+
 Proyecto Railway: **`valiant-rebirth`** (id `a4a055bc-ad80-45bb-9b8b-39899e4b3f0c`), env `production`.
 
 - ✅ **Postgres** provisionado y Online (service id `cb387508-…`).
-- ✅ Dockerfiles `apps/api/Dockerfile` y `apps/web/Dockerfile` en `main`.
+- ✅ Dockerfiles `nodes/backend-central/Dockerfile` y `nodes/web/Dockerfile` en `main`.
 - ⛔ **Bloqueo:** el plan **free** de Railway no deja provisionar más servicios
   (*"Free plan resource provision limit exceeded"* al crear el segundo servicio).
   Se necesita **upgrade a Hobby** para agregar api + web + openfga.
@@ -165,11 +170,11 @@ Proyecto Railway: **`valiant-rebirth`** (id `a4a055bc-ad80-45bb-9b8b-39899e4b3f0
 **Cómo retomar** (tras subir el proyecto a Hobby, con un Project Token en `RAILWAY_TOKEN`
 — Project → Settings → Tokens):
 
-1. `railway add --service api --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile' --variables 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --variables 'NODE_ENV=production'`
+1. `railway add --service api --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=nodes/backend-central/Dockerfile' --variables 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --variables 'NODE_ENV=production'`
 2. Resto de variables del api (§2): `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY` (service
    account de `gmt-hub-6d8f7`), `NVIDIA_API_KEY`, `NVIDIA_API_KEY_VISION`, `CORS_ORIGINS`
    (= URL pública del web), y `FGA_API_URL/STORE_ID/MODEL_ID` (tras bootstrap).
-3. `railway add --service web --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile'` + `VITE_*` (§3; se hornean como build args).
+3. `railway add --service web --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=nodes/web/Dockerfile'` + `VITE_*` (§3; se hornean como build args).
 4. `railway add --image openfga/openfga --service openfga` + su Postgres + start
    `openfga migrate && openfga run`; luego `pnpm --filter @gmt-platform/backend-central run fga:bootstrap`
    apuntando a su URL para obtener `FGA_STORE_ID` / `FGA_MODEL_ID`.

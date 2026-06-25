@@ -4,16 +4,22 @@
 
 **`docs/GMT_LINK_PLAN_MAESTRO.md`** es la autoridad de este proyecto: arquitectura, modelo de datos (§4.2), modelo de autorización OpenFGA (§4.3), primitivas reutilizables (§5), roadmap por etapas (§6), codificación de documentos (§7), catálogo de permisos (§8) y decisiones pendientes (§9). Léelo antes de escribir código. Si algo lo contradice, gana el plan maestro.
 
+> Nota: la decisión de "instancia única" (§2 del plan maestro) fue superseded por el diseño multicloud — ver `docs/superpowers/specs/2026-06-25-gmt-platform-multicloud-design.md`.
+
 ## Stack (decisiones cerradas — §2, no re-litigar)
 
-PostgreSQL + Prisma · OpenFGA · instancia única con clientes scopeados · monorepo pnpm · NestJS (`apps/api`) · React + Vite + TS + Tailwind + shadcn/ui (`apps/web`) · tipos compartidos en `packages/shared-types` · Firebase Auth · Cloudflare R2 · Gemini (cuota 3/día/usuario).
+PostgreSQL + Prisma · OpenFGA · instancia única con clientes scopeados · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Firebase Auth · Cloudflare R2 · Gemini (cuota 3/día/usuario).
 
 ## Estructura
 
 ```
-apps/api/              → NestJS
-apps/web/              → React + Vite
-packages/shared-types/ → tipos compartidos (@gmt-platform/contracts)
+nodes/backend-central/ → NestJS (orquestador central)
+nodes/web/             → React + Vite (frontend)
+nodes/auth-service/    → identidad / JWT (scaffold)
+nodes/tenant-gateway/  → gateway por tenant (scaffold)
+nodes/v-metric/        → desktop V-metric (placeholder; submódulo pendiente, Python)
+packages/contracts/    → tipos/contratos compartidos (@gmt-platform/contracts)
+packages/sdk-gateway/  → cliente tipado backend→gateway
 docs/                  → plan maestro y documentación
 docker-compose.yml     → PostgreSQL + Redis local
 ```

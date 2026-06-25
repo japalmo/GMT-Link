@@ -2,7 +2,7 @@
   "name": "@gmt-platform/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "Tipos compartidos entre apps/api y apps/web",
+  "description": "Tipos compartidos entre nodes/backend-central y nodes/web",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

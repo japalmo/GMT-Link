@@ -5,7 +5,7 @@ import { Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs
 import { StorageService } from './storage.service';
 import type { StorageSaveInput, StorageSaveResult } from './storage.service';
 
-/** Raíz en disco para los archivos en dev: `apps/api/var/uploads`. */
+/** Raíz en disco para los archivos en dev: `nodes/backend-central/var/uploads`. */
 export const UPLOADS_ROOT = path.resolve(process.cwd(), 'var', 'uploads');
 
 /** Tamaño máximo por archivo (10 MB) — configurable vía `STORAGE_MAX_BYTES`. */
@@ -13,7 +13,7 @@ const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 
 /**
  * Implementación de `StorageService` para DESARROLLO: guarda en disco bajo
- * `apps/api/var/uploads/<folder>/` (carpeta ignorada por git). El `FilesController`
+ * `nodes/backend-central/var/uploads/<folder>/` (carpeta ignorada por git). El `FilesController`
  * la sirve por HTTP. En prod se reemplaza por R2 (Decisión §9) sin tocar a los
  * consumidores.
  *

@@ -101,7 +101,7 @@ del alcance de `ImportWizard` — aquí solo se renderiza el contenido provisto.
 
 ## Demo aislada
 
-`apps/web/src/pages/primitives/import-wizard-demo.tsx` (default export): un botón
+`nodes/web/src/pages/primitives/import-wizard-demo.tsx` (default export): un botón
 "Importar" que abre el wizard con plantilla de reembolsos y un `parseFile` real
 de CSV (validando que el monto sea numérico, con una fila inválida de ejemplo
 para mostrar el manejo de errores).

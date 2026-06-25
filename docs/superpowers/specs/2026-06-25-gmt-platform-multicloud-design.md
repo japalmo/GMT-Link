@@ -1,7 +1,7 @@
 # Diseño — Proyecto General GMT (plataforma multicloud)
 
 **Fecha:** 2026-06-25
-**Estado:** aprobado (estructura) — pendiente revisión del spec antes del plan de implementación.
+**Estado:** Fase 1 implementada (ver docs/superpowers/plans/2026-06-25-gmt-platform-fase1-reestructura.md). Fases 2–5 pendientes.
 
 ## 1. Contexto y objetivo
 

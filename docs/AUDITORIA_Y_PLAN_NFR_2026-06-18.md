@@ -25,8 +25,8 @@ El problema está en **(a)** el código nuevo de Antigravity, que introdujo regr
 **El backend está bien.** Lo probé con curl: emulador Firebase → token → `GET /auth/me` = **HTTP 200** con el usuario. El bug es del **frontend + fragilidad operacional**:
 
 1. `signInWithEmailAndPassword` (Firebase) tiene éxito.
-2. El observer en `apps/web/src/context/auth-context.tsx:58` dispara `getMe()` y, si falla, hace `.catch(() => setUser(null))` — **traga el error** sin distinguir "401 token inválido" (cerrar sesión es correcto) de "API caída / red" (status 0 / 5xx).
-3. `apps/web/src/pages/login.tsx:62` solo captura errores de `signIn` (que ya resolvió con éxito) → `error` queda `null`, `submitting` → `false`.
+2. El observer en `nodes/web/src/context/auth-context.tsx:58` dispara `getMe()` y, si falla, hace `.catch(() => setUser(null))` — **traga el error** sin distinguir "401 token inválido" (cerrar sesión es correcto) de "API caída / red" (status 0 / 5xx).
+3. `nodes/web/src/pages/login.tsx:62` solo captura errores de `signIn` (que ya resolvió con éxito) → `error` queda `null`, `submitting` → `false`.
 4. Resultado: el usuario se queda en `/login` **sin ningún mensaje**.
 
 **Reproducción (navegador):** API caída + emulador arriba + credenciales correctas → atascado en `/login`, `errorShown: null`, red muestra `GET /auth/me → ERR_CONNECTION_REFUSED`, consola sin logs.

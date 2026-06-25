@@ -83,7 +83,7 @@ pnpm --filter @gmt-platform/backend-central exec tsx scripts/seed-firebase-mvp.t
 ### 🟡 MEDIA
 
 **Fix #3 — Visibilidad de módulos por "hack" de email, no por permisos. [APLICADO]**
-*Antes:* `apps/web/src/components/layout/sidebar.tsx` filtraba por dominio de email (`user?.email?.endsWith('@capstone.cl')`), frágil y acoplado.
+*Antes:* `nodes/web/src/components/layout/sidebar.tsx` filtraba por dominio de email (`user?.email?.endsWith('@capstone.cl')`), frágil y acoplado.
 *Fix aplicado (commit `130bb22`):* el backend `GET /auth/me` ahora devuelve `user.modules` derivado del cliente real (`Membership PROJECT → Project → Client.code` → `CLIENT_MODULES`). El sidebar filtra por `item.module` con un único `canSeeModule`. CAP → `[dashboard, operaciones]`; ALB → `[dashboard, v-metric]`; org_admin / cliente desconocido → todos. Ver `auth.controller.ts:resolveModules()`.
 
 **Fix #4 — "Limitación estricta de acceso" no implementada. [APLICADO]**

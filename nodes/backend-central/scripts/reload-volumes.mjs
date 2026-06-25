@@ -3,7 +3,7 @@
  * reload-volumes.mjs
  * ──────────────────
  * Purga y recarga los DataPoint de volumen de R1..R10 en la fase ATA/CUB/anual-2026,
- * desde apps/api/prisma/data-reservorios.json (serie limpia completa).
+ * desde nodes/backend-central/prisma/data-reservorios.json (serie limpia completa).
  *
  *   1. Respalda los DataPoint de volumen actuales a backups/ (JSON con timestamp).
  *   2. Borra esos DataPoint (solo variables de volumen de esa fase; NO toca dem_file).

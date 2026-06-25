@@ -3,7 +3,7 @@
  * Los tipos de dominio se agregan por etapa según el plan maestro (§4.2).
  */
 
-/** Respuesta del endpoint GET /health de apps/api. Valida el wiring del workspace en 0.1. */
+/** Respuesta del endpoint GET /health de nodes/backend-central. Valida el wiring del workspace en 0.1. */
 export interface HealthResponse {
   status: 'ok';
   service: 'gmt-link-api';

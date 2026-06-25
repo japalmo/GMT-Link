@@ -3,7 +3,7 @@
  * 1. Busca el store "gmt-link" (o lo crea).
  * 2. Transforma el DSL fga/model.fga (§4.3) a JSON y escribe el authorization model.
  * 3. Persiste FGA_STORE_ID y FGA_MODEL_ID en el .env de la raíz del monorepo.
- * Ejecutar desde apps/api: `pnpm run fga:bootstrap`.
+ * Ejecutar desde nodes/backend-central: `pnpm run fga:bootstrap`.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

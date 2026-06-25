@@ -19,7 +19,7 @@
 ### 0.1 Contrato de scope (la pieza que unifica los 4 módulos)
 
 ```ts
-// packages/shared-types/src/authz.ts
+// packages/contracts/src/authz.ts
 export type ScopeFilter =
   | { kind: 'none' }                       // GLOBAL  → sin restricción de fila
   | { kind: 'own' }                        // OWN     → WHERE createdById = userId
@@ -171,31 +171,31 @@ Visibilidad de módulos = `Client.enabledModules` (Albemarle: inicio+v-metric+op
 **Objetivo:** el flujo Supervisor→Operador→ITO sobre `Task` con tiempos de ejecución y vistas Kanban/Tabla, scopeado por `PermissionService`. **DoD:** Supervisor crea tarea con `dataSpec` y la asigna; Operador registra inicio/fin; ITO ve Tabla+Kanban read-only; `pnpm --filter api test` verde.
 
 ### Task A.1: Esquema — `TaskTimeLog` + deltas `Task` + `DataPoint.taskId`
-**Files:** Modify `apps/api/prisma/schema.prisma`; migración `m5a_task_execution`.
+**Files:** Modify `nodes/backend-central/prisma/schema.prisma`; migración `m5a_task_execution`.
 - [ ] Agregar `model TaskTimeLog`, los campos `phaseId/elementId/dataSpec` en `Task`, y `taskId String?` en `DataPoint` (todo aditivo/nullable).
 - [ ] `npx prisma migrate dev --name m5a_task_execution` (con DB arriba) + `prisma generate`.
 - [ ] Commit `feat(tasks): TaskTimeLog + execution context on Task`.
 
 ### Task A.2: Endpoints de tareas + time-log + asignables
-**Files:** `apps/api/src/modules/tasks/*` (service/controller/dto).
+**Files:** `nodes/backend-central/src/modules/tasks/*` (service/controller/dto).
 - [ ] DTOs `class-validator`: `CreateTaskDto { name, description?, serviceId, phaseId?, elementId?, dataSpec?, assignedToId? }`, `StartTaskDto`/`FinishTaskDto` (taskId), `AssignTaskDto`.
 - [ ] `POST /tasks/:id/time/start` → crea `TaskTimeLog{startedAt:now}` (rechaza si hay uno en curso del mismo user); `POST /tasks/:id/time/finish` → setea `endedAt`. Gate: `task:time:log` + dueño/asignado.
 - [ ] `GET /projects/:id/assignees?perm=task:read` → `permissionService.usersWithPermissionOnProject('task:read', projectId)` (poblar el dropdown de asignación del wizard).
 - [ ] Commit `feat(tasks): time-log endpoints + project assignees`.
 
 ### Task A.3: Wiring de `PermissionService` en tasks
-**Files:** `apps/api/src/modules/tasks/tasks.service.ts` (list/read/create/assign).
+**Files:** `nodes/backend-central/src/modules/tasks/tasks.service.ts` (list/read/create/assign).
 - [ ] `list`: `const f = await permissions.scopeFilter(userId,'task:read')` → `where` Prisma (`none`/`own`→`{assignedToId:userId}` o `{createdById:userId}` según rol/`{projectId in ids}`). `create`/`assign`: `permissions.can(userId,'task:create'|'task:assign',{projectId})`.
 - [ ] Test (mock Prisma/Fga) del scoping. Commit `feat(tasks): authorize via PermissionService`.
 
 ### Task A.4: Web — Kanban + Tabla + wizard + iniciar/finalizar
-**Files:** `apps/web/src/pages/operaciones/tareas/*` (vistas + wizard), hooks.
+**Files:** `nodes/web/src/pages/operaciones/tareas/*` (vistas + wizard), hooks.
 - [ ] Toggle Tabla/Kanban (2 vistas fijas). Tabla con filtros+búsqueda; Kanban 4 columnas por `TaskStatus` con drag (Supervisor/Adm).
 - [ ] Wizard crear-tarea (Servicio→Fase/Element→dataSpec→asignar→confirmar). Operador: botones Iniciar/Finalizar (llaman time/start|finish). ITO: read-only (sin acciones).
 - [ ] Verificación visual con la app (cuando el stack corra). Commit `feat(web/operaciones): tasks Kanban+Table + execution flow`.
 
 ### Task A.5: Seeder Capstone
-**Files:** `apps/api/prisma/seed-capstone.ts` (+ invocar desde seed).
+**Files:** `nodes/backend-central/prisma/seed-capstone.ts` (+ invocar desde seed).
 - [ ] `Client "Capstone Copper" (enabledModules: inicio,operaciones)` → `Project "Mantos Blancos"` → `Service "Topografía"` → 1 user por rol (ITO/Operador/Supervisor/Adm_Contrato) → `Membership(rol@proyecto)` + sync FGA → 2-3 `Task` de ejemplo. Idempotente.
 - [ ] Correr `db:seed`; verificar. Commit `feat(seed): Capstone Mantos Blancos flow`.
 
@@ -205,9 +205,9 @@ Visibilidad de módulos = `Client.enabledModules` (Albemarle: inicio+v-metric+op
 
 **Objetivo:** el ITO abre poza→DEM→visor 3D, dibuja perfil y compara; visibilidad de módulos por cliente. **DoD:** visor 3D interactivo con perfil y comparación sobre el `DemRaster` de muestra.
 
-**Files (crear):** `model DemRaster` + `apps/api/src/modules/metrics/*` (endpoint aditivo `POST /metrics/dem-raster` + `GET /metrics/dem-raster?elementId=`); `apps/web/src/pages/v-metric/dem-viewer/*` (three.js); `apps/api/prisma/seed-albemarle.ts`.
+**Files (crear):** `model DemRaster` + `nodes/backend-central/src/modules/metrics/*` (endpoint aditivo `POST /metrics/dem-raster` + `GET /metrics/dem-raster?elementId=`); `nodes/web/src/pages/v-metric/dem-viewer/*` (three.js); `nodes/backend-central/prisma/seed-albemarle.ts`.
 **Files (modificar):** `Client.enabledModules`; nav del front (renderiza módulos según `enabledModules` ∩ permisos).
-**Tareas (expandir a granular al ejecutar):** (1) `DemRaster` + migración + endpoints aditivos (no rompen al PyQt). (2) `Client.enabledModules` + gating de nav. (3) componente three.js: heightmap desde grid, OrbitControls, herramienta perfil (raycast/muestreo→gráfico 2D), comparación (2 mallas/diff). (4) dep `three` en `apps/web`. (5) seeder Albemarle (Salar de Atacama, pozas `Element`, `DemRaster` de muestra, roles+users). Permisos `vmetric:*` ya en el catálogo.
+**Tareas (expandir a granular al ejecutar):** (1) `DemRaster` + migración + endpoints aditivos (no rompen al PyQt). (2) `Client.enabledModules` + gating de nav. (3) componente three.js: heightmap desde grid, OrbitControls, herramienta perfil (raycast/muestreo→gráfico 2D), comparación (2 mallas/diff). (4) dep `three` en `nodes/web`. (5) seeder Albemarle (Salar de Atacama, pozas `Element`, `DemRaster` de muestra, roles+users). Permisos `vmetric:*` ya en el catálogo.
 
 ---
 
@@ -225,8 +225,8 @@ Visibilidad de módulos = `Client.enabledModules` (Albemarle: inicio+v-metric+op
 ### Task 1.1: Esquema Prisma — enums + columnas RBAC + Asset.createdById
 
 **Files:**
-- Modify: `apps/api/prisma/schema.prisma` (modelos `Role`, `Permission`, `RolePermission`, `Asset`)
-- Create (migración): `apps/api/prisma/migrations/<ts>_rbac_dynamic_scope/migration.sql` (vía Prisma)
+- Modify: `nodes/backend-central/prisma/schema.prisma` (modelos `Role`, `Permission`, `RolePermission`, `Asset`)
+- Create (migración): `nodes/backend-central/prisma/migrations/<ts>_rbac_dynamic_scope/migration.sql` (vía Prisma)
 
 - [ ] **Step 1: Editar `schema.prisma`** — agregar enums y columnas:
 
@@ -270,21 +270,21 @@ En `model Asset { ... }` agregar: `createdById String?` (nullable para no reescr
 
 - [ ] **Step 2: Generar la migración**
 
-Run: `cd apps/api && npx prisma migrate dev --name rbac_dynamic_scope`
+Run: `cd nodes/backend-central && npx prisma migrate dev --name rbac_dynamic_scope`
 Expected: migración creada y aplicada; `prisma generate` regenera el cliente sin error.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/api/prisma/schema.prisma apps/api/prisma/migrations
+git add nodes/backend-central/prisma/schema.prisma nodes/backend-central/prisma/migrations
 git commit -m "feat(rbac): add PermissionScope/Kind, RolePermission.scope, Permission metadata, Asset.createdById"
 ```
 
 ### Task 1.2: Seed del catálogo de permisos + roles funcionales + SuperAdmin
 
 **Files:**
-- Create: `apps/api/prisma/seed-rbac.ts`
-- Modify: `apps/api/prisma/seed.ts` (invocar `seedRbac`)
+- Create: `nodes/backend-central/prisma/seed-rbac.ts`
+- Modify: `nodes/backend-central/prisma/seed.ts` (invocar `seedRbac`)
 
 - [ ] **Step 1: Crear `seed-rbac.ts`** con el catálogo y el mapeo de roles existentes a grants. Estructura (formato `{ key, label, module, kind, fgaRelation?, scopeable }`):
 
@@ -389,10 +389,10 @@ Función `seedRbac(prisma)`: `upsert` cada permiso (por `key`), `upsert` cada ro
 ### Task 1.3: `PermissionService` (fachada) — TDD
 
 **Files:**
-- Create: `apps/api/src/authz/permission.service.ts`
-- Create: `apps/api/test/authz/permission.service.spec.ts`
-- Create: `packages/shared-types/src/authz.ts` (los tipos de 0.1)
-- Modify: `apps/api/src/authz/authz.module.ts` (proveer/exportar `PermissionService`)
+- Create: `nodes/backend-central/src/authz/permission.service.ts`
+- Create: `nodes/backend-central/test/authz/permission.service.spec.ts`
+- Create: `packages/contracts/src/authz.ts` (los tipos de 0.1)
+- Modify: `nodes/backend-central/src/authz/authz.module.ts` (proveer/exportar `PermissionService`)
 
 - [ ] **Step 1: Escribir el test que falla** (mocks a mano estilo `assets.service.spec.ts`):
 
@@ -500,27 +500,27 @@ export class PermissionService {
 
 ### Task 1.4: Probar la fachada en un endpoint real (migrar el path de listas de assets)
 
-**Files:** Modify `apps/api/src/modules/assets/assets.service.ts:242-291` (`listAll`)
+**Files:** Modify `nodes/backend-central/src/modules/assets/assets.service.ts:242-291` (`listAll`)
 
 - [ ] **Step 1:** Reemplazar el armado SQL manual de `allowedProjectIds` por `const f = await this.permissions.scopeFilter(userId, 'asset.read');` y construir el `where` Prisma desde `f` (`none`→sin filtro; `own`→`{ createdById: userId }`; `projects`→`{ projectId: { in: f.ids } }`). Inyectar `PermissionService`.
 - [ ] **Step 2: Test** — un operator de p1 ve activos de p1 y no de p2 (mock o e2e contra seed). **Step 3: Commit** — `refactor(assets): list via PermissionService.scopeFilter (proof of facade)`
 
 ### Task 1.5: Backfill `Asset.createdById` (migración de datos, separada)
 
-**Files:** Create `apps/api/prisma/migrations/<ts>_backfill_asset_createdby/migration.sql`
+**Files:** Create `nodes/backend-central/prisma/migrations/<ts>_backfill_asset_createdby/migration.sql`
 
 - [ ] **Step 1:** `npx prisma migrate dev --create-only --name backfill_asset_createdby`; en el SQL, set `createdById` = primer `AssetHistoryEntry.userId` del activo (o el admin de la org como fallback). Lotes con `FOR UPDATE SKIP LOCKED` si hay volumen (dev: bajo). **Step 2:** aplicar. **Step 3: Commit** — `chore(assets): backfill createdById`
 
 ### Task 1.6: Seeders de mockup (⭐ pedido explícito)
 
-**Files:** Create `apps/api/prisma/seed-mockup.ts`; Modify `apps/api/prisma/seed.ts`
+**Files:** Create `nodes/backend-central/prisma/seed-mockup.ts`; Modify `nodes/backend-central/prisma/seed.ts`
 
 - [ ] **Step 1:** `seedMockup(prisma)` idempotente que crea: 1 organización (`gmt`), 2 clientes, 2 departamentos, 3-4 proyectos; ~8 usuarios cubriendo cada rol (superadmin, project_creator, operator, qa, finance, viewer, client_ito); `Membership` que cablea usuarios↔proyectos y **sincroniza a FGA** (vía `syncMembershipToFGA` para los estructurales); 2-3 vehículos (`Asset` tipo `VEHICULO`) + 1 `ChecklistTemplate` de vehículo. (Los `ServiceType` de mockup se siembran en la Fase 2, donde existe el modelo.)
 - [ ] **Step 2:** correr `npx prisma db seed`; verificar conteos. **Step 3: Commit** — `feat(seed): mockup data (orgs, projects, users, memberships, vehicles)`
 
 ### Task 1.7: Fix proporción del logo (quick win UI)
 
-**Files:** Modify `apps/web/src/components/layout/sidebar.tsx:116-126`
+**Files:** Modify `nodes/web/src/components/layout/sidebar.tsx:116-126`
 
 - [ ] **Step 1:** subir el bar de marca de `h-14` a `h-16`; `logoMid` de `h-8` a `h-11 max-w-[160px]`; `logoCompact` de `h-8` a `h-10`. Mantener `w-auto object-contain` y el chevron con `ml-auto`. **Step 2:** verificar visualmente expandido/colapsado + drawer móvil. **Step 3: Commit** — `fix(web): enlarge GMT logo proportions in sidebar`
 
@@ -530,7 +530,7 @@ export class PermissionService {
 
 **Objetivo:** meta-modelo per-service-type + migración de metrics + UI builder + nomenclatura por servicio. **DoD:** un admin crea un `ServiceType` con N niveles y campos, lo publica, y un servicio captura datos validados contra él; el correlativo de documento usa el patrón del servicio sin colisión.
 
-**Files (crear):** `schema.prisma` (ServiceType/ServiceTypeLevel/FieldDef/InstanceNode/FieldValue/DocumentSequence + enums) · `apps/api/src/modules/service-types/*` (module/controller/service/dto) · `apps/api/src/modules/metrics/metrics-compat.shim.ts` (resuelve `variableCode→FieldDef` para PyQt) · `apps/web/src/pages/operaciones/service-builder/*` · `packages/shared-types/src/service-model.ts` (unión de `FieldDataType`, validación Zod).
+**Files (crear):** `schema.prisma` (ServiceType/ServiceTypeLevel/FieldDef/InstanceNode/FieldValue/DocumentSequence + enums) · `nodes/backend-central/src/modules/service-types/*` (module/controller/service/dto) · `nodes/backend-central/src/modules/metrics/metrics-compat.shim.ts` (resuelve `variableCode→FieldDef` para PyQt) · `nodes/web/src/pages/operaciones/service-builder/*` · `packages/contracts/src/service-model.ts` (unión de `FieldDataType`, validación Zod).
 **Files (modificar):** `Service` (+serviceTypeId/serviceTypeVersion) · `project-documents.service.ts` (`generateDocumentCode` lee segmentos del servicio + usa `DocumentSequence`).
 
 **Tareas (expandir a plan granular al iniciar):** (1) schema + migración aditiva de tablas nuevas. (2) `ServiceTypeService` CRUD + publish (congela versión). (3) Validación de captura contra el `FieldDef` (switch exhaustivo `FieldDataType`, cero `any`). (4) Migración expand-contract: backfill `DataPoint→InstanceNode/FieldValue` (lotes), shim PyQt, drop diferido de `Phase/Variable/DataPoint`. (5) `DocumentSequence` transaccional reemplaza `count()+while`. (6) UI builder (3 zonas: árbol de niveles · canvas de campos · panel nomenclatura con preview). (7) Permisos `servicetype.*`/`service.naming.configure` ya sembrados en F1.
@@ -539,8 +539,8 @@ export class PermissionService {
 
 **Objetivo:** que el admin cree roles y asigne scopes desde la UI. **DoD:** crear rol → marcar permisos+scope → guardar → un usuario con ese rol ve el filtro aplicado.
 
-**Files (crear):** `apps/api/src/modules/roles/*` (endpoints de la superficie API M4: `GET /permissions`, `roles` CRUD, `PUT /roles/:id/permissions`, `POST/DELETE /users/:id/roles`, `GET /me/permissions`) · `apps/web/src/pages/configuracion/roles/*` (matriz permisos×scope agrupada por `module`).
-**Files (modificar):** `apps/web/src/pages/usuarios/roles-dialog.tsx` (asignación con scopeType/scopeId).
+**Files (crear):** `nodes/backend-central/src/modules/roles/*` (endpoints de la superficie API M4: `GET /permissions`, `roles` CRUD, `PUT /roles/:id/permissions`, `POST/DELETE /users/:id/roles`, `GET /me/permissions`) · `nodes/web/src/pages/configuracion/roles/*` (matriz permisos×scope agrupada por `module`).
+**Files (modificar):** `nodes/web/src/pages/usuarios/roles-dialog.tsx` (asignación con scopeType/scopeId).
 
 **Tareas:** (1) endpoints + DTOs `class-validator` (validar scope∈válidos del permiso → 422). (2) sync a FGA solo para roles estructurales. (3) matriz UI con selector segmentado Propios/Proyecto/Todo (oculto si `!scopeable`). (4) `GET /me/permissions` para pintar affordances.
 
@@ -548,15 +548,15 @@ export class PermissionService {
 
 **Objetivo:** horas extra completas + gate de checklist de vehículo + capture de reembolso. **DoD:** solicitud de horas extra con proyecto+autorizador+entrada/salida (horas derivadas); uso de vehículo no aprobable sin checklist OK.
 
-**Files (modificar):** `OvertimeRequest` (expand-contract: +projectId,+authorizerId,+startTime,+endTime; hours derivado; date deprecado) · `overtime.dto.ts`/`overtime.service.ts` · `apps/web/src/pages/finanzas/horas-extra.tsx` (proyecto filtrado + autorizador vía `GET /projects/:id/authorizers` que usa `usersWithPermissionOnProject('overtime.authorize', …)`) · `reembolsos.tsx` (`capture="environment"` + split foto/PDF).
-**Files (crear):** `VehicleUseRequest` + `apps/api/src/modules/vehicle-use/*` (gate: aprobar exige `inspectionSubmissionId` con checklist sin fallas) · UI de solicitud que reemplaza el "Tomar en Uso" libre.
+**Files (modificar):** `OvertimeRequest` (expand-contract: +projectId,+authorizerId,+startTime,+endTime; hours derivado; date deprecado) · `overtime.dto.ts`/`overtime.service.ts` · `nodes/web/src/pages/finanzas/horas-extra.tsx` (proyecto filtrado + autorizador vía `GET /projects/:id/authorizers` que usa `usersWithPermissionOnProject('overtime.authorize', …)`) · `reembolsos.tsx` (`capture="environment"` + split foto/PDF).
+**Files (crear):** `VehicleUseRequest` + `nodes/backend-central/src/modules/vehicle-use/*` (gate: aprobar exige `inspectionSubmissionId` con checklist sin fallas) · UI de solicitud que reemplaza el "Tomar en Uso" libre.
 **FGA:** agregar relaciones `can_authorize_overtime`/`can_authorize_use` a `model.fga` (estructural; semilla de grant ya existe).
 
 ## FASE 5 — Módulo 2: Template Builder
 
 **Objetivo:** armar informes con bloques ligados a `FieldDef` + render React/PDF + snapshot. **DoD:** plantilla publicada genera un `ProjectDocument` en `PENDIENTE_QA` con `renderSnapshot`, y la previsualización del doc aprobado es estable.
 
-**Files (crear):** `ReportTemplate`/`TemplateBlock` + `apps/api/src/modules/report-templates/*` · `renderTemplateToPdf` (`@react-pdf/renderer`) → alimenta el `stampDocumentPdf` existente · `packages/shared-types/src/report-blocks.ts` (unión `Block` + Zod) · `apps/web/src/pages/operaciones/template-builder/*` (paleta + lienzo WYSIWYG) · `<BlockRenderer>` compartido.
+**Files (crear):** `ReportTemplate`/`TemplateBlock` + `nodes/backend-central/src/modules/report-templates/*` · `renderTemplateToPdf` (`@react-pdf/renderer`) → alimenta el `stampDocumentPdf` existente · `packages/contracts/src/report-blocks.ts` (unión `Block` + Zod) · `nodes/web/src/pages/operaciones/template-builder/*` (paleta + lienzo WYSIWYG) · `<BlockRenderer>` compartido.
 **Files (modificar):** `ProjectDocument` (+templateId,+renderSnapshot) · `project-documents.service.ts` (`generateFromTemplate`).
 
 **Tareas:** (1) modelos + binding por `fieldKey`. (2) resolver `(template,destino)→árbol resuelto`. (3) doble renderer (React + PDF→stamp). (4) snapshot inmutable al generar. (5) builder UI drag-and-drop. (6) ambos flujos (ensamblado/PDF crudo) caen en el `ApprovalWorkflow` existente.

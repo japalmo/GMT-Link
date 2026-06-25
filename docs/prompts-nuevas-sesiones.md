@@ -25,10 +25,10 @@ Repos de destino (**ambos son del usuario `japalmo`**):
 ```
 Contexto. Trabajo con dos proyectos en esta máquina (Windows):
 - GMT Link (web/servidor): monorepo pnpm en "C:\Users\juana\GMT Link".
-  NestJS api (apps/api, puerto 3001), React+Vite web (apps/web, 5173), Prisma + PostgreSQL,
+  NestJS api (nodes/backend-central, puerto 3001), React+Vite web (nodes/web, 5173), Prisma + PostgreSQL,
   OpenFGA para autorización, Firebase Auth (emulador en dev). Su autoridad de diseño es
   docs/GMT_LINK_PLAN_MAESTRO.md y las reglas en CLAUDE.md. Ya tiene: módulo web "v-metric"
-  con visor 3D de DEM (Three.js, lee apps/web/public/dem/*.json), generación de OTP en
+  con visor 3D de DEM (Three.js, lee nodes/web/public/dem/*.json), generación de OTP en
   MetricsService (flujo de no-repudio), y visibilidad de módulos por cliente.
 - V-metric (escritorio): "C:\Users\juana\V-metric". Python 3.14 + PySide6 (Qt),
   rasterio/numpy/PyMuPDF (geoespacial), reportlab (PDF), openpyxl, SQLAlchemy (BD local).
@@ -42,7 +42,7 @@ Lee primero, sin tocar código:
 1. "C:\Users\juana\Downloads\Especificación Técnica y Arquitectura de Integración_ GMT Link y V_metric.md"
    (modelo jerárquico Proyecto→Servicio→Fase→Variable→Dato, flujo ProjectDocument
    Borrador→QA→Cliente, storage asíncrono S3, OTP de no-repudio antes de subir).
-2. En GMT Link: apps/api/prisma/schema.prisma, el módulo metrics (OTP) y el módulo v-metric web.
+2. En GMT Link: nodes/backend-central/prisma/schema.prisma, el módulo metrics (OTP) y el módulo v-metric web.
 3. En V-metric: poza/db/models.py, poza/db/repository.py, poza/firebase_sync.py,
    poza/firebase_http.py, poza/themes.py, poza/vmetric.py (cálculo de volúmenes).
 
@@ -94,10 +94,10 @@ respaldo del estado remoto antes de cualquier reemplazo destructivo. gh no está
 
 ```
 Contexto. GMT Link es un monorepo pnpm (Node ≥22) en "C:\Users\juana\GMT Link":
-- apps/api: NestJS (puerto 3001), Prisma + PostgreSQL, OpenFGA, Firebase Admin. Migraciones
-  en apps/api/prisma/migrations (15). Seeds y fga:bootstrap existentes.
-- apps/web: React + Vite (build estático, dev en 5173). Llama a la API vía apps/web/src/lib/api.ts.
-- packages/shared-types: tipos compartidos.
+- nodes/backend-central: NestJS (puerto 3001), Prisma + PostgreSQL, OpenFGA, Firebase Admin. Migraciones
+  en nodes/backend-central/prisma/migrations (15). Seeds y fga:bootstrap existentes.
+- nodes/web: React + Vite (build estático, dev en 5173). Llama a la API vía nodes/web/src/lib/api.ts.
+- packages/contracts: tipos compartidos.
 Autoridad del proyecto: docs/GMT_LINK_PLAN_MAESTRO.md y CLAUDE.md.
 
 Estado actual REAL detectado (verifícalo tú también):
