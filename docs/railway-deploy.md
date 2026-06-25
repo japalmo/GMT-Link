@@ -149,3 +149,32 @@ api para apuntar a su Postgres a través de un túnel seguro (VPN/mTLS, IP allow
 correr `prisma migrate deploy` contra esa BD, y quitar el plugin Postgres de Railway.
 La lógica sigue en Railway; los datos pasan a estar bajo control de Albemarle (ver
 `docs/prompts-nuevas-sesiones.md`, prompt #5).
+
+---
+
+## 8. Estado del provisioning (PAUSADO — 2026-06-25)
+
+Proyecto Railway: **`valiant-rebirth`** (id `a4a055bc-ad80-45bb-9b8b-39899e4b3f0c`), env `production`.
+
+- ✅ **Postgres** provisionado y Online (service id `cb387508-…`).
+- ✅ Dockerfiles `apps/api/Dockerfile` y `apps/web/Dockerfile` en `main`.
+- ⛔ **Bloqueo:** el plan **free** de Railway no deja provisionar más servicios
+  (*"Free plan resource provision limit exceeded"* al crear el segundo servicio).
+  Se necesita **upgrade a Hobby** para agregar api + web + openfga.
+
+**Cómo retomar** (tras subir el proyecto a Hobby, con un Project Token en `RAILWAY_TOKEN`
+— Project → Settings → Tokens):
+
+1. `railway add --service api --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile' --variables 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --variables 'NODE_ENV=production'`
+2. Resto de variables del api (§2): `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY` (service
+   account de `gmt-hub-6d8f7`), `NVIDIA_API_KEY`, `NVIDIA_API_KEY_VISION`, `CORS_ORIGINS`
+   (= URL pública del web), y `FGA_API_URL/STORE_ID/MODEL_ID` (tras bootstrap).
+3. `railway add --service web --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile'` + `VITE_*` (§3; se hornean como build args).
+4. `railway add --image openfga/openfga --service openfga` + su Postgres + start
+   `openfga migrate && openfga run`; luego `pnpm --filter @gmt-link/api run fga:bootstrap`
+   apuntando a su URL para obtener `FGA_STORE_ID` / `FGA_MODEL_ID`.
+5. `railway domain` por servicio y cablear `CORS_ORIGINS` (api) ↔ `VITE_API_URL` (web).
+
+> Notas: el Postgres creado consume algo del crédito de trial aunque esté idle — si no
+> retomas pronto, puedes borrarlo (`railway` dashboard) y recrearlo al continuar. La CLI
+> solo funciona con **Project Token** (`RAILWAY_TOKEN`), no con el token de equipo.
