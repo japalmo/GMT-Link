@@ -50,9 +50,13 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
 describe('TasksService', () => {
   let prismaMock: PrismaMock;
   let prismaService: PrismaService;
-  let fgaMock: any;
-  let gamificationMock: any;
-  let permissionMock: any;
+  let fgaMock: { check: ReturnType<typeof vi.fn> };
+  let gamificationMock: { awardPoints: ReturnType<typeof vi.fn> };
+  let permissionMock: {
+    scopeFilter: ReturnType<typeof vi.fn>;
+    can: ReturnType<typeof vi.fn>;
+    usersWithPermissionOnProject: ReturnType<typeof vi.fn>;
+  };
   let service: TasksService;
 
   beforeEach(() => {

@@ -1,3 +1,4 @@
+/* global console, process */
 /**
  * reload-volumes.mjs
  * ──────────────────

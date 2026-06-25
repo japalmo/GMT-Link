@@ -184,7 +184,7 @@ interface TaskDef {
   key: string;
   name: string;
   description: string;
-  dataSpec: Record<string, any>;
+  dataSpec: Record<string, unknown>;
   isAlbemarle: boolean;
 }
 
@@ -328,7 +328,7 @@ async function main(): Promise<void> {
 
   // Load reservoirs JSON data
   const dataPath = path.join(__dirname, 'data-reservorios.json');
-  let reservoirsData: Record<string, any> = {};
+  let reservoirsData: Record<string, { name: string; polygon?: unknown; metadata?: unknown }> = {};
   try {
     if (fs.existsSync(dataPath)) {
       reservoirsData = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
@@ -346,7 +346,7 @@ async function main(): Promise<void> {
     create: { code: 'anual-2026', name: 'Campaña Anual 2026', serviceId: albService.id },
   });
 
-  const varMap = new Map<string, any>();
+  const varMap = new Map<string, { id: string }>();
   for (const v of ALB_VARIABLES) {
     const createdVar = await prisma.variable.upsert({
       where: { phaseId_code: { phaseId: phase.id, code: v.code } },

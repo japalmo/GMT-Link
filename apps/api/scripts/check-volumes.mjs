@@ -1,3 +1,4 @@
+/* global console, process */
 // Diagnóstico read-only: ¿están cargados los volúmenes R1..R10 en la fase anual-2026?
 import { config } from 'dotenv';
 import { fileURLToPath } from 'node:url';
