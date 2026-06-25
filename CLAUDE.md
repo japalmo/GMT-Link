@@ -8,7 +8,7 @@
 
 ## Stack (decisiones cerradas — §2, no re-litigar)
 
-PostgreSQL + Prisma · OpenFGA · instancia única con clientes scopeados · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Firebase Auth · Cloudflare R2 · Gemini (cuota 3/día/usuario).
+PostgreSQL + Prisma · OpenFGA · BD + gateway por tenant (multicloud; ver nota arriba) · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Firebase Auth · Cloudflare R2 · Gemini (cuota 3/día/usuario).
 
 ## Estructura
 
