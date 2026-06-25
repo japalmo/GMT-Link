@@ -31,6 +31,13 @@ export interface TaskTimeLogView {
   createdAt: string;
 }
 
+/** Especificación del entregable/producto de una tarea (type + label conocidos). */
+export interface TaskDataSpec {
+  type: string;
+  label?: string;
+  [key: string]: unknown;
+}
+
 export interface TaskView {
   id: string;
   name: string;
@@ -50,7 +57,7 @@ export interface TaskView {
   clientUserId: string | null;
   clientUser: { id: string; firstName: string; lastName: string; email: string } | null;
   timeLogs?: TaskTimeLogView[];
-  dataSpec?: Record<string, any> | null;
+  dataSpec?: TaskDataSpec | null;
   phaseId?: string | null;
   elementId?: string | null;
   createdAt: string;
@@ -67,7 +74,7 @@ export interface CreateTaskInput {
   estimatedPoints?: number;
   recurrence?: string;
   clientUserId?: string;
-  dataSpec?: Record<string, any> | null;
+  dataSpec?: TaskDataSpec | null;
   phaseId?: string | null;
   elementId?: string | null;
 }

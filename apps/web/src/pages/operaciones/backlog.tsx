@@ -18,7 +18,6 @@ import {
   User,
   Edit2,
   Table,
-  Clock,
   Play,
   Square,
   Kanban,
@@ -34,7 +33,7 @@ import {
   CardHeader,
 } from '@/components/ui/card';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
-import type { TaskView, TaskStatus } from '@/types/operations';
+import type { TaskView, TaskStatus, TaskDataSpec } from '@/types/operations';
 
 export function BacklogTab(): ReactNode {
   const { profile } = useProfile();
@@ -227,7 +226,7 @@ export function BacklogTab(): ReactNode {
     }
 
     try {
-      let dataSpec: any = null;
+      let dataSpec: TaskDataSpec | null = null;
       if (itoProduct === 'time_only') {
         dataSpec = { type: 'time_only', label: 'Solo registro de tiempo' };
       } else if (itoProduct === 'pdf_report') {
@@ -289,7 +288,7 @@ export function BacklogTab(): ReactNode {
     }
 
     try {
-      let dataSpec: any = null;
+      let dataSpec: TaskDataSpec | null = null;
       if (taskProduct === 'time_only') {
         dataSpec = { type: 'time_only', label: 'Solo registro de tiempo' };
       } else if (taskProduct === 'pdf_report') {
@@ -439,7 +438,7 @@ export function BacklogTab(): ReactNode {
             const cotaVar = vars.find(v => v.code === 'cota_espejo');
             const volVar = vars.find(v => v.code === 'vol_total_salmuera');
 
-            const points: any[] = [];
+            const points: Parameters<typeof api.submitMetricDataPoints>[0] = [];
             if (cotaVar && metricCotaEspejo) {
               points.push({ value: metricCotaEspejo, variableId: cotaVar.id, elementId, phaseId, taskId: timeLogTask.id });
             }
@@ -1213,7 +1212,11 @@ export function BacklogTab(): ReactNode {
                       id="task-product"
                       required
                       value={taskProduct}
-                      onChange={(e) => setTaskProduct(e.target.value as any)}
+                      onChange={(e) =>
+                        setTaskProduct(
+                          e.target.value as 'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics',
+                        )
+                      }
                       className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                     >
                       <option value="time_only">Solo registro de tiempo</option>
@@ -1387,7 +1390,11 @@ export function BacklogTab(): ReactNode {
                   id="ito-product"
                   required
                   value={itoProduct}
-                  onChange={(e) => setItoProduct(e.target.value as any)}
+                  onChange={(e) =>
+                    setItoProduct(
+                      e.target.value as 'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics',
+                    )
+                  }
                   className="flex h-9 w-full rounded-md border border-input bg-slate-900 px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                 >
                   <option value="time_only">Solo registro de tiempo</option>

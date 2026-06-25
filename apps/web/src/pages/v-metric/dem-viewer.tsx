@@ -3,7 +3,7 @@
  * Auto-contenido: lee /dem/<code>.json (grid de elevaciones) y /dem/<code>-cubicacion.json
  * (variables × fechas) desde public/. Pensado para la demo: no depende de la API/DB.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,22 +18,6 @@ interface DemGrid {
   maxZ: number;
   noData: number | null;
   elevations: number[];
-}
-
-interface VarDef {
-  key: string;
-  label: string;
-  unit: string;
-}
-interface CubRow {
-  fecha: string;
-  [key: string]: string | number;
-}
-interface Cubicacion {
-  elementCode: string;
-  elementName: string;
-  variables: VarDef[];
-  series: CubRow[];
 }
 
 /** Lienzo three.js: heightmap del DEM con OrbitControls y colormap por elevación. */
@@ -133,38 +117,6 @@ function Terrain3D({ grid, exaggeration }: { grid: DemGrid; exaggeration: number
   }, [grid, exaggeration]);
 
   return <div ref={mountRef} className="h-[440px] w-full overflow-hidden rounded-lg border border-border" />;
-}
-
-/** Gráfico de líneas SVG simple (sin dependencias) para una variable a lo largo del tiempo. */
-function TimeChart({ data, varDef }: { data: CubRow[]; varDef: VarDef }): ReactNode {
-  const W = 560;
-  const H = 220;
-  const pad = { l: 56, r: 16, t: 16, b: 28 };
-  const values = data.map((r) => Number(r[varDef.key]));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const x = (i: number): number => pad.l + (i * (W - pad.l - pad.r)) / Math.max(1, data.length - 1);
-  const y = (v: number): number => pad.t + (1 - (v - min) / span) * (H - pad.t - pad.b);
-  const path = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`Serie temporal de ${varDef.label}`}>
-      <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke="var(--border)" strokeOpacity={0.4} />
-      <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke="var(--border)" strokeOpacity={0.4} />
-      <text x={pad.l - 6} y={y(max)} textAnchor="end" dominantBaseline="middle" fontSize="10" fill="var(--muted-foreground)">{max.toLocaleString('es-CL')}</text>
-      <text x={pad.l - 6} y={y(min)} textAnchor="end" dominantBaseline="middle" fontSize="10" fill="var(--muted-foreground)">{min.toLocaleString('es-CL')}</text>
-      <path d={path} fill="none" stroke="var(--primary)" strokeWidth={2} />
-      {values.map((v, i) => (
-        <g key={i}>
-          <circle cx={x(i)} cy={y(v)} r={3} fill="var(--primary)" />
-          <text x={x(i)} y={H - pad.b + 14} textAnchor="middle" fontSize="9" fill="var(--muted-foreground)">
-            {(data[i]?.fecha ?? '').slice(5)}
-          </text>
-        </g>
-      ))}
-    </svg>
-  );
 }
 
 export function DemViewer({ code = 'R2' }: { code?: string }): ReactNode {
