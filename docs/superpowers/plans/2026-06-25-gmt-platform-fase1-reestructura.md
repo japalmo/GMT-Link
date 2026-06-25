@@ -23,9 +23,9 @@
 
 | Antes (dir) | Después (dir) | Antes (pkg npm) | Después (pkg npm) |
 | :-- | :-- | :-- | :-- |
-| `apps/api` | `nodes/backend-central` | `@gmt-platform/backend-central` | `@gmt-platform/backend-central` |
-| `apps/web` | `nodes/web` | `@gmt-platform/web` | `@gmt-platform/web` |
-| `packages/shared-types` | `packages/contracts` | `@gmt-platform/contracts` | `@gmt-platform/contracts` |
+| `apps/api` | `nodes/backend-central` | `@gmt-link/api` | `@gmt-platform/backend-central` |
+| `apps/web` | `nodes/web` | `@gmt-link/web` | `@gmt-platform/web` |
+| `packages/shared-types` | `packages/contracts` | `@gmt-link/shared-types` | `@gmt-platform/contracts` |
 | (raíz) | (raíz) | `gmt-link` | `gmt-platform` |
 
 ### Secuencia de Verificación verde (SV) — se usa en varias tareas
@@ -65,7 +65,7 @@ Expected: `feat/gmt-platform-multicloud`. Si no, `git checkout feat/gmt-platform
 Run:
 ```bash
 pnpm install
-pnpm --filter @gmt-platform/contracts build
+pnpm --filter @gmt-link/shared-types build
 ```
 Expected: install sin errores; `packages/shared-types/dist/index.js` y `index.d.ts` generados.
 
@@ -73,8 +73,8 @@ Expected: install sin errores; `packages/shared-types/dist/index.js` y `index.d.
 
 Run:
 ```bash
-pnpm --filter @gmt-platform/backend-central exec tsc --noEmit
-pnpm --filter @gmt-platform/web exec tsc --noEmit
+pnpm --filter @gmt-link/api exec tsc --noEmit
+pnpm --filter @gmt-link/web exec tsc --noEmit
 ```
 Expected: ambos salen 0.
 
@@ -82,10 +82,10 @@ Expected: ambos salen 0.
 
 Run:
 ```bash
-pnpm --filter @gmt-platform/backend-central test
-pnpm --filter @gmt-platform/web test
+pnpm --filter @gmt-link/api test
+pnpm --filter @gmt-link/web test
 ```
-Expected: web PASA. api PASA salvo, posiblemente, `test/fga-model.spec.ts` (necesita OpenFGA). **Anotar** exactamente qué falla y por qué — esa es la línea base. Si quieres aislar el unit-set de api: `pnpm --filter @gmt-platform/backend-central exec vitest run --exclude "**/fga-model.spec.ts"` debe quedar 100% verde.
+Expected: web PASA. api PASA salvo, posiblemente, `test/fga-model.spec.ts` (necesita OpenFGA). **Anotar** exactamente qué falla y por qué — esa es la línea base. Si quieres aislar el unit-set de api: `pnpm --filter @gmt-link/api exec vitest run --exclude "**/fga-model.spec.ts"` debe quedar 100% verde.
 
 - [ ] **Step 5: Lint**
 
@@ -108,16 +108,16 @@ Renombrado puramente nominal. Las carpetas siguen en `apps/*` y `packages/shared
 - Modify: `packages/shared-types/package.json` (name + description)
 - Modify: `apps/api/package.json` (name + dep)
 - Modify: `apps/web/package.json` (name + dep)
-- Modify: 51 archivos fuente con `import ... from '@gmt-platform/contracts'` + strings de filtro/comentarios
+- Modify: 51 archivos fuente con `import ... from '@gmt-link/shared-types'` + strings de filtro/comentarios
 - Modify: `Dockerfile`, `apps/api/Dockerfile`, `apps/web/Dockerfile`, `.claude/launch.json`, `apps/api/src/fga/fga.module.ts`
 
 - [ ] **Step 1: Reemplazo masivo de los tres nombres de paquete (tracked files, excluyendo el lockfile)**
 
 Desde la raíz, en Git Bash (Git for Windows trae `sed`):
 ```bash
-git grep -lZ '@gmt-platform/contracts' -- ':!pnpm-lock.yaml' | xargs -0 sed -i 's#@gmt-platform/contracts#@gmt-platform/contracts#g'
-git grep -lZ '@gmt-platform/backend-central'          -- ':!pnpm-lock.yaml' | xargs -0 sed -i 's#@gmt-platform/backend-central#@gmt-platform/backend-central#g'
-git grep -lZ '@gmt-platform/web'          -- ':!pnpm-lock.yaml' | xargs -0 sed -i 's#@gmt-platform/web#@gmt-platform/web#g'
+git grep -lZ '@gmt-link/shared-types' -- ':!pnpm-lock.yaml' | xargs -0 sed -i 's#@gmt-link/shared-types#@gmt-platform/contracts#g'
+git grep -lZ '@gmt-link/api'          -- ':!pnpm-lock.yaml' | xargs -0 sed -i 's#@gmt-link/api#@gmt-platform/backend-central#g'
+git grep -lZ '@gmt-link/web'          -- ':!pnpm-lock.yaml' | xargs -0 sed -i 's#@gmt-link/web#@gmt-platform/web#g'
 ```
 Esto cubre: los 51 imports de `@gmt-platform/contracts`, las `dependencies` `workspace:*` en los dos consumidores, los `--filter` de los 3 Dockerfiles, `.claude/launch.json`, el string de error en `apps/api/src/fga/fga.module.ts`, y los comentarios. Los tres nombres son disjuntos, así que el orden no genera colisiones.
 
@@ -978,7 +978,7 @@ En el bloque `Estructura`:
 ```diff
 -apps/api/              → NestJS
 -apps/web/              → React + Vite
--packages/shared-types/ → tipos compartidos (@gmt-platform/contracts)
+-packages/shared-types/ → tipos compartidos (@gmt-link/shared-types)
 +nodes/backend-central/ → NestJS (orquestador central)
 +nodes/web/             → React + Vite (frontend)
 +nodes/auth-service/    → identidad / JWT (scaffold)
