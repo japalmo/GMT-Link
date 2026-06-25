@@ -6,7 +6,7 @@ vi.mock('@/lib/firebase', () => ({
   auth: { currentUser: { getIdToken: mockGetIdToken } },
 }));
 
-import { getMe, ApiError } from '@/lib/api';
+import { getMe, deleteTask, uploadUserAvatar, ApiError } from '@/lib/api';
 
 /** Construye un Response mínimo para el mock de fetch. */
 function res(body: unknown, ok = true, status = 200): Response {
@@ -90,5 +90,61 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
     const err = await getMe().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
+  });
+
+  it('204 No Content → resuelve undefined sin intentar parsear el cuerpo', async () => {
+    mockGetIdToken.mockResolvedValue('tok');
+    // json() rechaza: si request() lo llamara en un 204, el test fallaría.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        json: () => Promise.reject(new Error('no debería parsearse')),
+      } as unknown as Response),
+    );
+
+    await expect(deleteTask('t1')).resolves.toBeUndefined();
+  });
+});
+
+describe('api — uploadRequest() (subida multipart de archivos)', () => {
+  beforeEach(() => {
+    mockGetIdToken.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('envía PATCH multipart con Authorization y SIN Content-Type (boundary del navegador)', async () => {
+    mockGetIdToken.mockResolvedValue('tok-up');
+    const fetchMock = vi.fn().mockResolvedValue(res({ id: 'u1', firstName: 'Ada' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const file = new File(['x'], 'avatar.png', { type: 'image/png' });
+
+    const result = await uploadUserAvatar('u1', file);
+
+    expect(result).toEqual({ id: 'u1', firstName: 'Ada' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/users/u1/avatar');
+    expect(init.method).toBe('PATCH');
+    const headers = init.headers as Headers;
+    expect(headers.get('Authorization')).toBe('Bearer tok-up');
+    expect(headers.get('Content-Type')).toBeNull();
+    expect(init.body).toBeInstanceOf(FormData);
+  });
+
+  it('error no-2xx en subida → ApiError con mensaje y status', async () => {
+    mockGetIdToken.mockResolvedValue('tok');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(res({ message: 'Archivo demasiado grande' }, false, 413)),
+    );
+    const file = new File(['x'], 'a.png', { type: 'image/png' });
+
+    const err = await uploadUserAvatar('u1', file).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).message).toBe('Archivo demasiado grande');
+    expect((err as ApiError).status).toBe(413);
   });
 });
