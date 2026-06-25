@@ -1,11 +1,18 @@
+# Contexto de build de Docker (api y web). Mantener liviano y sin secretos.
 node_modules
 **/node_modules
 dist
 **/dist
 .git
+.gitignore
+.env
+.env.*
+!.env.example
+coverage
+*.log
+.railway
+apps/api/prisma/backups
+*.tsbuildinfo
 .vscode
 .idea
 .DS_Store
-.env
-.env.*
-coverage
