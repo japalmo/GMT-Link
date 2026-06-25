@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import {
+  computeLatestPoolMetrics,
+  getPoolStatus as poolStatusOf,
+  computeSummaryStats,
+} from './metrics-utils';
+import {
   Layers,
   Activity,
   Map as MapIcon,
@@ -256,80 +261,19 @@ export default function MetricsDashboard(): ReactNode {
   };
 
   // Compute latest values of each variable for each pool
-  const latestPoolMetrics = useMemo(() => {
-    const metrics: Record<string, Record<string, string>> = {};
-
-    elements.forEach((el) => {
-      metrics[el.id] = {};
-    });
-
-    // Sort chronologically ascending to overwrite with the latest values
-    const sortedDps = [...dataPoints].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-
-    sortedDps.forEach((dp) => {
-      if (dp.elementId) {
-        const elementMetrics = metrics[dp.elementId];
-        if (elementMetrics) {
-          const variable = variables.find((v) => v.id === dp.variableId);
-          if (variable) {
-            elementMetrics[variable.code] = dp.value;
-          }
-        }
-      }
-    });
-
-    return metrics;
-  }, [elements, variables, dataPoints]);
+  const latestPoolMetrics = useMemo(
+    () => computeLatestPoolMetrics(elements, variables, dataPoints),
+    [elements, variables, dataPoints],
+  );
 
   // Compute pool alert status
-  const getPoolStatus = (element: MetricElement) => {
-    const poolData = latestPoolMetrics[element.id] || {};
-    const cotaEspejoStr = poolData['cota_espejo'];
-
-    if (!cotaEspejoStr) return 'neutral'; // No data
-
-    const cotaEspejo = parseFloat(cotaEspejoStr);
-    const metadata = (element.metadata as Record<string, number> | null) || {};
-    const cotaCritica = metadata.cota_lamina_critica;
-    const cotaSegura = metadata.cota_segura;
-
-    if (isNaN(cotaEspejo)) return 'neutral';
-
-    if (cotaCritica !== undefined && cotaEspejo >= cotaCritica) {
-      return 'danger'; // Exceeds critical level
-    }
-    if (cotaSegura !== undefined && cotaEspejo >= cotaSegura) {
-      return 'warning'; // Warning level
-    }
-    return 'safe'; // Normal
-  };
+  const getPoolStatus = (element: MetricElement) => poolStatusOf(element, latestPoolMetrics);
 
   // Compute summary stats across all pools
-  const summaryStats = useMemo(() => {
-    let totalBrineVolume = 0;
-    let totalFreeVolume = 0;
-    let totalDecantedSalt = 0;
-
-    elements.forEach((el) => {
-      const elData = latestPoolMetrics[el.id] || {};
-      const volSalmueraTotal = parseFloat(elData['vol_salmuera_total'] || '0');
-      const volSalmueraLibre = parseFloat(elData['vol_salmuera_libre'] || '0');
-      const volSal = parseFloat(elData['vol_sal'] || '0');
-
-      if (!isNaN(volSalmueraTotal)) totalBrineVolume += volSalmueraTotal;
-      if (!isNaN(volSalmueraLibre)) totalFreeVolume += volSalmueraLibre;
-      if (!isNaN(volSal)) totalDecantedSalt += volSal;
-    });
-
-    return {
-      totalBrineVolume,
-      totalFreeVolume,
-      totalDecantedSalt,
-      poolCount: elements.length,
-    };
-  }, [elements, latestPoolMetrics]);
+  const summaryStats = useMemo(
+    () => computeSummaryStats(elements, latestPoolMetrics),
+    [elements, latestPoolMetrics],
+  );
 
   // Selected element data
   const selectedElement = useMemo(() => {
