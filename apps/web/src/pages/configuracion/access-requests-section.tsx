@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { roleLabel } from '@/lib/role-labels';
-import { ROLE_KEYS, type RoleKey } from '@gmt-link/shared-types';
+import { ROLE_KEYS, type RoleKey } from '@gmt-platform/contracts';
 import type { PermissionRequestView } from '@/types/settings';
 import { RequestStatusBadge } from './request-status-badge';
 

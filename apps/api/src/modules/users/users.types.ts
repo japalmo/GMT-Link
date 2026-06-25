@@ -1,4 +1,4 @@
-import type { ProvisionedUser, RoleKey } from '@gmt-link/shared-types';
+import type { ProvisionedUser, RoleKey } from '@gmt-platform/contracts';
 
 export type { ProvisionedUser, RoleKey };
 

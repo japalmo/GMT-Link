@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import type { HealthResponse } from '@gmt-link/shared-types';
+import type { HealthResponse } from '@gmt-platform/contracts';
 
 @Controller('health')
 export class HealthController {

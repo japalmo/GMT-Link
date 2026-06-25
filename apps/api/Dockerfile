@@ -18,11 +18,11 @@ COPY . .
 RUN pnpm install
 
 # shared-types se consume compilado (main: dist/index.js) -> hay que construirlo.
-RUN pnpm --filter @gmt-link/shared-types build
+RUN pnpm --filter @gmt-platform/contracts build
 
 # Cliente Prisma + build de la API.
-RUN pnpm --filter @gmt-link/api exec prisma generate
-RUN pnpm --filter @gmt-link/api build
+RUN pnpm --filter @gmt-platform/backend-central exec prisma generate
+RUN pnpm --filter @gmt-platform/backend-central build
 
 ENV NODE_ENV=production
 WORKDIR /app/apps/api

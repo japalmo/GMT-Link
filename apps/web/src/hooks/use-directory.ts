@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DirectoryEntry } from '@gmt-link/shared-types';
+import type { DirectoryEntry } from '@gmt-platform/contracts';
 import { ApiError, listDirectory } from '@/lib/api';
 
 /** Mensaje legible a partir de un error desconocido (ApiError o genérico). */

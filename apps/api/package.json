@@ -1,5 +1,5 @@
 {
-  "name": "@gmt-link/api",
+  "name": "@gmt-platform/backend-central",
   "version": "0.1.0",
   "private": true,
   "description": "GMT Link — API NestJS",
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@gmt-link/shared-types": "workspace:*",
+    "@gmt-platform/contracts": "workspace:*",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",

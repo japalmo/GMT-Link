@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { UserStatus } from '@gmt-link/shared-types';
+import type { UserStatus } from '@gmt-platform/contracts';
 import { statusLabel } from '@/lib/role-labels';
 import { cn } from '@/lib/utils';
 

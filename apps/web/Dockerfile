@@ -18,7 +18,7 @@ ENV VITE_API_URL=$VITE_API_URL \
     VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID \
     VITE_FIREBASE_AUTH_EMULATOR=$VITE_FIREBASE_AUTH_EMULATOR
 
-RUN pnpm --filter @gmt-link/web build
+RUN pnpm --filter @gmt-platform/web build
 
 FROM node:22-slim AS runtime
 RUN npm install -g serve@14

@@ -1,4 +1,4 @@
-import type { RoleKey, UserStatus } from '@gmt-link/shared-types';
+import type { RoleKey, UserStatus } from '@gmt-platform/contracts';
 
 /**
  * Etiquetas legibles (es-CL) para cada {@link RoleKey}. Estas claves son los

@@ -1,5 +1,5 @@
 /**
- * @gmt-link/shared-types — tipos compartidos del monorepo.
+ * @gmt-platform/contracts — tipos compartidos del monorepo.
  * Los tipos de dominio se agregan por etapa según el plan maestro (§4.2).
  */
 

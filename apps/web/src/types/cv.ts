@@ -1,7 +1,7 @@
 /**
  * Tipos del frontend para "Mi CV" (§6-1.4). Reflejan el contrato HTTP de la API
  * (`/cv/me`). Las fechas viajan como string ISO; los campos opcionales como
- * `string | null`. No hay dependencia con `@gmt-link/shared-types` porque estos
+ * `string | null`. No hay dependencia con `@gmt-platform/contracts` porque estos
  * contratos son específicos del frontend de esta etapa.
  */
 

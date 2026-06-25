@@ -7,7 +7,7 @@ import {
   listPendingPermissionRequests,
   rejectPermissionRequest,
 } from '@/lib/api';
-import type { RoleKey } from '@gmt-link/shared-types';
+import type { RoleKey } from '@gmt-platform/contracts';
 import type {
   PermissionRequestAdminView,
   PermissionRequestView,

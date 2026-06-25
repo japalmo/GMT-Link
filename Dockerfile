@@ -13,7 +13,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm --filter @gmt-link/shared-types build && cd apps/api && pnpm exec prisma generate
+RUN pnpm --filter @gmt-platform/contracts build && cd apps/api && pnpm exec prisma generate
 
 EXPOSE 3001 5173
 

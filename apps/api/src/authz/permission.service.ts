@@ -4,7 +4,7 @@ import type {
   PermissionDecision,
   ResourceRef,
   ScopeFilter,
-} from '@gmt-link/shared-types';
+} from '@gmt-platform/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { FgaService } from '../fga/fga.service';
 

@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import { ROLE_KEYS, type RoleKey } from '@gmt-link/shared-types';
+import { ROLE_KEYS, type RoleKey } from '@gmt-platform/contracts';
 import { roleLabel } from '@/lib/role-labels';
 import { cn } from '@/lib/utils';
 

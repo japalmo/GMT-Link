@@ -32,12 +32,12 @@ necesita el workspace pnpm completo).
 
 - **Build command:**
   ```
-  pnpm install --frozen-lockfile && pnpm --filter @gmt-link/shared-types build && pnpm --filter @gmt-link/api exec prisma generate && pnpm --filter @gmt-link/api build
+  pnpm install --frozen-lockfile && pnpm --filter @gmt-platform/contracts build && pnpm --filter @gmt-platform/backend-central exec prisma generate && pnpm --filter @gmt-platform/backend-central build
   ```
-  (si `@gmt-link/shared-types` no tiene script `build`, omitir ese tramo)
+  (si `@gmt-platform/contracts` no tiene script `build`, omitir ese tramo)
 - **Pre-deploy / Release command** (corre las migraciones y siembra FGA):
   ```
-  pnpm --filter @gmt-link/api exec prisma migrate deploy
+  pnpm --filter @gmt-platform/backend-central exec prisma migrate deploy
   ```
 - **Start command:**
   ```
@@ -72,11 +72,11 @@ Root directory: raíz del repo.
 
 - **Build command** (`VITE_API_URL` debe estar definida ANTES del build):
   ```
-  pnpm install --frozen-lockfile && pnpm --filter @gmt-link/web build
+  pnpm install --frozen-lockfile && pnpm --filter @gmt-platform/web build
   ```
 - **Start command** (sirve el estático en el puerto de Railway):
   ```
-  pnpm --filter @gmt-link/web exec vite preview --host 0.0.0.0 --port $PORT
+  pnpm --filter @gmt-platform/web exec vite preview --host 0.0.0.0 --port $PORT
   ```
 
 ### Variables del servicio Web (todas `VITE_*`, se hornean en build)
@@ -101,7 +101,7 @@ Root directory: raíz del repo.
    - `OPENFGA_HTTP_ADDR=0.0.0.0:8080`
 3. Start command: `./openfga migrate && ./openfga run` (migrate crea las tablas).
 4. **Bootstrap del modelo** (escribe `apps/api/fga/model.fga` y crea el store):
-   correr una vez `pnpm --filter @gmt-link/api run fga:bootstrap` apuntando
+   correr una vez `pnpm --filter @gmt-platform/backend-central run fga:bootstrap` apuntando
    `FGA_API_URL` al openfga desplegado. Anota el `FGA_STORE_ID` y `FGA_MODEL_ID`
    que imprime y cárgalos como variables del servicio api (§2).
 
@@ -171,7 +171,7 @@ Proyecto Railway: **`valiant-rebirth`** (id `a4a055bc-ad80-45bb-9b8b-39899e4b3f0
    (= URL pública del web), y `FGA_API_URL/STORE_ID/MODEL_ID` (tras bootstrap).
 3. `railway add --service web --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=apps/web/Dockerfile'` + `VITE_*` (§3; se hornean como build args).
 4. `railway add --image openfga/openfga --service openfga` + su Postgres + start
-   `openfga migrate && openfga run`; luego `pnpm --filter @gmt-link/api run fga:bootstrap`
+   `openfga migrate && openfga run`; luego `pnpm --filter @gmt-platform/backend-central run fga:bootstrap`
    apuntando a su URL para obtener `FGA_STORE_ID` / `FGA_MODEL_ID`.
 5. `railway domain` por servicio y cablear `CORS_ORIGINS` (api) ↔ `VITE_API_URL` (web).
 

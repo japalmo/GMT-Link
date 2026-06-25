@@ -13,7 +13,7 @@ PostgreSQL + Prisma · OpenFGA · instancia única con clientes scopeados · mon
 ```
 apps/api/              → NestJS
 apps/web/              → React + Vite
-packages/shared-types/ → tipos compartidos (@gmt-link/shared-types)
+packages/shared-types/ → tipos compartidos (@gmt-platform/contracts)
 docs/                  → plan maestro y documentación
 docker-compose.yml     → PostgreSQL + Redis local
 ```

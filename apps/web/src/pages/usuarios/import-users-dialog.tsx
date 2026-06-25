@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ROLE_KEYS, type RoleKey } from '@gmt-link/shared-types';
+import { ROLE_KEYS, type RoleKey } from '@gmt-platform/contracts';
 import { ImportWizard, type ImportTemplateColumn } from '@/components/primitives/import-wizard';
 import type { CreateUserDto, ImportUsersResponse } from '@/lib/api';
 import { roleLabel } from '@/lib/role-labels';

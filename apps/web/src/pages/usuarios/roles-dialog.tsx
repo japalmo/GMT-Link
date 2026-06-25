@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Plus, X } from 'lucide-react';
-import { ROLE_KEYS, type RoleKey } from '@gmt-link/shared-types';
+import { ROLE_KEYS, type RoleKey } from '@gmt-platform/contracts';
 import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import type { UserListItem, UserRolesResponse } from '@/lib/api';

@@ -1,5 +1,5 @@
 {
-  "name": "gmt-link",
+  "name": "gmt-platform",
   "private": true,
   "version": "0.1.0",
   "description": "GMT Link — plataforma interna de operaciones de GMT (monorepo)",

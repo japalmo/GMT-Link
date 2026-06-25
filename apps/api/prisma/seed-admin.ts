@@ -9,7 +9,7 @@
  *                  usa FgaService.syncMembershipToFGA).
  * Esto permite ejercer 1.1 (el admin puede llamar a /users).
  *
- * Ejecutar con: pnpm --filter @gmt-link/api seed:admin
+ * Ejecutar con: pnpm --filter @gmt-platform/backend-central seed:admin
  * Requiere: Postgres arriba, OpenFGA bootstrapeado (FGA_STORE_ID en .env) y, en
  * dev, el emulador de Firebase (FIREBASE_AUTH_EMULATOR_HOST).
  */

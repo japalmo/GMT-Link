@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { HealthResponse } from '@gmt-link/shared-types';
+import type { HealthResponse } from '@gmt-platform/contracts';
 import { Activity, Inbox, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

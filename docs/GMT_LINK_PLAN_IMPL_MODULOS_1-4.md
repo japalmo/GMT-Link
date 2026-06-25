@@ -8,7 +8,7 @@
 
 **Architecture:** Una **fachada de autorización única** (`PermissionService.can`) gobierna los 3 scopes (Propios/Proyecto/Todo) de forma idéntica en los 4 módulos: estructura vía OpenFGA, "propios" vía predicado SQL `createdById`, funcional vía grants Postgres con columna `scope`. Sobre esa base se construye un **meta-modelo de servicios** (ServiceType→Level→FieldDef + InstanceNode/FieldValue) que reemplaza la jerarquía fija de metrics, y un **template builder** (ReportTemplate/TemplateBlock con binding por `fieldKey` y snapshot al generar).
 
-**Tech Stack:** NestJS + Prisma + PostgreSQL + OpenFGA (`@openfga/sdk`) · React + Vite + TS + Tailwind + shadcn/ui · `@gmt-link/shared-types` · Firebase Auth · StorageService (disco local→R2) · `class-validator` DTOs · Vitest/Jest (mocks a mano estilo `assets.service.spec.ts`).
+**Tech Stack:** NestJS + Prisma + PostgreSQL + OpenFGA (`@openfga/sdk`) · React + Vite + TS + Tailwind + shadcn/ui · `@gmt-platform/contracts` · Firebase Auth · StorageService (disco local→R2) · `class-validator` DTOs · Vitest/Jest (mocks a mano estilo `assets.service.spec.ts`).
 
 **Decisión de arquitectura:** ver [ADR-0001](adr/0001-rbac-dinamico-permission-service.md) (RBAC dinámico, fachada B-ahora/C-listo, *accepted*).
 

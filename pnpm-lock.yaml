@@ -29,7 +29,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@gmt-link/shared-types':
+      '@gmt-platform/contracts':
         specifier: workspace:*
         version: link:../../packages/shared-types
       '@nestjs/common':
@@ -114,7 +114,7 @@ importers:
       '@fontsource-variable/inter':
         specifier: ^5.1.1
         version: 5.2.8
-      '@gmt-link/shared-types':
+      '@gmt-platform/contracts':
         specifier: workspace:*
         version: link:../../packages/shared-types
       '@radix-ui/react-dialog':

@@ -13,7 +13,7 @@
  *  8. Historial de DataPoints para R2 para poblar el dashboard.
  *  9. Tareas de ejemplo para ambos proyectos (incluyendo dataSpec).
  *
- * Ejecutar con: pnpm --filter @gmt-link/api seed:capstone
+ * Ejecutar con: pnpm --filter @gmt-platform/backend-central seed:capstone
  */
 import fs from 'node:fs';
 import path from 'node:path';

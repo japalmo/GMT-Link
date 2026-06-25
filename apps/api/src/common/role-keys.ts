@@ -1,12 +1,12 @@
 /**
  * Re-export del contrato de claves de rol compartido (§4.3 / §6-0.2).
- * Vive en `@gmt-link/shared-types` para que back y front compartan la misma
+ * Vive en `@gmt-platform/contracts` para que back y front compartan la misma
  * lista; aquí se re-exporta y se añade un helper de validación de runtime.
  * La validación dura (¿existe el rol en la tabla Role?) la hace UsersService
  * contra Postgres; este helper es la primera barrera de tipo/forma.
  */
-import { ROLE_KEYS } from '@gmt-link/shared-types';
-import type { RoleKey } from '@gmt-link/shared-types';
+import { ROLE_KEYS } from '@gmt-platform/contracts';
+import type { RoleKey } from '@gmt-platform/contracts';
 
 export { ROLE_KEYS };
 export type { RoleKey };

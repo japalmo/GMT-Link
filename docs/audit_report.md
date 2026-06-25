@@ -30,9 +30,9 @@ Leyenda: ✅ Pasa · ⚠️ Pasa parcial / verificar manual · ❌ Falla.
 
 | Check | Comando | Resultado |
 |---|---|---|
-| TypeScript API | `pnpm --filter @gmt-link/api exec tsc --noEmit` | **exit 0 (sin errores)** |
-| TypeScript Web | `pnpm --filter @gmt-link/web exec tsc --noEmit` | **exit 0 (sin errores)** |
-| Tests API (Vitest) | `pnpm --filter @gmt-link/api run test` | **25 archivos, 227 tests — todos verdes** |
+| TypeScript API | `pnpm --filter @gmt-platform/backend-central exec tsc --noEmit` | **exit 0 (sin errores)** |
+| TypeScript Web | `pnpm --filter @gmt-platform/web exec tsc --noEmit` | **exit 0 (sin errores)** |
+| Tests API (Vitest) | `pnpm --filter @gmt-platform/backend-central run test` | **25 archivos, 227 tests — todos verdes** |
 | Docker (PostgreSQL/OpenFGA/Redis) | `docker compose ps` | up + `gmt_postgres` healthy |
 | Migraciones Prisma | `prisma migrate status` | 15 migraciones, **schema al día** |
 | Seed / datos | psql | 9 usuarios, 2 clientes (Capstone+Albemarle), Element R2, 4 tareas |
@@ -72,13 +72,13 @@ Leyenda: ✅ Pasa · ⚠️ Pasa parcial / verificar manual · ❌ Falla.
 *Procedimiento de arranque correcto (documentar para la demo):*
 ```bash
 firebase emulators:start --only auth        # ahora toma demo-gmt-link de .firebaserc
-pnpm --filter @gmt-link/api exec tsx scripts/seed-firebase-mvp.ts   # recrear usuarios (emulador es in-memory)
+pnpm --filter @gmt-platform/backend-central exec tsx scripts/seed-firebase-mvp.ts   # recrear usuarios (emulador es in-memory)
 ```
 *Nota:* el emulador de Auth es **in-memory** → cada reinicio borra los usuarios. **Siempre** re-correr `seed-firebase-mvp.ts` tras (re)levantar el emulador. Recomendado: agregar al emulador `--import=./.firebase-data --export-on-exit` para persistir, o un script `dev:emu` que encadene start+seed.
 
 **Fix #2 — La API debe estar arriba para que el login complete.**
 *Síntoma:* con el emulador OK pero la API caída, `signIn` funciona pero `getMe()` cuelga → el login no avanza ni muestra error.
-*Acción:* asegurar `pnpm --filter @gmt-link/api dev` (puerto 3001) antes de demostrar. *Mejora de robustez:* en `auth-context.tsx`, dar timeout/feedback a `getMe()` para no quedar colgado si la API no responde.
+*Acción:* asegurar `pnpm --filter @gmt-platform/backend-central dev` (puerto 3001) antes de demostrar. *Mejora de robustez:* en `auth-context.tsx`, dar timeout/feedback a `getMe()` para no quedar colgado si la API no responde.
 
 ### 🟡 MEDIA
 
