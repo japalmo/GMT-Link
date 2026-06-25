@@ -7,12 +7,9 @@ import {
   Calendar,
   Download,
   Database,
-  AlertTriangle,
   CheckCircle2,
   User,
-  RefreshCw,
   Sliders,
-  HelpCircle,
   Plus,
   Search,
   ChevronLeft,
@@ -81,7 +78,7 @@ export default function MetricsDashboard(): ReactNode {
   }, []);
 
   // Navigation & Dropdown Selection States
-  const [projects, setProjects] = useState<ProjectView[]>([]);
+  const [, setProjects] = useState<ProjectView[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectView | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceView | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<MetricPhase | null>(null);
@@ -122,8 +119,8 @@ export default function MetricsDashboard(): ReactNode {
   const [endDateFilter, setEndDateFilter] = useState('');
 
   // UI States
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [, setLoading] = useState(true);
+  const [, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'satellite' | 'vector'>('satellite');
 
   // Leaflet references
@@ -562,18 +559,6 @@ export default function MetricsDashboard(): ReactNode {
     }
   }, [LModule, elements, latestPoolMetrics, selectedElementId]);
 
-  // Center map on selected element helper
-  const centerOnElement = (el: MetricElement) => {
-    const map = mapRef.current;
-    if (!LModule || !map) return;
-
-    const coordinates = parsePolygon(el);
-    const bounds = LModule.latLngBounds(coordinates);
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { maxZoom: 15, padding: [40, 40] });
-    }
-  };
-
   // CSV Exporter
   const handleExportCSV = () => {
     if (!selectedElement || filteredElementTimeline.length === 0) return;
@@ -612,7 +597,8 @@ export default function MetricsDashboard(): ReactNode {
     setEditPoolCode(el.code);
     setEditPoolCoords(el.locationPolygon || '');
     
-    const limits = ((el.metadata as any)?.limits) || {};
+    const limits: Record<string, number> =
+      (el.metadata?.limits as Record<string, number> | undefined) ?? {};
     setEditPoolEffectiveArea(limits.effective_area ? String(limits.effective_area) : '');
     setEditPoolSafeCapacity(limits.safe_capacity ? String(limits.safe_capacity) : '');
     setEditPoolMaxCapacity(limits.max_nominal_capacity ? String(limits.max_nominal_capacity) : '');
@@ -928,7 +914,8 @@ export default function MetricsDashboard(): ReactNode {
   /* DETAIL VIEW SCREEN                                                       */
   /* ======================================================================== */
   if (selectedElementId && selectedElement) {
-    const limits = ((selectedElement.metadata as any)?.limits) || {
+    const limits: Record<string, number> =
+      (selectedElement.metadata?.limits as Record<string, number> | undefined) || {
       effective_area: 0,
       safe_capacity: 0,
       max_nominal_capacity: 0,
@@ -1332,7 +1319,9 @@ export default function MetricsDashboard(): ReactNode {
                 
                 <select
                   value={statusFilter}
-                  onChange={(e: any) => setStatusFilter(e.target.value)}
+                  onChange={(e) =>
+                    setStatusFilter(e.target.value as 'all' | 'safe' | 'warning' | 'danger')
+                  }
                   className="rounded-xl border border-input bg-background px-3 h-9 text-xs"
                 >
                   <option value="all">Todos los Estados</option>
