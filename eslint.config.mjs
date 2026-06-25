@@ -17,7 +17,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/api/**/*.ts'],
+    files: ['nodes/backend-central/**/*.ts'],
     rules: {
       '@typescript-eslint/consistent-type-imports': 'off',
     },

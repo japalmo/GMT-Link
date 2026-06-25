@@ -1,5 +1,6 @@
 packages:
-  - apps/*
+  - nodes/*
+  - '!nodes/v-metric'
   - packages/*
 allowBuilds:
   esbuild: true

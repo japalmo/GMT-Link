@@ -11,7 +11,7 @@ dist
 coverage
 *.log
 .railway
-apps/api/prisma/backups
+nodes/backend-central/prisma/backups
 *.tsbuildinfo
 .vscode
 .idea

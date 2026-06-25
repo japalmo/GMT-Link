@@ -1,5 +1,5 @@
 # Dockerfile del servicio API (NestJS) — build desde la raíz del monorepo pnpm.
-# En Railway: setear RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile (root dir = raíz del repo).
+# En Railway: setear RAILWAY_DOCKERFILE_PATH=nodes/backend-central/Dockerfile (root dir = raíz del repo).
 FROM node:22-slim
 
 # Prisma necesita openssl; ca-certificates para llamadas TLS salientes (Firebase/NVIDIA).
@@ -25,7 +25,7 @@ RUN pnpm --filter @gmt-platform/backend-central exec prisma generate
 RUN pnpm --filter @gmt-platform/backend-central build
 
 ENV NODE_ENV=production
-WORKDIR /app/apps/api
+WORKDIR /app/nodes/backend-central
 
 # Release + arranque: aplica migraciones y levanta. PORT lo inyecta Railway.
 CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]

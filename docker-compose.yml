@@ -35,7 +35,7 @@ services:
   firebase-seed:
     image: gmt-link-app
     container_name: gmt_firebase_seed
-    working_dir: /workspace/apps/api
+    working_dir: /workspace/nodes/backend-central
     depends_on:
       firebase-auth:
         condition: service_healthy
@@ -125,7 +125,7 @@ services:
 
   # OpenFGA — servidor de autorización (§4.3). Almacenamiento in-memory (dev):
   # se resetea al reiniciar, por eso hay que correr `pnpm run fga:bootstrap`
-  # (apps/api) después de levantarlo para recrear el store + authorization model.
+  # (nodes/backend-central) después de levantarlo para recrear el store + authorization model.
   openfga:
     image: openfga/openfga:latest
     container_name: gmt_openfga

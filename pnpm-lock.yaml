@@ -27,11 +27,11 @@ importers:
         specifier: ^8.20.0
         version: 8.61.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
 
-  apps/api:
+  nodes/backend-central:
     dependencies:
       '@gmt-platform/contracts':
         specifier: workspace:*
-        version: link:../../packages/shared-types
+        version: link:../../packages/contracts
       '@nestjs/common':
         specifier: ^11.0.1
         version: 11.1.26(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -109,14 +109,14 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.21)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  apps/web:
+  nodes/web:
     dependencies:
       '@fontsource-variable/inter':
         specifier: ^5.1.1
         version: 5.2.8
       '@gmt-platform/contracts':
         specifier: workspace:*
-        version: link:../../packages/shared-types
+        version: link:../../packages/contracts
       '@radix-ui/react-dialog':
         specifier: ^1.1.6
         version: 1.1.16(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -194,7 +194,7 @@ importers:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.21)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.19.21)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  packages/shared-types:
+  packages/contracts:
     devDependencies:
       typescript:
         specifier: ^5.7.3

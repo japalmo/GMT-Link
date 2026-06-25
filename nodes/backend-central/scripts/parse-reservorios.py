@@ -6,7 +6,7 @@ import openpyxl
 
 KML_DIR = r"C:\Users\juana\Downloads\poligonos reservorios"
 EXCEL_PATH = r"C:\Users\juana\Downloads\VOLUMEN 3D DE RESERVORIOS DIA 18-06-2026.xlsx"
-OUT_PATH = r"C:\Users\juana\GMT Link\apps\api\prisma\data-reservorios.json"
+OUT_PATH = r"C:\Users\juana\GMT Link\nodes\backend-central\prisma\data-reservorios.json"
 
 # Mapeo de reservorios a sus hojas correspondientes
 SHEETS_MAP = {

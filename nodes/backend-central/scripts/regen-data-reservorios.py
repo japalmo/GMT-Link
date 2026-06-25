@@ -1,7 +1,7 @@
 """
 regen-data-reservorios.py
 ─────────────────────────
-Regenera apps/api/prisma/data-reservorios.json para R1..R10 con la SERIE COMPLETA
+Regenera nodes/backend-central/prisma/data-reservorios.json para R1..R10 con la SERIE COMPLETA
 limpia (sin submuestreo), reusando el parser validado normalize_reservorios_v2.py.
 
 - Preserva code/name/polygon/metadata existentes (polígonos de KML); reemplaza measurements.
@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, r"C:\Users\juana\V-metric")
 import normalize_reservorios_v2 as N  # noqa: E402
 
-JSON_PATH = Path(r"C:\Users\juana\GMT Link\apps\api\prisma\data-reservorios.json")
+JSON_PATH = Path(r"C:\Users\juana\GMT Link\nodes\backend-central\prisma\data-reservorios.json")
 R_CODES = [f"R{i}" for i in range(1, 11)]
 
 # Reverse: elemento -> hojas
