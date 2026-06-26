@@ -7,6 +7,10 @@ WORKDIR /app
 COPY . .
 RUN pnpm install
 
+# Compilar los tipos compartidos ANTES del build de web: su `dist/` es gitignored
+# (no llega al contexto Docker), y sin él `tsc` no encuentra @gmt-platform/contracts.
+RUN pnpm --filter @gmt-platform/contracts build
+
 ARG VITE_API_URL=""
 ARG VITE_FIREBASE_API_KEY=""
 ARG VITE_FIREBASE_AUTH_DOMAIN=""
