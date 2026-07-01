@@ -19,6 +19,7 @@ model User {
   secondLastName String?
   email          String     @unique
   avatarUrl      String?
+  passwordHash   String?    // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
   status         UserStatus @default(PENDING_FIRST_LOGIN)
   points         Int        @default(0) // gamificación
   isClientUser   Boolean    @default(false)
