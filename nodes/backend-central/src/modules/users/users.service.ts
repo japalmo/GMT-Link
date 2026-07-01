@@ -10,9 +10,9 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
+import { hashPassword } from '../../common/password';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
-import { FirebaseService } from '../../auth/firebase.service';
 import { FgaService } from '../../fga/fga.service';
 import type { TupleKey } from '../../fga/fga.types';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -36,13 +36,13 @@ type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true 
 /**
  * Provisión de usuarios por el admin (§1.1, §6-1.1).
  *
- * Orquesta tres sistemas por usuario creado:
- *  1. Firebase   — cuenta con clave provisoria, emailVerified=true.
- *  2. Postgres   — User (PENDING_FIRST_LOGIN) + Membership por rol (espejo §4.1).
- *  3. OpenFGA    — tupla por membership vía FgaService.syncMembershipToFGA.
+ * Orquesta dos sistemas por usuario creado:
+ *  1. Postgres   — User (PENDING_FIRST_LOGIN) con el HASH bcrypt de la clave
+ *                  provisoria + Membership por rol (espejo §4.1).
+ *  2. OpenFGA    — tupla de acceso org (member/admin).
  *
  * Decisión §9: NO se envía email; la clave provisoria se RETORNA en la respuesta
- * para que el admin la comparta. Nunca se persiste en claro ni se relee.
+ * para que el admin la comparta. Solo se persiste su hash bcrypt; nunca en claro.
  *
  * Modelo de roles en la provisión (decisión §9 "acceso org + roles por defecto"):
  * a nivel ORGANIZACIÓN OpenFGA solo distingue acceso (admin/member). Por eso al
@@ -54,10 +54,8 @@ type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true 
  * proyecto (Etapa 4). OpenFGA write no es idempotente, así que `member` se escribe
  * una sola vez aquí (no en cada rol funcional).
  *
- * Compensación best-effort: si tras crear el usuario en Firebase falla Postgres
- * o FGA, se intenta borrar el usuario Firebase para no dejar huérfanos. Una tupla
- * org huérfana (referida a un id de usuario ya borrado) es inocua: ningún login
- * vuelve a tener ese cuid.
+ * Compensación best-effort: si tras persistir el User en Postgres falla la
+ * escritura FGA, se borra el User (cascada de memberships) para no dejar huérfanos.
  */
 @Injectable()
 export class UsersService {
@@ -65,7 +63,6 @@ export class UsersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly firebase: FirebaseService,
     private readonly fga: FgaService,
     private readonly storage: StorageService,
   ) {}
@@ -76,19 +73,12 @@ export class UsersService {
     await this.assertEmailFree(dto.email);
 
     const provisionalPassword = generateProvisionalPassword();
-    const { uid } = await this.firebase.createUser({
-      email: dto.email,
-      password: provisionalPassword,
-      emailVerified: true,
-    });
+    const passwordHash = await hashPassword(provisionalPassword);
 
     let user: UserWithMemberships;
     try {
-      user = await this.persistUserWithMemberships(dto, roleKeys);
+      user = await this.persistUserWithMemberships(dto, roleKeys, passwordHash);
     } catch (error: unknown) {
-      // Compensación: borra el usuario Firebase recién creado para no dejar huérfanos.
-      await this.compensateFirebase(uid, dto.email);
-      // Postgres @unique(email) puede correr la carrera contra assertEmailFree.
       if (this.isUniqueEmailViolation(error)) {
         throw new ConflictException(`Ya existe un usuario con el email "${dto.email}".`);
       }
@@ -96,7 +86,6 @@ export class UsersService {
     }
 
     // Acceso org en FGA: member siempre; admin además si trae org_admin.
-    // (Una sola escritura; los roles funcionales no generan tupla org — ver JSDoc.)
     try {
       const orgWrites: TupleKey[] = [this.orgAccessTuple(user.id, 'member')];
       if (roleKeys.includes(ORG_ADMIN_ROLE)) {
@@ -104,7 +93,7 @@ export class UsersService {
       }
       await this.fga.writeTuples(orgWrites);
     } catch (error: unknown) {
-      await this.compensateUser(user.id, uid, dto.email);
+      await this.compensateUser(user.id);
       throw error;
     }
 
@@ -321,6 +310,7 @@ export class UsersService {
   private async persistUserWithMemberships(
     dto: CreateUserDto,
     roleKeys: RoleKey[],
+    passwordHash: string,
   ): Promise<UserWithMemberships> {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -330,6 +320,7 @@ export class UsersService {
           lastName: dto.lastName,
           secondLastName: dto.secondLastName ?? null,
           email: dto.email,
+          passwordHash,
           isClientUser: dto.isClientUser ?? false,
           status: 'PENDING_FIRST_LOGIN',
           memberships: {
@@ -351,19 +342,8 @@ export class UsersService {
     return { user: `user:${userId}`, relation, object: `organization:${ORG_ID}` };
   }
 
-  /** Compensación best-effort: borra el usuario Firebase huérfano. No re-lanza. */
-  private async compensateFirebase(uid: string, email: string): Promise<void> {
-    try {
-      await this.firebase.deleteUser(uid);
-    } catch (error: unknown) {
-      this.logger.error(
-        `Compensación parcial: no se pudo borrar el usuario Firebase ${uid} (${email}) tras un fallo de provisión. Requiere limpieza manual. Causa: ${this.errorMessage(error)}`,
-      );
-    }
-  }
-
-  /** Compensación best-effort: borra User en Postgres (cascada de memberships) + Firebase. */
-  private async compensateUser(userId: string, uid: string, email: string): Promise<void> {
+  /** Compensación best-effort: borra User en Postgres (cascada de memberships). No re-lanza. */
+  private async compensateUser(userId: string): Promise<void> {
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.membership.deleteMany({ where: { userId } });
@@ -371,10 +351,9 @@ export class UsersService {
       });
     } catch (error: unknown) {
       this.logger.error(
-        `Compensación parcial: no se pudo borrar el User ${userId} (${email}) tras un fallo de sync FGA. Requiere limpieza manual. Causa: ${this.errorMessage(error)}`,
+        `Compensación parcial: no se pudo borrar el User ${userId} tras un fallo de sync FGA. Requiere limpieza manual. Causa: ${this.errorMessage(error)}`,
       );
     }
-    await this.compensateFirebase(uid, email);
   }
 
   private async currentRoles(userId: string): Promise<UserRolesResponse> {

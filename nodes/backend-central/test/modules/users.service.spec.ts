@@ -1,9 +1,10 @@
 import 'reflect-metadata';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FirebaseService } from '../../src/auth/firebase.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import type { StorageService } from '../../src/common/storage/storage.service';
+import { verifyPassword } from '../../src/common/password';
 import { UsersService } from '../../src/modules/users/users.service';
 import type { CreateUserDto } from '../../src/modules/users/dto/create-user.dto';
 
@@ -18,6 +19,7 @@ interface FakeUserRow {
   lastName: string;
   secondLastName: string | null;
   email: string;
+  passwordHash: string;
   status: string;
   isClientUser: boolean;
   createdAt: Date;
@@ -34,6 +36,8 @@ interface PrismaState {
 function buildPrismaMock(state: PrismaState): {
   prisma: PrismaService;
   createdRow: () => FakeUserRow | null;
+  userDelete: ReturnType<typeof vi.fn>;
+  membershipDeleteMany: ReturnType<typeof vi.fn>;
 } {
   let created: FakeUserRow | null = null;
 
@@ -45,6 +49,7 @@ function buildPrismaMock(state: PrismaState): {
         lastName: string;
         secondLastName: string | null;
         email: string;
+        passwordHash: string;
         isClientUser: boolean;
         status: string;
         memberships: { create: Array<{ roleKey: string }> };
@@ -60,6 +65,7 @@ function buildPrismaMock(state: PrismaState): {
         lastName: args.data.lastName,
         secondLastName: args.data.secondLastName,
         email: args.data.email,
+        passwordHash: args.data.passwordHash,
         status: args.data.status,
         isClientUser: args.data.isClientUser,
         createdAt: new Date('2026-06-13T00:00:00.000Z'),
@@ -69,6 +75,9 @@ function buildPrismaMock(state: PrismaState): {
       return Promise.resolve(row);
     },
   );
+
+  const userDelete = vi.fn((): Promise<unknown> => Promise.resolve(undefined));
+  const membershipDeleteMany = vi.fn((): Promise<unknown> => Promise.resolve(undefined));
 
   const prismaLike = {
     role: {
@@ -87,10 +96,10 @@ function buildPrismaMock(state: PrismaState): {
           Promise.resolve(state.emailExists ? { id: 'existing' } : null),
       ),
       create: userCreate,
-      delete: vi.fn((): Promise<unknown> => Promise.resolve(undefined)),
+      delete: userDelete,
     },
     membership: {
-      deleteMany: vi.fn((): Promise<unknown> => Promise.resolve(undefined)),
+      deleteMany: membershipDeleteMany,
     },
     // $transaction ejecuta el callback con un tx que reusa los mismos mocks.
     $transaction: vi.fn(
@@ -101,22 +110,8 @@ function buildPrismaMock(state: PrismaState): {
   return {
     prisma: prismaLike as unknown as PrismaService,
     createdRow: () => created,
-  };
-}
-
-function buildFirebaseMock(opts: { uid?: string } = {}): {
-  firebase: FirebaseService;
-  createUser: ReturnType<typeof vi.fn>;
-  deleteUser: ReturnType<typeof vi.fn>;
-} {
-  const createUser = vi.fn(
-    (): Promise<{ uid: string }> => Promise.resolve({ uid: opts.uid ?? 'fb-uid' }),
-  );
-  const deleteUser = vi.fn((): Promise<void> => Promise.resolve());
-  return {
-    firebase: { createUser, deleteUser } as unknown as FirebaseService,
-    createUser,
-    deleteUser,
+    userDelete,
+    membershipDeleteMany,
   };
 }
 
@@ -136,6 +131,11 @@ function buildFgaMock(opts: { fail?: boolean } = {}): {
     writeTuples,
     deleteTuples,
   };
+}
+
+/** Storage stub: UsersService lo inyecta pero create()/importBatch() no lo usan. */
+function buildStorageMock(): StorageService {
+  return { save: vi.fn() } as unknown as StorageService;
 }
 
 function validDto(overrides: Partial<CreateUserDto> = {}): CreateUserDto {
@@ -166,24 +166,22 @@ describe('UsersService.create', () => {
     state = { rolesInCatalog: new Set(ALL_ROLES), emailExists: false, failPersist: false };
   });
 
-  it('crea el usuario, asigna memberships, llama syncMembershipToFGA y retorna la clave provisoria', async () => {
-    const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock({ uid: 'fb-123' });
+  it('crea el usuario, persiste el hash bcrypt de la clave provisoria, escribe acceso FGA y retorna la clave', async () => {
+    const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     const result = await service.create(validDto());
 
-    // Se crea el usuario Firebase con la clave provisoria generada y emailVerified.
-    expect(fb.createUser).toHaveBeenCalledTimes(1);
-    const fbArg = fb.createUser.mock.calls[0]?.[0] as {
-      email: string;
-      password: string;
-      emailVerified?: boolean;
-    };
-    expect(fbArg.email).toBe('ana@gmt.cl');
-    expect(fbArg.emailVerified).toBe(true);
-    expect(fbArg.password).toBe(result.provisionalPassword);
+    // El User persistido lleva un passwordHash no vacío que verifica contra la clave provisoria.
+    const row = createdRow();
+    expect(row).not.toBeNull();
+    expect(typeof row?.passwordHash).toBe('string');
+    expect(row?.passwordHash.length).toBeGreaterThan(0);
+    expect(row?.passwordHash).not.toBe(result.provisionalPassword);
+    await expect(verifyPassword(result.provisionalPassword, row?.passwordHash ?? '')).resolves.toBe(
+      true,
+    );
     expect(result.provisionalPassword.length).toBeGreaterThanOrEqual(12);
 
     // Acceso org: solo member (no trae org_admin → sin tupla admin).
@@ -205,9 +203,8 @@ describe('UsersService.create', () => {
 
   it('si trae org_admin, escribe acceso member + admin en FGA', async () => {
     const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     await service.create(validDto({ roleKeys: ['org_admin'] }));
 
@@ -218,11 +215,10 @@ describe('UsersService.create', () => {
     ]);
   });
 
-  it('NO persiste la clave provisoria en claro (no aparece en los datos guardados en Postgres)', async () => {
+  it('NO persiste la clave provisoria en claro (solo su hash bcrypt)', async () => {
     const { prisma, createdRow } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     const result = await service.create(validDto());
 
@@ -234,49 +230,48 @@ describe('UsersService.create', () => {
 
   it('rechaza (400) roleKeys que no existen en el catálogo de la BD', async () => {
     state.rolesInCatalog = new Set(['operator']); // 'viewer' no está en la BD
-    const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
+    const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     await expect(service.create(validDto({ roleKeys: ['operator', 'viewer'] }))).rejects.toBeInstanceOf(
       BadRequestException,
     );
-    // No se debe haber tocado Firebase si la validación falla antes.
-    expect(fb.createUser).not.toHaveBeenCalled();
+    // No se debe haber persistido nada si la validación falla antes.
+    expect(createdRow()).toBeNull();
+    expect(fga.writeTuples).not.toHaveBeenCalled();
   });
 
-  it('rechaza (409) si el email ya existe en Postgres y no crea en Firebase', async () => {
+  it('rechaza (409) si el email ya existe en Postgres y no persiste el usuario', async () => {
     state.emailExists = true;
-    const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
+    const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     await expect(service.create(validDto())).rejects.toBeInstanceOf(ConflictException);
-    expect(fb.createUser).not.toHaveBeenCalled();
+    expect(createdRow()).toBeNull();
+    expect(fga.writeTuples).not.toHaveBeenCalled();
   });
 
-  it('compensa borrando el usuario Firebase si falla la persistencia en Postgres', async () => {
+  it('propaga el error si falla la persistencia en Postgres (sin escribir FGA)', async () => {
     state.failPersist = true;
     const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock({ uid: 'fb-orphan' });
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     await expect(service.create(validDto())).rejects.toThrow();
-    expect(fb.createUser).toHaveBeenCalledTimes(1);
-    expect(fb.deleteUser).toHaveBeenCalledWith('fb-orphan');
+    expect(fga.writeTuples).not.toHaveBeenCalled();
   });
 
-  it('compensa (borra User + Firebase) si falla el sync FGA tras crear en Postgres', async () => {
-    const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock({ uid: 'fb-456' });
+  it('compensa borrando el User (rollback Postgres) si falla la escritura FGA', async () => {
+    const { prisma, userDelete, membershipDeleteMany } = buildPrismaMock(state);
     const fga = buildFgaMock({ fail: true });
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     await expect(service.create(validDto())).rejects.toThrow();
-    expect(fb.deleteUser).toHaveBeenCalledWith('fb-456');
+    // Rollback: se borran memberships + user del recién creado (solo Postgres, sin Firebase).
+    expect(membershipDeleteMany).toHaveBeenCalledWith({ where: { userId: 'user-generated-id' } });
+    expect(userDelete).toHaveBeenCalledWith({ where: { id: 'user-generated-id' } });
   });
 });
 
@@ -289,9 +284,8 @@ describe('UsersService.importBatch', () => {
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     const result = await service.importBatch([
       validDto({ email: 'ok@gmt.cl', roleKeys: ['operator'] }),
@@ -316,9 +310,8 @@ describe('UsersService.importBatch', () => {
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     // Filas CRUDAS (como llegan del CSV): la del medio tiene email inválido.
     const result = await service.importBatch([
@@ -332,8 +325,8 @@ describe('UsersService.importBatch', () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]?.index).toBe(1);
     expect(result.errors[0]?.email).toBe('no-es-un-email');
-    // No se intentó crear en Firebase la fila inválida (solo las 2 buenas).
-    expect(fb.createUser).toHaveBeenCalledTimes(2);
+    // Solo se escribió acceso FGA por las 2 filas buenas.
+    expect(fga.writeTuples).toHaveBeenCalledTimes(2);
   });
 
   it('una fila que no es objeto cae en errors sin romper el proceso', async () => {
@@ -343,9 +336,8 @@ describe('UsersService.importBatch', () => {
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
-    const fb = buildFirebaseMock();
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fb.firebase, fga.fga);
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
 
     const result = await service.importBatch([
       { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gmt.cl', roleKeys: ['operator'] },
