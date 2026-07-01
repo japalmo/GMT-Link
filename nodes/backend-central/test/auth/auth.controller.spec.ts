@@ -1,12 +1,12 @@
 import 'reflect-metadata';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import type { Request } from 'express';
 import { AuthController } from '../../src/auth/auth.controller';
 import type { FirebaseService } from '../../src/auth/firebase.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import { CompleteFirstLoginDto } from '../../src/auth/dto/complete-first-login.dto';
+import { verifyPassword } from '../../src/common/password';
 import '../../src/auth/auth-request.types';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 
@@ -22,7 +22,7 @@ interface Mocks {
   controller: AuthController;
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
-  setPassword: ReturnType<typeof vi.fn>;
+  awardPoints: ReturnType<typeof vi.fn>;
 }
 
 function buildController(options: {
@@ -30,21 +30,17 @@ function buildController(options: {
 }): Mocks {
   const findUnique = vi.fn(() => Promise.resolve(options.user ?? null));
   const update = vi.fn(() => Promise.resolve({}));
-  const setPassword = vi.fn(() => Promise.resolve());
+  const awardPoints = vi.fn(() => Promise.resolve());
 
   const prisma = {
     user: { findUnique, update },
     membership: { findMany: vi.fn(() => Promise.resolve([])) },
     project: { findMany: vi.fn(() => Promise.resolve([])) },
   } as unknown as PrismaService;
-  const firebase = { setPassword } as unknown as FirebaseService;
-  const gamification = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
+  const firebase = { setPassword: vi.fn(() => Promise.resolve()) } as unknown as FirebaseService;
+  const gamification = { awardPoints } as unknown as GamificationService;
 
-  return { controller: new AuthController(prisma, firebase, gamification), findUnique, update, setPassword };
-}
-
-function buildReq(firebaseUid?: string): Request {
-  return { firebaseUid } as unknown as Request;
+  return { controller: new AuthController(prisma, firebase, gamification), findUnique, update, awardPoints };
 }
 
 function dto(newPassword: string): CompleteFirstLoginDto {
@@ -94,39 +90,45 @@ describe('AuthController · POST /auth/first-login/complete', () => {
   it('lanza 401 cuando no hay authUser', async () => {
     const { controller } = buildController({});
     await expect(
-      controller.completeFirstLogin(undefined, buildReq('fb-uid'), dto('password123')),
+      controller.completeFirstLogin(undefined, dto('password123')),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('lanza 401 cuando falta el firebaseUid en la sesión', async () => {
-    const { controller } = buildController({ user: { status: 'PENDING_FIRST_LOGIN' } });
+  it('lanza 401 cuando el usuario de la sesión ya no existe', async () => {
+    const { controller, update } = buildController({ user: null });
     await expect(
-      controller.completeFirstLogin(ACTIVE_USER, buildReq(undefined), dto('password123')),
+      controller.completeFirstLogin(ACTIVE_USER, dto('password123')),
     ).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('lanza Conflict cuando el usuario ya está ACTIVE', async () => {
-    const { controller, setPassword, update } = buildController({ user: { status: 'ACTIVE' } });
-    await expect(
-      controller.completeFirstLogin(ACTIVE_USER, buildReq('fb-uid'), dto('password123')),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(setPassword).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('camino feliz: PENDING → fija password en Firebase y activa el usuario', async () => {
-    const { controller, setPassword, update } = buildController({
+  it('lanza Conflict cuando el usuario ya está ACTIVE', async () => {
+    const { controller, update } = buildController({ user: { status: 'ACTIVE' } });
+    await expect(
+      controller.completeFirstLogin(ACTIVE_USER, dto('password123')),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('camino feliz: PENDING → fija passwordHash (bcrypt) y activa el usuario', async () => {
+    const { controller, update, awardPoints } = buildController({
       user: { status: 'PENDING_FIRST_LOGIN' },
     });
 
-    const result = await controller.completeFirstLogin(
-      ACTIVE_USER,
-      buildReq('fb-uid'),
-      dto('password123'),
-    );
+    const result = await controller.completeFirstLogin(ACTIVE_USER, dto('password123'));
 
-    expect(setPassword).toHaveBeenCalledWith('fb-uid', 'password123');
-    expect(update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { status: 'ACTIVE' } });
+    expect(update).toHaveBeenCalledTimes(1);
+    const call = update.mock.calls[0]?.[0] as {
+      where: { id: string };
+      data: { passwordHash: string; status: string };
+    };
+    expect(call.where).toEqual({ id: 'u1' });
+    expect(call.data.status).toBe('ACTIVE');
+    expect(typeof call.data.passwordHash).toBe('string');
+    expect(call.data.passwordHash.length).toBeGreaterThan(0);
+    // el hash almacenado verifica contra la contraseña en claro
+    await expect(verifyPassword('password123', call.data.passwordHash)).resolves.toBe(true);
+    expect(awardPoints).toHaveBeenCalledWith('u1', 'FIRST_LOGIN');
     expect(result).toEqual({ status: 'ACTIVE' });
   });
 });

@@ -4,12 +4,10 @@ import {
   Controller,
   Get,
   Post,
-  Req,
   UnauthorizedException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../modules/gamification/gamification.service';
 import type { AuthUser } from '../authz/auth-user.types';
@@ -17,7 +15,7 @@ import { CurrentUser } from './current-user.decorator';
 import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { FirebaseService } from './firebase.service';
-import { verifyPassword } from '../common/password';
+import { hashPassword, verifyPassword } from '../common/password';
 import { signToken } from '../common/jwt';
 import './auth-request.types';
 
@@ -151,25 +149,19 @@ export class AuthController {
   }
 
   /**
-   * Completa el primer login: fija la contraseña en Firebase y activa la cuenta.
-   * Requiere sesión (401), que el usuario esté en `PENDING_FIRST_LOGIN`
-   * (409 si ya está activo/otro estado) y un `uid` de Firebase en el token.
+   * Completa el primer login: fija la contraseña (bcrypt) y activa la cuenta.
+   * Requiere sesión (401) y que el usuario esté en `PENDING_FIRST_LOGIN`
+   * (409 si ya está activo/otro estado).
    */
   @Post('first-login/complete')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   async completeFirstLogin(
     @CurrentUser() authUser: AuthUser | undefined,
-    @Req() req: Request,
     @Body() body: CompleteFirstLoginDto,
   ): Promise<FirstLoginCompleteResponse> {
     if (!authUser) {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');
     }
-    const firebaseUid = req.firebaseUid;
-    if (!firebaseUid) {
-      throw new UnauthorizedException('Falta el identificador de Firebase en la sesión.');
-    }
-
     const user = await this.prisma.user.findUnique({
       where: { id: authUser.id },
       select: { status: true },
@@ -180,16 +172,12 @@ export class AuthController {
     if (user.status !== 'PENDING_FIRST_LOGIN') {
       throw new ConflictException('El primer login ya fue completado.');
     }
-
-    await this.firebase.setPassword(firebaseUid, body.newPassword);
+    const passwordHash = await hashPassword(body.newPassword);
     await this.prisma.user.update({
       where: { id: authUser.id },
-      data: { status: 'ACTIVE' },
+      data: { passwordHash, status: 'ACTIVE' },
     });
-
-    // Gamificación: otorgar puntos por primer login (best-effort)
     void this.gamification.awardPoints(authUser.id, 'FIRST_LOGIN');
-
     return { status: 'ACTIVE' };
   }
 }
