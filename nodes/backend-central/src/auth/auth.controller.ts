@@ -15,7 +15,10 @@ import { GamificationService } from '../modules/gamification/gamification.servic
 import type { AuthUser } from '../authz/auth-user.types';
 import { CurrentUser } from './current-user.decorator';
 import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
+import { LoginDto } from './dto/login.dto';
 import { FirebaseService } from './firebase.service';
+import { verifyPassword } from '../common/password';
+import { signToken } from '../common/jwt';
 import './auth-request.types';
 
 /** Vista pública del usuario autenticado. Nunca expone campos internos. */
@@ -68,6 +71,21 @@ export class AuthController {
     private readonly firebase: FirebaseService,
     private readonly gamification: GamificationService,
   ) {}
+
+  /** Login propio: valida email+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
+  @Post('login')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async login(@Body() body: LoginDto): Promise<{ token: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: body.email },
+      select: { id: true, passwordHash: true },
+    });
+    const ok = user?.passwordHash ? await verifyPassword(body.password, user.passwordHash) : false;
+    if (!user || !ok) {
+      throw new UnauthorizedException('Correo o contraseña incorrectos.');
+    }
+    return { token: signToken(user.id) };
+  }
 
   /** Datos del usuario autenticado. 401 si no hay sesión. */
   @Get('me')
