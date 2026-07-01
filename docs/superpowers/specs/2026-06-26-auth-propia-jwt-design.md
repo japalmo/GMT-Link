@@ -20,7 +20,7 @@ Esto adelanta parcialmente la Fase 4 del diseño multicloud, pero **dentro de `b
 | Hashing | **bcrypt** (cost 10) sobre `User.passwordHash`. |
 | Token | TTL **7 días**, payload `{ sub: userId }`. **Sin refresh tokens** (YAGNI demo). Guardado en `localStorage` del navegador. |
 | Firebase | Se **elimina** del flujo de auth (login, verificación, provisión, primer login, cambio de clave). `firebase-admin` deja de usarse. |
-| OpenFGA | **No se despliega.** Verificado en `permission.service.ts`: el `org_admin` tiene grants GLOBAL → `can()` corta en `filter.kind==='none'` y permite sin tocar FGA. FGA queda lazy/no-configurado. |
+| OpenFGA | **Se conserva y se despliega** en Railway (imagen `openfga/openfga`, datastore Postgres para persistir el store/modelo) + `fga:bootstrap`; `FGA_API_URL/STORE_ID/MODEL_ID` en el backend. Habilita la capa estructural (depto→proyecto) de los permisos `STRUCTURAL` por-proyecto. Nota: el `org_admin` igual no la ejerce (grants GLOBAL → bypass), pero la capa queda operativa para roles funcionales por-proyecto. |
 | Seed | **Un solo usuario admin** (`org_admin`, ACTIVE) + el catálogo del sistema (permisos/roles/grants). El admin crea el resto desde la UI. |
 | Permisos/OpenFGA/módulos | **Sin cambios.** El middleware sigue poblando `request.authUser`; `PermissionService` y guards funcionan igual. |
 
@@ -84,6 +84,7 @@ El admin luego crea usuarios desde la UI (provisión §4.4).
 ## 7. Configuración y despliegue
 
 - `AUTH_JWT_SECRET` — string aleatorio fuerte que **genero yo** y seteo como variable del servicio `backend-central` en Railway (no es secreto del usuario).
+- **OpenFGA**: despliego un servicio `openfga` en Railway (imagen `openfga/openfga`) con **datastore Postgres** (su propia DB, reusando el Postgres de Railway o uno dedicado) → `openfga migrate` + `run`. Luego corro `fga:bootstrap` (crea store + sube `fga/model.fga`) y seteo `FGA_API_URL` (URL interna del servicio openfga), `FGA_STORE_ID`, `FGA_MODEL_ID` en `backend-central`. El backend ya tolera el arranque sin FGA (lazy), así que el orden no bloquea.
 - Seteo, redeployo `backend-central` y `web`, y **corro el seed** contra la Postgres de Railway. Mecanismo (se decide en el plan; la DB interna `postgres.railway.internal` NO es alcanzable desde mi máquina con `railway run`): opción preferida = **URL pública** de la Postgres (proxy TCP de Railway, `DATABASE_PUBLIC_URL`) y correr el seed local contra esa URL; alternativa = comando one-off dentro del contenedor del backend.
 - Entrego la **URL pública** (web) con login funcionando + la credencial admin.
 - Quedan ignoradas (sin borrar) `VITE_FIREBASE_*` y `FIREBASE_*`.
@@ -114,5 +115,5 @@ El admin luego crea usuarios desde la UI (provisión §4.4).
 
 - Nodo `auth-service` separado (Fase 4) — esto vive en `backend-central` por ahora.
 - Refresh tokens, "recordar sesión" avanzado, reset de clave por email.
-- OpenFGA / permisos de proyecto finos (no se ejercen con un solo admin GLOBAL).
 - Migrar datos de usuarios existentes de Firebase (la Postgres de Railway parte limpia; solo el admin sembrado).
+- UI de matriz RBAC para crear/editar roles dinámicamente (F3, post-MVP). Para la demo el admin asigna los roles ya sembrados en el catálogo; crear roles nuevos por UI es un paso aparte.
