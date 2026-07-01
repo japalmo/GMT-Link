@@ -8,7 +8,7 @@ import { randomInt } from 'node:crypto';
  * Por eso debe ser legible (sin libs externas) pero fuerte:
  *  - longitud configurable, mínimo 12 caracteres;
  *  - garantiza al menos un carácter de cada clase (minúscula, mayúscula,
- *    dígito, símbolo) para satisfacer la política de Firebase / cualquier IdP;
+ *    dígito, símbolo) para satisfacer cualquier política de contraseñas;
  *  - usa `crypto.randomInt` (CSPRNG) — nunca `Math.random` para secretos;
  *  - se omiten caracteres ambiguos (O/0, l/1/I) para reducir errores al copiar.
  */

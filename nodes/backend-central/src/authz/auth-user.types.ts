@@ -1,7 +1,7 @@
 /**
  * Usuario autenticado adjunto al request.
  * Hoy lo setea `DevUserMiddleware` (solo dev); en la Etapa 0.5 lo poblará
- * el middleware de sesión real (Firebase Auth).
+ * el middleware de sesión real (JWT propio).
  */
 export interface AuthUser {
   id: string;

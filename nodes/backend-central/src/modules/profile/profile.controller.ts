@@ -22,8 +22,8 @@ import type { ChangePasswordResponse, ProfileMe } from './profile.types';
  * usuario con sesión opera sobre SU PROPIO perfil. No hay permiso FGA que
  * verificar (no se accede a recursos de otros); por eso el guard global no
  * aplica metadata aquí y la exigencia de sesión se hace a mano: si falta
- * `request.authUser` → 401. El `userId`/`firebaseUid` salen SIEMPRE de la
- * sesión, jamás del body.
+ * `request.authUser` → 401. El `userId` sale SIEMPRE de la sesión, jamás del
+ * body.
  */
 @Controller('profile')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))

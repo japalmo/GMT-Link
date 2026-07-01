@@ -19,7 +19,7 @@ const trim = (): PropertyDecorator =>
  *  - `avatarUrl`: URL válida o string vacío (limpiar el avatar). `@IsUrl` se
  *    salta cuando el valor es '' vía `@ValidateIf`.
  *
- * NO incluye email (identidad Firebase → solo lectura), ni status, roles o
+ * NO incluye email (identidad → solo lectura), ni status, roles o
  * points: esos no son editables desde el perfil propio (§6-1.3).
  */
 export class UpdateProfileDto {

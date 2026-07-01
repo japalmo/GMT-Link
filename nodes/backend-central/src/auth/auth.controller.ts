@@ -14,7 +14,6 @@ import type { AuthUser } from '../authz/auth-user.types';
 import { CurrentUser } from './current-user.decorator';
 import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
 import { LoginDto } from './dto/login.dto';
-import { FirebaseService } from './firebase.service';
 import { hashPassword, verifyPassword } from '../common/password';
 import { signToken } from '../common/jwt';
 import './auth-request.types';
@@ -59,14 +58,13 @@ interface FirstLoginCompleteResponse {
 
 /**
  * Endpoints de sesión (Etapa 0.5). Dependen de `SessionMiddleware`, que puebla
- * `request.authUser` y `request.firebaseUid` a partir del Bearer token. Cuando
- * no hay usuario autenticado, los handlers responden 401 explícitamente.
+ * `request.authUser` a partir del Bearer token (JWT propio). Cuando no hay
+ * usuario autenticado, los handlers responden 401 explícitamente.
  */
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly firebase: FirebaseService,
     private readonly gamification: GamificationService,
   ) {}
 

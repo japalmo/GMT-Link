@@ -73,7 +73,7 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     // '{*path}' = comodín "todas las rutas" en path-to-regexp v8 (Express 5 / Nest 11),
     // equivalente moderno del legacy '*'.
-    // Orden: SessionMiddleware (sesión real Firebase) PRIMERO; DevUserMiddleware
+    // Orden: SessionMiddleware (sesión real, JWT propio) PRIMERO; DevUserMiddleware
     // DESPUÉS, como fallback solo-dev que no pisa una sesión real ya resuelta.
     consumer.apply(SessionMiddleware, DevUserMiddleware).forRoutes('{*path}');
   }

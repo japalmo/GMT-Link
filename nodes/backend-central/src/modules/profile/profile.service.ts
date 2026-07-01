@@ -20,7 +20,7 @@ type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true 
  * puede inyectar un id ajeno.
  *
  * Campos editables (§4.2 / nota del prompt): firstName, secondName?, lastName,
- * secondLastName?, avatarUrl?. NO se permite cambiar email (identidad Firebase →
+ * secondLastName?, avatarUrl?. NO se permite cambiar email (identidad →
  * solo lectura), status, roles ni points: el `data` de Prisma se arma a mano con
  * solo los campos del DTO, así que esos campos jamás se escriben desde aquí.
  */

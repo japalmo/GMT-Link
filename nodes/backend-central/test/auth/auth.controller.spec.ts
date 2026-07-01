@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthController } from '../../src/auth/auth.controller';
-import type { FirebaseService } from '../../src/auth/firebase.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import { CompleteFirstLoginDto } from '../../src/auth/dto/complete-first-login.dto';
@@ -37,10 +36,9 @@ function buildController(options: {
     membership: { findMany: vi.fn(() => Promise.resolve([])) },
     project: { findMany: vi.fn(() => Promise.resolve([])) },
   } as unknown as PrismaService;
-  const firebase = { setPassword: vi.fn(() => Promise.resolve()) } as unknown as FirebaseService;
   const gamification = { awardPoints } as unknown as GamificationService;
 
-  return { controller: new AuthController(prisma, firebase, gamification), findUnique, update, awardPoints };
+  return { controller: new AuthController(prisma, gamification), findUnique, update, awardPoints };
 }
 
 function dto(newPassword: string): CompleteFirstLoginDto {
