@@ -1,4 +1,4 @@
-import { auth } from '@/lib/firebase';
+import { getToken } from '@/lib/auth-token';
 import type { AuthedUser } from '@/types/auth';
 import type {
   CvCertificationInput,
@@ -94,14 +94,14 @@ function extractMessage(body: unknown, fallback: string): string {
 }
 
 /**
- * `fetch` tipado contra la API. Adjunta el ID token de Firebase del usuario
- * actual en `Authorization: Bearer …` cuando hay sesión. Lanza `ApiError` en
- * respuestas no-2xx con el mensaje más útil disponible.
+ * `fetch` tipado contra la API. Adjunta nuestro JWT de sesión (localStorage) en
+ * `Authorization: Bearer …` cuando hay sesión. Lanza `ApiError` en respuestas
+ * no-2xx con el mensaje más útil disponible.
  */
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
 
-  const token = await auth.currentUser?.getIdToken();
+  const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (init.body !== undefined) headers.set('Content-Type', 'application/json');
 
@@ -132,7 +132,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 /**
  * `fetch` tipado para subidas multipart (archivos). A diferencia de
  * {@link request}, **NO** fija `Content-Type`: el navegador lo establece con el
- * `boundary` correcto a partir del `FormData`. Adjunta el ID token de Firebase
+ * `boundary` correcto a partir del `FormData`. Adjunta nuestro JWT de sesión
  * igual que `request` y comparte el manejo de errores (`ApiError`).
  */
 async function uploadRequest<T>(
@@ -141,7 +141,7 @@ async function uploadRequest<T>(
   method = 'POST',
 ): Promise<T> {
   const headers = new Headers();
-  const token = await auth.currentUser?.getIdToken();
+  const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   let res: Response;
@@ -171,6 +171,14 @@ async function uploadRequest<T>(
 /** `GET /auth/me` — usuario autenticado (Postgres). 401 si no hay sesión. */
 export function getMe(): Promise<AuthedUser> {
   return request<AuthedUser>('/auth/me');
+}
+
+/** `POST /auth/login` — valida credenciales y devuelve nuestro JWT. */
+export function login(email: string, password: string): Promise<{ token: string }> {
+  return request<{ token: string }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 /**
@@ -792,7 +800,7 @@ export async function downloadReimbursementsPdf(
   perPage: 2 | 4 | 6,
 ): Promise<Blob> {
   const headers = new Headers();
-  const token = await auth.currentUser?.getIdToken();
+  const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   headers.set('Content-Type', 'application/json');
 
