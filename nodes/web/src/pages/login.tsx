@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { FirebaseError } from 'firebase/app';
+import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,28 +13,14 @@ import {
 import logoWideLogin from '@/assets/branding/logo-wide-login.png';
 import { useAuth } from '@/context/auth-context';
 
-/** Traduce los códigos de error de Firebase Auth a mensajes claros en español. */
+/** Traduce los errores de la API de login a mensajes claros en español. */
 function authErrorMessage(error: unknown): string {
-  if (error instanceof FirebaseError) {
-    switch (error.code) {
-      case 'auth/invalid-credential':
-      case 'auth/wrong-password':
-      case 'auth/user-not-found':
-      case 'auth/invalid-email':
-        return 'Correo o contraseña incorrectos.';
-      case 'auth/user-disabled':
-        return 'Esta cuenta está deshabilitada. Contacta a un administrador.';
-      case 'auth/too-many-requests':
-        return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
-      case 'auth/network-request-failed':
-        return 'Sin conexión con el servidor de autenticación.';
-      default:
-        return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
-    }
-  }
-  if (error instanceof Error) {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return 'Correo o contraseña incorrectos.';
+    if (error.status === 0) return 'Sin conexión con el servidor.';
     return error.message;
   }
+  if (error instanceof Error) return error.message;
   return 'No se pudo iniciar sesión. Inténtalo de nuevo.';
 }
 
