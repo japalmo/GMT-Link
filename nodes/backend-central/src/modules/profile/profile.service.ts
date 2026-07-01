@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { ORG_ID } from '../../common/org.constant';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
-import { FirebaseService } from '../../auth/firebase.service';
+import { hashPassword } from '../../common/password';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { ChangePasswordResponse, ProfileMe } from './profile.types';
@@ -26,10 +26,7 @@ type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true 
  */
 @Injectable()
 export class ProfileService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly firebase: FirebaseService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /** Perfil propio. 404 si el usuario de la sesión ya no existe en Postgres. */
   async getMe(userId: string): Promise<ProfileMe> {
@@ -84,12 +81,13 @@ export class ProfileService {
   }
 
   /**
-   * Cambia la contraseña del PROPIO usuario en Firebase. Recibe el `firebaseUid`
-   * de la sesión (no del body). No toca Postgres: la contraseña vive solo en
-   * Firebase (§2). El control de "hay firebaseUid" lo hace el controller (401).
+   * Cambia la contraseña del PROPIO usuario en Postgres (bcrypt). Recibe el
+   * `userId` de la sesión (no del body). Hashea con bcrypt y persiste en la
+   * columna `passwordHash` de la tabla `User`.
    */
-  async changePassword(firebaseUid: string, newPassword: string): Promise<ChangePasswordResponse> {
-    await this.firebase.setPassword(firebaseUid, newPassword);
+  async changePassword(userId: string, newPassword: string): Promise<ChangePasswordResponse> {
+    const passwordHash = await hashPassword(newPassword);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
     return { ok: true };
   }
 

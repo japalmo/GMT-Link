@@ -4,15 +4,12 @@ import {
   Get,
   Patch,
   Post,
-  Req,
   UnauthorizedException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { CurrentUser } from '../../auth/current-user.decorator';
-import '../../auth/auth-request.types';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileService } from './profile.service';
@@ -49,21 +46,17 @@ export class ProfileController {
   }
 
   /**
-   * Cambia la clave del propio usuario en Firebase. 401 si no hay sesión o si la
-   * sesión no trae `firebaseUid` (no se expone cambiar la clave de otros).
+   * Cambia la clave del propio usuario (bcrypt → passwordHash en Postgres).
+   * 401 si no hay sesión. Pasa el userId de la sesión al servicio; el cliente
+   * no puede inyectar un id ajeno.
    */
   @Post('change-password')
   changePassword(
     @CurrentUser() authUser: AuthUser | undefined,
-    @Req() req: Request,
     @Body() dto: ChangePasswordDto,
   ): Promise<ChangePasswordResponse> {
-    this.requireUserId(authUser);
-    const firebaseUid = req.firebaseUid;
-    if (!firebaseUid) {
-      throw new UnauthorizedException('Falta el identificador de Firebase en la sesión.');
-    }
-    return this.profileService.changePassword(firebaseUid, dto.newPassword);
+    const userId = this.requireUserId(authUser);
+    return this.profileService.changePassword(userId, dto.newPassword);
   }
 
   /** Exige sesión: devuelve el id del usuario autenticado o lanza 401. */

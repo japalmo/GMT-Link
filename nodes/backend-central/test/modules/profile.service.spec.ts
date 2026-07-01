@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import { NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import type { FirebaseService } from '../../src/auth/firebase.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { ProfileService } from '../../src/modules/profile/profile.service';
+import { verifyPassword } from '../../src/common/password';
 import type { UpdateProfileDto } from '../../src/modules/profile/dto/update-profile.dto';
 
 /** Forma del User (con memberships) que devuelve Prisma en estos tests. */
@@ -41,7 +41,7 @@ function baseUser(overrides: Partial<FakeUserRow> = {}): FakeUserRow {
   };
 }
 
-/** Construye un ProfileService con mocks tipados de Prisma y Firebase. */
+/** Construye un ProfileService con un mock tipado de Prisma (sin Firebase). */
 function buildService(opts: {
   findUser?: FakeUserRow | null;
   updateImpl?: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<FakeUserRow>;
@@ -49,7 +49,6 @@ function buildService(opts: {
   service: ProfileService;
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
-  setPassword: ReturnType<typeof vi.fn>;
 } {
   const findUnique = vi.fn(() => Promise.resolve(opts.findUser ?? null));
   const update = vi.fn(
@@ -57,12 +56,10 @@ function buildService(opts: {
       ((args: { where: { id: string }; data: Record<string, unknown> }): Promise<FakeUserRow> =>
         Promise.resolve({ ...baseUser({ id: args.where.id }), ...args.data })),
   );
-  const setPassword = vi.fn(() => Promise.resolve());
 
   const prisma = { user: { findUnique, update } } as unknown as PrismaService;
-  const firebase = { setPassword } as unknown as FirebaseService;
 
-  return { service: new ProfileService(prisma, firebase), findUnique, update, setPassword };
+  return { service: new ProfileService(prisma), findUnique, update };
 }
 
 describe('ProfileService.getMe', () => {
@@ -193,13 +190,27 @@ describe('ProfileService.updateMe', () => {
 });
 
 describe('ProfileService.changePassword', () => {
-  it('llama setPassword con el firebaseUid de la sesión y la nueva clave, y retorna { ok: true }', async () => {
-    const { service, setPassword } = buildService({ findUser: baseUser() });
+  it('llama prisma.user.update con where:{id} y data.passwordHash, y retorna { ok: true }', async () => {
+    const { service, update } = buildService({ findUser: baseUser() });
 
-    const result = await service.changePassword('fb-uid-123', 'nuevaClave123');
+    const result = await service.changePassword('u1', 'newpass123');
 
-    expect(setPassword).toHaveBeenCalledTimes(1);
-    expect(setPassword).toHaveBeenCalledWith('fb-uid-123', 'nuevaClave123');
+    expect(update).toHaveBeenCalledTimes(1);
+    const arg = update.mock.calls[0]?.[0] as { where: { id: string }; data: { passwordHash: string } };
+    expect(arg.where).toEqual({ id: 'u1' });
+    expect(typeof arg.data.passwordHash).toBe('string');
+    expect(arg.data.passwordHash.length).toBeGreaterThan(0);
     expect(result).toEqual({ ok: true });
+  });
+
+  it('el passwordHash almacenado pasa la verificación bcrypt (round-trip)', async () => {
+    const { service, update } = buildService({ findUser: baseUser() });
+
+    await service.changePassword('u1', 'newpass123');
+
+    const arg = update.mock.calls[0]?.[0] as { data: { passwordHash: string } };
+    const stored = arg.data.passwordHash;
+    await expect(verifyPassword('newpass123', stored)).resolves.toBe(true);
+    await expect(verifyPassword('wrongpass', stored)).resolves.toBe(false);
   });
 });
