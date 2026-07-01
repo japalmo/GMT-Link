@@ -40,7 +40,7 @@ export interface UseNotificationsResult {
 /**
  * Hook de datos de Notificaciones in-app (§6-2.2).
  *
- * Envuelve los endpoints de `lib/api.ts` (idToken de Firebase). Mantiene la
+ * Envuelve los endpoints de `lib/api.ts` (JWT de sesión). Mantiene la
  * lista completa y deriva `unreadCount` de ella para que la campana y la página
  * queden consistentes tras marcar leídas. Las mutaciones son optimistas y
  * revierten ante error. El cleanup ignora respuestas que llegan tras desmontar.

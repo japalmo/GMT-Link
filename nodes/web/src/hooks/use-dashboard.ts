@@ -39,7 +39,7 @@ export interface UseDashboardResult {
 /**
  * Hook de datos del Dashboard modular (§6-2.1).
  *
- * Envuelve `getDashboard`/`saveDashboard` (idToken de Firebase). El backend ya
+ * Envuelve `getDashboard`/`saveDashboard` (JWT de sesión). El backend ya
  * filtra los widgets por permiso y reconcilia el layout (order 0..n-1), así que
  * el hook solo gestiona carga/error y refleja la respuesta de guardado. El
  * cálculo del DATO de cada widget vive en cada componente de widget, reusando

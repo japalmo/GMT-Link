@@ -44,8 +44,8 @@ export interface UseUsersResult {
 /**
  * Hook de datos de la página de administración de Usuarios (§6-1.1).
  *
- * Envuelve las funciones tipadas de `lib/api.ts` (que adjuntan el idToken de
- * Firebase). Gestiona los estados loading/error de la carga del directorio y
+ * Envuelve las funciones tipadas de `lib/api.ts` (que adjuntan el JWT de
+ * sesión). Gestiona los estados loading/error de la carga del directorio y
  * expone `refetch` además de los mutadores (create/import/assign/remove). Las
  * mutaciones propagan el error al llamador para que la UI muestre feedback
  * contextual (409/404/etc.); no tocan el estado de error de la lista.

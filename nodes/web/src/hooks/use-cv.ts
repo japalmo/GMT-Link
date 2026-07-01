@@ -63,8 +63,8 @@ export interface UseCvResult {
 /**
  * Hook de datos de la página "Mi CV" (§6-1.4).
  *
- * Envuelve las funciones tipadas de `lib/api.ts` (que adjuntan el idToken de
- * Firebase). Gestiona loading/error de la carga y expone `refetch`. Cada
+ * Envuelve las funciones tipadas de `lib/api.ts` (que adjuntan el JWT de
+ * sesión). Gestiona loading/error de la carga y expone `refetch`. Cada
  * mutador llama al endpoint correspondiente y refresca el CV completo para que
  * la UI quede consistente. Los errores se propagan al llamador para que cada
  * formulario muestre feedback contextual.

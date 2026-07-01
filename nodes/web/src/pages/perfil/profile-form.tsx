@@ -52,7 +52,7 @@ function validate(state: FormState): string | null {
 
 /**
  * Formulario de edición de "Mis datos" (§6-1.3). El `email` se muestra solo
- * lectura (identidad Firebase). Persiste vía `onSave` y muestra feedback de
+ * lectura (identidad de la cuenta). Persiste vía `onSave` y muestra feedback de
  * éxito/error. Los campos opcionales vacíos se envían como `undefined`.
  */
 export function ProfileForm({

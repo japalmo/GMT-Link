@@ -33,8 +33,8 @@ export interface UseProfileResult {
 /**
  * Hook de datos de la página de Perfil → "Mis datos" (§6-1.3).
  *
- * Envuelve las funciones tipadas de `lib/api.ts` (que adjuntan el idToken de
- * Firebase). Gestiona loading/error de la carga del perfil y expone `refetch`.
+ * Envuelve las funciones tipadas de `lib/api.ts` (que adjuntan el JWT de
+ * sesión). Gestiona loading/error de la carga del perfil y expone `refetch`.
  * `save` actualiza el estado local con el perfil devuelto por el backend para
  * que la UI quede consistente sin recargar. Las mutaciones propagan el error al
  * llamador para que el formulario muestre feedback contextual.

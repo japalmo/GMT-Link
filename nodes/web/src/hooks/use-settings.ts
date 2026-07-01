@@ -28,7 +28,7 @@ export interface UseSettingsResult {
 
 /**
  * Hook de datos de Configuración (§6-2.3). Envuelve `getSettings`/`updateSettings`
- * (idToken de Firebase). El tema se aplica vía {@link useTheme}; este hook cubre
+ * (JWT de sesión). El tema se aplica vía {@link useTheme}; este hook cubre
  * el resto de preferencias (notificaciones) pero refleja también `theme` para
  * mantener consistente la lectura. El cleanup ignora respuestas tras desmontar.
  */

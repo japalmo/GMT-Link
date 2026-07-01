@@ -44,7 +44,7 @@ export interface UseDocumentsResult {
 /**
  * Hook de datos de la página "Mis documentos" (§6-1.5).
  *
- * Envuelve las funciones tipadas de `lib/api.ts` (idToken de Firebase). El
+ * Envuelve las funciones tipadas de `lib/api.ts` (JWT de sesión). El
  * filtrado por estado y "por vencer" se delega al backend vía query params, de
  * modo que cambiar `filters` dispara una recarga. Las mutaciones (subir,
  * versionar, eliminar) refrescan la lista y propagan el error al llamador.

@@ -7,7 +7,7 @@ import { useAuth } from '@/context/auth-context';
 
 /**
  * Pantalla de cuenta suspendida (status SUSPENDED, §4.2 UserStatus).
- * Un usuario suspendido tiene sesión Firebase válida pero acceso bloqueado por
+ * Un usuario suspendido tiene sesión válida pero acceso bloqueado por
  * un admin: no debe alcanzar el shell ni ningún módulo. Solo puede cerrar sesión.
  *
  * Se auto-guarda (no va bajo ProtectedRoute, que la redirigiría en bucle): sin

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// auth de firebase mockeado: api.ts importa `auth` desde '@/lib/firebase'.
-const { mockGetIdToken } = vi.hoisted(() => ({ mockGetIdToken: vi.fn() }));
-vi.mock('@/lib/firebase', () => ({
-  auth: { currentUser: { getIdToken: mockGetIdToken } },
+// token store mockeado: api.ts lee el JWT vía getToken() de '@/lib/auth-token'.
+const { mockGetToken } = vi.hoisted(() => ({ mockGetToken: vi.fn() }));
+vi.mock('@/lib/auth-token', () => ({
+  getToken: mockGetToken,
+  setToken: vi.fn(),
+  clearToken: vi.fn(),
 }));
 
 import { getMe, deleteTask, uploadUserAvatar, ApiError } from '@/lib/api';
@@ -15,14 +17,14 @@ function res(body: unknown, ok = true, status = 200): Response {
 
 describe('api — request() vía getMe (núcleo del cliente)', () => {
   beforeEach(() => {
-    mockGetIdToken.mockReset();
+    mockGetToken.mockReset();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('adjunta Authorization Bearer con token y parsea la respuesta', async () => {
-    mockGetIdToken.mockResolvedValue('tok-123');
+    mockGetToken.mockReturnValue('tok-123');
     const fetchMock = vi.fn().mockResolvedValue(res({ id: 'u1', email: 'a@b.cl' }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -35,7 +37,7 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
   });
 
   it('sin token no envía Authorization', async () => {
-    mockGetIdToken.mockResolvedValue(undefined);
+    mockGetToken.mockReturnValue(null);
     const fetchMock = vi.fn().mockResolvedValue(res({ id: 'u1' }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -46,7 +48,7 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
   });
 
   it('lanza ApiError con el mensaje del backend en respuestas no-2xx', async () => {
-    mockGetIdToken.mockResolvedValue('tok');
+    mockGetToken.mockReturnValue('tok');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res({ message: 'No autorizado' }, false, 401)));
 
     const err = await getMe().catch((e: unknown) => e);
@@ -56,7 +58,7 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
   });
 
   it('une mensajes en array (errores de validación NestJS)', async () => {
-    mockGetIdToken.mockResolvedValue('tok');
+    mockGetToken.mockReturnValue('tok');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(res({ message: ['campo a inválido', 'campo b inválido'] }, false, 400)),
@@ -68,7 +70,7 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
   });
 
   it('usa un fallback cuando el cuerpo de error no es JSON', async () => {
-    mockGetIdToken.mockResolvedValue('tok');
+    mockGetToken.mockReturnValue('tok');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -84,7 +86,7 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
   });
 
   it('fallo de red → ApiError status 0', async () => {
-    mockGetIdToken.mockResolvedValue('tok');
+    mockGetToken.mockReturnValue('tok');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
 
     const err = await getMe().catch((e: unknown) => e);
@@ -93,7 +95,7 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
   });
 
   it('204 No Content → resuelve undefined sin intentar parsear el cuerpo', async () => {
-    mockGetIdToken.mockResolvedValue('tok');
+    mockGetToken.mockReturnValue('tok');
     // json() rechaza: si request() lo llamara en un 204, el test fallaría.
     vi.stubGlobal(
       'fetch',
@@ -110,14 +112,14 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
 
 describe('api — uploadRequest() (subida multipart de archivos)', () => {
   beforeEach(() => {
-    mockGetIdToken.mockReset();
+    mockGetToken.mockReset();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('envía PATCH multipart con Authorization y SIN Content-Type (boundary del navegador)', async () => {
-    mockGetIdToken.mockResolvedValue('tok-up');
+    mockGetToken.mockReturnValue('tok-up');
     const fetchMock = vi.fn().mockResolvedValue(res({ id: 'u1', firstName: 'Ada' }));
     vi.stubGlobal('fetch', fetchMock);
     const file = new File(['x'], 'avatar.png', { type: 'image/png' });
@@ -135,7 +137,7 @@ describe('api — uploadRequest() (subida multipart de archivos)', () => {
   });
 
   it('error no-2xx en subida → ApiError con mensaje y status', async () => {
-    mockGetIdToken.mockResolvedValue('tok');
+    mockGetToken.mockReturnValue('tok');
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(res({ message: 'Archivo demasiado grande' }, false, 413)),
