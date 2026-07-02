@@ -2,13 +2,25 @@ import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FgaService } from '../src/fga/fga.service';
 import type { FgaClientLike, MembershipInput } from '../src/fga/fga.types';
+import type { PrismaService } from '../src/prisma/prisma.service';
+
+function buildPrismaStub(): PrismaService {
+  return {
+    role: { findUnique: vi.fn(), findMany: vi.fn() },
+    membership: { findMany: vi.fn() },
+    permission: { findMany: vi.fn() },
+  } as unknown as PrismaService;
+}
 
 function buildClient() {
   const client = {
     check: vi.fn(() => Promise.resolve({ allowed: true })),
     write: vi.fn(() => Promise.resolve({})),
   };
-  return { client, service: new FgaService(client as unknown as FgaClientLike) };
+  return {
+    client,
+    service: new FgaService(client as unknown as FgaClientLike, buildPrismaStub()),
+  };
 }
 
 const membership = (over: Partial<MembershipInput> = {}): MembershipInput => ({
@@ -150,5 +162,17 @@ describe('FgaService', () => {
       expect(client.write).not.toHaveBeenCalled();
       expect(client.check).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('FgaService — constructor con PrismaService', () => {
+  it('se construye recibiendo (client, prisma) sin lanzar', () => {
+    const client = {
+      check: vi.fn(() => Promise.resolve({ allowed: false })),
+      write: vi.fn(() => Promise.resolve({})),
+    };
+    expect(
+      () => new FgaService(client as unknown as FgaClientLike, buildPrismaStub()),
+    ).not.toThrow();
   });
 });

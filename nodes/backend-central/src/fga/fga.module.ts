@@ -4,6 +4,7 @@ import { OpenFgaClient } from '@openfga/sdk';
 import { FgaService } from './fga.service';
 import { FGA_CLIENT } from './fga.types';
 import type { FgaClientLike } from './fga.types';
+import { PrismaModule } from '../prisma/prisma.module';
 
 /**
  * Módulo global de autorización. Provee el cliente OpenFGA configurado desde el
@@ -13,6 +14,7 @@ import type { FgaClientLike } from './fga.types';
  */
 @Global()
 @Module({
+  imports: [PrismaModule],
   providers: [
     {
       provide: FGA_CLIENT,

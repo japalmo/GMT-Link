@@ -14,6 +14,16 @@ import { transformer } from '@openfga/syntax-transformer';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FgaService } from '../src/fga/fga.service';
 import type { FgaClientLike, TupleKey } from '../src/fga/fga.types';
+import type { PrismaService } from '../src/prisma/prisma.service';
+
+/** Stub mínimo: los tests de mapeo de syncMembershipToFGA no tocan Prisma. */
+function buildPrismaStub(): PrismaService {
+  return {
+    role: { findUnique: () => Promise.resolve(null), findMany: () => Promise.resolve([]) },
+    membership: { findMany: () => Promise.resolve([]) },
+    permission: { findMany: () => Promise.resolve([]) },
+  } as unknown as PrismaService;
+}
 
 // Cargar .env de la raíz o de la carpeta local de la API
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
@@ -263,7 +273,7 @@ function createRecordingClient(): {
 describe('FgaService.syncMembershipToFGA — mapeo §4.1/§4.3', () => {
   it('org_admin + ORGANIZATION → organization#admin (create escribe tupla)', async () => {
     const recorder = createRecordingClient();
-    const service = new FgaService(recorder.client);
+    const service = new FgaService(recorder.client, buildPrismaStub());
     await service.syncMembershipToFGA(
       { userId: 'u1', roleKey: 'org_admin', scopeType: 'ORGANIZATION', scopeId: 'gmt' },
       'create',
@@ -275,7 +285,7 @@ describe('FgaService.syncMembershipToFGA — mapeo §4.1/§4.3', () => {
 
   it('operator + PROJECT → project#operator (delete borra la tupla)', async () => {
     const recorder = createRecordingClient();
-    const service = new FgaService(recorder.client);
+    const service = new FgaService(recorder.client, buildPrismaStub());
     await service.syncMembershipToFGA(
       { userId: 'u2', roleKey: 'operator', scopeType: 'PROJECT', scopeId: 'p1' },
       'delete',
@@ -287,7 +297,7 @@ describe('FgaService.syncMembershipToFGA — mapeo §4.1/§4.3', () => {
 
   it('combinación inválida (org_admin en PROJECT) lanza error', async () => {
     const recorder = createRecordingClient();
-    const service = new FgaService(recorder.client);
+    const service = new FgaService(recorder.client, buildPrismaStub());
     await expect(
       service.syncMembershipToFGA(
         { userId: 'u3', roleKey: 'org_admin', scopeType: 'PROJECT', scopeId: 'p1' },

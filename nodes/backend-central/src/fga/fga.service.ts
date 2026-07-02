@@ -10,6 +10,7 @@ import type {
   MembershipSyncOp,
   TupleKey,
 } from './fga.types';
+import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Punto único de decisión de autorización (§3.1, §4.1).
@@ -20,7 +21,10 @@ import type {
  */
 @Injectable()
 export class FgaService {
-  constructor(@Inject(FGA_CLIENT) private readonly client: FgaClientLike) {}
+  constructor(
+    @Inject(FGA_CLIENT) private readonly client: FgaClientLike,
+    private readonly prisma: PrismaService,
+  ) {}
 
   private readonly logger = new Logger(FgaService.name);
 
