@@ -407,6 +407,121 @@ describe('RolesService.listRoles / getRole', () => {
   });
 });
 
+describe('RolesService.updateRole', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+  });
+
+  it('rechaza con 403 si el rol es isSystem', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_1', key: 'org_admin', label: 'Admin', description: null, isSystem: true,
+    });
+
+    await expect(service.updateRole('org_admin', { label: 'Otro nombre' })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(prisma.role.update).not.toHaveBeenCalled();
+  });
+
+  it('label/description-only: update simple, sin $transaction, sin tocar grants y SIN fga.resyncRole (A2)', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.role.update.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo actualizado', description: 'nueva desc', isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'task:read' }, scope: 'PROJECT' },
+    ]);
+
+    const detail = await service.updateRole('c_demo', { label: 'Demo actualizado', description: 'nueva desc' });
+
+    expect(detail.label).toBe('Demo actualizado');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.rolePermission.deleteMany).not.toHaveBeenCalled();
+    expect(fga.resyncRole).not.toHaveBeenCalled();
+  });
+
+  it('al cambiar grants: valida, reemplaza el set dentro de $transaction y llama fga.resyncRole', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.permission.findMany.mockResolvedValue([
+      { id: 'perm_assign', key: 'task:assign', label: 'Asignar tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+    prisma.role.update.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany
+      // 1ª llamada: lectura de los grants PREVIOS (filas crudas, para poder restaurar)
+      .mockResolvedValueOnce([{ roleId: 'role_2', permissionId: 'perm_read', scope: 'PROJECT' }])
+      // 2ª llamada: loadGrants para el detalle final (include permission)
+      .mockResolvedValueOnce([{ permission: { key: 'task:assign' }, scope: 'PROJECT' }]);
+
+    const detail = await service.updateRole('c_demo', {
+      grants: [{ permissionKey: 'task:assign', scope: 'PROJECT' }],
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.rolePermission.deleteMany).toHaveBeenCalledWith({ where: { roleId: 'role_2' } });
+    expect(prisma.rolePermission.createMany).toHaveBeenCalledWith({
+      data: [{ roleId: 'role_2', permissionId: 'perm_assign', scope: 'PROJECT' }],
+    });
+    expect(fga.resyncRole).toHaveBeenCalledTimes(1);
+    expect(fga.resyncRole).toHaveBeenCalledWith('c_demo');
+    expect(detail.grants).toEqual([{ permissionKey: 'task:assign', scope: 'PROJECT' }]);
+  });
+
+  it('si resyncRole falla: restaura los grants previos, reintenta resync best-effort y responde 502 FGA_SYNC_FAILED (A2)', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.permission.findMany.mockResolvedValue([
+      { id: 'perm_assign', key: 'task:assign', label: 'Asignar tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+    prisma.role.update.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValueOnce([
+      { roleId: 'role_2', permissionId: 'perm_read', scope: 'PROJECT' },
+    ]);
+    // El primer resync falla; el reintento best-effort (con los grants viejos) resuelve.
+    fga.resyncRole.mockRejectedValueOnce(new Error('FGA caído'));
+
+    await expect(
+      service.updateRole('c_demo', { grants: [{ permissionKey: 'task:assign', scope: 'PROJECT' }] }),
+    ).rejects.toMatchObject({ status: 502, response: { code: 'FGA_SYNC_FAILED' } });
+
+    // Rollback: el ÚLTIMO createMany reescribe exactamente los grants previos.
+    expect(prisma.rolePermission.createMany).toHaveBeenLastCalledWith({
+      data: [{ roleId: 'role_2', permissionId: 'perm_read', scope: 'PROJECT' }],
+    });
+    // Dos transacciones: reemplazo + restauración.
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    // Best-effort: segundo resyncRole tras restaurar.
+    expect(fga.resyncRole).toHaveBeenCalledTimes(2);
+  });
+
+  it('rechaza grants inválidos en update con 400 NOT_COMPOSABLE (misma regla que create) sin tocar la BD', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.permission.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.updateRole('c_demo', { grants: [{ permissionKey: 'no:existe', scope: 'PROJECT' }] }),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'NOT_COMPOSABLE' } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(fga.resyncRole).not.toHaveBeenCalled();
+  });
+});
+
 describe('RolesService.allowedScopeTypes', () => {
   let prisma: ReturnType<typeof makePrismaMock>;
   let fga: ReturnType<typeof makeFgaMock>;

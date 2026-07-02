@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Permission, Role } from '@prisma/client';
 import type {
   CreateRoleInput,
@@ -7,6 +13,7 @@ import type {
   RoleDetail,
   RoleGrant,
   ScopeType,
+  UpdateRoleInput,
 } from '@gmt-platform/contracts';
 import { FgaService } from '../../fga/fga.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -113,6 +120,95 @@ export class RolesService {
   async getRole(key: string): Promise<RoleDetail> {
     const role = await this.findRoleOrThrow(key);
     return this.toRoleDetail(role, await this.loadGrants(role.id));
+  }
+
+  /**
+   * Implementación CANÓNICA de updateRole (A2 — la Fase 3 no la reescribe).
+   * Actualiza label/description/grants de un rol CUSTOM. 403 si `isSystem`.
+   * - `input.grants === undefined` → update simple de label/description,
+   *   SIN transacción de grants y SIN `fga.resyncRole`.
+   * - `input.grants` definido (incluso `[]`) → valida y REEMPLAZA el set
+   *   completo (deleteMany+createMany) dentro de `$transaction`, y luego llama
+   *   `fga.resyncRole(key)` para que se reconcilien las tuplas FGA de todos
+   *   los usuarios con este rol (stub en Fase 2, real en Fase 3).
+   * - Si `resyncRole` lanza: restaura los grants previos en Postgres, reintenta
+   *   `resyncRole` best-effort con los grants viejos y responde
+   *   502 {code:'FGA_SYNC_FAILED'}.
+   */
+  async updateRole(key: string, input: UpdateRoleInput): Promise<RoleDetail> {
+    const role = await this.findRoleOrThrow(key);
+    if (role.isSystem) {
+      throw new ForbiddenException(`El rol "${key}" es del sistema y no se puede editar.`);
+    }
+
+    const labelDescriptionData = {
+      ...(input.label !== undefined ? { label: input.label } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+    };
+
+    const newGrants = input.grants;
+    if (newGrants === undefined) {
+      // Solo label/description: no cambia el set de grants → no hay nada que
+      // sincronizar en FGA (A2).
+      const updated = await this.prisma.role.update({
+        where: { id: role.id },
+        data: labelDescriptionData,
+      });
+      return this.toRoleDetail(updated, await this.loadGrants(role.id));
+    }
+
+    await this.validateGrants(newGrants);
+
+    // Filas crudas previas (roleId/permissionId/scope) para poder restaurar si FGA falla.
+    const previousRows = (
+      await this.prisma.rolePermission.findMany({ where: { roleId: role.id } })
+    ).map((row) => ({ roleId: row.roleId, permissionId: row.permissionId, scope: row.scope }));
+    const newRows = await this.grantsToRolePermissionRows(role.id, newGrants);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updatedRole = await tx.role.update({ where: { id: role.id }, data: labelDescriptionData });
+      await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+      await tx.rolePermission.createMany({ data: newRows });
+      return updatedRole;
+    });
+
+    try {
+      await this.fga.resyncRole(key);
+    } catch {
+      // Rollback: restaurar los grants previos en Postgres…
+      await this.prisma.$transaction(async (tx) => {
+        await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+        await tx.rolePermission.createMany({ data: previousRows });
+      });
+      // …y reintentar la sincronización FGA con los grants viejos (best-effort:
+      // si también falla, Postgres ya quedó consistente con el estado previo).
+      try {
+        await this.fga.resyncRole(key);
+      } catch {
+        // best-effort intencional
+      }
+      throw new BadGatewayException({
+        code: 'FGA_SYNC_FAILED',
+        message: 'No se pudo sincronizar el rol con OpenFGA; se restauraron los permisos previos.',
+      });
+    }
+
+    return this.toRoleDetail(updated, await this.loadGrants(role.id));
+  }
+
+  /** Traduce RoleGrant[] a filas de RolePermission (resuelve permissionId por key). */
+  private async grantsToRolePermissionRows(
+    roleId: string,
+    grants: readonly RoleGrant[],
+  ): Promise<Array<{ roleId: string; permissionId: string; scope: RoleGrant['scope'] }>> {
+    const keys = grants.map((g) => g.permissionKey);
+    const permissions = await this.prisma.permission.findMany({ where: { key: { in: keys } } });
+    const idByKey = new Map(permissions.map((p) => [p.key, p.id]));
+    return grants.map((grant) => ({
+      roleId,
+      permissionId: idByKey.get(grant.permissionKey) as string,
+      scope: grant.scope,
+    }));
   }
 
   /**
