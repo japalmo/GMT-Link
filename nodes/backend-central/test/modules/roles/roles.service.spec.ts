@@ -141,6 +141,20 @@ describe('RolesService.listPermissions', () => {
     const groups = await service.listPermissions();
     expect(groups).toEqual([]);
   });
+
+  it('ordena labels con colación es (localeCompare): "Árbol de tareas" antes que "Borrar tareas"', async () => {
+    // Fija el contrato de colación: por codepoint 'Á' (U+00C1) > 'B' (U+0042)
+    // invertiría el orden; localeCompare('es') trata 'Á' como 'A'.
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'task:delete', label: 'Borrar tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+      { key: 'task:tree', label: 'Árbol de tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+
+    const groups = await service.listPermissions();
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.label)).toEqual(['Árbol de tareas', 'Borrar tareas']);
+  });
 });
 
 describe('RolesService.createRole — slugKey', () => {

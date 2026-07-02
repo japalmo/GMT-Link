@@ -41,11 +41,13 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'directorio', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
   // ── proyectos ──
   { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
-  // ⚠️ Granularidad compartida (review Task 2.2): project:read, measurement:read
-  // y task:read materializan la MISMA tupla FGA (`can_view` sobre project).
-  // Otorgar cualquiera de los tres en un rol custom concede de facto la
-  // visibilidad de los otros dos a nivel FGA; la separación de keys es
-  // catálogo/UI, no enforcement. Desacoplarlas requeriría relaciones FGA
+  // ⚠️ Granularidad compartida (review Tasks 2.2 y 2.4): project:read,
+  // measurement:read y task:read materializan la MISMA tupla FGA (`can_view`
+  // sobre project). Otorgar cualquiera de los tres en un rol custom concede
+  // de facto la visibilidad de los otros dos a nivel FGA — y también lo que
+  // gatean `service:read` y `document:read` (misma relación `can_view`, pero
+  // NO componibles: solo llegan vía roles del sistema). La separación de keys
+  // es catálogo/UI, no enforcement. Desacoplarlas requeriría relaciones FGA
   // propias por recurso (deuda post-MVP).
   { key: 'project:read', label: 'Ver proyectos', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
   { key: 'project:update', label: 'Editar proyecto', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: true },
