@@ -204,6 +204,37 @@ describe('Modelo OpenFGA §4.3 — derivaciones', () => {
     expect(await allowed('user:iris', 'can_view', 'service:s1')).toBe(true);
     expect(await allowed('user:iris', 'can_view', 'project:p1')).toBe(true);
   });
+
+  it('o) can_manage_roles NO es componible: la tupla directa se rechaza; admin sí lo deriva (§5)', async () => {
+    await expect(
+      client.write({
+        writes: [{ user: 'user:leo', relation: 'can_manage_roles', object: 'organization:gmt' }],
+      }),
+    ).rejects.toThrow(/type 'user' is not an allowed type restriction/);
+    expect(await allowed('user:leo', 'can_manage_roles', 'organization:gmt')).toBe(false);
+    expect(await allowed('user:anna', 'can_manage_roles', 'organization:gmt')).toBe(true);
+  });
+
+  it('p) tupla directa org NO deriva a project: can_view_directory_extended en la org no da can_view en p1 (A1)', async () => {
+    await client.write({
+      writes: [
+        { user: 'user:laura', relation: 'can_view_directory_extended', object: 'organization:gmt' },
+      ],
+    });
+    expect(await allowed('user:laura', 'can_view_directory_extended', 'organization:gmt')).toBe(
+      true,
+    );
+    expect(await allowed('user:laura', 'can_view', 'project:p1')).toBe(false);
+  });
+
+  it('q) independencia atómica: SOLO can_create_task directo en p1 no otorga can_view en p1 (§5)', async () => {
+    await client.write({
+      writes: [{ user: 'user:mike', relation: 'can_create_task', object: 'project:p1' }],
+    });
+    expect(await allowed('user:mike', 'can_create_task', 'project:p1')).toBe(true);
+    // La visibilidad se otorga aparte: cada permiso atómico es independiente.
+    expect(await allowed('user:mike', 'can_view', 'project:p1')).toBe(false);
+  });
 });
 
 /** Cliente fake que registra la última operación de write para inspección. */

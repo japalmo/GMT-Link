@@ -9,18 +9,20 @@ type organization
     define member: [user] or admin
     # permisos atómicos org-scope (§3.1 "rol chico por método")
     define can_manage_users: admin
-    # Las 3 relaciones org COMPONIBLES (A1) admiten tupla directa "[user] or":
-    # un grant STRUCTURAL org-scope de un rol personalizado se materializa como
-    # tupla directa (user:U, can_x, organization:gmt). can_manage_users NO es
-    # componible: sigue solo derivado de admin.
+    # Componibilidad org-scope (A1): EXACTAMENTE estas 3 relaciones admiten
+    # tupla directa "[user] or admin" — un grant STRUCTURAL org-scope de un rol
+    # personalizado se materializa como tupla directa (user:U, can_x,
+    # organization:gmt). can_manage_users y can_manage_roles NO son componibles:
+    # se derivan SOLO de admin (sin tupla directa → sin delegación).
     # datos extendidos de directorio (§8 directory:view:extended, §6-1.6)
     define can_view_directory_extended: [user] or admin
     # revisión de documentos personales (§8 document:review, §6-1.5)
     define can_review_documents: [user] or admin
     # gestión de finanzas (§8 finance:manage, §6-3.1/3.3)
     define can_manage_finance: [user] or admin
-    # gestión de roles dinámicos (matriz RBAC, design doc 2026-07-01 §5) — gate de RolesController
-    define can_manage_roles: [user] or admin
+    # gestión de roles dinámicos (matriz RBAC, design doc 2026-07-01 §5) — gate de
+    # RolesController; solo el admin gestiona roles
+    define can_manage_roles: admin
 
 type department
   relations
