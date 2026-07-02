@@ -11,6 +11,40 @@ import type {
   TupleKey,
 } from './fga.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { COMPOSABLE_STRUCTURAL } from '../modules/roles/composable-permissions';
+import { ORG_ID } from '../common/org.constant';
+
+/** Scopes admitidos para asignaciones de roles custom (matriz RBAC). */
+type AssignableScopeType = 'ORGANIZATION' | 'PROJECT';
+
+/** Asignación (usuario, rol, scope) a sincronizar con FGA. */
+interface RoleAssignmentInput {
+  userId: string;
+  roleKey: string;
+  scopeType: AssignableScopeType;
+  scopeId: string;
+}
+
+/** Forma del grant que consumen estos métodos (evita `any`). */
+interface StructuralGrant {
+  scope: string;
+  permission: { key: string; kind: string; fgaRelation: string | null };
+}
+
+/** organization:gmt | project:<scopeId> según el scope de la asignación. */
+function objectOf(
+  scopeType: AssignableScopeType,
+  scopeId: string,
+): { objectType: 'organization' | 'project'; object: string } {
+  return scopeType === 'ORGANIZATION'
+    ? { objectType: 'organization', object: `organization:${ORG_ID}` }
+    : { objectType: 'project', object: `project:${scopeId}` };
+}
+
+/** Clave canónica de tupla para sets de dedupe/unión (enmienda A5). */
+function tupleId(t: TupleKey): string {
+  return `${t.user}|${t.relation}|${t.object}`;
+}
 
 /**
  * Punto único de decisión de autorización (§3.1, §4.1).
@@ -88,5 +122,114 @@ export class FgaService {
       relation,
       object: `${objectType}:${membership.scopeId}`,
     };
+  }
+
+  /**
+   * Sincroniza la asignación de un rol CUSTOM a un usuario en un scope dado
+   * (org o project) hacia OpenFGA: por cada grant STRUCTURAL del rol cuyo
+   * object type (vía COMPOSABLE_STRUCTURAL) coincide con `scopeType`, escribe
+   * o borra la tupla directa `(user, fgaRelation, objectType:scopeId)`.
+   *
+   * Semántica multi-rol (A5): el set FGA deseado para (usuario, objeto) es la
+   * UNIÓN de los grants STRUCTURAL de TODOS sus roles custom sobre ese objeto.
+   * Las tuplas que otro rol custom sigue sosteniendo NO se borran en 'delete'
+   * ni se re-escriben en 'create' (el write de OpenFGA no es idempotente).
+   * Tuplas deduplicadas por "user|relation|object" (5 permisos comparten can_view).
+   */
+  async syncRoleAssignment(input: RoleAssignmentInput, op: MembershipSyncOp): Promise<void> {
+    const role = await this.prisma.role.findUnique({
+      where: { key: input.roleKey },
+      include: { permissions: { include: { permission: true } } },
+    });
+    if (!role) return;
+
+    const { objectType, object } = objectOf(input.scopeType, input.scopeId);
+    const tuples = this.dedupeTuples(
+      this.tuplesFromGrants(
+        role.permissions as unknown as StructuralGrant[],
+        input.userId,
+        objectType,
+        object,
+      ),
+    );
+    if (tuples.length === 0) return;
+
+    const sustained = await this.tuplesSustainedByOtherCustomRoles(input);
+    const effective = tuples.filter((t) => !sustained.has(tupleId(t)));
+
+    if (op === 'create') {
+      await this.writeTuples(effective);
+    } else {
+      await this.deleteTuples(effective);
+    }
+  }
+
+  /** Grants STRUCTURAL composables de un rol → tuplas FGA sobre `object` (sin dedupe). */
+  private tuplesFromGrants(
+    grants: StructuralGrant[],
+    userId: string,
+    objectType: 'organization' | 'project',
+    object: string,
+  ): TupleKey[] {
+    const out: TupleKey[] = [];
+    for (const grant of grants) {
+      const { permission } = grant;
+      if (permission.kind !== 'STRUCTURAL' || !permission.fgaRelation) continue;
+      if (COMPOSABLE_STRUCTURAL[permission.key] !== objectType) continue;
+      out.push({ user: `user:${userId}`, relation: permission.fgaRelation, object });
+    }
+    return out;
+  }
+
+  /** Dedupe por "user|relation|object" (varios permisos pueden compartir relación, p.ej. can_view). */
+  private dedupeTuples(tuples: TupleKey[]): TupleKey[] {
+    const seen = new Set<string>();
+    const out: TupleKey[] = [];
+    for (const tuple of tuples) {
+      const id = tupleId(tuple);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(tuple);
+    }
+    return out;
+  }
+
+  /**
+   * Set "user|relation|object" con la unión de grants STRUCTURAL de los DEMÁS
+   * roles custom (isSystem=false) que el usuario tiene asignados sobre el
+   * MISMO objeto. Funciona igual para create (la Membership nueva ya existe en
+   * Postgres pero se excluye por roleKey) y delete (la Membership ya se borró).
+   */
+  private async tuplesSustainedByOtherCustomRoles(input: RoleAssignmentInput): Promise<Set<string>> {
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId: input.userId,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        roleKey: { not: input.roleKey },
+      },
+    });
+    const otherKeys = [...new Set(memberships.map((m) => m.roleKey))];
+    if (otherKeys.length === 0) return new Set();
+
+    const roles = await this.prisma.role.findMany({
+      where: { key: { in: otherKeys }, isSystem: false },
+      include: { permissions: { include: { permission: true } } },
+    });
+
+    const { objectType, object } = objectOf(input.scopeType, input.scopeId);
+    const sustained = new Set<string>();
+    for (const role of roles) {
+      const tuples = this.tuplesFromGrants(
+        role.permissions as unknown as StructuralGrant[],
+        input.userId,
+        objectType,
+        object,
+      );
+      for (const tuple of tuples) {
+        sustained.add(tupleId(tuple));
+      }
+    }
+    return sustained;
   }
 }
