@@ -143,4 +143,12 @@ describe('FgaService', () => {
       });
     }
   });
+
+  describe('resyncRole (stub Fase 2 — implementación real en Fase 3)', () => {
+    it('resuelve sin tocar el cliente FGA (no escribe ni chequea tuplas)', async () => {
+      await expect(service.resyncRole('c_demo')).resolves.toBeUndefined();
+      expect(client.write).not.toHaveBeenCalled();
+      expect(client.check).not.toHaveBeenCalled();
+    });
+  });
 });

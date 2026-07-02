@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   FGA_CLIENT,
   MEMBERSHIP_RELATION_MAP,
@@ -21,6 +21,21 @@ import type {
 @Injectable()
 export class FgaService {
   constructor(@Inject(FGA_CLIENT) private readonly client: FgaClientLike) {}
+
+  private readonly logger = new Logger(FgaService.name);
+
+  /**
+   * Reconcilia las tuplas FGA de TODOS los usuarios que tienen `roleKey`
+   * asignado: el set deseado por (usuario, objeto) es la UNIÓN de los grants
+   * STRUCTURAL de todos sus roles custom sobre ese objeto (A5).
+   *
+   * STUB en Fase 2 (A2): no-op para que `RolesService.updateRole` compile y
+   * se pueda testear el contrato de invocación/rollback. La Fase 3 REEMPLAZA
+   * este cuerpo por la implementación real (Modify, no Create).
+   */
+  async resyncRole(roleKey: string): Promise<void> {
+    this.logger.warn(`resyncRole('${roleKey}'): stub, se implementa en Fase 3`);
+  }
 
   /** ¿Puede `user` ejercer `relation` sobre `object`? Resuelto en OpenFGA. */
   async check(params: { user: string; relation: string; object: string }): Promise<boolean> {
