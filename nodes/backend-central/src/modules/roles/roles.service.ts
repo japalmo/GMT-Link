@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Permission, Role } from '@prisma/client';
 import type {
   CreateRoleInput,
   PermissionCatalogGroup,
   PermissionCatalogItem,
   RoleDetail,
+  RoleGrant,
 } from '@gmt-platform/contracts';
 import { FgaService } from '../../fga/fga.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -76,6 +77,7 @@ export class RolesService {
    * único write anidado de Prisma (transaccional).
    */
   async createRole(input: CreateRoleInput, createdById: string | null): Promise<RoleDetail> {
+    await this.validateGrants(input.grants);
     const key = await this.slugKey(input.label);
 
     const role = await this.prisma.role.create({
@@ -127,6 +129,56 @@ export class RolesService {
     _grants: ReadonlyArray<{ permissionKey: string; scope: string }>,
   ): ('ORGANIZATION' | 'PROJECT')[] {
     return ['ORGANIZATION'];
+  }
+
+  /**
+   * Valida un array de grants antes de persistirlo (`[]` pasa trivialmente, A6):
+   *  1. cada `permissionKey` existe en el catálogo,
+   *  2. es `composable` (FUNCTIONAL siempre; STRUCTURAL solo si está en
+   *     `COMPOSABLE_STRUCTURAL`), y si no lo es → 400 NOT_COMPOSABLE,
+   *  3. si el permiso NO es `scopeable`, el scope del grant debe ser 'GLOBAL'
+   *     (si no → 400 NOT_COMPOSABLE, mismo code: el grant no es válido para
+   *     ese permiso),
+   *  4. los permisos STRUCTURAL del set deben ser homogéneos en su nivel FGA
+   *     (todos 'organization' o todos 'project'; mezclarlos → 400
+   *     MIXED_SCOPE_LEVELS). Los FUNCTIONAL no participan de esta regla.
+   */
+  private async validateGrants(grants: readonly RoleGrant[]): Promise<void> {
+    const keys = grants.map((g) => g.permissionKey);
+    const permissions = await this.prisma.permission.findMany({ where: { key: { in: keys } } });
+    const byKey = new Map(permissions.map((p) => [p.key, p]));
+
+    const structuralLevels = new Set<'organization' | 'project'>();
+
+    for (const grant of grants) {
+      const permission = byKey.get(grant.permissionKey);
+      if (!permission || !composable(permission)) {
+        throw new BadRequestException({
+          code: 'NOT_COMPOSABLE',
+          message: `El permiso "${grant.permissionKey}" no existe o no puede incluirse en un rol custom.`,
+        });
+      }
+      if (!permission.scopeable && grant.scope !== 'GLOBAL') {
+        throw new BadRequestException({
+          code: 'NOT_COMPOSABLE',
+          message: `El permiso "${grant.permissionKey}" no admite scope: debe ir con scope GLOBAL.`,
+        });
+      }
+      if (permission.kind === 'STRUCTURAL') {
+        const objectType = fgaObjectTypeOf(permission);
+        if (objectType) {
+          structuralLevels.add(objectType);
+        }
+      }
+    }
+
+    if (structuralLevels.size > 1) {
+      throw new BadRequestException({
+        code: 'MIXED_SCOPE_LEVELS',
+        message:
+          'Los permisos estructurales del rol deben ser todos de organización o todos de proyecto, no una mezcla.',
+      });
+    }
   }
 
   /**

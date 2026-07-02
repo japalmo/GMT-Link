@@ -157,6 +157,116 @@ describe('RolesService.listPermissions', () => {
   });
 });
 
+describe('RolesService.createRole — validateGrants', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+    prisma.role.findMany.mockResolvedValue([]);
+  });
+
+  it('rechaza con 400 NOT_COMPOSABLE si un permiso no existe en el catálogo', async () => {
+    prisma.permission.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createRole(
+        { label: 'Demo', grants: [{ permissionKey: 'no:existe', scope: 'PROJECT' }] },
+        'user_1',
+      ),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'NOT_COMPOSABLE' } });
+  });
+
+  it('rechaza con 400 NOT_COMPOSABLE si el permiso es STRUCTURAL fuera del mapa composable', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'document:sign:qa', label: 'Firmar QA', module: 'documentos', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+
+    await expect(
+      service.createRole(
+        { label: 'Demo', grants: [{ permissionKey: 'document:sign:qa', scope: 'PROJECT' }] },
+        'user_1',
+      ),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'NOT_COMPOSABLE' } });
+  });
+
+  it('rechaza con 400 MIXED_SCOPE_LEVELS si mezcla STRUCTURAL org-level y project-level', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'finance:manage', label: 'Gestionar finanzas', module: 'finanzas', kind: 'STRUCTURAL', scopeable: false },
+      { key: 'task:read', label: 'Ver tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+
+    await expect(
+      service.createRole(
+        {
+          label: 'Demo',
+          grants: [
+            { permissionKey: 'finance:manage', scope: 'GLOBAL' },
+            { permissionKey: 'task:read', scope: 'PROJECT' },
+          ],
+        },
+        'user_1',
+      ),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'MIXED_SCOPE_LEVELS' } });
+  });
+
+  it('acepta grants FUNCTIONAL + STRUCTURAL homogéneos (todos project-level)', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'task:read', label: 'Ver tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+      { key: 'task:update', label: 'Editar tareas', module: 'tareas', kind: 'FUNCTIONAL', scopeable: true },
+    ]);
+    prisma.role.create.mockResolvedValue({
+      id: 'role_1', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'task:read' }, scope: 'PROJECT' },
+      { permission: { key: 'task:update' }, scope: 'PROJECT' },
+    ]);
+
+    const detail = await service.createRole(
+      {
+        label: 'Demo',
+        grants: [
+          { permissionKey: 'task:read', scope: 'PROJECT' },
+          { permissionKey: 'task:update', scope: 'PROJECT' },
+        ],
+      },
+      'user_1',
+    );
+
+    expect(detail.grants).toHaveLength(2);
+  });
+
+  it('acepta grants: [] — crea un rol vacío (A6)', async () => {
+    prisma.permission.findMany.mockResolvedValue([]);
+    prisma.role.create.mockResolvedValue({
+      id: 'role_1', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([]);
+
+    const detail = await service.createRole({ label: 'Demo', grants: [] }, 'user_1');
+
+    expect(detail.grants).toEqual([]);
+    expect(detail.allowedScopeTypes).toEqual(['ORGANIZATION']);
+  });
+
+  it('rechaza scope no permitido para un permiso no scopeable (scopeable=false exige el scope declarado en catálogo, aquí GLOBAL)', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'finance:manage', label: 'Gestionar finanzas', module: 'finanzas', kind: 'STRUCTURAL', scopeable: false },
+    ]);
+
+    await expect(
+      service.createRole(
+        { label: 'Demo', grants: [{ permissionKey: 'finance:manage', scope: 'PROJECT' }] },
+        'user_1',
+      ),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'NOT_COMPOSABLE' } });
+  });
+});
+
 describe('RolesService.createRole — slugKey', () => {
   let prisma: ReturnType<typeof makePrismaMock>;
   let fga: ReturnType<typeof makeFgaMock>;
