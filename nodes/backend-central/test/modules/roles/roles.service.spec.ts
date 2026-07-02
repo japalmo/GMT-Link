@@ -522,6 +522,51 @@ describe('RolesService.updateRole', () => {
   });
 });
 
+describe('RolesService.deleteRole', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+  });
+
+  it('rechaza con 403 si el rol es isSystem', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_1', key: 'org_admin', label: 'Admin', description: null, isSystem: true,
+    });
+
+    await expect(service.deleteRole('org_admin')).rejects.toMatchObject({ status: 403 });
+    expect(prisma.role.delete).not.toHaveBeenCalled();
+  });
+
+  it('rechaza con 409 ROLE_IN_USE si tiene memberships', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.membership.count.mockResolvedValue(3);
+
+    await expect(service.deleteRole('c_demo')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'ROLE_IN_USE' },
+    });
+    expect(prisma.role.delete).not.toHaveBeenCalled();
+  });
+
+  it('borra el rol si es custom y no tiene memberships', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.membership.count.mockResolvedValue(0);
+
+    await service.deleteRole('c_demo');
+
+    expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 'role_2' } });
+  });
+});
+
 describe('RolesService.allowedScopeTypes', () => {
   let prisma: ReturnType<typeof makePrismaMock>;
   let fga: ReturnType<typeof makeFgaMock>;

@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -194,6 +195,29 @@ export class RolesService {
     }
 
     return this.toRoleDetail(updated, await this.loadGrants(role.id));
+  }
+
+  /**
+   * Borra un rol CUSTOM. 403 si `isSystem`. 409 {code:'ROLE_IN_USE'} si tiene
+   * al menos una `Membership` con ese `roleKey` (cualquier scope): borrarlo
+   * dejaría usuarios con un rol fantasma. El admin debe reasignar/quitar el
+   * rol de esos usuarios antes de poder eliminarlo.
+   */
+  async deleteRole(key: string): Promise<void> {
+    const role = await this.findRoleOrThrow(key);
+    if (role.isSystem) {
+      throw new ForbiddenException(`El rol "${key}" es del sistema y no se puede eliminar.`);
+    }
+
+    const membershipCount = await this.prisma.membership.count({ where: { roleKey: key } });
+    if (membershipCount > 0) {
+      throw new ConflictException({
+        code: 'ROLE_IN_USE',
+        message: `El rol "${key}" está asignado a ${membershipCount} usuario(s) y no se puede eliminar.`,
+      });
+    }
+
+    await this.prisma.role.delete({ where: { id: role.id } });
   }
 
   /** Traduce RoleGrant[] a filas de RolePermission (resuelve permissionId por key). */
