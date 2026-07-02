@@ -152,6 +152,58 @@ describe('Modelo OpenFGA §4.3 — derivaciones', () => {
   it('i) admin (vía project_creator→can_create_service) puede crear activo', async () => {
     expect(await allowed('user:anna', 'can_create', 'asset:a1')).toBe(true);
   });
+
+  it('j) can_manage_roles: admin de organización lo deriva; un no-admin no (§5)', async () => {
+    expect(await allowed('user:anna', 'can_manage_roles', 'organization:gmt')).toBe(true);
+    expect(await allowed('user:bob', 'can_manage_roles', 'organization:gmt')).toBe(false);
+  });
+
+  it('k) tupla directa [user] en project.can_view pasa el check aunque no tenga ningún rol bundle (§5)', async () => {
+    // 'gina' no tiene viewer/operator/qa/finance/project_creator/client_ito en p1.
+    expect(await allowed('user:gina', 'can_view', 'project:p1')).toBe(false);
+    await client.write({
+      writes: [{ user: 'user:gina', relation: 'can_view', object: 'project:p1' }],
+    });
+    expect(await allowed('user:gina', 'can_view', 'project:p1')).toBe(true);
+    // Aislamiento: la tupla directa en p1 no da acceso a p2 (§3.4).
+    expect(await allowed('user:gina', 'can_view', 'project:p2')).toBe(false);
+  });
+
+  it('l) tupla directa [user] en project.can_create_task pasa el check (§5)', async () => {
+    expect(await allowed('user:henry', 'can_create_task', 'project:p1')).toBe(false);
+    await client.write({
+      writes: [{ user: 'user:henry', relation: 'can_create_task', object: 'project:p1' }],
+    });
+    expect(await allowed('user:henry', 'can_create_task', 'project:p1')).toBe(true);
+  });
+
+  it('m) tupla directa [user] en las 3 relaciones org componibles pasa el check (A1)', async () => {
+    // 'kevin' no es admin de la org: sin tupla directa, ningún can_* org le da true.
+    expect(await allowed('user:kevin', 'can_review_documents', 'organization:gmt')).toBe(false);
+    await client.write({
+      writes: [
+        { user: 'user:kevin', relation: 'can_review_documents', object: 'organization:gmt' },
+        { user: 'user:kevin', relation: 'can_view_directory_extended', object: 'organization:gmt' },
+        { user: 'user:kevin', relation: 'can_manage_finance', object: 'organization:gmt' },
+      ],
+    });
+    expect(await allowed('user:kevin', 'can_review_documents', 'organization:gmt')).toBe(true);
+    expect(await allowed('user:kevin', 'can_view_directory_extended', 'organization:gmt')).toBe(true);
+    expect(await allowed('user:kevin', 'can_manage_finance', 'organization:gmt')).toBe(true);
+    // can_manage_users NO es componible: sigue siendo solo derivado de admin.
+    expect(await allowed('user:kevin', 'can_manage_users', 'organization:gmt')).toBe(false);
+  });
+
+  it('n) derivación cruzada §12 (A14a): tupla directa can_view sobre project:P satisface can_view en service con service.project = P', async () => {
+    // 'iris' no tiene ningún rol ni tupla: no ve el servicio s1 (que cuelga de p1).
+    expect(await allowed('user:iris', 'can_view', 'service:s1')).toBe(false);
+    await client.write({
+      writes: [{ user: 'user:iris', relation: 'can_view', object: 'project:p1' }],
+    });
+    // service.can_view = can_view from project → la tupla directa en p1 alcanza a s1.
+    expect(await allowed('user:iris', 'can_view', 'service:s1')).toBe(true);
+    expect(await allowed('user:iris', 'can_view', 'project:p1')).toBe(true);
+  });
 });
 
 /** Cliente fake que registra la última operación de write para inspección. */

@@ -9,12 +9,18 @@ type organization
     define member: [user] or admin
     # permisos atómicos org-scope (§3.1 "rol chico por método")
     define can_manage_users: admin
-    # datos extendidos de directorio (§8 directory:view:extended, §6-1.6) — derivado de admin
-    define can_view_directory_extended: admin
-    # revisión de documentos personales (§8 document:review, §6-1.5) — derivado de admin
-    define can_review_documents: admin
-    # gestión de finanzas (§8 finance:manage, §6-3.1/3.3) — derivado de admin
-    define can_manage_finance: admin
+    # Las 3 relaciones org COMPONIBLES (A1) admiten tupla directa "[user] or":
+    # un grant STRUCTURAL org-scope de un rol personalizado se materializa como
+    # tupla directa (user:U, can_x, organization:gmt). can_manage_users NO es
+    # componible: sigue solo derivado de admin.
+    # datos extendidos de directorio (§8 directory:view:extended, §6-1.6)
+    define can_view_directory_extended: [user] or admin
+    # revisión de documentos personales (§8 document:review, §6-1.5)
+    define can_review_documents: [user] or admin
+    # gestión de finanzas (§8 finance:manage, §6-3.1/3.3)
+    define can_manage_finance: [user] or admin
+    # gestión de roles dinámicos (matriz RBAC, design doc 2026-07-01 §5) — gate de RolesController
+    define can_manage_roles: [user] or admin
 
 type department
   relations
@@ -37,13 +43,15 @@ type project
     define finance: [user]
     define viewer: [user]
     define client_ito: [user]
-    # permisos atómicos (derivados)
-    define can_view: viewer or operator or qa or finance or project_creator or client_ito
-    define can_create_task: operator or project_creator
-    define can_assign_task: project_creator or admin from department
-    define can_define_kpi: project_creator
-    define can_create_service: project_creator
-    define can_submit_measurements: operator or qa or project_creator
+    # permisos atómicos (derivados). "[user] or ..." los hace componibles: un rol
+    # personalizado (matriz RBAC, design doc 2026-07-01 §5) se materializa como
+    # tupla directa (user:U, can_x, project:P) y el check la satisface directo.
+    define can_view: [user] or viewer or operator or qa or finance or project_creator or client_ito
+    define can_create_task: [user] or operator or project_creator
+    define can_assign_task: [user] or project_creator or admin from department
+    define can_define_kpi: [user] or project_creator
+    define can_create_service: [user] or project_creator
+    define can_submit_measurements: [user] or operator or qa or project_creator
 
 type service
   relations
