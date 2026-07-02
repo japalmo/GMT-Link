@@ -312,4 +312,34 @@ describe('ReimbursementsService', () => {
 
     await expect(service.approve('mgr', 'nope')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('reject con motivo → la notificación lo lleva en el body (promesa de la UI)', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow()));
+    const update = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.RECHAZADO })));
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await service.reject('mgr', 'r-1', 'Falta la boleta del gasto.');
+
+    expect(notifBits.create).toHaveBeenCalledTimes(1);
+    const [toUserId, payload] = notifBits.create.mock.calls[0] as [
+      string,
+      { title: string; body?: string; link?: string },
+    ];
+    expect(toUserId).toBe('u1');
+    expect(payload.body).toContain('Falta la boleta del gasto.');
+    expect(payload.link).toBe('/finanzas/reembolsos');
+  });
+
+  it('reject sin motivo → notificación sin body', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow()));
+    const update = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.RECHAZADO })));
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await service.reject('mgr', 'r-1');
+
+    const [, payload] = notifBits.create.mock.calls[0] as [string, { body?: string }];
+    expect(payload.body).toBeUndefined();
+  });
 });

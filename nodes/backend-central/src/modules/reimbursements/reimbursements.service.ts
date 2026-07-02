@@ -251,13 +251,14 @@ export class ReimbursementsService {
 
   /**
    * Rechaza un reembolso (gestor). PENDIENTE→RECHAZADO. El `reason` no se persiste
-   * (el schema no tiene campo, MVP): se registra en log si viene.
+   * en la fila (el schema no tiene campo, MVP): viaja al solicitante en el BODY de
+   * la notificación (promesa de la UI) y se registra en log.
    */
   async reject(managerId: string, id: string, reason?: string): Promise<ReimbursementView> {
     if (reason) {
       this.logger.log(`Reembolso ${id} rechazado por ${managerId}. Motivo: ${reason}`);
     }
-    return this.transition(id, 'reject', managerId);
+    return this.transition(id, 'reject', managerId, reason);
   }
 
   /** Marca pagado un reembolso (gestor). Solo desde APROBADO→PAGADO. */
@@ -276,6 +277,7 @@ export class ReimbursementsService {
     id: string,
     transition: FinanceTransition,
     managerId: string,
+    reason?: string,
   ): Promise<ReimbursementView> {
     const current = await this.prisma.reimbursement.findUnique({ where: { id } });
     if (!current) {
@@ -288,15 +290,20 @@ export class ReimbursementsService {
       data: { status, decidedById: managerId, decidedAt: new Date() },
     });
 
-    await this.notifyRequester(row, status);
+    await this.notifyRequester(row, status, reason);
     return toView(row);
   }
 
   /** Notifica al solicitante el resultado de la transición (salvo que él la haga). */
-  private async notifyRequester(row: Reimbursement, status: FinanceStatus): Promise<void> {
+  private async notifyRequester(
+    row: Reimbursement,
+    status: FinanceStatus,
+    reason?: string,
+  ): Promise<void> {
     await this.notifications.create(row.userId, {
       type: NOTIFICATION_TYPE,
       title: `Tu reembolso "${row.concept}" cambió a ${statusLabel(status)}`,
+      body: reason ? `Motivo: ${reason}` : undefined,
       link: REIMBURSEMENTS_LINK,
     });
   }

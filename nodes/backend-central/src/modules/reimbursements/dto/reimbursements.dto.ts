@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   MinLength,
   Min,
@@ -14,6 +15,9 @@ import {
   ArrayMaxSize,
   IsIn,
 } from 'class-validator';
+
+/** Tope del `amount` (CLP): máximo Int32 de Postgres (columna Prisma `Int`). */
+const MAX_AMOUNT_CLP = 2_147_483_647;
 import { FinanceStatus } from '@prisma/client';
 
 /** Recorta espacios de un valor string (deja intactos los no-string). */
@@ -30,6 +34,7 @@ export class CreateReimbursementDto {
   @Type(() => Number)
   @IsInt({ message: 'amount debe ser un entero (CLP, sin decimales).' })
   @Min(1, { message: 'amount debe ser mayor a 0.' })
+  @Max(MAX_AMOUNT_CLP, { message: `amount no puede superar ${MAX_AMOUNT_CLP} (CLP).` })
   amount!: number;
 
   @IsISO8601({ strict: true }, { message: 'date debe ser una fecha ISO-8601.' })
@@ -72,6 +77,8 @@ export class RejectReimbursementDto {
 /** Body de `POST /reimbursements/import` para importación masiva. */
 export class ImportReimbursementsDto {
   @IsArray()
+  @ArrayNotEmpty({ message: 'El lote debe traer al menos un reembolso.' })
+  @ArrayMaxSize(200, { message: 'No se pueden importar más de 200 reembolsos a la vez.' })
   @ValidateNested({ each: true })
   @Type(() => CreateReimbursementDto)
   items!: CreateReimbursementDto[];

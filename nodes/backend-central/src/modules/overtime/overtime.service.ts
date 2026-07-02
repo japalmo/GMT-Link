@@ -17,7 +17,7 @@ import type { OvertimeView } from './overtime.types';
 const NOTIFICATION_TYPE = 'overtime.decided';
 
 /** Enlace destino de la notificación (ruta del front). */
-const OVERTIME_LINK = '/finanzas/horas-extra';
+const OVERTIME_LINK = '/finanzas/horas';
 
 /** Selección de datos del solicitante para la vista del gestor. */
 const REQUESTER_SELECT = {
@@ -128,14 +128,15 @@ export class OvertimeService {
   }
 
   /**
-   * Rechaza (gestor). PENDIENTE→RECHAZADO. El `reason` no se persiste (el schema
-   * no tiene campo de decisión, MVP): se registra en log si viene.
+   * Rechaza (gestor). PENDIENTE→RECHAZADO. El `reason` de la decisión no se
+   * persiste en la fila (el schema no tiene campo, MVP): viaja al solicitante en
+   * el BODY de la notificación y se registra en log.
    */
   async reject(managerId: string, id: string, reason?: string): Promise<OvertimeView> {
     if (reason) {
       this.logger.log(`Horas extra ${id} rechazadas por ${managerId}. Motivo: ${reason}`);
     }
-    return this.transition(id, 'reject', managerId);
+    return this.transition(id, 'reject', managerId, reason);
   }
 
   /** Marca pagada (gestor). Solo desde APROBADO→PAGADO. */
@@ -154,6 +155,7 @@ export class OvertimeService {
     id: string,
     transition: FinanceTransition,
     managerId: string,
+    reason?: string,
   ): Promise<OvertimeView> {
     const current = await this.prisma.overtimeRequest.findUnique({ where: { id } });
     if (!current) {
@@ -166,15 +168,20 @@ export class OvertimeService {
       data: { status, decidedById: managerId, decidedAt: new Date() },
     });
 
-    await this.notifyRequester(row, status);
+    await this.notifyRequester(row, status, reason);
     return toView(row);
   }
 
   /** Notifica al solicitante el resultado de la transición. */
-  private async notifyRequester(row: OvertimeRequest, status: FinanceStatus): Promise<void> {
+  private async notifyRequester(
+    row: OvertimeRequest,
+    status: FinanceStatus,
+    reason?: string,
+  ): Promise<void> {
     await this.notifications.create(row.userId, {
       type: NOTIFICATION_TYPE,
       title: `Tu solicitud de horas extra cambió a ${statusLabel(status)}`,
+      body: reason ? `Motivo: ${reason}` : undefined,
       link: OVERTIME_LINK,
     });
   }

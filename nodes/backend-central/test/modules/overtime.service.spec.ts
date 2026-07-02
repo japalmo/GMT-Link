@@ -183,7 +183,8 @@ describe('OvertimeService', () => {
     ];
     expect(toUserId).toBe('owner-1');
     expect(payload.type).toBe('overtime.decided');
-    expect(payload.link).toBe('/finanzas/horas-extra');
+    // La ruta usa la clave real de la pestaña ('horas'), servida por /finanzas/:tab.
+    expect(payload.link).toBe('/finanzas/horas');
     expect(payload.title).toContain('aprobado');
   });
 
@@ -241,5 +242,22 @@ describe('OvertimeService', () => {
     const service = makeService(prisma);
 
     await expect(service.approve('mgr', 'nope')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('reject con motivo → la notificación lo lleva en el body y el link apunta a la pestaña real', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow()));
+    const update = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.RECHAZADO })));
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await service.reject('mgr', 'o-1', 'Las horas no corresponden al proyecto.');
+
+    expect(notifBits.create).toHaveBeenCalledTimes(1);
+    const [, payload] = notifBits.create.mock.calls[0] as [
+      string,
+      { title: string; body?: string; link?: string },
+    ];
+    expect(payload.body).toContain('Las horas no corresponden al proyecto.');
+    expect(payload.link).toBe('/finanzas/horas');
   });
 });
