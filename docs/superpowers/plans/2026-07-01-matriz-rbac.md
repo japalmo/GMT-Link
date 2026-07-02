@@ -5199,6 +5199,21 @@ describe('PermissionService — roles custom (matriz RBAC, §12)', () => {
   git commit -m "test(authz): PermissionService cubre grants FUNCTIONAL de roles custom y scope mas fuerte"
   ```
 
+### Task 3.10: permission-requests acepta roles dinámicos (gap descubierto en la review de Task 1.2)
+
+**Contexto:** `permission-requests.service.ts` (~línea 156, `parseRoleKey`) usa `isRoleKey` como gate de entrada (400 "Rol desconocido") y `dto/create-permission-request.dto.ts` documenta ese gate como validación semántica. Post-plan nadie podría **solicitar** un rol personalizado `c_xxx`. Alinear al contrato de Task 1.3: cualquier string tipa; la existencia se valida contra la tabla `Role`.
+
+**Files:**
+- Modify: `nodes/backend-central/src/modules/permission-requests/permission-requests.service.ts`
+- Modify: `nodes/backend-central/src/modules/permission-requests/dto/create-permission-request.dto.ts` (solo el comentario que menciona `isRoleKey`)
+- Test: el spec EXISTENTE de permission-requests en `nodes/backend-central/test/` (localizarlo con Glob; extenderlo, no crear uno paralelo)
+
+- [ ] 1. **Test que falla:** agregar al spec existente (reusando sus helpers/mocks): (a) `create()` con `roleKey: 'c_inspector'` cuando el mock de `prisma.role.findUnique` devuelve el rol → NO lanza y crea la solicitud con ese roleKey; (b) `create()` con `roleKey: 'no_existe'` cuando la BD no lo tiene → `BadRequestException` con mensaje que nombre el rol. Ajustar los mocks del spec para cubrir la consulta a `role` si aún no existe.
+- [ ] 2. Correr el spec → los tests nuevos deben FALLAR (hoy `parseRoleKey` corta por `isRoleKey` sin tocar la BD).
+- [ ] 3. **Implementación:** reemplazar el gate `isRoleKey` de `parseRoleKey`/`create` por validación de EXISTENCIA contra la tabla `Role` (`prisma.role.findUnique({ where: { key } })`; 400 `El rol "X" no existe en el catálogo.` si no está — mismo tono que `UsersService.validateRoleKeys`). El método pasa a ser async si hace falta; quitar el import de `isRoleKey` si queda sin uso. Actualizar el comentario del DTO para reflejar el contrato nuevo (forma en el DTO, existencia en el service contra Postgres).
+- [ ] 4. Correr el spec (verde) + `tsc --noEmit` + suite completa backend (verde).
+- [ ] 5. Commit: `fix(permission-requests): valida roleKey contra la tabla Role (roles dinámicos)` + línea Co-Authored-By.
+
 ---
 
 ## Fase 4: `canManageRoles` en `/auth/me` + verificación de registro de `RolesModule`
