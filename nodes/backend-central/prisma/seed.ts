@@ -41,14 +41,26 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'directorio', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
   // ── proyectos ──
   { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
+  // ⚠️ Granularidad compartida (review Task 2.2): project:read, measurement:read
+  // y task:read materializan la MISMA tupla FGA (`can_view` sobre project).
+  // Otorgar cualquiera de los tres en un rol custom concede de facto la
+  // visibilidad de los otros dos a nivel FGA; la separación de keys es
+  // catálogo/UI, no enforcement. Desacoplarlas requeriría relaciones FGA
+  // propias por recurso (deuda post-MVP).
   { key: 'project:read', label: 'Ver proyectos', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
   { key: 'project:update', label: 'Editar proyecto', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: true },
   { key: 'project:kpi:define', label: 'Definir KPIs', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_define_kpi', scopeable: true },
   { key: 'service:read', label: 'Ver servicios', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
-  { key: 'service:create', label: 'Crear servicios', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_create_service', scopeable: true },
+  // ⚠️ Acople conocido (review Task 1.5): en el modelo FGA `asset.can_create =
+  // can_create_service from project`, así que otorgar este permiso TAMBIÉN
+  // habilita crear/asignar/actualizar activos del proyecto. El label lo dice
+  // explícitamente; desacoplarlo (gate propio de assets) es deuda post-MVP.
+  { key: 'service:create', label: 'Crear servicios (incluye gestión de activos)', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_create_service', scopeable: true },
   { key: 'measurement:submit', label: 'Subir cubicaciones/mediciones', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_submit_measurements', scopeable: true },
+  // ⚠️ Comparte `can_view` con project:read y task:read — ver nota en project:read.
   { key: 'measurement:read', label: 'Ver mediciones', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
   // ── tareas (Módulo 5) ──
+  // ⚠️ Comparte `can_view` con project:read y measurement:read — ver nota en project:read.
   { key: 'task:read', label: 'Ver tareas / backlog', module: 'tareas', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
   { key: 'task:create', label: 'Crear tareas', module: 'tareas', kind: 'STRUCTURAL', fgaRelation: 'can_create_task', scopeable: true },
   { key: 'task:assign', label: 'Asignar tareas', module: 'tareas', kind: 'STRUCTURAL', fgaRelation: 'can_assign_task', scopeable: true },
