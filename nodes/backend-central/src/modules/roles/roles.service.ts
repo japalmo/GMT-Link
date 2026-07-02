@@ -97,38 +97,54 @@ export class RolesService {
       },
     });
 
-    return this.toRoleDetail(role);
+    return this.toRoleDetail(role, await this.loadGrants(role.id));
   }
 
-  /** Todos los roles (sistema + custom) con sus grants resueltos. */
+  /** Todos los roles (sistema + custom) con sus grants, en UNA query (join, sin N+1). */
   async listRoles(): Promise<RoleDetail[]> {
-    const roles = await this.prisma.role.findMany({ orderBy: { createdAt: 'asc' } });
-    return Promise.all(roles.map((role) => this.toRoleDetail(role)));
+    const roles = await this.prisma.role.findMany({
+      orderBy: { createdAt: 'asc' },
+      include: { permissions: { include: { permission: true } } },
+    });
+    return roles.map((role) => this.toRoleDetail(role, role.permissions));
   }
 
   /** Detalle de un rol por key. 404 si no existe. */
   async getRole(key: string): Promise<RoleDetail> {
     const role = await this.findRoleOrThrow(key);
-    return this.toRoleDetail(role);
+    return this.toRoleDetail(role, await this.loadGrants(role.id));
   }
 
+  /**
+   * Rol por key o 404. Solo la AUSENCIA de fila es 404: cualquier otro error
+   * (BD caída, timeout, etc.) se propaga tal cual — no se disfraza de
+   * "rol no existe".
+   */
   private async findRoleOrThrow(key: string): Promise<Role> {
-    try {
-      return await this.prisma.role.findUniqueOrThrow({ where: { key } });
-    } catch {
+    const role = await this.prisma.role.findUnique({ where: { key } });
+    if (!role) {
       throw new NotFoundException(`No existe un rol con key "${key}".`);
     }
+    return role;
   }
 
-  /** Arma el `RoleDetail` de un rol ya cargado (resuelve sus grants). */
-  private async toRoleDetail(
-    role: Pick<Role, 'id' | 'key' | 'label' | 'description' | 'isSystem'>,
-  ): Promise<RoleDetail> {
-    const grantsRaw = await this.prisma.rolePermission.findMany({
-      where: { roleId: role.id },
+  /** Filas RolePermission (+Permission) de un rol, para armar sus grants. */
+  private async loadGrants(roleId: string) {
+    return this.prisma.rolePermission.findMany({
+      where: { roleId },
       include: { permission: true },
     });
-    const grants = grantsRaw.map((g) => ({ permissionKey: g.permission.key, scope: g.scope }));
+  }
+
+  /** Arma el `RoleDetail` de un rol con sus grants ya cargados (sin queries). */
+  private toRoleDetail(
+    role: Pick<Role, 'key' | 'label' | 'description' | 'isSystem'>,
+    grantsRaw: ReadonlyArray<{ permission: { key: string }; scope: RoleGrant['scope'] }>,
+  ): RoleDetail {
+    const grants: RoleGrant[] = grantsRaw.map((g) => ({
+      permissionKey: g.permission.key,
+      scope: g.scope,
+    }));
     return {
       key: role.key,
       label: role.label,

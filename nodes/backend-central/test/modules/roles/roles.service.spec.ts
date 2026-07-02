@@ -343,27 +343,33 @@ describe('RolesService.listRoles / getRole', () => {
     service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
   });
 
-  it('listRoles devuelve todos los roles con sus grants', async () => {
+  it('listRoles devuelve todos los roles con sus grants en UNA query (join, sin N+1)', async () => {
     prisma.role.findMany.mockResolvedValue([
-      { id: 'role_1', key: 'org_admin', label: 'Admin', description: null, isSystem: true },
-      { id: 'role_2', key: 'c_demo', label: 'Demo', description: 'custom', isSystem: false },
+      {
+        id: 'role_1', key: 'org_admin', label: 'Admin', description: null, isSystem: true,
+        permissions: [{ permission: { key: 'user:create' }, scope: 'GLOBAL' }],
+      },
+      {
+        id: 'role_2', key: 'c_demo', label: 'Demo', description: 'custom', isSystem: false,
+        permissions: [{ permission: { key: 'task:read' }, scope: 'PROJECT' }],
+      },
     ]);
-    prisma.rolePermission.findMany.mockImplementation(async ({ where }: { where: { roleId: string } }) => {
-      if (where.roleId === 'role_1') {
-        return [{ permission: { key: 'user:create' }, scope: 'GLOBAL' }];
-      }
-      return [{ permission: { key: 'task:read' }, scope: 'PROJECT' }];
-    });
 
     const roles = await service.listRoles();
 
     expect(roles).toHaveLength(2);
-    expect(roles[0]).toMatchObject({ key: 'org_admin', isSystem: true });
+    expect(roles[0]).toMatchObject({
+      key: 'org_admin',
+      isSystem: true,
+      grants: [{ permissionKey: 'user:create', scope: 'GLOBAL' }],
+    });
     expect(roles[1]).toMatchObject({ key: 'c_demo', isSystem: false, description: 'custom' });
+    // Una sola query con include: no debe haber una consulta de grants por rol.
+    expect(prisma.rolePermission.findMany).not.toHaveBeenCalled();
   });
 
   it('getRole devuelve el detalle de un rol existente', async () => {
-    prisma.role.findUniqueOrThrow.mockResolvedValue({
+    prisma.role.findUnique.mockResolvedValue({
       id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
     });
     prisma.rolePermission.findMany.mockResolvedValue([
@@ -377,7 +383,7 @@ describe('RolesService.listRoles / getRole', () => {
   });
 
   it('getRole de un rol sin grants devuelve grants: [] y scope ORGANIZATION (A6)', async () => {
-    prisma.role.findUniqueOrThrow.mockResolvedValue({
+    prisma.role.findUnique.mockResolvedValue({
       id: 'role_3', key: 'c_vacio', label: 'Vacío', description: null, isSystem: false,
     });
     prisma.rolePermission.findMany.mockResolvedValue([]);
@@ -388,10 +394,16 @@ describe('RolesService.listRoles / getRole', () => {
     expect(detail.allowedScopeTypes).toEqual(['ORGANIZATION']);
   });
 
-  it('getRole lanza 404 si el rol no existe', async () => {
-    prisma.role.findUniqueOrThrow.mockRejectedValue(new Error('not found'));
+  it('getRole lanza 404 si el rol no existe (findUnique → null)', async () => {
+    prisma.role.findUnique.mockResolvedValue(null);
 
     await expect(service.getRole('c_no_existe')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('un error de BD en getRole NO se convierte en 404 (se propaga tal cual)', async () => {
+    prisma.role.findUnique.mockRejectedValue(new Error('db down'));
+
+    await expect(service.getRole('c_demo')).rejects.toThrow('db down');
   });
 });
 
