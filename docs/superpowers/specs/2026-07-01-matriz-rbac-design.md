@@ -40,7 +40,7 @@ Ya soporta todo (verificado): `Role{key@unique,label,description?,isSystem,creat
 
 Cambios (re-bootstrap → nuevo `FGA_MODEL_ID`). El nuevo modelo es una **versión más en el mismo store**: las tuplas ya existentes persisten (son independientes del modelo) y siguen válidas — no hay migración de tuplas. Los cambios son retro-compatibles (`[user] or …` amplía, no rompe).
 
-1. `type organization` — agregar `define can_manage_roles: [user] or admin`.
+1. `type organization` — agregar `define can_manage_roles: admin` (NO asignable directo: solo derivada de `admin` — decisión de la review de seguridad de Task 1.5; sin delegación en v1).
 2. `type project` — a cada permiso atómico anteponer `[user] or`:
    ```
    define can_view: [user] or viewer or operator or qa or finance or project_creator or client_ito

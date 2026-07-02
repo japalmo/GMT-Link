@@ -26,7 +26,7 @@
 
 **Endpoints**: `RolesController` gate `@RequirePermission('can_manage_roles', {type:'organization', id: ORG_ID})` → `GET /permissions`, `GET /roles`, `GET /roles/:key`, `POST /roles`, `PATCH /roles/:key`, `DELETE /roles/:key`, `POST /roles/:key/clone`. Asignación (gate `can_manage_users`): `POST /users/:id/roles` (body `AssignRoleInput`), `DELETE /users/:id/roles?roleKey=&scopeType=&scopeId=`. `GET /auth/me` += `canManageRoles: boolean`.
 
-**FGA** (`fga/model.fga`): `organization` += `define can_manage_roles: [user] or admin`; cada `can_*` de `project` += `[user] or`. Re-bootstrap → nuevo `FGA_MODEL_ID`.
+**FGA** (`fga/model.fga`): `organization` += `define can_manage_roles: admin`; cada `can_*` de `project` += `[user] or`. Re-bootstrap → nuevo `FGA_MODEL_ID`.
 
 **Códigos de error**: 400 `{code: MIXED_SCOPE_LEVELS | NOT_COMPOSABLE | INVALID_SCOPE_FOR_ROLE | INVALID_SCOPE_ID}`, 403 (isSystem escritura / sin gate), 404, 409 `{code: ROLE_IN_USE}`, 502 `{code: FGA_SYNC_FAILED}`.
 
@@ -821,7 +821,7 @@ Contexto: `class-validator` con `@IsIn([...ROLE_KEYS])` rechaza en la capa de DT
 - Modify: `C:/Users/juana/GMT Link/nodes/backend-central/fga/model.fga`
 - Test: `C:/Users/juana/GMT Link/nodes/backend-central/test/fga-model.spec.ts` (modificar — agregar tests al describe existente "Modelo OpenFGA §4.3 — derivaciones")
 
-Contexto: §5 del design doc. `organization` gana `can_manage_roles: [user] or admin` (gate de `RolesController`, sin tupla extra: lo deriva `admin`). Además (A1), las 3 relaciones org **componibles** también reciben asignación directa — `can_view_directory_extended`, `can_review_documents` y `can_manage_finance` pasan de `admin` a `[user] or admin` — para que un grant STRUCTURAL org-scope de un rol personalizado se materialice como tupla directa. Y cada permiso atómico de `project` pasa a admitir tupla directa `[user] or <derivaciones existentes>` — así un grant STRUCTURAL de un rol personalizado se materializa como una tupla directa sobre el usuario y el `check` la satisface sin pasar por los roles bundle. Nota de derivación cruzada (A14a): `service.can_view` es `can_view from project`, así que la tupla directa sobre el proyecto también habilita los checks aguas abajo en servicios de ese proyecto — se testea explícitamente.
+Contexto: §5 del design doc. `organization` gana `can_manage_roles: admin` (gate de `RolesController`, sin tupla extra: lo deriva `admin`). Además (A1), las 3 relaciones org **componibles** también reciben asignación directa — `can_view_directory_extended`, `can_review_documents` y `can_manage_finance` pasan de `admin` a `[user] or admin` — para que un grant STRUCTURAL org-scope de un rol personalizado se materialice como tupla directa. Y cada permiso atómico de `project` pasa a admitir tupla directa `[user] or <derivaciones existentes>` — así un grant STRUCTURAL de un rol personalizado se materializa como una tupla directa sobre el usuario y el `check` la satisface sin pasar por los roles bundle. Nota de derivación cruzada (A14a): `service.can_view` es `can_view from project`, así que la tupla directa sobre el proyecto también habilita los checks aguas abajo en servicios de ese proyecto — se testea explícitamente.
 
 - [ ] 1. Escribir el test que falla. Agregar estos `it()` al describe `'Modelo OpenFGA §4.3 — derivaciones'` en `test/fga-model.spec.ts` (no se toca `beforeAll`/`afterAll`; se agregan nuevas tuplas ad-hoc dentro de cada test vía `client.write`, ya que estas relaciones nuevas no están en la carga inicial):
 
@@ -921,7 +921,7 @@ Contexto: §5 del design doc. `organization` gana `can_manage_roles: [user] or a
       # gestión de finanzas (§8 finance:manage, §6-3.1/3.3)
       define can_manage_finance: [user] or admin
       # gestión de roles dinámicos (matriz RBAC, design doc 2026-07-01 §5) — gate de RolesController
-      define can_manage_roles: [user] or admin
+      define can_manage_roles: admin
   ```
 
   En `type project`, anteponer `[user] or` a cada permiso atómico:
@@ -1060,6 +1060,8 @@ Los tipos `RoleKey = string`, `PermissionKind`, `FgaObjectType`, `PermissionCata
 - Test: `C:/Users/juana/GMT Link/nodes/backend-central/test/modules/roles/composable-permissions.spec.ts`
 
 > **A3:** este archivo se crea UNA sola vez, en esta task. La Task 3.2 de la Fase 3 pasa a ser **verificación** (confirmar exports; NO volver a crear).
+
+> **⚠️ Acople conocido (review de seguridad de Task 1.5):** en el modelo FGA, `asset.can_create = can_create_service from project`, y el controller de activos gatea crear/asignar/actualizar activos con `can_create_service`. Por lo tanto, otorgar `service:create` en un rol personalizado TAMBIÉN habilita la gestión de activos del proyecto. Documentarlo en el comentario de `COMPOSABLE_STRUCTURAL` junto a `'service:create'` y en el `label`/descripción del catálogo que sirve `GET /permissions` (p. ej. label "Crear servicios (incluye gestión de activos)"), para que la matriz no prometa una granularidad que el modelo no tiene. El desacople real (gate propio de assets) es deuda post-MVP, fuera de este plan.
 
 - [ ] 1. Escribir el test que falla (`test/modules/roles/composable-permissions.spec.ts`):
 
