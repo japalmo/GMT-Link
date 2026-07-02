@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Permission, Role } from '@prisma/client';
 import type {
   CreateRoleInput,
@@ -6,10 +6,11 @@ import type {
   PermissionCatalogItem,
   RoleDetail,
   RoleGrant,
+  ScopeType,
 } from '@gmt-platform/contracts';
 import { FgaService } from '../../fga/fga.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { composable, fgaObjectTypeOf } from './composable-permissions';
+import { COMPOSABLE_STRUCTURAL, composable, fgaObjectTypeOf } from './composable-permissions';
 
 /**
  * CRUD de roles dinámicos (RBAC dinámico, Fase 2 del diseño). Lee/escribe el
@@ -99,10 +100,24 @@ export class RolesService {
     return this.toRoleDetail(role);
   }
 
-  /** Detalle de un rol por key. 404 si no existe (placeholder Task 2.7). */
+  /** Todos los roles (sistema + custom) con sus grants resueltos. */
+  async listRoles(): Promise<RoleDetail[]> {
+    const roles = await this.prisma.role.findMany({ orderBy: { createdAt: 'asc' } });
+    return Promise.all(roles.map((role) => this.toRoleDetail(role)));
+  }
+
+  /** Detalle de un rol por key. 404 si no existe. */
   async getRole(key: string): Promise<RoleDetail> {
-    const role = await this.prisma.role.findUniqueOrThrow({ where: { key } });
+    const role = await this.findRoleOrThrow(key);
     return this.toRoleDetail(role);
+  }
+
+  private async findRoleOrThrow(key: string): Promise<Role> {
+    try {
+      return await this.prisma.role.findUniqueOrThrow({ where: { key } });
+    } catch {
+      throw new NotFoundException(`No existe un rol con key "${key}".`);
+    }
   }
 
   /** Arma el `RoleDetail` de un rol ya cargado (resuelve sus grants). */
@@ -124,11 +139,18 @@ export class RolesService {
     };
   }
 
-  /** Placeholder: la lógica real (['PROJECT'] si hay STRUCTURAL project-level) llega en la Task 2.9. */
-  allowedScopeTypes(
-    _grants: ReadonlyArray<{ permissionKey: string; scope: string }>,
-  ): ('ORGANIZATION' | 'PROJECT')[] {
-    return ['ORGANIZATION'];
+  /**
+   * ['PROJECT'] si algún grant coincide con un permiso STRUCTURAL project-level
+   * del mapa `COMPOSABLE_STRUCTURAL`; si no, ['ORGANIZATION'] (incluye el caso
+   * sin grants — `[]` es un rol recién creado por el flujo A6 —, solo
+   * FUNCTIONAL, o STRUCTURAL org-level). Los permisos FUNCTIONAL no participan
+   * de este cálculo: no acotan el scope asignable del rol.
+   */
+  allowedScopeTypes(grants: readonly RoleGrant[]): ScopeType[] {
+    const hasProjectLevel = grants.some(
+      (grant) => COMPOSABLE_STRUCTURAL[grant.permissionKey] === 'project',
+    );
+    return hasProjectLevel ? ['PROJECT'] : ['ORGANIZATION'];
   }
 
   /**

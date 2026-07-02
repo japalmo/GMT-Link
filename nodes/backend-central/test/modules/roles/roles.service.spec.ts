@@ -332,6 +332,107 @@ describe('RolesService.createRole — validateGrants', () => {
   });
 });
 
+describe('RolesService.listRoles / getRole', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+  });
+
+  it('listRoles devuelve todos los roles con sus grants', async () => {
+    prisma.role.findMany.mockResolvedValue([
+      { id: 'role_1', key: 'org_admin', label: 'Admin', description: null, isSystem: true },
+      { id: 'role_2', key: 'c_demo', label: 'Demo', description: 'custom', isSystem: false },
+    ]);
+    prisma.rolePermission.findMany.mockImplementation(async ({ where }: { where: { roleId: string } }) => {
+      if (where.roleId === 'role_1') {
+        return [{ permission: { key: 'user:create' }, scope: 'GLOBAL' }];
+      }
+      return [{ permission: { key: 'task:read' }, scope: 'PROJECT' }];
+    });
+
+    const roles = await service.listRoles();
+
+    expect(roles).toHaveLength(2);
+    expect(roles[0]).toMatchObject({ key: 'org_admin', isSystem: true });
+    expect(roles[1]).toMatchObject({ key: 'c_demo', isSystem: false, description: 'custom' });
+  });
+
+  it('getRole devuelve el detalle de un rol existente', async () => {
+    prisma.role.findUniqueOrThrow.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'task:read' }, scope: 'PROJECT' },
+    ]);
+
+    const detail = await service.getRole('c_demo');
+
+    expect(detail.key).toBe('c_demo');
+    expect(detail.grants).toEqual([{ permissionKey: 'task:read', scope: 'PROJECT' }]);
+  });
+
+  it('getRole de un rol sin grants devuelve grants: [] y scope ORGANIZATION (A6)', async () => {
+    prisma.role.findUniqueOrThrow.mockResolvedValue({
+      id: 'role_3', key: 'c_vacio', label: 'Vacío', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([]);
+
+    const detail = await service.getRole('c_vacio');
+
+    expect(detail.grants).toEqual([]);
+    expect(detail.allowedScopeTypes).toEqual(['ORGANIZATION']);
+  });
+
+  it('getRole lanza 404 si el rol no existe', async () => {
+    prisma.role.findUniqueOrThrow.mockRejectedValue(new Error('not found'));
+
+    await expect(service.getRole('c_no_existe')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('RolesService.allowedScopeTypes', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+  });
+
+  it('devuelve ["PROJECT"] si algún grant STRUCTURAL es project-level', () => {
+    const result = service.allowedScopeTypes([
+      { permissionKey: 'task:read', scope: 'PROJECT' },
+      { permissionKey: 'user:create', scope: 'GLOBAL' },
+    ]);
+    expect(result).toEqual(['PROJECT']);
+  });
+
+  it('devuelve ["ORGANIZATION"] si los STRUCTURAL son org-level', () => {
+    const result = service.allowedScopeTypes([
+      { permissionKey: 'finance:manage', scope: 'GLOBAL' },
+    ]);
+    expect(result).toEqual(['ORGANIZATION']);
+  });
+
+  it('devuelve ["ORGANIZATION"] si no hay grants STRUCTURAL (solo FUNCTIONAL)', () => {
+    const result = service.allowedScopeTypes([
+      { permissionKey: 'user:create', scope: 'GLOBAL' },
+    ]);
+    expect(result).toEqual(['ORGANIZATION']);
+  });
+
+  it('devuelve ["ORGANIZATION"] para grants vacíos (A6)', () => {
+    expect(service.allowedScopeTypes([])).toEqual(['ORGANIZATION']);
+  });
+});
+
 describe('RolesService.createRole — slugKey', () => {
   let prisma: ReturnType<typeof makePrismaMock>;
   let fga: ReturnType<typeof makeFgaMock>;
