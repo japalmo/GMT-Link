@@ -1,9 +1,11 @@
 /**
- * Contrato de forma del SPINE RBAC dinámico (§7 del design doc). Verifica en
- * runtime que los tipos nuevos existen con la forma esperada — el chequeo de
- * TIPOS estricto lo hace `tsc --noEmit` (Task 1.6), este spec cubre valores
- * de runtime (ROLE_KEYS) y sirve de humo si alguien vuelve `RoleKey` a unión
- * cerrada por accidente (dejaría de compilar el `const check` de abajo).
+ * Contrato de forma del SPINE RBAC dinámico (§7 del design doc). El chequeo de
+ * TIPOS lo hace `tsc -p tsconfig.test.json`, primera mitad del script `test`
+ * de este paquete — vitest transforma con esbuild SIN typecheck, así que por
+ * sí solo NO atraparía una regresión de tipos. Si alguien vuelve `RoleKey` a
+ * unión cerrada o borra un export del SPINE, ese `tsc` falla (este archivo
+ * deja de compilar); los `expect` de abajo cubren los valores de runtime
+ * (ROLE_KEYS) y la composición de los tipos.
  */
 import { describe, expect, it } from 'vitest';
 import { ROLE_KEYS } from '../src/index';
