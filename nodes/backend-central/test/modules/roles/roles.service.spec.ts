@@ -699,3 +699,105 @@ describe('RolesService.createRole — slugKey', () => {
     expect(createdKey).toBe('c_supervisor_norte_2');
   });
 });
+
+describe('RolesService.cloneRole', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+  });
+
+  it('clona el rol del sistema "qa" (grants reales del seed) omitiendo los no componibles y reportándolos (A7)', async () => {
+    // findRoleOrThrow real = findUnique + null-check (no findUniqueOrThrow).
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_qa', key: 'qa', label: 'QA', description: null, isSystem: true, createdById: null,
+    });
+    prisma.rolePermission.findMany
+      // 1ª llamada: grants del ORIGEN (los 4 del seed para 'qa')
+      .mockResolvedValueOnce([
+        { permission: { key: 'document:read', kind: 'STRUCTURAL' }, scope: 'PROJECT' },
+        { permission: { key: 'document:sign:qa', kind: 'STRUCTURAL' }, scope: 'PROJECT' },
+        { permission: { key: 'task:read', kind: 'STRUCTURAL' }, scope: 'PROJECT' },
+        { permission: { key: 'measurement:read', kind: 'STRUCTURAL' }, scope: 'PROJECT' },
+      ])
+      // 2ª llamada: loadGrants del rol recién clonado (solo los componibles)
+      .mockResolvedValueOnce([
+        { permission: { key: 'task:read' }, scope: 'PROJECT' },
+        { permission: { key: 'measurement:read' }, scope: 'PROJECT' },
+      ]);
+    // Catálogo para validateGrants/grantsToRolePermissionRows del clon (solo los que sobreviven al filtro):
+    prisma.permission.findMany.mockResolvedValue([
+      { id: 'p_task_read', key: 'task:read', label: 'Ver tareas / backlog', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+      { id: 'p_meas_read', key: 'measurement:read', label: 'Ver mediciones', module: 'proyectos', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+    prisma.role.findMany.mockResolvedValue([]); // slugKey: sin colisión
+    prisma.role.create.mockResolvedValue({
+      id: 'role_new', key: 'c_qa_norte', label: 'QA Norte', description: null, isSystem: false,
+    });
+
+    const result = await service.cloneRole('qa', 'QA Norte');
+
+    expect(result.role.key).toBe('c_qa_norte');
+    expect(result.role.isSystem).toBe(false);
+    expect(result.role.label).toBe('QA Norte');
+    expect(result.role.grants).toEqual([
+      { permissionKey: 'task:read', scope: 'PROJECT' },
+      { permissionKey: 'measurement:read', scope: 'PROJECT' },
+    ]);
+    expect(result.omittedPermissionKeys).toEqual(['document:read', 'document:sign:qa']);
+  });
+
+  it('clona sin omisiones cuando todos los grants son componibles y atribuye el createdById del origen', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_src', key: 'c_origen', label: 'Origen', description: 'desc', isSystem: false, createdById: 'user_9',
+    });
+    prisma.rolePermission.findMany
+      .mockResolvedValueOnce([{ permission: { key: 'task:read', kind: 'STRUCTURAL' }, scope: 'PROJECT' }])
+      .mockResolvedValueOnce([{ permission: { key: 'task:read' }, scope: 'PROJECT' }]);
+    prisma.permission.findMany.mockResolvedValue([
+      { id: 'p_task_read', key: 'task:read', label: 'Ver tareas / backlog', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+    prisma.role.findMany.mockResolvedValue([]);
+    prisma.role.create.mockResolvedValue({
+      id: 'role_new', key: 'c_copia', label: 'Copia', description: 'desc', isSystem: false,
+    });
+
+    const result = await service.cloneRole('c_origen', 'Copia');
+
+    expect(result.omittedPermissionKeys).toEqual([]);
+    expect(result.role.grants).toEqual([{ permissionKey: 'task:read', scope: 'PROJECT' }]);
+    expect(prisma.role.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ createdById: 'user_9' }) }),
+    );
+  });
+
+  it('si TODOS los grants del origen son no componibles, crea un clon vacío y los reporta (A6+A7)', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_qa', key: 'qa', label: 'QA', description: null, isSystem: true, createdById: null,
+    });
+    prisma.rolePermission.findMany
+      .mockResolvedValueOnce([{ permission: { key: 'document:sign:qa', kind: 'STRUCTURAL' }, scope: 'PROJECT' }])
+      .mockResolvedValueOnce([]); // loadGrants del clon vacío
+    prisma.permission.findMany.mockResolvedValue([]);
+    prisma.role.findMany.mockResolvedValue([]);
+    prisma.role.create.mockResolvedValue({
+      id: 'role_new', key: 'c_qa_norte', label: 'QA Norte', description: null, isSystem: false,
+    });
+
+    const result = await service.cloneRole('qa', 'QA Norte');
+
+    expect(result.role.grants).toEqual([]);
+    expect(result.omittedPermissionKeys).toEqual(['document:sign:qa']);
+  });
+
+  it('lanza 404 si el rol origen no existe', async () => {
+    // findRoleOrThrow real: findUnique → null ⇒ NotFoundException (no rejection del mock).
+    prisma.role.findUnique.mockResolvedValue(null);
+
+    await expect(service.cloneRole('c_no_existe', 'Nuevo')).rejects.toMatchObject({ status: 404 });
+  });
+});

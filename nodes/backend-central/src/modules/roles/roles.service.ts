@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Permission, Role } from '@prisma/client';
 import type {
+  CloneRoleResponse,
   CreateRoleInput,
   PermissionCatalogGroup,
   PermissionCatalogItem,
@@ -218,6 +219,39 @@ export class RolesService {
     }
 
     await this.prisma.role.delete({ where: { id: role.id } });
+  }
+
+  /**
+   * Clona un rol EXISTENTE (sistema o custom) como rol CUSTOM nuevo con
+   * `label` propio (A7, spec §6.2/§13.4). Los grants NO componibles
+   * (STRUCTURAL fuera de `COMPOSABLE_STRUCTURAL`, p. ej. `document:sign:qa`
+   * del rol 'qa' sembrado) se OMITEN del clon y se devuelven en
+   * `omittedPermissionKeys` para que la UI los avise. Si todos se omiten, el
+   * clon queda con `grants: []` (válido por A6). Los grants restantes pasan
+   * igual por `validateGrants` dentro de `createRole` (p. ej. clonar
+   * `org_admin`, que mezcla STRUCTURAL org y project componibles, sigue
+   * fallando con 400 MIXED_SCOPE_LEVELS — correcto por diseño). Atribución:
+   * se reutiliza `source.createdById` (null para roles sembrados).
+   */
+  async cloneRole(key: string, label: string): Promise<CloneRoleResponse> {
+    const source = await this.findRoleOrThrow(key);
+    const sourceGrantsRaw = await this.loadGrants(source.id);
+
+    const grants: RoleGrant[] = [];
+    const omittedPermissionKeys: string[] = [];
+    for (const grantRaw of sourceGrantsRaw) {
+      if (composable(grantRaw.permission)) {
+        grants.push({ permissionKey: grantRaw.permission.key, scope: grantRaw.scope });
+      } else {
+        omittedPermissionKeys.push(grantRaw.permission.key);
+      }
+    }
+
+    const role = await this.createRole(
+      { label, description: source.description ?? undefined, grants },
+      source.createdById,
+    );
+    return { role, omittedPermissionKeys };
   }
 
   /** Traduce RoleGrant[] a filas de RolePermission (resuelve permissionId por key). */
