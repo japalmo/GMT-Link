@@ -28,7 +28,7 @@
 
 **FGA** (`fga/model.fga`): `organization` += `define can_manage_roles: admin`; cada `can_*` de `project` += `[user] or`. Re-bootstrap → nuevo `FGA_MODEL_ID`.
 
-**Códigos de error**: 400 `{code: MIXED_SCOPE_LEVELS | NOT_COMPOSABLE | INVALID_SCOPE_FOR_ROLE | INVALID_SCOPE_ID}`, 403 (isSystem escritura / sin gate), 404, 409 `{code: ROLE_IN_USE}`, 502 `{code: FGA_SYNC_FAILED}`.
+**Códigos de error**: 400 `{code: MIXED_SCOPE_LEVELS | NOT_COMPOSABLE | DUPLICATE_GRANT | INVALID_SCOPE_FOR_ROLE | INVALID_SCOPE_ID}`, 403 (isSystem escritura / sin gate), 404, 409 `{code: ROLE_IN_USE}`, 502 `{code: FGA_SYNC_FAILED}`. (`DUPLICATE_GRANT`: permissionKey repetida en grants — agregado en review de Task 2.6.)
 
 ---
 
