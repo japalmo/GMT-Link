@@ -41,6 +41,9 @@ function buildPrismaMock(state: PrismaState): {
 } {
   let created: FakeUserRow | null = null;
 
+  // Memberships ORGANIZATION creadas vía assignRole (respaldan membership.findMany).
+  const orgMemberships: Array<{ roleKey: string }> = [];
+
   const userCreate = vi.fn(
     (args: {
       data: {
@@ -92,14 +95,32 @@ function buildPrismaMock(state: PrismaState): {
     },
     user: {
       findUnique: vi.fn(
-        (): Promise<{ id: string } | null> =>
-          Promise.resolve(state.emailExists ? { id: 'existing' } : null),
+        (args: { where: { id?: string; email?: string } }): Promise<{ id: string } | null> => {
+          if (args.where.id !== undefined) {
+            // assertUserExists (assignRole/removeRole): el usuario del test existe.
+            return Promise.resolve({ id: args.where.id });
+          }
+          // assertEmailFree (create): controlado por el estado del test.
+          return Promise.resolve(state.emailExists ? { id: 'existing' } : null);
+        },
       ),
       create: userCreate,
       delete: userDelete,
     },
     membership: {
       deleteMany: membershipDeleteMany,
+      findUnique: vi.fn((): Promise<unknown> => Promise.resolve(null)),
+      create: vi.fn(
+        (args: {
+          data: { userId: string; roleKey: string; scopeType: string; scopeId: string };
+        }): Promise<unknown> => {
+          orgMemberships.push({ roleKey: args.data.roleKey });
+          return Promise.resolve(args.data);
+        },
+      ),
+      findMany: vi.fn(
+        (): Promise<Array<{ roleKey: string }>> => Promise.resolve([...orgMemberships]),
+      ),
     },
     // $transaction ejecuta el callback con un tx que reusa los mismos mocks.
     $transaction: vi.fn(
@@ -347,5 +368,52 @@ describe('UsersService.importBatch', () => {
     expect(result.created).toHaveLength(1);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]?.index).toBe(1);
+  });
+});
+
+describe('UsersService — roles dinámicos (§7, matriz RBAC): valida contra Role, no por forma', () => {
+  let state: PrismaState;
+
+  beforeEach(() => {
+    state = {
+      // El catálogo de la BD incluye un rol personalizado NO sembrado en ROLE_KEYS.
+      rolesInCatalog: new Set([...ALL_ROLES, 'c_inspector_de_campo']),
+      emailExists: false,
+      failPersist: false,
+    };
+  });
+
+  it('create acepta un rol personalizado (c_xxx) que SÍ existe en la tabla Role', async () => {
+    const { prisma } = buildPrismaMock(state);
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
+
+    const result = await service.create(validDto({ roleKeys: ['c_inspector_de_campo'] }));
+
+    // El rol c_xxx aparece en la respuesta (nada lo filtra por forma).
+    expect(result.user.roleKeys).toEqual(['c_inspector_de_campo']);
+  });
+
+  it('create rechaza (400) un roleKey de forma libre que NO existe en la tabla Role', async () => {
+    const { prisma } = buildPrismaMock(state);
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
+
+    await expect(
+      service.create(validDto({ roleKeys: ['c_no_existe'] })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('assignRole acepta un rol personalizado y lo refleja en roleKeys (collectRoleKeys ya no filtra)', async () => {
+    const { prisma } = buildPrismaMock(state);
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock());
+
+    const result = await service.assignRole('u1', 'c_inspector_de_campo');
+
+    expect(result.id).toBe('u1');
+    expect(result.roleKeys).toContain('c_inspector_de_campo');
+    // Un rol funcional (no org_admin) no toca FGA en la asignación org (decisión §9).
+    expect(fga.writeTuples).not.toHaveBeenCalled();
   });
 });

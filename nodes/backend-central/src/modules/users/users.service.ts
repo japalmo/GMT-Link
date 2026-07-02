@@ -11,7 +11,6 @@ import { validate } from 'class-validator';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
 import { hashPassword } from '../../common/password';
-import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
 import { FgaService } from '../../fga/fga.service';
 import type { TupleKey } from '../../fga/fga.types';
@@ -260,15 +259,15 @@ export class UsersService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Valida `roleKeys` contra forma (RoleKey) y contra la tabla Role (§4.1).
-   * Deduplica preservando orden. 400 si hay claves desconocidas en la BD.
+   * Valida `roleKeys` contra la tabla `Role` de Postgres (§4.1, matriz RBAC
+   * dinámica §7): acepta cualquier string que exista como `Role.key`, incluidos
+   * roles personalizados (`c_xxx`) creados por `RolesService`. El gate de forma
+   * (`isRoleKey`) se eliminó — la consulta `role.findMany` de abajo es la única
+   * validación. Deduplica preservando orden. 400 si hay claves fuera de la BD.
    */
   private async validateRoleKeys(roleKeys: readonly string[]): Promise<RoleKey[]> {
     const unique: RoleKey[] = [];
     for (const raw of roleKeys) {
-      if (!isRoleKey(raw)) {
-        throw new BadRequestException(`Rol desconocido: "${raw}".`);
-      }
       if (!unique.includes(raw)) {
         unique.push(raw);
       }
@@ -364,11 +363,16 @@ export class UsersService {
     return { id: userId, roleKeys: this.collectRoleKeys(memberships.map((m) => m.roleKey)) };
   }
 
-  /** Filtra a RoleKey conocidas (defensivo: la BD podría tener legacy). */
+  /**
+   * Deduplica roleKeys preservando orden. Ya NO filtra por `isRoleKey` (matriz
+   * RBAC §7): los roles personalizados (`c_xxx`) son válidos y deben aparecer
+   * en las respuestas (`UserListItem`/`UserRolesResponse`); ocultarlos rompería
+   * la UI de roles dinámicos.
+   */
   private collectRoleKeys(raw: readonly string[]): RoleKey[] {
     const out: RoleKey[] = [];
     for (const key of raw) {
-      if (isRoleKey(key) && !out.includes(key)) {
+      if (!out.includes(key)) {
         out.push(key);
       }
     }
