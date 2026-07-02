@@ -91,6 +91,7 @@ const router = createBrowserRouter([
           { path: '/notificaciones', element: lazyRoute(<NotificacionesPage />) },
           { path: '/configuracion', element: lazyRoute(<ConfiguracionPage />) },
           { path: '/finanzas', element: lazyRoute(<FinanzasPage />) },
+          { path: '/finanzas/:tab', element: lazyRoute(<FinanzasPage />) },
           { path: '/operaciones', element: lazyRoute(<OperacionesPage />) },
           { path: '/operaciones/:tab', element: lazyRoute(<OperacionesPage />) },
           { path: '/recursos', element: lazyRoute(<RecursosPage />) },
