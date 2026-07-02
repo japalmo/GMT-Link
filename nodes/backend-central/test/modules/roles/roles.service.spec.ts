@@ -142,3 +142,84 @@ describe('RolesService.listPermissions', () => {
     expect(groups).toEqual([]);
   });
 });
+
+describe('RolesService.createRole — slugKey', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+    // Catálogo mínimo para que validateGrants (aún no implementado del todo) no falle en esta task:
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'task:read', label: 'Ver tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+  });
+
+  it('genera key "c_"+slug en minúsculas sin acentos', async () => {
+    prisma.role.findMany.mockResolvedValue([]); // sin colisión
+    prisma.role.create.mockResolvedValue({
+      id: 'role_1',
+      key: 'c_supervisor_norte',
+      label: 'Supervisor Norte',
+      description: null,
+      isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'task:read' }, scope: 'PROJECT' },
+    ]);
+
+    const detail = await service.createRole(
+      { label: 'Supervisor Norte', grants: [{ permissionKey: 'task:read', scope: 'PROJECT' }] },
+      'user_admin_1',
+    );
+
+    expect(detail.key).toBe('c_supervisor_norte');
+  });
+
+  it('colapsa caracteres no [a-z0-9] a "_" y trunca a 40 chars', async () => {
+    prisma.role.findMany.mockResolvedValue([]);
+    let createdKey = '';
+    prisma.role.create.mockImplementation(async ({ data }: { data: { key: string } }) => {
+      createdKey = data.key;
+      return { id: 'role_2', key: data.key, label: 'x', description: null, isSystem: false };
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'task:read' }, scope: 'PROJECT' },
+    ]);
+
+    await service.createRole(
+      {
+        label: 'Ñoño!! Supervisor  de   Zona--Muy-Larga-Que-Excede-Los-Cuarenta-Caracteres',
+        grants: [{ permissionKey: 'task:read', scope: 'PROJECT' }],
+      },
+      'user_admin_1',
+    );
+
+    expect(createdKey.startsWith('c_')).toBe(true);
+    expect(createdKey.length).toBeLessThanOrEqual(40);
+    expect(createdKey).not.toMatch(/[^a-z0-9_]/);
+    expect(createdKey).not.toMatch(/__/);
+  });
+
+  it('agrega sufijo _2 si el slug colisiona con un rol existente', async () => {
+    prisma.role.findMany.mockResolvedValue([{ key: 'c_supervisor_norte' }]);
+    let createdKey = '';
+    prisma.role.create.mockImplementation(async ({ data }: { data: { key: string } }) => {
+      createdKey = data.key;
+      return { id: 'role_3', key: data.key, label: 'x', description: null, isSystem: false };
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'task:read' }, scope: 'PROJECT' },
+    ]);
+
+    await service.createRole(
+      { label: 'Supervisor Norte', grants: [{ permissionKey: 'task:read', scope: 'PROJECT' }] },
+      'user_admin_1',
+    );
+
+    expect(createdKey).toBe('c_supervisor_norte_2');
+  });
+});
