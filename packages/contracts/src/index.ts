@@ -33,8 +33,13 @@ export const ROLE_KEYS = [
   'adm_contrato',
 ] as const;
 
-/** Unión de claves de rol válidas. */
-export type RoleKey = (typeof ROLE_KEYS)[number];
+/**
+ * Clave de rol. Antes unión cerrada sobre `ROLE_KEYS`; con roles dinámicos
+ * (§7 design doc RBAC) cualquier string es válido (incluye roles personalizados
+ * `c_xxx`). La validación dura contra la tabla `Role` la hace el backend
+ * (`UsersService.validateRoleKeys` / `RolesService`), no el tipo.
+ */
+export type RoleKey = string;
 
 /** Estados de usuario (§4.2 — enum UserStatus). */
 export type UserStatus = 'PENDING_FIRST_LOGIN' | 'ACTIVE' | 'SUSPENDED';
@@ -137,3 +142,87 @@ export interface ResourceRef {
 
 /** Alcance de un permiso dentro de un rol (espejo del enum Prisma `PermissionScope`). */
 export type PermissionScopeValue = 'OWN' | 'PROJECT' | 'GLOBAL';
+
+// ============ Roles dinámicos — matriz RBAC (design doc 2026-07-01) ============
+
+/** Naturaleza de un permiso del catálogo (§8): resuelto en Postgres o en OpenFGA. */
+export type PermissionKind = 'FUNCTIONAL' | 'STRUCTURAL';
+
+/** Tipo de objeto FGA sobre el que se materializa un permiso STRUCTURAL componible. */
+export type FgaObjectType = 'organization' | 'project';
+
+/** Item del catálogo de permisos servido por `GET /permissions`. */
+export interface PermissionCatalogItem {
+  key: string;
+  label: string;
+  module: string;
+  kind: PermissionKind;
+  scopeable: boolean;
+  fgaObjectType: FgaObjectType | null;
+  composable: boolean;
+}
+
+/** Catálogo de permisos agrupado por módulo (orden: alfabético por `module`). */
+export interface PermissionCatalogGroup {
+  module: string;
+  items: PermissionCatalogItem[];
+}
+
+/** Un grant dentro de un rol: permiso + alcance de resolución FUNCTIONAL. */
+export interface RoleGrant {
+  permissionKey: string;
+  scope: PermissionScopeValue;
+}
+
+/** Detalle completo de un rol (sistema o personalizado). */
+export interface RoleDetail {
+  key: string;
+  label: string;
+  description: string | null;
+  isSystem: boolean;
+  allowedScopeTypes: ScopeType[];
+  grants: RoleGrant[];
+}
+
+/** Body de `POST /roles`. */
+export interface CreateRoleInput {
+  label: string;
+  description?: string;
+  grants: RoleGrant[];
+}
+
+/** Body de `PATCH /roles/:key`. */
+export interface UpdateRoleInput {
+  label?: string;
+  description?: string;
+  grants?: RoleGrant[];
+}
+
+/** Body de `POST /users/:id/roles` (asignación por scope). */
+export interface AssignRoleInput {
+  roleKey: string;
+  scopeType: ScopeType;
+  scopeId: string;
+}
+
+/**
+ * Membership de un usuario (rol + scope), A4. Lo consumen las respuestas de
+ * asignación (`UserRolesResponse` extendida) y `UserListItem` — esos dos tipos
+ * viven en el backend (`users.types.ts`) y en `nodes/web/src/lib/api.ts`; se
+ * extienden con `memberships: UserMembership[]` en Fase 3 (backend) y Fase 5 (web).
+ */
+export interface UserMembership {
+  roleKey: string;
+  scopeType: ScopeType;
+  scopeId: string;
+}
+
+/**
+ * Respuesta de `POST /roles/:key/clone` (A7): el rol clonado + las claves de
+ * permisos omitidos por NO ser componibles (así clonar roles del sistema
+ * funciona y la UI puede avisar qué quedó afuera, spec §6.2/§13.4).
+ */
+export interface CloneRoleResponse {
+  role: RoleDetail;
+  omittedPermissionKeys: string[];
+}
