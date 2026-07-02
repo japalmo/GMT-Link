@@ -20,10 +20,11 @@ import { ORG_ID } from '../../common/org.constant';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
-import { AssignRoleDto } from './dto/assign-role.dto';
+import { AssignRoleScopedDto } from './dto/assign-role-scoped.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
 import { UsersService } from './users.service';
+import type { AssignRoleInput, ScopeType } from '@gmt-platform/contracts';
 import type {
   CreateUserResponse,
   ImportUsersResponse,
@@ -71,21 +72,64 @@ export class UsersController {
     return this.usersService.getById(id);
   }
 
-  /** Asigna un rol org-scope a un usuario. */
+  /**
+   * Asigna un rol (sistema o custom) a un usuario en un scope arbitrario
+   * (§ Fase 3 matriz RBAC). Retro-compat: si el body omite `scopeType`/`scopeId`
+   * (contrato legacy `{ roleKey }` que aún envía `roles-dialog.tsx` hasta la
+   * Fase 5), el rol se asigna org-scope (ORGANIZATION/ORG_ID) como antes.
+   * Devuelve la `UserRolesResponse` extendida (roleKeys + memberships).
+   */
   @Post(':id/roles')
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
-  assignRole(@Param('id') id: string, @Body() dto: AssignRoleDto): Promise<UserRolesResponse> {
-    return this.usersService.assignRole(id, dto.roleKey);
+  assignRoleScoped(
+    @Param('id') id: string,
+    @Body() dto: AssignRoleScopedDto,
+  ): Promise<UserRolesResponse> {
+    return this.usersService.assignRoleScoped(id, this.resolveScopedInput(dto.roleKey, dto.scopeType, dto.scopeId));
   }
 
-  /** Quita un rol org-scope de un usuario. */
+  /**
+   * Quita un rol (sistema o custom) de un usuario en un scope arbitrario, vía
+   * querystring. Retro-compat: si `scopeType`/`scopeId` faltan en la query,
+   * resuelve a ORGANIZATION/ORG_ID.
+   */
+  @Delete(':id/roles')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  removeRoleScoped(
+    @Param('id') id: string,
+    @Query('roleKey') roleKey: string,
+    @Query('scopeType') scopeType?: ScopeType,
+    @Query('scopeId') scopeId?: string,
+  ): Promise<UserRolesResponse> {
+    return this.usersService.removeRoleScoped(id, this.resolveScopedInput(roleKey, scopeType, scopeId));
+  }
+
+  /**
+   * Quita un rol org-scope de un usuario (endpoint legacy con `:roleKey` en el
+   * path). Se conserva porque `roles-dialog.tsx` lo sigue usando hasta la
+   * Fase 5; su path (`/roles/:roleKey`) NO colisiona con `/roles`. Resuelve el
+   * scope a ORGANIZATION/ORG_ID y delega en el mismo camino scoped.
+   */
   @Delete(':id/roles/:roleKey')
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
   removeRole(
     @Param('id') id: string,
     @Param('roleKey') roleKey: string,
   ): Promise<UserRolesResponse> {
-    return this.usersService.removeRole(id, roleKey);
+    return this.usersService.removeRoleScoped(id, this.resolveScopedInput(roleKey));
+  }
+
+  /** Completa un scope parcial con el default org (ORGANIZATION/ORG_ID) para el `AssignRoleInput`. */
+  private resolveScopedInput(
+    roleKey: string,
+    scopeType?: ScopeType,
+    scopeId?: string,
+  ): AssignRoleInput {
+    return {
+      roleKey,
+      scopeType: scopeType ?? 'ORGANIZATION',
+      scopeId: scopeId ?? ORG_ID,
+    };
   }
 
   /** Sube la foto de avatar para un usuario. */
