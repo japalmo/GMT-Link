@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   FGA_CLIENT,
   MEMBERSHIP_RELATION_MAP,
@@ -46,6 +46,12 @@ function tupleId(t: TupleKey): string {
   return `${t.user}|${t.relation}|${t.object}`;
 }
 
+/** ¿El error de OpenFGA es un no-op tolerable (tupla ya existe / no existe)? */
+function isTupleNoopError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already exists|does not exist/i.test(message);
+}
+
 /**
  * Punto único de decisión de autorización (§3.1, §4.1).
  * Envuelve el cliente OpenFGA (inyectado vía `FGA_CLIENT`) y expone el contrato
@@ -60,19 +66,92 @@ export class FgaService {
     private readonly prisma: PrismaService,
   ) {}
 
-  private readonly logger = new Logger(FgaService.name);
-
   /**
-   * Reconcilia las tuplas FGA de TODOS los usuarios que tienen `roleKey`
-   * asignado: el set deseado por (usuario, objeto) es la UNIÓN de los grants
-   * STRUCTURAL de todos sus roles custom sobre ese objeto (A5).
-   *
-   * STUB en Fase 2 (A2): no-op para que `RolesService.updateRole` compile y
-   * se pueda testear el contrato de invocación/rollback. La Fase 3 REEMPLAZA
-   * este cuerpo por la implementación real (Modify, no Create).
+   * Recorre las Membership del rol y aplica el delta (altas + bajas) para que
+   * FGA refleje exactamente sus grants STRUCTURAL vigentes (spec §6.4).
+   * Por cada membership: set deseado = grants vigentes que aplican a su
+   * scopeType; set posible = todas las relaciones STRUCTURAL composables de
+   * ese object type (catálogo Permission). posible − deseado se borra, salvo
+   * lo que OTRO rol custom del usuario siga sosteniendo (unión, A5).
+   * Escribe/borra de a una tupla tolerando los no-ops de OpenFGA
+   * (already exists / does not exist); otros errores se propagan.
    */
   async resyncRole(roleKey: string): Promise<void> {
-    this.logger.warn(`resyncRole('${roleKey}'): stub, se implementa en Fase 3`);
+    const memberships = await this.prisma.membership.findMany({ where: { roleKey } });
+    if (memberships.length === 0) return;
+
+    const role = await this.prisma.role.findUnique({
+      where: { key: roleKey },
+      include: { permissions: { include: { permission: true } } },
+    });
+    const grants = (role?.permissions ?? []) as unknown as StructuralGrant[];
+
+    for (const membership of memberships) {
+      const scopeType = membership.scopeType as string;
+      if (scopeType !== 'ORGANIZATION' && scopeType !== 'PROJECT') continue;
+      const assignScope = scopeType as AssignableScopeType;
+      const { objectType, object } = objectOf(assignScope, membership.scopeId);
+
+      const desired = this.dedupeTuples(
+        this.tuplesFromGrants(grants, membership.userId, objectType, object),
+      );
+      const desiredIds = new Set(desired.map(tupleId));
+
+      const possibleRelations = await this.possibleRelationsFor(objectType);
+      const sustained = await this.tuplesSustainedByOtherCustomRoles({
+        userId: membership.userId,
+        roleKey,
+        scopeType: assignScope,
+        scopeId: membership.scopeId,
+      });
+
+      const writes = desired.filter((t) => !sustained.has(tupleId(t)));
+      const deletes: TupleKey[] = [...possibleRelations]
+        .map((relation) => ({ user: `user:${membership.userId}`, relation, object }))
+        .filter((t) => !desiredIds.has(tupleId(t)) && !sustained.has(tupleId(t)));
+
+      await this.writeTuplesTolerant(writes);
+      await this.deleteTuplesTolerant(deletes);
+    }
+  }
+
+  /** Todas las relaciones FGA de permisos STRUCTURAL composables para un object type (catálogo Postgres). */
+  private async possibleRelationsFor(objectType: 'organization' | 'project'): Promise<Set<string>> {
+    const keys = Object.entries(COMPOSABLE_STRUCTURAL)
+      .filter(([, type]) => type === objectType)
+      .map(([key]) => key);
+    if (keys.length === 0) return new Set();
+    const permissions = await this.prisma.permission.findMany({
+      where: { key: { in: keys }, kind: 'STRUCTURAL' },
+      select: { fgaRelation: true },
+    });
+    return new Set(
+      permissions
+        .map((p) => p.fgaRelation)
+        .filter((r): r is string => r !== null && r !== undefined),
+    );
+  }
+
+  /** write de a una tupla, tolerando "already exists" (write FGA no idempotente). */
+  private async writeTuplesTolerant(tuples: TupleKey[]): Promise<void> {
+    for (const tuple of tuples) {
+      try {
+        await this.client.write({ writes: [tuple] });
+      } catch (error: unknown) {
+        if (!isTupleNoopError(error)) throw error;
+      }
+    }
+  }
+
+  /** delete de a una tupla, tolerando "does not exist". */
+  private async deleteTuplesTolerant(tuples: TupleKey[]): Promise<void> {
+    for (const tuple of tuples) {
+      try {
+        await this.client.write({ deletes: [tuple] });
+      } catch (error: unknown) {
+        if (!isTupleNoopError(error)) throw error;
+      }
+    }
   }
 
   /** ¿Puede `user` ejercer `relation` sobre `object`? Resuelto en OpenFGA. */

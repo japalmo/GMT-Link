@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FgaService } from '../src/fga/fga.service';
-import type { FgaClientLike, MembershipInput } from '../src/fga/fga.types';
+import type { FgaClientLike, MembershipInput, TupleKey } from '../src/fga/fga.types';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { ORG_ID } from '../src/common/org.constant';
 
@@ -157,13 +157,6 @@ describe('FgaService', () => {
     }
   });
 
-  describe('resyncRole (stub Fase 2 — implementación real en Fase 3)', () => {
-    it('resuelve sin tocar el cliente FGA (no escribe ni chequea tuplas)', async () => {
-      await expect(service.resyncRole('c_demo')).resolves.toBeUndefined();
-      expect(client.write).not.toHaveBeenCalled();
-      expect(client.check).not.toHaveBeenCalled();
-    });
-  });
 });
 
 describe('FgaService — constructor con PrismaService', () => {
@@ -405,5 +398,176 @@ describe('FgaService.syncRoleAssignment', () => {
       ),
     ).resolves.toBeUndefined();
     expect(client.write).not.toHaveBeenCalled();
+  });
+});
+
+function buildRecordingClient(): { client: FgaClientLike; writes: TupleKey[]; deletes: TupleKey[] } {
+  const writes: TupleKey[] = [];
+  const deletes: TupleKey[] = [];
+  const client: FgaClientLike = {
+    check: vi.fn(() => Promise.resolve({ allowed: false })),
+    write: vi.fn((body: { writes?: TupleKey[]; deletes?: TupleKey[] }) => {
+      if (body.writes) writes.push(...body.writes);
+      if (body.deletes) deletes.push(...body.deletes);
+      return Promise.resolve(undefined);
+    }),
+  };
+  return { client, writes, deletes };
+}
+
+function buildPrismaForResync(opts: {
+  grants: RoleGrantRow[];
+  memberships: Array<{ userId: string; roleKey: string; scopeType: string; scopeId: string }>;
+  catalogRelations: string[]; // relaciones STRUCTURAL composables del object type (catálogo Permission)
+  otherMemberships?: Array<{ roleKey: string }>;
+  otherRoles?: OtherRoleRow[];
+}): PrismaService {
+  return {
+    role: {
+      findUnique: vi.fn(() =>
+        Promise.resolve({ key: 'c_auditor', isSystem: false, permissions: opts.grants }),
+      ),
+      findMany: vi.fn(() => Promise.resolve(opts.otherRoles ?? [])),
+    },
+    membership: {
+      // where.roleKey string → memberships del rol (resync);
+      // where.roleKey {not} → memberships de OTROS roles (unión multi-rol).
+      findMany: vi.fn((args: { where: { roleKey?: unknown } }) =>
+        typeof args.where.roleKey === 'string'
+          ? Promise.resolve(opts.memberships)
+          : Promise.resolve(opts.otherMemberships ?? []),
+      ),
+    },
+    permission: {
+      findMany: vi.fn(() =>
+        Promise.resolve(opts.catalogRelations.map((fgaRelation) => ({ fgaRelation }))),
+      ),
+    },
+  } as unknown as PrismaService;
+}
+
+describe('FgaService.resyncRole — delta real', () => {
+  it('si el rol perdió un grant STRUCTURAL, borra la tupla vieja de los miembros existentes', async () => {
+    // c_auditor HOY solo tiene 'document:review' (perdió 'finance:manage').
+    const prisma = buildPrismaForResync({
+      grants: [
+        {
+          scope: 'GLOBAL',
+          permission: { key: 'document:review', kind: 'STRUCTURAL', fgaRelation: 'can_review_documents' },
+        },
+      ],
+      memberships: [{ userId: 'u1', roleKey: 'c_auditor', scopeType: 'ORGANIZATION', scopeId: ORG_ID }],
+      // Catálogo org real del seed: 3 relaciones composables org-level.
+      catalogRelations: ['can_view_directory_extended', 'can_review_documents', 'can_manage_finance'],
+    });
+    const { client, writes, deletes } = buildRecordingClient();
+    const svc = new FgaService(client, prisma);
+
+    await svc.resyncRole('c_auditor');
+
+    // Escribe la tupla vigente (document:review)...
+    expect(writes).toContainEqual({
+      user: 'user:u1',
+      relation: 'can_review_documents',
+      object: `organization:${ORG_ID}`,
+    });
+    // ...borra la de finance:manage, que ya no es grant del rol...
+    expect(deletes).toContainEqual({
+      user: 'user:u1',
+      relation: 'can_manage_finance',
+      object: `organization:${ORG_ID}`,
+    });
+    // ...y NUNCA borra una relación vigente.
+    expect(deletes).not.toContainEqual({
+      user: 'user:u1',
+      relation: 'can_review_documents',
+      object: `organization:${ORG_ID}`,
+    });
+  });
+
+  it('editar el rol A no revoca lo que el rol B sigue otorgando (unión multi-rol)', async () => {
+    // c_auditor perdió task:read (grants: []). u1 también tiene c_reporte en p1,
+    // que otorga can_view vía project:read → resyncRole NO debe borrar can_view.
+    const prisma = buildPrismaForResync({
+      grants: [],
+      memberships: [{ userId: 'u1', roleKey: 'c_auditor', scopeType: 'PROJECT', scopeId: 'p1' }],
+      catalogRelations: ['can_view', 'can_create_task', 'can_assign_task'],
+      otherMemberships: [{ roleKey: 'c_reporte' }],
+      otherRoles: [
+        {
+          key: 'c_reporte',
+          isSystem: false,
+          permissions: [
+            { scope: 'PROJECT', permission: { key: 'project:read', kind: 'STRUCTURAL', fgaRelation: 'can_view' } },
+          ],
+        },
+      ],
+    });
+    const { client, deletes } = buildRecordingClient();
+    const svc = new FgaService(client, prisma);
+
+    await svc.resyncRole('c_auditor');
+
+    expect(deletes).not.toContainEqual({ user: 'user:u1', relation: 'can_view', object: 'project:p1' });
+    // Las relaciones que nadie sostiene sí se limpian (tolerante si no existían).
+    expect(deletes).toContainEqual({ user: 'user:u1', relation: 'can_assign_task', object: 'project:p1' });
+  });
+
+  it('sin memberships del rol → no llama write', async () => {
+    const prisma = buildPrismaForResync({ grants: [], memberships: [], catalogRelations: [] });
+    const { client } = buildRecordingClient();
+    const svc = new FgaService(client, prisma);
+
+    await svc.resyncRole('c_auditor');
+
+    expect(client.write).not.toHaveBeenCalled();
+  });
+
+  it('tolera los no-ops de FGA: "already exists" en write y "does not exist" en delete', async () => {
+    const prisma = buildPrismaForResync({
+      grants: [
+        {
+          scope: 'GLOBAL',
+          permission: { key: 'document:review', kind: 'STRUCTURAL', fgaRelation: 'can_review_documents' },
+        },
+      ],
+      memberships: [{ userId: 'u1', roleKey: 'c_auditor', scopeType: 'ORGANIZATION', scopeId: ORG_ID }],
+      catalogRelations: ['can_review_documents', 'can_manage_finance'],
+    });
+    const client: FgaClientLike = {
+      check: vi.fn(() => Promise.resolve({ allowed: false })),
+      write: vi.fn((body: { writes?: TupleKey[]; deletes?: TupleKey[] }) =>
+        Promise.reject(
+          new Error(
+            body.writes
+              ? 'cannot write a tuple which already exists'
+              : 'cannot delete a tuple which does not exist',
+          ),
+        ),
+      ),
+    };
+    const svc = new FgaService(client, prisma);
+
+    await expect(svc.resyncRole('c_auditor')).resolves.toBeUndefined();
+  });
+
+  it('otros errores FGA SÍ se propagan (para que updateRole haga rollback + 502)', async () => {
+    const prisma = buildPrismaForResync({
+      grants: [
+        {
+          scope: 'GLOBAL',
+          permission: { key: 'document:review', kind: 'STRUCTURAL', fgaRelation: 'can_review_documents' },
+        },
+      ],
+      memberships: [{ userId: 'u1', roleKey: 'c_auditor', scopeType: 'ORGANIZATION', scopeId: ORG_ID }],
+      catalogRelations: ['can_review_documents'],
+    });
+    const client: FgaClientLike = {
+      check: vi.fn(() => Promise.resolve({ allowed: false })),
+      write: vi.fn(() => Promise.reject(new Error('connection refused'))),
+    };
+    const svc = new FgaService(client, prisma);
+
+    await expect(svc.resyncRole('c_auditor')).rejects.toThrow(/connection refused/);
   });
 });
