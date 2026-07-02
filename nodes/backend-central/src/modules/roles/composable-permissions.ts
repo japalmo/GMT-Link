@@ -25,19 +25,17 @@ export const COMPOSABLE_STRUCTURAL: Readonly<Record<string, FgaObjectType>> = {
   'finance:manage': 'organization',
   'project:read': 'project',
   'project:kpi:define': 'project',
-  // ⚠️ Acople conocido (review de seguridad Task 1.5): en el modelo FGA
-  // `asset.can_create = can_create_service from project`, y el controller de
-  // activos gatea crear/asignar/actualizar con `can_create_service`. Otorgar
-  // can_create_service TAMBIÉN habilita la gestión de activos del proyecto
-  // (vía asset.can_create). Reflejarlo en el label del catálogo de
-  // GET /permissions ("Crear servicios (incluye gestión de activos)").
-  // Desacoplarlo (gate propio de assets) es deuda post-MVP.
   'service:create': 'project',
   'measurement:submit': 'project',
   'measurement:read': 'project',
   'task:read': 'project',
   'task:create': 'project',
   'task:assign': 'project',
+  // Gate propio de la gestión de activos (resuelve el acople de la review de
+  // seguridad Task 1.5): `asset.can_create = can_manage_assets from project` y el
+  // controller de activos gatea con can_manage_assets. service:create ya NO
+  // habilita la gestión de activos.
+  'asset:manage': 'project',
 };
 
 /**
