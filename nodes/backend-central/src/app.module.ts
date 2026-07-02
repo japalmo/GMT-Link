@@ -20,6 +20,7 @@ import { OvertimeModule } from './modules/overtime/overtime.module';
 import { PermissionRequestsModule } from './modules/permission-requests/permission-requests.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { ReimbursementsModule } from './modules/reimbursements/reimbursements.module';
+import { RolesModule } from './modules/roles/roles.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -45,6 +46,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     AuthzModule,
     AuthModule,
     UsersModule,
+    RolesModule,
     ProfileModule,
     DirectoryModule,
     CvModule,
