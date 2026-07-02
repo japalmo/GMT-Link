@@ -223,33 +223,54 @@ export class RolesService {
 
   /**
    * Clona un rol EXISTENTE (sistema o custom) como rol CUSTOM nuevo con
-   * `label` propio (A7, spec §6.2/§13.4). Los grants NO componibles
-   * (STRUCTURAL fuera de `COMPOSABLE_STRUCTURAL`, p. ej. `document:sign:qa`
-   * del rol 'qa' sembrado) se OMITEN del clon y se devuelven en
-   * `omittedPermissionKeys` para que la UI los avise. Si todos se omiten, el
-   * clon queda con `grants: []` (válido por A6). Los grants restantes pasan
-   * igual por `validateGrants` dentro de `createRole` (p. ej. clonar
-   * `org_admin`, que mezcla STRUCTURAL org y project componibles, sigue
-   * fallando con 400 MIXED_SCOPE_LEVELS — correcto por diseño). Atribución:
-   * se reutiliza `source.createdById` (null para roles sembrados).
+   * `label` propio (A7, spec §6.2/§13.4). Filosofía A7: FILTRAR, no fallar.
+   * Se omiten del clon (y se devuelven en `omittedPermissionKeys` para que la
+   * UI los avise):
+   *  1. los grants NO componibles (STRUCTURAL fuera de
+   *     `COMPOSABLE_STRUCTURAL`, p. ej. `document:sign:qa` del rol 'qa'
+   *     sembrado), y
+   *  2. si los STRUCTURAL componibles restantes mezclan niveles FGA
+   *     'organization' y 'project' (caso `org_admin`), los de nivel ORG: el
+   *     clon conserva los de PROJECT — precedencia consistente con
+   *     `allowedScopeTypes` — en vez de reventar con 400 MIXED_SCOPE_LEVELS
+   *     en `validateGrants`.
+   * Los FUNCTIONAL se clonan siempre (no participan de niveles FGA). Si todos
+   * se omiten, el clon queda con `grants: []` (válido por A6). Atribución: el
+   * clon nace con `createdById = actorId` (el admin que clona) — nunca hereda
+   * el del origen ni queda en null-de-semilla.
    */
-  async cloneRole(key: string, label: string): Promise<CloneRoleResponse> {
+  async cloneRole(key: string, label: string, actorId: string | null): Promise<CloneRoleResponse> {
     const source = await this.findRoleOrThrow(key);
     const sourceGrantsRaw = await this.loadGrants(source.id);
 
-    const grants: RoleGrant[] = [];
     const omittedPermissionKeys: string[] = [];
+    const composableRaw: typeof sourceGrantsRaw = [];
     for (const grantRaw of sourceGrantsRaw) {
       if (composable(grantRaw.permission)) {
-        grants.push({ permissionKey: grantRaw.permission.key, scope: grantRaw.scope });
+        composableRaw.push(grantRaw);
       } else {
         omittedPermissionKeys.push(grantRaw.permission.key);
       }
     }
 
+    // Homogeneización de niveles FGA: si hay mezcla org+project entre los
+    // componibles, los org-level también se omiten (ver docstring, punto 2).
+    const mixedLevels =
+      composableRaw.some((g) => fgaObjectTypeOf(g.permission) === 'organization') &&
+      composableRaw.some((g) => fgaObjectTypeOf(g.permission) === 'project');
+
+    const grants: RoleGrant[] = [];
+    for (const grantRaw of composableRaw) {
+      if (mixedLevels && fgaObjectTypeOf(grantRaw.permission) === 'organization') {
+        omittedPermissionKeys.push(grantRaw.permission.key);
+      } else {
+        grants.push({ permissionKey: grantRaw.permission.key, scope: grantRaw.scope });
+      }
+    }
+
     const role = await this.createRole(
       { label, description: source.description ?? undefined, grants },
-      source.createdById,
+      actorId,
     );
     return { role, omittedPermissionKeys };
   }

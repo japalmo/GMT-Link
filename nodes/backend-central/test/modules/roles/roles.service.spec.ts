@@ -739,7 +739,7 @@ describe('RolesService.cloneRole', () => {
       id: 'role_new', key: 'c_qa_norte', label: 'QA Norte', description: null, isSystem: false,
     });
 
-    const result = await service.cloneRole('qa', 'QA Norte');
+    const result = await service.cloneRole('qa', 'QA Norte', 'user_admin_1');
 
     expect(result.role.key).toBe('c_qa_norte');
     expect(result.role.isSystem).toBe(false);
@@ -751,8 +751,9 @@ describe('RolesService.cloneRole', () => {
     expect(result.omittedPermissionKeys).toEqual(['document:read', 'document:sign:qa']);
   });
 
-  it('clona sin omisiones cuando todos los grants son componibles y atribuye el createdById del origen', async () => {
+  it('clona sin omisiones cuando todos los grants son componibles y atribuye el createdById del ACTOR (no el del origen)', async () => {
     prisma.role.findUnique.mockResolvedValue({
+      // createdById del origen distinto al actor: prueba que NO se hereda.
       id: 'role_src', key: 'c_origen', label: 'Origen', description: 'desc', isSystem: false, createdById: 'user_9',
     });
     prisma.rolePermission.findMany
@@ -766,12 +767,12 @@ describe('RolesService.cloneRole', () => {
       id: 'role_new', key: 'c_copia', label: 'Copia', description: 'desc', isSystem: false,
     });
 
-    const result = await service.cloneRole('c_origen', 'Copia');
+    const result = await service.cloneRole('c_origen', 'Copia', 'user_admin_7');
 
     expect(result.omittedPermissionKeys).toEqual([]);
     expect(result.role.grants).toEqual([{ permissionKey: 'task:read', scope: 'PROJECT' }]);
     expect(prisma.role.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ createdById: 'user_9' }) }),
+      expect.objectContaining({ data: expect.objectContaining({ createdById: 'user_admin_7' }) }),
     );
   });
 
@@ -788,16 +789,60 @@ describe('RolesService.cloneRole', () => {
       id: 'role_new', key: 'c_qa_norte', label: 'QA Norte', description: null, isSystem: false,
     });
 
-    const result = await service.cloneRole('qa', 'QA Norte');
+    const result = await service.cloneRole('qa', 'QA Norte', 'user_admin_1');
 
     expect(result.role.grants).toEqual([]);
     expect(result.omittedPermissionKeys).toEqual(['document:sign:qa']);
+  });
+
+  it('homogeneiza niveles FGA al clonar (estilo org_admin): conserva los STRUCTURAL project + FUNCTIONAL y omite los STRUCTURAL org (A7, no lanza MIXED_SCOPE_LEVELS)', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_oa', key: 'org_admin', label: 'Admin de organización', description: null, isSystem: true, createdById: null,
+    });
+    prisma.rolePermission.findMany
+      // 1ª llamada: grants del ORIGEN — las 3 org componibles + 2 project componibles + 1 FUNCTIONAL
+      .mockResolvedValueOnce([
+        { permission: { key: 'directory:view:extended', kind: 'STRUCTURAL' }, scope: 'GLOBAL' },
+        { permission: { key: 'document:review', kind: 'STRUCTURAL' }, scope: 'GLOBAL' },
+        { permission: { key: 'finance:manage', kind: 'STRUCTURAL' }, scope: 'GLOBAL' },
+        { permission: { key: 'project:read', kind: 'STRUCTURAL' }, scope: 'PROJECT' },
+        { permission: { key: 'task:read', kind: 'STRUCTURAL' }, scope: 'PROJECT' },
+        { permission: { key: 'user:create', kind: 'FUNCTIONAL' }, scope: 'GLOBAL' },
+      ])
+      // 2ª llamada: loadGrants del clon (project-level + FUNCTIONAL)
+      .mockResolvedValueOnce([
+        { permission: { key: 'project:read' }, scope: 'PROJECT' },
+        { permission: { key: 'task:read' }, scope: 'PROJECT' },
+        { permission: { key: 'user:create' }, scope: 'GLOBAL' },
+      ]);
+    prisma.permission.findMany.mockResolvedValue([
+      { id: 'p_project_read', key: 'project:read', label: 'Ver proyecto', module: 'proyectos', kind: 'STRUCTURAL', scopeable: true },
+      { id: 'p_task_read', key: 'task:read', label: 'Ver tareas / backlog', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+      { id: 'p_user_create', key: 'user:create', label: 'Crear usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: false },
+    ]);
+    prisma.role.findMany.mockResolvedValue([]);
+    prisma.role.create.mockResolvedValue({
+      id: 'role_new', key: 'c_admin_zona', label: 'Admin Zona', description: null, isSystem: false,
+    });
+
+    const result = await service.cloneRole('org_admin', 'Admin Zona', 'user_admin_1');
+
+    expect(result.role.grants).toEqual([
+      { permissionKey: 'project:read', scope: 'PROJECT' },
+      { permissionKey: 'task:read', scope: 'PROJECT' },
+      { permissionKey: 'user:create', scope: 'GLOBAL' },
+    ]);
+    expect(result.omittedPermissionKeys).toEqual([
+      'directory:view:extended',
+      'document:review',
+      'finance:manage',
+    ]);
   });
 
   it('lanza 404 si el rol origen no existe', async () => {
     // findRoleOrThrow real: findUnique → null ⇒ NotFoundException (no rejection del mock).
     prisma.role.findUnique.mockResolvedValue(null);
 
-    await expect(service.cloneRole('c_no_existe', 'Nuevo')).rejects.toMatchObject({ status: 404 });
+    await expect(service.cloneRole('c_no_existe', 'Nuevo', 'user_admin_1')).rejects.toMatchObject({ status: 404 });
   });
 });
