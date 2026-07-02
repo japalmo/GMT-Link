@@ -253,6 +253,71 @@ describe('RolesService.createRole — validateGrants', () => {
     expect(detail.allowedScopeTypes).toEqual(['ORGANIZATION']);
   });
 
+  it('rechaza con 400 DUPLICATE_GRANT si la misma permissionKey aparece dos veces (mismo scope)', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'task:read', label: 'Ver tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+
+    await expect(
+      service.createRole(
+        {
+          label: 'Demo',
+          grants: [
+            { permissionKey: 'task:read', scope: 'PROJECT' },
+            { permissionKey: 'task:read', scope: 'PROJECT' },
+          ],
+        },
+        'user_1',
+      ),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'DUPLICATE_GRANT' } });
+  });
+
+  it('rechaza con 400 DUPLICATE_GRANT si la misma permissionKey aparece con scopes distintos (contradicción visible, no dedupe silencioso)', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'task:read', label: 'Ver tareas', module: 'tareas', kind: 'STRUCTURAL', scopeable: true },
+    ]);
+
+    await expect(
+      service.createRole(
+        {
+          label: 'Demo',
+          grants: [
+            { permissionKey: 'task:read', scope: 'PROJECT' },
+            { permissionKey: 'task:read', scope: 'OWN' },
+          ],
+        },
+        'user_1',
+      ),
+    ).rejects.toMatchObject({ status: 400, response: { code: 'DUPLICATE_GRANT' } });
+  });
+
+  it('acepta mezcla FUNCTIONAL + STRUCTURAL org-level (homogéneo organization)', async () => {
+    prisma.permission.findMany.mockResolvedValue([
+      { key: 'finance:manage', label: 'Gestionar finanzas', module: 'finanzas', kind: 'STRUCTURAL', scopeable: false },
+      { key: 'task:update', label: 'Editar tareas', module: 'tareas', kind: 'FUNCTIONAL', scopeable: true },
+    ]);
+    prisma.role.create.mockResolvedValue({
+      id: 'role_1', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([
+      { permission: { key: 'finance:manage' }, scope: 'GLOBAL' },
+      { permission: { key: 'task:update' }, scope: 'PROJECT' },
+    ]);
+
+    const detail = await service.createRole(
+      {
+        label: 'Demo',
+        grants: [
+          { permissionKey: 'finance:manage', scope: 'GLOBAL' },
+          { permissionKey: 'task:update', scope: 'PROJECT' },
+        ],
+      },
+      'user_1',
+    );
+
+    expect(detail.grants).toHaveLength(2);
+  });
+
   it('rechaza scope no permitido para un permiso no scopeable (scopeable=false exige el scope declarado en catálogo, aquí GLOBAL)', async () => {
     prisma.permission.findMany.mockResolvedValue([
       { key: 'finance:manage', label: 'Gestionar finanzas', module: 'finanzas', kind: 'STRUCTURAL', scopeable: false },

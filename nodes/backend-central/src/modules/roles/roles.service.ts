@@ -133,6 +133,10 @@ export class RolesService {
 
   /**
    * Valida un array de grants antes de persistirlo (`[]` pasa trivialmente, A6):
+   *  0. sin `permissionKey` repetidas (el PK compuesto [roleId, permissionId]
+   *     lo haría reventar con P2002→500; y repetir con scopes distintos es una
+   *     contradicción que el cliente debe ver, no dedupear en silencio) → 400
+   *     DUPLICATE_GRANT,
    *  1. cada `permissionKey` existe en el catálogo,
    *  2. es `composable` (FUNCTIONAL siempre; STRUCTURAL solo si está en
    *     `COMPOSABLE_STRUCTURAL`), y si no lo es → 400 NOT_COMPOSABLE,
@@ -145,6 +149,18 @@ export class RolesService {
    */
   private async validateGrants(grants: readonly RoleGrant[]): Promise<void> {
     const keys = grants.map((g) => g.permissionKey);
+
+    const seen = new Set<string>();
+    for (const key of keys) {
+      if (seen.has(key)) {
+        throw new BadRequestException({
+          code: 'DUPLICATE_GRANT',
+          message: `El permiso "${key}" está repetido en los grants.`,
+        });
+      }
+      seen.add(key);
+    }
+
     const permissions = await this.prisma.permission.findMany({ where: { key: { in: keys } } });
     const byKey = new Map(permissions.map((p) => [p.key, p]));
 
