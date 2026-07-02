@@ -5,21 +5,21 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
-  IsIn,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { ROLE_KEYS } from '../../../common/role-keys';
 import type { RoleKey } from '../../../common/role-keys';
+
+/** Tope defensivo de roles por usuario en un solo request (no ligado a ROLE_KEYS). */
+const MAX_ROLE_KEYS_PER_REQUEST = 20;
 
 /**
  * Body de `POST /users` (§1.1). El admin provisiona un colaborador o cliente.
- * Validación de forma vía class-validator; la validación dura de `roleKeys`
- * contra la tabla Role la hace `UsersService` (espejo §4.1).
- * `ROLE_KEYS` es un readonly tuple; class-validator pide un array mutable de
- * valores permitidos, de ahí el spread defensivo.
+ * Validación de forma vía class-validator (solo exige texto no vacío); la
+ * validación dura de `roleKeys` contra la tabla `Role` la hace `UsersService`
+ * (§4.1, matriz RBAC dinámica §7 — acepta roles personalizados `c_xxx`).
  */
 export class CreateUserDto {
   @IsString()
@@ -48,11 +48,9 @@ export class CreateUserDto {
   @IsArray()
   @ArrayNotEmpty({ message: 'Debe asignar al menos un rol.' })
   @ArrayMinSize(1)
-  @ArrayMaxSize(ROLE_KEYS.length)
-  @IsIn([...ROLE_KEYS], {
-    each: true,
-    message: `Cada rol debe ser uno de: ${ROLE_KEYS.join(', ')}.`,
-  })
+  @ArrayMaxSize(MAX_ROLE_KEYS_PER_REQUEST)
+  @IsString({ each: true, message: 'Cada rol debe ser un texto no vacío.' })
+  @MinLength(1, { each: true, message: 'Cada rol debe ser un texto no vacío.' })
   roleKeys!: RoleKey[];
 
   @IsOptional()
