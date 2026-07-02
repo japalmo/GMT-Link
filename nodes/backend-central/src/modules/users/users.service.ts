@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -8,6 +9,7 @@ import {
 import type { Prisma, User } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import type { AssignRoleInput, ScopeType, UserMembership } from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
 import { hashPassword } from '../../common/password';
@@ -15,6 +17,7 @@ import type { RoleKey } from '../../common/role-keys';
 import { FgaService } from '../../fga/fga.service';
 import type { TupleKey } from '../../fga/fga.types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
 import { StorageService } from '../../common/storage/storage.service';
@@ -64,6 +67,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly fga: FgaService,
     private readonly storage: StorageService,
+    private readonly roles: RolesService,
   ) {}
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
@@ -254,9 +258,167 @@ export class UsersService {
     return this.currentRoles(userId);
   }
 
+  /**
+   * Asigna un rol (sistema o custom) a un usuario en un scope arbitrario
+   * (ORGANIZATION|PROJECT). Valida scopeType contra `allowedScopeTypes` del
+   * rol y, si es PROJECT, que `scopeId` exista. Crea la Membership y
+   * sincroniza FGA por el camino correcto según `Role.isSystem`. Si el sync
+   * FGA falla, borra la Membership creada y responde 502 (enmienda A11).
+   */
+  async assignRoleScoped(userId: string, input: AssignRoleInput): Promise<UserRolesResponse> {
+    await this.assertUserExists(userId);
+    const role = await this.roles.getRole(input.roleKey);
+    this.assertScopeAllowed(role, input.scopeType);
+    if (input.scopeType === 'PROJECT') {
+      await this.assertProjectExists(input.scopeId);
+    }
+
+    const existing = await this.prisma.membership.findUnique({
+      where: {
+        userId_roleKey_scopeType_scopeId: {
+          userId,
+          roleKey: input.roleKey,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
+        },
+      },
+    });
+    if (existing) {
+      throw new ConflictException(`El usuario ya tiene el rol "${input.roleKey}" en ese scope.`);
+    }
+
+    const membership = await this.prisma.membership.create({
+      data: {
+        userId,
+        roleKey: input.roleKey,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+      },
+    });
+
+    try {
+      await this.syncScopedAssignment(
+        role.isSystem,
+        {
+          userId,
+          roleKey: input.roleKey,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
+        },
+        'create',
+      );
+    } catch (error: unknown) {
+      // A11: FGA falló → revertir la Membership recién creada y responder 502.
+      try {
+        await this.prisma.membership.delete({ where: { id: membership.id } });
+      } catch (cleanupError: unknown) {
+        this.logger.error(
+          `Rollback parcial: no se pudo borrar la Membership ${membership.id} tras fallo FGA. Causa: ${this.errorMessage(cleanupError)}`,
+        );
+      }
+      this.logger.error(`Sync FGA falló al asignar rol: ${this.errorMessage(error)}`);
+      throw new HttpException(
+        {
+          code: 'FGA_SYNC_FAILED',
+          message: 'No se pudo sincronizar OpenFGA; se revirtió la asignación.',
+        },
+        502,
+      );
+    }
+
+    return this.currentRoles(userId);
+  }
+
+  /** Quita un rol (sistema o custom) de un usuario en un scope arbitrario. 404 si no existe la Membership. */
+  async removeRoleScoped(userId: string, input: AssignRoleInput): Promise<UserRolesResponse> {
+    await this.assertUserExists(userId);
+    const role = await this.roles.getRole(input.roleKey);
+
+    const membership = await this.prisma.membership.findUnique({
+      where: {
+        userId_roleKey_scopeType_scopeId: {
+          userId,
+          roleKey: input.roleKey,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
+        },
+      },
+    });
+    if (!membership) {
+      throw new NotFoundException('El usuario no tiene ese rol en ese scope.');
+    }
+
+    await this.prisma.membership.delete({ where: { id: membership.id } });
+
+    await this.syncScopedAssignment(
+      role.isSystem,
+      {
+        userId,
+        roleKey: input.roleKey,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+      },
+      'delete',
+    );
+
+    return this.currentRoles(userId);
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers privados
   // ---------------------------------------------------------------------------
+
+  /** 400 INVALID_SCOPE_FOR_ROLE si scopeType no está en los allowedScopeTypes del rol. */
+  private assertScopeAllowed(role: { allowedScopeTypes: string[] }, scopeType: string): void {
+    if (!role.allowedScopeTypes.includes(scopeType)) {
+      throw new HttpException(
+        { code: 'INVALID_SCOPE_FOR_ROLE', message: `El rol no admite el scope "${scopeType}".` },
+        400,
+      );
+    }
+  }
+
+  /** 400 INVALID_SCOPE_ID si el proyecto no existe. */
+  private async assertProjectExists(projectId: string): Promise<void> {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      throw new HttpException(
+        { code: 'INVALID_SCOPE_ID', message: `No existe un proyecto con id "${projectId}".` },
+        400,
+      );
+    }
+  }
+
+  /**
+   * Roles isSystem usan el camino legacy (Membership→relación fija); custom usan
+   * syncRoleAssignment. El camino custom solo admite scopes ORGANIZATION|PROJECT
+   * (los únicos niveles FGA de la matriz RBAC); un scopeType fuera de ese rango
+   * ya fue rechazado por `assertScopeAllowed`, pero se re-verifica aquí para
+   * estrechar el tipo antes de `syncRoleAssignment`.
+   */
+  private async syncScopedAssignment(
+    isSystem: boolean,
+    input: { userId: string; roleKey: string; scopeType: ScopeType; scopeId: string },
+    op: 'create' | 'delete',
+  ): Promise<void> {
+    if (isSystem) {
+      await this.fga.syncMembershipToFGA(input, op);
+      return;
+    }
+    if (input.scopeType !== 'ORGANIZATION' && input.scopeType !== 'PROJECT') {
+      throw new HttpException(
+        {
+          code: 'INVALID_SCOPE_FOR_ROLE',
+          message: `El rol no admite el scope "${input.scopeType}".`,
+        },
+        400,
+      );
+    }
+    await this.fga.syncRoleAssignment(
+      { ...input, scopeType: input.scopeType },
+      op,
+    );
+  }
 
   /**
    * Valida `roleKeys` contra la tabla `Role` de Postgres (§4.1, matriz RBAC
@@ -355,12 +517,30 @@ export class UsersService {
     }
   }
 
+  /**
+   * Respuesta extendida (A4): trae TODAS las memberships del usuario. `roleKeys`
+   * conserva la semántica legacy (roles a nivel org, para el directorio);
+   * `memberships` expone cada asignación con su scope exacto para que la UI
+   * pueda remover con precisión.
+   */
   private async currentRoles(userId: string): Promise<UserRolesResponse> {
     const memberships = await this.prisma.membership.findMany({
-      where: { userId, scopeType: 'ORGANIZATION', scopeId: ORG_ID },
-      select: { roleKey: true },
+      where: { userId },
+      select: { roleKey: true, scopeType: true, scopeId: true },
     });
-    return { id: userId, roleKeys: this.collectRoleKeys(memberships.map((m) => m.roleKey)) };
+    const orgRoleKeys = memberships
+      .filter((m) => m.scopeType === 'ORGANIZATION' && m.scopeId === ORG_ID)
+      .map((m) => m.roleKey);
+    return {
+      id: userId,
+      roleKeys: this.collectRoleKeys(orgRoleKeys),
+      memberships: memberships.map((m) => this.toUserMembership(m)),
+    };
+  }
+
+  /** Proyección pública de una Membership (contrato UserMembership, A4). */
+  private toUserMembership(m: { roleKey: string; scopeType: string; scopeId: string }): UserMembership {
+    return { roleKey: m.roleKey, scopeType: m.scopeType as ScopeType, scopeId: m.scopeId };
   }
 
   /**
@@ -404,6 +584,7 @@ export class UsersService {
       status: user.status,
       isClientUser: user.isClientUser,
       roleKeys: this.collectRoleKeys(user.memberships.map((m) => m.roleKey)),
+      memberships: user.memberships.map((m) => this.toUserMembership(m)),
       createdAt: user.createdAt.toISOString(),
     };
   }

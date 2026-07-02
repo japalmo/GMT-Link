@@ -1,6 +1,6 @@
-import type { ProvisionedUser, RoleKey } from '@gmt-platform/contracts';
+import type { ProvisionedUser, RoleKey, UserMembership } from '@gmt-platform/contracts';
 
-export type { ProvisionedUser, RoleKey };
+export type { ProvisionedUser, RoleKey, UserMembership };
 
 /**
  * Respuesta de `POST /users` (§1.1).
@@ -43,11 +43,13 @@ export interface UserListItem {
   status: string;
   isClientUser: boolean;
   roleKeys: RoleKey[];
+  memberships: UserMembership[];
   createdAt: string;
 }
 
-/** Respuesta de asignar / quitar rol (§1.1). */
+/** Respuesta de asignar / quitar rol — EXTENDIDA (enmienda A4). */
 export interface UserRolesResponse {
   id: string;
   roleKeys: RoleKey[];
+  memberships: UserMembership[];
 }
