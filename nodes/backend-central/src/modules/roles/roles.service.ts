@@ -211,7 +211,10 @@ export class RolesService {
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/_+/g, '_')
       .replace(/^_+|_+$/g, '');
-    const withPrefix = `c_${normalized}`;
+    // Label solo-símbolos/emoji → slug vacío; sin fallback la key degeneraría
+    // en 'c' (perdería el prefijo 'c_').
+    const slug = normalized === '' ? 'rol' : normalized;
+    const withPrefix = `c_${slug}`;
     return withPrefix.slice(0, 40).replace(/_+$/g, '');
   }
 

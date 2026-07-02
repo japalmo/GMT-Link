@@ -328,6 +328,20 @@ describe('RolesService.createRole — slugKey', () => {
     expect(createdKey).not.toMatch(/__/);
   });
 
+  it('usa fallback "rol" si el label es solo símbolos (slug vacío): "!!!" → key "c_rol"', async () => {
+    prisma.role.findMany.mockResolvedValue([]);
+    let createdKey = '';
+    prisma.role.create.mockImplementation(async ({ data }: { data: { key: string } }) => {
+      createdKey = data.key;
+      return { id: 'role_4', key: data.key, label: '!!!', description: null, isSystem: false };
+    });
+    prisma.rolePermission.findMany.mockResolvedValue([]);
+
+    await service.createRole({ label: '!!!', grants: [] }, 'user_admin_1');
+
+    expect(createdKey).toBe('c_rol');
+  });
+
   it('agrega sufijo _2 si el slug colisiona con un rol existente', async () => {
     prisma.role.findMany.mockResolvedValue([{ key: 'c_supervisor_norte' }]);
     let createdKey = '';
