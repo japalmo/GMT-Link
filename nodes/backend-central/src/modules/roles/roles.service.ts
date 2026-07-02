@@ -85,28 +85,57 @@ export class RolesService {
    * (`grants: []` es válido, A6). `createdById: null` = sin admin atribuible
    * (p. ej. clonación, Task 2.11). Role + RolePermission[] se crean en un
    * único write anidado de Prisma (transaccional).
+   *
+   * Carrera de key: dos creates concurrentes con el mismo label calculan la
+   * misma `key` en `slugKey` (read-then-insert sin lock) y el segundo insert
+   * revienta con P2002 sobre `Role.key` → se mapea a 409 ROLE_KEY_CONFLICT
+   * (reintentable) en vez de 500. Es el ÚNICO unique alcanzable aquí: el PK
+   * [roleId, permissionId] de los grants anidados ya lo bloquea
+   * `validateGrants` (400 DUPLICATE_GRANT) y el roleId es recién generado.
+   * Cualquier otro error de BD se propaga tal cual.
    */
   async createRole(input: CreateRoleInput, createdById: string | null): Promise<RoleDetail> {
     await this.validateGrants(input.grants);
     const key = await this.slugKey(input.label);
 
-    const role = await this.prisma.role.create({
-      data: {
-        key,
-        label: input.label,
-        description: input.description ?? null,
-        isSystem: false,
-        createdById,
-        permissions: {
-          create: input.grants.map((grant) => ({
-            scope: grant.scope,
-            permission: { connect: { key: grant.permissionKey } },
-          })),
+    let role: Role;
+    try {
+      role = await this.prisma.role.create({
+        data: {
+          key,
+          label: input.label,
+          description: input.description ?? null,
+          isSystem: false,
+          createdById,
+          permissions: {
+            create: input.grants.map((grant) => ({
+              scope: grant.scope,
+              permission: { connect: { key: grant.permissionKey } },
+            })),
+          },
         },
-      },
-    });
+      });
+    } catch (error: unknown) {
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException({
+          code: 'ROLE_KEY_CONFLICT',
+          message: 'Conflicto generando la key del rol; reintentá.',
+        });
+      }
+      throw error;
+    }
 
     return this.toRoleDetail(role, await this.loadGrants(role.id));
+  }
+
+  /** ¿El error es una violación de unicidad de Prisma (P2002)? */
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002'
+    );
   }
 
   /** Todos los roles (sistema + custom) con sus grants, en UNA query (join, sin N+1). */

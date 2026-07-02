@@ -700,6 +700,43 @@ describe('RolesService.createRole — slugKey', () => {
   });
 });
 
+describe('RolesService.createRole — carrera de key (P2002)', () => {
+  let prisma: ReturnType<typeof makePrismaMock>;
+  let fga: ReturnType<typeof makeFgaMock>;
+  let service: RolesService;
+
+  beforeEach(() => {
+    prisma = makePrismaMock();
+    fga = makeFgaMock();
+    service = new RolesService(prisma as unknown as PrismaService, fga as unknown as FgaService);
+    prisma.permission.findMany.mockResolvedValue([]);
+    prisma.role.findMany.mockResolvedValue([]);
+  });
+
+  it('mapea P2002 de role.create (dos creates concurrentes con el mismo label) a 409 ROLE_KEY_CONFLICT', async () => {
+    // Simula la carrera: slugKey no vio la key (findMany → []) pero al insertar
+    // otro request ya la creó → Prisma revienta con P2002 sobre Role.key.
+    prisma.role.create.mockRejectedValue(
+      Object.assign(new Error('Unique constraint failed on the fields: (`key`)'), {
+        code: 'P2002',
+        meta: { target: ['key'] },
+      }),
+    );
+
+    await expect(service.createRole({ label: 'Demo', grants: [] }, 'user_1')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'ROLE_KEY_CONFLICT' },
+    });
+  });
+
+  it('un error de BD distinto de P2002 en role.create se propaga tal cual (no se disfraza de 409)', async () => {
+    const dbError = new Error('db down');
+    prisma.role.create.mockRejectedValue(dbError);
+
+    await expect(service.createRole({ label: 'Demo', grants: [] }, 'user_1')).rejects.toBe(dbError);
+  });
+});
+
 describe('RolesService.cloneRole', () => {
   let prisma: ReturnType<typeof makePrismaMock>;
   let fga: ReturnType<typeof makeFgaMock>;
