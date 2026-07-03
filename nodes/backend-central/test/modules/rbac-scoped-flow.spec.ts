@@ -198,6 +198,8 @@ describe('Flujo: rol custom → asignación por scope → resync → remove (map
     });
     // can_view sigue deseada (task:read la sostiene) → se re-escribe tolerante, nunca se borra.
     expect(writes).toContainEqual({ user: 'user:u1', relation: 'can_view', object: 'project:p1' });
+    // Única escritura: un delta que re-escribiera can_assign_task sería un bug.
+    expect(writes).toHaveLength(1);
     expect(deletes).toContainEqual({ user: 'user:u1', relation: 'can_assign_task', object: 'project:p1' });
     expect(deletes).not.toContainEqual({ user: 'user:u1', relation: 'can_view', object: 'project:p1' });
 

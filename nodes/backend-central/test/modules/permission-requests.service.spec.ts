@@ -1,5 +1,10 @@
 import 'reflect-metadata';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PermissionRequest } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 import { ORG_ID } from '../../src/common/org.constant';
@@ -78,9 +83,11 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
 }
 
 function buildUsers(
-  assignRole: ReturnType<typeof vi.fn> = vi.fn(() => Promise.resolve({ id: 'u1', roleKeys: [] })),
-): { users: UsersService; assignRole: ReturnType<typeof vi.fn> } {
-  return { users: { assignRole } as unknown as UsersService, assignRole };
+  assignRoleScoped: ReturnType<typeof vi.fn> = vi.fn(() =>
+    Promise.resolve({ id: 'u1', roleKeys: [] }),
+  ),
+): { users: UsersService; assignRoleScoped: ReturnType<typeof vi.fn> } {
+  return { users: { assignRoleScoped } as unknown as UsersService, assignRoleScoped };
 }
 
 function buildNotifications(): {
@@ -183,7 +190,7 @@ describe('PermissionRequestsService.create', () => {
 });
 
 describe('PermissionRequestsService.approve', () => {
-  it('marca APROBADA + decidedBy/At, llama assignRole y notifica al solicitante', async () => {
+  it('marca APROBADA + decidedBy/At, aplica el rol vía assignRoleScoped (ORGANIZATION/ORG_ID) y notifica', async () => {
     const pending = buildRow({ id: 'req-1', userId: 'u1', roleKey: 'finance' });
     const findUnique = vi.fn(() => Promise.resolve(pending));
     const update = vi.fn((args: { data: Partial<PermissionRequest> }) =>
@@ -196,8 +203,13 @@ describe('PermissionRequestsService.approve', () => {
 
     const view = await service.approve('admin-1', 'req-1');
 
-    // Aplica el rol al SOLICITANTE (no al admin).
-    expect(usersBits.assignRole).toHaveBeenCalledWith('u1', 'finance');
+    // Aplica el rol al SOLICITANTE (no al admin) por el camino scoped: valida
+    // allowedScopeTypes y materializa tuplas FGA de roles custom (review Fase 3).
+    expect(usersBits.assignRoleScoped).toHaveBeenCalledWith('u1', {
+      roleKey: 'finance',
+      scopeType: 'ORGANIZATION',
+      scopeId: ORG_ID,
+    });
     const data = update.mock.calls[0]?.[0]?.data as Partial<PermissionRequest>;
     expect(data.status).toBe('APROBADA');
     expect(data.decidedById).toBe('admin-1');
@@ -211,15 +223,15 @@ describe('PermissionRequestsService.approve', () => {
     expect(view.status).toBe('APROBADA');
   });
 
-  it('si assignRole lanza 409 (ya tiene el rol) IGUAL marca APROBADA y notifica', async () => {
+  it('si assignRoleScoped lanza 409 (ya tiene el rol) IGUAL marca APROBADA y notifica', async () => {
     const pending = buildRow();
     const findUnique = vi.fn(() => Promise.resolve(pending));
     const update = vi.fn((args: { data: Partial<PermissionRequest> }) =>
       Promise.resolve(buildRow({ ...pending, ...args.data })),
     );
     const { prisma } = buildPrisma({ findUnique, update });
-    const assignRole = vi.fn(() => Promise.reject(new ConflictException('ya lo tiene')));
-    const usersBits = buildUsers(assignRole);
+    const assignRoleScoped = vi.fn(() => Promise.reject(new ConflictException('ya lo tiene')));
+    const usersBits = buildUsers(assignRoleScoped);
     const notifBits = buildNotifications();
     const service = new PermissionRequestsService(prisma, usersBits.users, notifBits.notifications);
 
@@ -230,11 +242,31 @@ describe('PermissionRequestsService.approve', () => {
     expect(notifBits.create).toHaveBeenCalledTimes(1);
   });
 
-  it('si assignRole lanza un error NO-conflicto, propaga y no marca decidida', async () => {
+  it('si el rol no admite scope ORGANIZATION (custom project-level) propaga el 400 y NO marca APROBADA', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ roleKey: 'c_topografo' })));
+    const { prisma, parts } = buildPrisma({ findUnique });
+    // Mismo error que UsersService.assertScopeAllowed (400 INVALID_SCOPE_FOR_ROLE):
+    // ese rol se asigna por proyecto desde /usuarios, no por este flujo org-level.
+    const scopeError = new HttpException(
+      { code: 'INVALID_SCOPE_FOR_ROLE', message: 'El rol no admite el scope "ORGANIZATION".' },
+      400,
+    );
+    const assignRoleScoped = vi.fn(() => Promise.reject(scopeError));
+    const usersBits = buildUsers(assignRoleScoped);
+    const notifBits = buildNotifications();
+    const service = new PermissionRequestsService(prisma, usersBits.users, notifBits.notifications);
+
+    await expect(service.approve('admin-1', 'req-1')).rejects.toBe(scopeError);
+    // La solicitud queda PENDIENTE: no se marca decidida ni se notifica.
+    expect(parts.update).not.toHaveBeenCalled();
+    expect(notifBits.create).not.toHaveBeenCalled();
+  });
+
+  it('si assignRoleScoped lanza un error NO-conflicto, propaga y no marca decidida', async () => {
     const findUnique = vi.fn(() => Promise.resolve(buildRow()));
     const { prisma, parts } = buildPrisma({ findUnique });
-    const assignRole = vi.fn(() => Promise.reject(new Error('FGA caído')));
-    const usersBits = buildUsers(assignRole);
+    const assignRoleScoped = vi.fn(() => Promise.reject(new Error('FGA caído')));
+    const usersBits = buildUsers(assignRoleScoped);
     const notifBits = buildNotifications();
     const service = new PermissionRequestsService(prisma, usersBits.users, notifBits.notifications);
 
@@ -254,10 +286,10 @@ describe('PermissionRequestsService.approve', () => {
     );
 
     await expect(service.approve('admin-1', 'nope')).rejects.toBeInstanceOf(NotFoundException);
-    expect(usersBits.assignRole).not.toHaveBeenCalled();
+    expect(usersBits.assignRoleScoped).not.toHaveBeenCalled();
   });
 
-  it('409 si la solicitud ya fue resuelta (no PENDIENTE) y no llama assignRole', async () => {
+  it('409 si la solicitud ya fue resuelta (no PENDIENTE) y no llama assignRoleScoped', async () => {
     const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: 'APROBADA' })));
     const { prisma } = buildPrisma({ findUnique });
     const usersBits = buildUsers();
@@ -268,7 +300,7 @@ describe('PermissionRequestsService.approve', () => {
     );
 
     await expect(service.approve('admin-1', 'req-1')).rejects.toBeInstanceOf(ConflictException);
-    expect(usersBits.assignRole).not.toHaveBeenCalled();
+    expect(usersBits.assignRoleScoped).not.toHaveBeenCalled();
   });
 });
 

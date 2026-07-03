@@ -119,8 +119,17 @@ describe('PermissionService', () => {
 });
 
 describe('PermissionService — roles custom (matriz RBAC, §12)', () => {
+  /** Shape del where real de `scopeFilter` sobre `rolePermission.findMany`. */
+  interface GrantsWhereArgs {
+    where: { role: { key: { in: string[] } }; permission: { key: string } };
+  }
+
+  function grantsWhere(mock: PrismaMock, call = 0): GrantsWhereArgs['where'] {
+    return (mock.rolePermission.findMany.mock.calls[call]?.[0] as GrantsWhereArgs).where;
+  }
+
   it('un grant FUNCTIONAL de un rol custom pasa can() (GLOBAL → allow / filtro none)', async () => {
-    const { prisma } = buildPrisma({
+    const { prisma, mock } = buildPrisma({
       memberships: [{ roleKey: 'c_reporteria', scopeType: 'ORGANIZATION', scopeId: 'gmt' }],
       grants: [{ scope: 'GLOBAL' }],
       permission: { kind: 'FUNCTIONAL', fgaRelation: null },
@@ -130,10 +139,14 @@ describe('PermissionService — roles custom (matriz RBAC, §12)', () => {
       effect: 'allow',
       filter: { kind: 'none' },
     });
+    // Los grants se buscan por la clave del rol custom (tabla Role), no por lista estática.
+    const where = grantsWhere(mock);
+    expect(where.role.key.in).toContain('c_reporteria');
+    expect(where.permission).toEqual({ key: 'finance:print:batch' });
   });
 
   it('grant FUNCTIONAL PROJECT de un rol custom: allow en el proyecto asignado, deny fuera', async () => {
-    const { prisma } = buildPrisma({
+    const { prisma, mock } = buildPrisma({
       memberships: [{ roleKey: 'c_reporteria', scopeType: 'PROJECT', scopeId: 'p1' }],
       grants: [{ scope: 'PROJECT' }],
       permission: { kind: 'FUNCTIONAL', fgaRelation: null },
@@ -141,10 +154,11 @@ describe('PermissionService — roles custom (matriz RBAC, §12)', () => {
     const svc = new PermissionService(prisma, buildFga().fga, []);
     expect((await svc.can('u1', 'task:time:read', { projectId: 'p1' })).effect).toBe('allow');
     expect((await svc.can('u1', 'task:time:read', { projectId: 'p2' })).effect).toBe('deny');
+    expect(grantsWhere(mock).role.key.in).toContain('c_reporteria');
   });
 
   it('scope más fuerte gana también mezclando rol custom y rol del sistema (GLOBAL > PROJECT)', async () => {
-    const { prisma } = buildPrisma({
+    const { prisma, mock } = buildPrisma({
       memberships: [
         { roleKey: 'operator', scopeType: 'PROJECT', scopeId: 'p1' },
         { roleKey: 'c_reporteria', scopeType: 'ORGANIZATION', scopeId: 'gmt' },
@@ -153,5 +167,9 @@ describe('PermissionService — roles custom (matriz RBAC, §12)', () => {
     });
     const svc = new PermissionService(prisma, buildFga().fga, []);
     expect(await svc.scopeFilter('u1', 'task:time:read')).toEqual({ kind: 'none' });
+    // La unión multi-rol consulta ambos roles (sistema + custom) en un solo where.
+    const roleKeysIn = grantsWhere(mock).role.key.in;
+    expect(roleKeysIn).toContain('c_reporteria');
+    expect(roleKeysIn).toContain('operator');
   });
 });

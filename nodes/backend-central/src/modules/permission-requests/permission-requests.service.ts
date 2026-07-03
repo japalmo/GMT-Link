@@ -111,16 +111,26 @@ export class PermissionRequestsService {
 
   /**
    * Aprueba una solicitud PENDIENTE: la marca APROBADA (+ decidedBy/At) y APLICA
-   * el rol reusando `UsersService.assignRole`. Si el usuario YA tenía el rol,
-   * `assignRole` lanza 409: se captura como "ya asignado" (no es error — el
-   * objetivo es que el usuario tenga el rol), y la solicitud igual queda aprobada.
-   * Notifica al solicitante. 404 si no existe; 409 si no está PENDIENTE.
+   * el rol reusando `UsersService.assignRoleScoped` a nivel ORGANIZATION/ORG_ID
+   * (mismo camino que la asignación manual: valida `allowedScopeTypes` del rol
+   * y materializa las tuplas FGA de roles custom). Si el usuario YA tenía el
+   * rol, `assignRoleScoped` lanza 409: se captura como "ya asignado" (no es
+   * error — el objetivo es que el usuario tenga el rol) y la solicitud igual
+   * queda aprobada. Si el rol NO admite scope ORGANIZATION (p. ej. un rol
+   * custom project-level), el 400 INVALID_SCOPE_FOR_ROLE se propaga y la
+   * solicitud queda PENDIENTE — deliberado: ese rol se asigna por proyecto
+   * desde /usuarios, no por este flujo org-level. Notifica al solicitante.
+   * 404 si no existe; 409 si no está PENDIENTE.
    */
   async approve(adminId: string, id: string): Promise<PermissionRequestView> {
     const request = await this.findPending(id);
 
     try {
-      await this.users.assignRole(request.userId, request.roleKey);
+      await this.users.assignRoleScoped(request.userId, {
+        roleKey: request.roleKey,
+        scopeType: 'ORGANIZATION',
+        scopeId: ORG_ID,
+      });
     } catch (error: unknown) {
       // El usuario ya tenía el rol: el efecto deseado ya está, seguimos aprobando.
       if (error instanceof ConflictException) {
