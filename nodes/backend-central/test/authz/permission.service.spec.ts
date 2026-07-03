@@ -117,3 +117,41 @@ describe('PermissionService', () => {
     expect(await svc.usersWithPermissionOnProject('document.sign.qa', 'p1')).toEqual(['a', 'b']);
   });
 });
+
+describe('PermissionService — roles custom (matriz RBAC, §12)', () => {
+  it('un grant FUNCTIONAL de un rol custom pasa can() (GLOBAL → allow / filtro none)', async () => {
+    const { prisma } = buildPrisma({
+      memberships: [{ roleKey: 'c_reporteria', scopeType: 'ORGANIZATION', scopeId: 'gmt' }],
+      grants: [{ scope: 'GLOBAL' }],
+      permission: { kind: 'FUNCTIONAL', fgaRelation: null },
+    });
+    const svc = new PermissionService(prisma, buildFga().fga, []);
+    expect(await svc.can('u1', 'finance:print:batch')).toEqual({
+      effect: 'allow',
+      filter: { kind: 'none' },
+    });
+  });
+
+  it('grant FUNCTIONAL PROJECT de un rol custom: allow en el proyecto asignado, deny fuera', async () => {
+    const { prisma } = buildPrisma({
+      memberships: [{ roleKey: 'c_reporteria', scopeType: 'PROJECT', scopeId: 'p1' }],
+      grants: [{ scope: 'PROJECT' }],
+      permission: { kind: 'FUNCTIONAL', fgaRelation: null },
+    });
+    const svc = new PermissionService(prisma, buildFga().fga, []);
+    expect((await svc.can('u1', 'task:time:read', { projectId: 'p1' })).effect).toBe('allow');
+    expect((await svc.can('u1', 'task:time:read', { projectId: 'p2' })).effect).toBe('deny');
+  });
+
+  it('scope más fuerte gana también mezclando rol custom y rol del sistema (GLOBAL > PROJECT)', async () => {
+    const { prisma } = buildPrisma({
+      memberships: [
+        { roleKey: 'operator', scopeType: 'PROJECT', scopeId: 'p1' },
+        { roleKey: 'c_reporteria', scopeType: 'ORGANIZATION', scopeId: 'gmt' },
+      ],
+      grants: [{ scope: 'PROJECT' }, { scope: 'GLOBAL' }],
+    });
+    const svc = new PermissionService(prisma, buildFga().fga, []);
+    expect(await svc.scopeFilter('u1', 'task:time:read')).toEqual({ kind: 'none' });
+  });
+});
