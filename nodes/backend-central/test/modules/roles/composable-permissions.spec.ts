@@ -26,7 +26,14 @@ describe('composable-permissions (SPINE Fase 2)', () => {
       'task:read': 'project',
       'task:create': 'project',
       'task:assign': 'project',
+      'asset:manage': 'project',
     });
+  });
+
+  it('asset:manage es componible y aplica sobre project (gate propio de activos)', () => {
+    const p: FakePermission = { key: 'asset:manage', kind: 'STRUCTURAL' };
+    expect(composable(p)).toBe(true);
+    expect(fgaObjectTypeOf(p)).toBe('project');
   });
 
   it('composable() es true para cualquier permiso FUNCTIONAL', () => {

@@ -57,7 +57,7 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   // can_create_service from project`, así que otorgar este permiso TAMBIÉN
   // habilita crear/asignar/actualizar activos del proyecto. El label lo dice
   // explícitamente; desacoplarlo (gate propio de assets) es deuda post-MVP.
-  { key: 'service:create', label: 'Crear servicios (incluye gestión de activos)', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_create_service', scopeable: true },
+  { key: 'service:create', label: 'Crear servicios', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_create_service', scopeable: true },
   { key: 'measurement:submit', label: 'Subir cubicaciones/mediciones', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_submit_measurements', scopeable: true },
   // ⚠️ Comparte `can_view` con project:read y task:read — ver nota en project:read.
   { key: 'measurement:read', label: 'Ver mediciones', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
@@ -84,6 +84,9 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'finance:print:batch', label: 'Impresión en lote', module: 'finanzas', kind: 'FUNCTIONAL', scopeable: true },
   { key: 'finance:manage', label: 'Gestionar finanzas', module: 'finanzas', kind: 'STRUCTURAL', fgaRelation: 'can_manage_finance', scopeable: false },
   // ── activos ──
+  // Gate propio de la gestión de activos (crear/asignar/accesorios/plantillas):
+  // desacoplado de service:create; project_creator lo deriva en FGA.
+  { key: 'asset:manage', label: 'Gestionar activos', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_manage_assets', scopeable: true },
   { key: 'asset:create', label: 'Crear activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_create', scopeable: true },
   { key: 'asset:checklist:run', label: 'Ejecutar checklist', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_run_checklist', scopeable: true },
   { key: 'asset:location:view', label: 'Ver ubicación de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_location', scopeable: true },
@@ -110,12 +113,12 @@ const ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
-    grants: [g('project:create', 'GLOBAL'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:create')],
+    grants: [g('project:create', 'GLOBAL'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
   },
   {
     key: 'project_creator',
     label: 'Creador de proyecto',
-    grants: [g('project:read'), g('project:kpi:define'), g('service:create'), g('task:create'), g('task:assign'), g('task:read'), g('asset:create')],
+    grants: [g('project:read'), g('project:kpi:define'), g('service:create'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
   },
   {
     key: 'operator',

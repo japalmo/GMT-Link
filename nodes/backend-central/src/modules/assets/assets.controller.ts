@@ -67,7 +67,7 @@ export class AssetsController {
     if (dto.projectId) {
       const hasProjAccess = await this.fga.check({
         user: `user:${userId}`,
-        relation: 'can_create_service',
+        relation: 'can_manage_assets',
         object: `project:${dto.projectId}`,
       });
       if (!hasProjAccess) {
@@ -151,7 +151,7 @@ export class AssetsController {
     if (asset.projectId) {
       const canAssign = await this.fga.check({
         user: `user:${userId}`,
-        relation: 'can_create_service',
+        relation: 'can_manage_assets',
         object: `project:${asset.projectId}`,
       });
       if (!canAssign) {
@@ -299,7 +299,7 @@ export class AssetsController {
     if (asset.projectId) {
       const hasProjAccess = await this.fga.check({
         user: `user:${userId}`,
-        relation: 'can_create_service',
+        relation: 'can_manage_assets',
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
@@ -335,7 +335,7 @@ export class AssetsController {
     if (asset.projectId) {
       const hasProjAccess = await this.fga.check({
         user: `user:${userId}`,
-        relation: 'can_create_service',
+        relation: 'can_manage_assets',
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
@@ -371,7 +371,7 @@ export class AssetsController {
     if (asset.projectId) {
       const hasProjAccess = await this.fga.check({
         user: `user:${userId}`,
-        relation: 'can_create_service',
+        relation: 'can_manage_assets',
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
@@ -415,7 +415,7 @@ export class AssetsController {
     if (asset.projectId) {
       const hasProjAccess = await this.fga.check({
         user: `user:${userId}`,
-        relation: 'can_create_service',
+        relation: 'can_manage_assets',
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {

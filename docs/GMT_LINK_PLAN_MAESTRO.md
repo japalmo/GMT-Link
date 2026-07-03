@@ -200,6 +200,8 @@ type project
     define can_assign_task: project_creator or admin from department
     define can_define_kpi: project_creator
     define can_create_service: project_creator
+    # gate propio de la gestión de activos (asset:manage) — desacoplado de can_create_service
+    define can_manage_assets: [user] or project_creator
 
 type service
   relations
@@ -228,7 +230,7 @@ type asset
     define can_view_location: [user]
     define can_view_history: [user]
     define can_view_speed: [user]
-    define can_create: can_create_service from project
+    define can_create: can_manage_assets from project
     define can_upload_doc: [user]
     define can_upload_and_approve_doc: [user]
 ```
@@ -357,6 +359,7 @@ Ej.: `GMT-ALS-...-CA-A4-001`. Cada código máx 4 chars, configurable. Al crear 
 | `document:sign:qa` / `document:sign:client` | Firmar QA / cliente |
 | `asset:checklist:run` | Ejecutar checklist |
 | `asset:location:view` / `asset:history:view` | Ver ubicación / históricos |
+| `asset:manage` | Gestionar activos (crear/asignar/accesorios/plantillas; FGA `can_manage_assets`) |
 | `asset:create` | Crear activo |
 | `asset:doc:upload` / `asset:doc:approve` | Subir / aprobar doc de activo |
 | `finance:reimbursement:import` | Importar reembolsos |

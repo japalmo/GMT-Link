@@ -1062,6 +1062,8 @@ Los tipos `RoleKey = string`, `PermissionKind`, `FgaObjectType`, `PermissionCata
 > **A3:** este archivo se crea UNA sola vez, en esta task. La Task 3.2 de la Fase 3 pasa a ser **verificación** (confirmar exports; NO volver a crear).
 
 > **⚠️ Acople conocido (review de seguridad de Task 1.5):** en el modelo FGA, `asset.can_create = can_create_service from project`, y el controller de activos gatea crear/asignar/actualizar activos con `can_create_service`. Por lo tanto, otorgar `service:create` en un rol personalizado TAMBIÉN habilita la gestión de activos del proyecto. Documentarlo en el comentario de `COMPOSABLE_STRUCTURAL` junto a `'service:create'` y en el `label`/descripción del catálogo que sirve `GET /permissions` (p. ej. label "Crear servicios (incluye gestión de activos)"), para que la matriz no prometa una granularidad que el modelo no tiene. El desacople real (gate propio de assets) es deuda post-MVP, fuera de este plan.
+>
+> ✅ **RESUELTO (2026-07-02):** assets tiene gate propio. Nueva relación `project.can_manage_assets: [user] or project_creator` (componible, `asset:manage` en el catálogo y en `COMPOSABLE_STRUCTURAL`); `asset.can_create = can_manage_assets from project`; el controller de activos gatea con `can_manage_assets`. `service:create` ya NO habilita la gestión de activos (label revertido a "Crear servicios"). Tests: `fga-model.spec.ts` (r/s/t) y `assets.controller.spec.ts`.
 
 - [ ] 1. Escribir el test que falla (`test/modules/roles/composable-permissions.spec.ts`):
 

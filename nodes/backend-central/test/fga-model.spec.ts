@@ -159,7 +159,7 @@ describe('Modelo OpenFGA §4.3 — derivaciones', () => {
     expect(await allowed('user:bob', 'can_run_checklist', 'asset:a1')).toBe(false);
   });
 
-  it('i) admin (vía project_creator→can_create_service) puede crear activo', async () => {
+  it('i) admin (vía project_creator→can_manage_assets) puede crear activo', async () => {
     expect(await allowed('user:anna', 'can_create', 'asset:a1')).toBe(true);
   });
 
@@ -244,6 +244,34 @@ describe('Modelo OpenFGA §4.3 — derivaciones', () => {
     expect(await allowed('user:mike', 'can_create_task', 'project:p1')).toBe(true);
     // La visibilidad se otorga aparte: cada permiso atómico es independiente.
     expect(await allowed('user:mike', 'can_view', 'project:p1')).toBe(false);
+  });
+
+  it('r) tupla directa [user] en project.can_manage_assets habilita la gestión de activos del proyecto (§5)', async () => {
+    expect(await allowed('user:noa', 'can_manage_assets', 'project:p1')).toBe(false);
+    await client.write({
+      writes: [{ user: 'user:noa', relation: 'can_manage_assets', object: 'project:p1' }],
+    });
+    expect(await allowed('user:noa', 'can_manage_assets', 'project:p1')).toBe(true);
+    // asset.can_create = can_manage_assets from project → alcanza al activo a1.
+    expect(await allowed('user:noa', 'can_create', 'asset:a1')).toBe(true);
+    // ...sin otorgar can_create_service: son gates independientes.
+    expect(await allowed('user:noa', 'can_create_service', 'project:p1')).toBe(false);
+    // Aislamiento: la tupla directa en p1 no alcanza a p2 (§3.4).
+    expect(await allowed('user:noa', 'can_manage_assets', 'project:p2')).toBe(false);
+  });
+
+  it('s) desacople: can_create_service directo NO otorga can_manage_assets ni asset.can_create', async () => {
+    await client.write({
+      writes: [{ user: 'user:omar', relation: 'can_create_service', object: 'project:p1' }],
+    });
+    expect(await allowed('user:omar', 'can_create_service', 'project:p1')).toBe(true);
+    expect(await allowed('user:omar', 'can_manage_assets', 'project:p1')).toBe(false);
+    expect(await allowed('user:omar', 'can_create', 'asset:a1')).toBe(false);
+  });
+
+  it('t) retrocompatibilidad: project_creator deriva can_manage_assets', async () => {
+    // anna es admin org → admin dept → project_creator (test b).
+    expect(await allowed('user:anna', 'can_manage_assets', 'project:p1')).toBe(true);
   });
 });
 
