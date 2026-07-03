@@ -7,7 +7,7 @@ beforeAll(() => { process.env.AUTH_JWT_SECRET = 'test-secret-para-vitest-32bytes
 
 function makeController(user: { id: string; passwordHash: string | null } | null) {
   const prisma = { user: { findUnique: vi.fn().mockResolvedValue(user) } };
-  return new AuthController(prisma as never, undefined as never);
+  return new AuthController(prisma as never, undefined as never, undefined as never);
 }
 
 describe('AuthController.login', () => {
