@@ -3,6 +3,7 @@ import {
   ConflictException,
   Controller,
   Get,
+  Logger,
   Post,
   UnauthorizedException,
   UsePipes,
@@ -10,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../modules/gamification/gamification.service';
+import { FgaService } from '../fga/fga.service';
+import { ORG_ID, ORG_OBJECT_TYPE } from '../common/org.constant';
 import type { AuthUser } from '../authz/auth-user.types';
 import { CurrentUser } from './current-user.decorator';
 import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
@@ -27,6 +30,8 @@ interface MeResponse {
   status: string;
   /** Módulos del sidebar visibles para este usuario (derivados de su cliente). */
   modules: string[];
+  /** true si el usuario tiene `can_manage_roles` sobre `organization:gmt` (§8, Fase 4 RBAC). */
+  canManageRoles: boolean;
 }
 
 /** Todos los módulos del sidebar. */
@@ -63,9 +68,12 @@ interface FirstLoginCompleteResponse {
  */
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly gamification: GamificationService,
+    private readonly fga: FgaService,
   ) {}
 
   /** Login propio: valida email+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
@@ -111,7 +119,31 @@ export class AuthController {
       lastName: user.lastName,
       status: user.status,
       modules: await this.resolveModules(user.id),
+      canManageRoles: await this.resolveCanManageRoles(authUser.id),
     };
+  }
+
+  /**
+   * ¿Tiene el usuario `can_manage_roles` sobre `organization:gmt`? (§8, Fase 4 RBAC).
+   * Fail-closed: si OpenFGA no responde (caído / sin bootstrap), devuelve `false`
+   * en vez de romper el /me con 500 — este endpoint se consulta en cada carga
+   * de la web y no puede depender de la disponibilidad de FGA.
+   */
+  private async resolveCanManageRoles(userId: string): Promise<boolean> {
+    try {
+      return await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_manage_roles',
+        object: `${ORG_OBJECT_TYPE}:${ORG_ID}`,
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `FGA no disponible al resolver can_manage_roles en /auth/me (fail-closed → false): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return false;
+    }
   }
 
   /**

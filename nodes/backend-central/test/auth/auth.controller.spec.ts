@@ -8,6 +8,7 @@ import { CompleteFirstLoginDto } from '../../src/auth/dto/complete-first-login.d
 import { verifyPassword } from '../../src/common/password';
 import '../../src/auth/auth-request.types';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
+import type { FgaService } from '../../src/fga/fga.service';
 
 interface UserRow {
   id: string;
@@ -22,14 +23,17 @@ interface Mocks {
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   awardPoints: ReturnType<typeof vi.fn>;
+  fgaCheck: ReturnType<typeof vi.fn>;
 }
 
 function buildController(options: {
   user?: UserRow | { status: string } | null;
+  canManageRoles?: boolean;
 }): Mocks {
   const findUnique = vi.fn(() => Promise.resolve(options.user ?? null));
   const update = vi.fn(() => Promise.resolve({}));
   const awardPoints = vi.fn(() => Promise.resolve());
+  const fgaCheck = vi.fn(() => Promise.resolve(options.canManageRoles ?? false));
 
   const prisma = {
     user: { findUnique, update },
@@ -37,8 +41,15 @@ function buildController(options: {
     project: { findMany: vi.fn(() => Promise.resolve([])) },
   } as unknown as PrismaService;
   const gamification = { awardPoints } as unknown as GamificationService;
+  const fga = { check: fgaCheck } as unknown as FgaService;
 
-  return { controller: new AuthController(prisma, gamification), findUnique, update, awardPoints };
+  return {
+    controller: new AuthController(prisma, gamification, fga),
+    findUnique,
+    update,
+    awardPoints,
+    fgaCheck,
+  };
 }
 
 function dto(newPassword: string): CompleteFirstLoginDto {
@@ -64,6 +75,7 @@ describe('AuthController · GET /auth/me', () => {
         lastName: 'Prueba',
         status: 'ACTIVE',
       },
+      canManageRoles: false,
     });
 
     const result = await controller.me(ACTIVE_USER);
@@ -80,7 +92,51 @@ describe('AuthController · GET /auth/me', () => {
       status: 'ACTIVE',
       // sin memberships → todos los módulos (no se restringe el acceso)
       modules: ['dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'recursos', 'herramientas', 'v-metric'],
+      canManageRoles: false,
     });
+  });
+
+  it('incluye canManageRoles=true consultando FGA (can_manage_roles sobre organization:gmt)', async () => {
+    const { controller, fgaCheck } = buildController({
+      user: {
+        id: 'u1',
+        email: 'admin@gmt.cl',
+        firstName: 'Admin',
+        lastName: 'GMT',
+        status: 'ACTIVE',
+      },
+      canManageRoles: true,
+    });
+
+    const result = await controller.me(ACTIVE_USER);
+
+    expect(fgaCheck).toHaveBeenCalledWith({
+      user: 'user:u1',
+      relation: 'can_manage_roles',
+      object: 'organization:gmt',
+    });
+    expect(result.canManageRoles).toBe(true);
+  });
+
+  it('fail-closed: si FGA falla, canManageRoles=false y el /me no rompe (500)', async () => {
+    const { controller, fgaCheck } = buildController({
+      user: {
+        id: 'u1',
+        email: 'admin@gmt.cl',
+        firstName: 'Admin',
+        lastName: 'GMT',
+        status: 'ACTIVE',
+      },
+      canManageRoles: true,
+    });
+    fgaCheck.mockImplementationOnce(() =>
+      Promise.reject(new Error('OpenFGA no inicializado: FGA_STORE_ID vacío.')),
+    );
+
+    const result = await controller.me(ACTIVE_USER);
+
+    expect(result.canManageRoles).toBe(false);
+    expect(result.status).toBe('ACTIVE');
   });
 });
 
