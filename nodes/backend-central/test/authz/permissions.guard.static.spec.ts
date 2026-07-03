@@ -97,3 +97,43 @@ describe('PermissionsGuard — recurso de id estático (org-scope §1.1)', () =>
     expect(check).not.toHaveBeenCalled();
   });
 });
+
+describe('PermissionsGuard — can_manage_roles sobre organization:gmt (Fase 4 RBAC matriz)', () => {
+  class RolesFixtureController {
+    @RequirePermission('can_manage_roles', { type: 'organization', id: ORG_ID })
+    manageRoles(): string {
+      return 'ok';
+    }
+  }
+
+  function createRolesContext(request: RequestLike): ExecutionContext {
+    const partialContext = {
+      getHandler: (): HandlerRef => RolesFixtureController.prototype.manageRoles,
+      getClass: (): typeof RolesFixtureController => RolesFixtureController,
+      switchToHttp: (): { getRequest: () => RequestLike } => ({
+        getRequest: (): RequestLike => request,
+      }),
+    };
+    return partialContext as unknown as ExecutionContext;
+  }
+
+  it('200: admin con can_manage_roles=true accede', async () => {
+    const { guard, check } = createGuard(true);
+    const context = createRolesContext({ authUser: { id: 'admin1' }, params: {} });
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(check).toHaveBeenCalledWith({
+      user: 'user:admin1',
+      relation: 'can_manage_roles',
+      object: `organization:${ORG_ID}`,
+    });
+  });
+
+  it('403: usuario sin can_manage_roles es rechazado', async () => {
+    const { guard, check } = createGuard(false);
+    const context = createRolesContext({ authUser: { id: 'noadmin' }, params: {} });
+
+    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+});
