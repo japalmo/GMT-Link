@@ -133,7 +133,7 @@ describe('ProjectsService', () => {
 
       expect(mock.membership.findMany).not.toHaveBeenCalled();
       expect(mock.project.findMany).toHaveBeenCalledTimes(1);
-      expect((result[0].kpis as { current: number }).current).toBe(5);
+      expect((result[0]?.kpis as { current: number }).current).toBe(5);
     });
 
     it('no-admin filtra por membresías de proyecto y departamento', async () => {
@@ -180,8 +180,9 @@ describe('ProjectsService', () => {
         relation: 'can_view',
         object: 'project:p1',
       });
-      expect((result.kpis as { current: number; meta: number }).current).toBe(7);
-      expect((result.kpis as { meta: number }).meta).toBe(100);
+      const kpis = result.kpis as { current: number; meta: number };
+      expect(kpis.current).toBe(7);
+      expect(kpis.meta).toBe(100);
     });
   });
 
@@ -242,8 +243,9 @@ describe('ProjectsService', () => {
         where: { id: 'p1' },
         data: { kpis: { meta: 50 } },
       });
-      expect((result.kpis as { current: number; meta: number }).current).toBe(3);
-      expect((result.kpis as { meta: number }).meta).toBe(50);
+      const kpis = result.kpis as { current: number; meta: number };
+      expect(kpis.current).toBe(3);
+      expect(kpis.meta).toBe(50);
     });
   });
 

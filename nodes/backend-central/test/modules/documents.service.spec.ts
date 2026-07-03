@@ -144,20 +144,21 @@ describe('DocumentsService', () => {
   });
 
   it('listMine con expiring=true filtra por ventana de vencimiento (gte ahora, lte +30d)', async () => {
-    const findMany = vi.fn(() => Promise.resolve([]));
+    const findMany = vi.fn<
+      (args: {
+        where: { userId: string; expiresAt?: { gte: Date; lte: Date } };
+      }) => Promise<PersonalDocument[]>
+    >(() => Promise.resolve([]));
     const { prisma } = buildPrisma({ findMany });
     const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock);
 
     await service.listMine('u1', { expiring: true });
 
-    const where = findMany.mock.calls[0]?.[0]?.where as {
-      userId: string;
-      expiresAt?: { gte: Date; lte: Date };
-    };
-    expect(where.userId).toBe('u1');
-    expect(where.expiresAt?.gte).toBeInstanceOf(Date);
-    expect(where.expiresAt?.lte).toBeInstanceOf(Date);
-    expect(where.expiresAt!.lte.getTime()).toBeGreaterThan(where.expiresAt!.gte.getTime());
+    const where = findMany.mock.calls[0]?.[0]?.where;
+    expect(where?.userId).toBe('u1');
+    expect(where?.expiresAt?.gte).toBeInstanceOf(Date);
+    expect(where?.expiresAt?.lte).toBeInstanceOf(Date);
+    expect(where!.expiresAt!.lte.getTime()).toBeGreaterThan(where!.expiresAt!.gte.getTime());
   });
 
   it('approve fija APROBADO con el revisor', async () => {

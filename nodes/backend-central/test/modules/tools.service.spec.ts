@@ -2,11 +2,14 @@ import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { ToolsService } from '../../src/modules/tools/tools.service';
+import { ConvertDirection } from '../../src/modules/tools/dto/tools.dto';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { ConfigService } from '@nestjs/config';
 
+type MockFunction = ReturnType<typeof vi.fn>;
+
 describe('ToolsService - Coordinates & GIS', () => {
-  let prismaMock: Record<string, unknown>;
+  let prismaMock: { geminiUsage: { count: MockFunction; create: MockFunction } };
   let configMock: Record<string, unknown>;
   let service: ToolsService;
 
@@ -37,7 +40,7 @@ describe('ToolsService - Coordinates & GIS', () => {
       const easting = 346200;
       const northing = 6296700;
       const res = service.convertPoint({
-        direction: 'UTM_TO_LL' as const,
+        direction: ConvertDirection.UTM_TO_LL,
         easting,
         northing,
         zone: 19,
@@ -54,7 +57,7 @@ describe('ToolsService - Coordinates & GIS', () => {
       const latitude = -33.456;
       const longitude = -70.662;
       const res = service.convertPoint({
-        direction: 'LL_TO_UTM' as const,
+        direction: ConvertDirection.LL_TO_UTM,
         latitude,
         longitude,
       });

@@ -1,7 +1,15 @@
 import 'reflect-metadata';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { AssetStatus, AssetType, DocumentStatus, ScopeType } from '@prisma/client';
-import type { Asset, AssetDocument, AssetHistoryEntry, User } from '@prisma/client';
+import type {
+  Asset,
+  AssetAccessory,
+  AssetDocument,
+  AssetHistoryEntry,
+  ChecklistSubmission,
+  ChecklistTemplate,
+  User,
+} from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FgaService } from '../../src/fga/fga.service';
@@ -17,6 +25,7 @@ function buildUserRow(overrides: Partial<User> = {}): User {
     lastName: 'Pérez',
     secondLastName: null,
     email: 'juan@gmt.cl',
+    passwordHash: null,
     avatarUrl: null,
     status: 'ACTIVE',
     points: 10,
@@ -37,6 +46,7 @@ function buildAssetRow(overrides: Partial<Asset> = {}): Asset {
     name: 'Generador 5kW',
     description: 'Generador de respaldo',
     status: AssetStatus.DISPONIBLE,
+    createdById: null,
     projectId: null,
     assignedToId: null,
     inUseById: null,
@@ -57,6 +67,7 @@ function buildDocRow(overrides: Partial<AssetDocument> = {}): AssetDocument {
     type: 'CERT',
     fileUrl: 'http://localhost/cert.pdf',
     status: DocumentStatus.EN_REVISION,
+    expirationDate: null,
     previousFileUrl: null,
     reviewedById: null,
     reviewedAt: null,

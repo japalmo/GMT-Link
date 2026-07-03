@@ -150,7 +150,9 @@ describe('DashboardService.updateForUser', () => {
   });
 
   it('guarda (upsert) un layout válido y retorna el shape reconciliado', async () => {
-    const upsert = vi.fn(() => Promise.resolve(undefined));
+    const upsert = vi.fn<(args: { where: { userId: string } }) => Promise<undefined>>(() =>
+      Promise.resolve(undefined),
+    );
     const { prisma } = buildPrisma({ upsert });
     const { fga } = buildFga(true);
     const service = new DashboardService(prisma, fga);
@@ -161,8 +163,8 @@ describe('DashboardService.updateForUser', () => {
     const view = await service.updateForUser('u1', layout);
 
     expect(upsert).toHaveBeenCalledTimes(1);
-    const args = upsert.mock.calls[0]?.[0] as { where: { userId: string } };
-    expect(args.where).toEqual({ userId: 'u1' });
+    const args = upsert.mock.calls[0]?.[0];
+    expect(args?.where).toEqual({ userId: 'u1' });
     // El widget enviado conserva su visibilidad; el resto reaparece reconciliado.
     expect(view.layout.find((l) => l.widgetKey === firstPublic)?.visible).toBe(false);
     expect(view.layout.map((l) => l.widgetKey).sort()).toEqual(

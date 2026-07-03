@@ -6,9 +6,20 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { ConfigService } from '@nestjs/config';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 
+type MockFunction = ReturnType<typeof vi.fn>;
+
 describe('ProvidersService', () => {
-  let prismaMock: Record<string, unknown>;
-  let txMock: Record<string, unknown>;
+  let prismaMock: {
+    $transaction: MockFunction;
+    provider: { create: MockFunction; findUnique: MockFunction; findMany: MockFunction };
+    providerRating: { findMany: MockFunction };
+    providerProduct: { create: MockFunction; findMany: MockFunction };
+    geminiUsage: { count: MockFunction; create: MockFunction };
+  };
+  let txMock: {
+    providerRating: { create: MockFunction; findMany: MockFunction };
+    provider: { update: MockFunction };
+  };
   let configMock: Record<string, unknown>;
   let gamificationMock: Record<string, unknown>;
   let service: ProvidersService;

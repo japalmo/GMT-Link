@@ -98,7 +98,9 @@ describe('NotificationsService', () => {
 
   it('create respeta notifyInApp=false del destinatario: NO inserta y retorna null', async () => {
     const create = vi.fn();
-    const prefsFindUnique = vi.fn(() => Promise.resolve({ notifyInApp: false }));
+    const prefsFindUnique = vi.fn<
+      (args: { where: { userId: string } }) => Promise<{ notifyInApp: boolean } | null>
+    >(() => Promise.resolve({ notifyInApp: false }));
     ({ prisma: prismaBits.prisma } = buildPrisma({ create, prefsFindUnique }));
     service = new NotificationsService(prismaBits.prisma);
 
@@ -124,33 +126,42 @@ describe('NotificationsService', () => {
   });
 
   it('listMine (todas) filtra por userId y ordena createdAt desc', async () => {
-    const findMany = vi.fn(() => Promise.resolve([buildRow()]));
+    const findMany = vi.fn<
+      (args: {
+        where: { userId: string; readAt?: null };
+        orderBy: { createdAt: string };
+      }) => Promise<Notification[]>
+    >(() => Promise.resolve([buildRow()]));
     ({ prisma: prismaBits.prisma } = buildPrisma({ findMany }));
     service = new NotificationsService(prismaBits.prisma);
 
     await service.listMine('u1', false);
 
-    const args = findMany.mock.calls[0]?.[0] as {
-      where: { userId: string; readAt?: null };
-      orderBy: { createdAt: string };
-    };
-    expect(args.where).toEqual({ userId: 'u1' });
-    expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    const args = findMany.mock.calls[0]?.[0];
+    expect(args?.where).toEqual({ userId: 'u1' });
+    expect(args?.orderBy).toEqual({ createdAt: 'desc' });
   });
 
   it('listMine con unreadOnly filtra readAt null', async () => {
-    const findMany = vi.fn(() => Promise.resolve([]));
+    const findMany = vi.fn<
+      (args: {
+        where: { userId: string; readAt?: null };
+        orderBy: { createdAt: string };
+      }) => Promise<Notification[]>
+    >(() => Promise.resolve([]));
     ({ prisma: prismaBits.prisma } = buildPrisma({ findMany }));
     service = new NotificationsService(prismaBits.prisma);
 
     await service.listMine('u1', true);
 
-    const where = findMany.mock.calls[0]?.[0]?.where as { userId: string; readAt: null };
+    const where = findMany.mock.calls[0]?.[0]?.where;
     expect(where).toEqual({ userId: 'u1', readAt: null });
   });
 
   it('unreadCount cuenta solo no leídas del usuario', async () => {
-    const count = vi.fn(() => Promise.resolve(3));
+    const count = vi.fn<
+      (args: { where: { userId: string; readAt: null } }) => Promise<number>
+    >(() => Promise.resolve(3));
     ({ prisma: prismaBits.prisma } = buildPrisma({ count }));
     service = new NotificationsService(prismaBits.prisma);
 
@@ -161,7 +172,9 @@ describe('NotificationsService', () => {
   });
 
   it('markRead marca la propia no leída con readAt', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ readAt: null })));
+    const findFirst = vi.fn<
+      (args: { where: { id: string; userId: string } }) => Promise<Notification | null>
+    >(() => Promise.resolve(buildRow({ readAt: null })));
     const update = vi.fn((args: { data: { readAt: Date } }) =>
       Promise.resolve(buildRow({ readAt: args.data.readAt })),
     );
@@ -199,18 +212,20 @@ describe('NotificationsService', () => {
   });
 
   it('markAllRead actualiza solo las no leídas del usuario y retorna updated', async () => {
-    const updateMany = vi.fn(() => Promise.resolve({ count: 5 }));
+    const updateMany = vi.fn<
+      (args: {
+        where: { userId: string; readAt: null };
+        data: { readAt: Date };
+      }) => Promise<{ count: number }>
+    >(() => Promise.resolve({ count: 5 }));
     ({ prisma: prismaBits.prisma } = buildPrisma({ updateMany }));
     service = new NotificationsService(prismaBits.prisma);
 
     const result = await service.markAllRead('u1');
 
     expect(result).toEqual({ updated: 5 });
-    const args = updateMany.mock.calls[0]?.[0] as {
-      where: { userId: string; readAt: null };
-      data: { readAt: Date };
-    };
-    expect(args.where).toEqual({ userId: 'u1', readAt: null });
-    expect(args.data.readAt).toBeInstanceOf(Date);
+    const args = updateMany.mock.calls[0]?.[0];
+    expect(args?.where).toEqual({ userId: 'u1', readAt: null });
+    expect(args?.data.readAt).toBeInstanceOf(Date);
   });
 });
