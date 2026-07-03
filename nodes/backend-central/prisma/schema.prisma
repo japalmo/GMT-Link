@@ -126,6 +126,7 @@ model Role {
   isSystem    Boolean          @default(false) // rol sembrado (estructural/SuperAdmin): no editable/borrable por admin
   createdById String?                           // quién lo creó (null = semilla del sistema)
   permissions RolePermission[]
+  memberships Membership[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt @default(now())
 }
@@ -156,6 +157,10 @@ model Membership {
   userId    String
   user      User      @relation(fields: [userId], references: [id])
   roleKey   String
+  // FK a Role.key (unique) con Restrict: cierra la carrera count→delete de
+  // RolesService.deleteRole (review Task 2.10) — borrar un Role con
+  // memberships revienta con P2003 en vez de dejar roleKeys colgados.
+  role      Role      @relation(fields: [roleKey], references: [key], onDelete: Restrict)
   scopeType ScopeType
   scopeId   String
   createdAt DateTime  @default(now())

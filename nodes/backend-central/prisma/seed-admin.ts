@@ -9,7 +9,9 @@
  * Esto permite ejercer 1.1 (el admin puede llamar a /users).
  *
  * Ejecutar con: pnpm --filter @gmt-platform/backend-central seed:admin
- * Requiere: Postgres arriba, OpenFGA bootstrapeado (FGA_STORE_ID en .env).
+ * Requiere: Postgres arriba, OpenFGA bootstrapeado (FGA_STORE_ID en .env) y el
+ * catálogo sembrado ANTES (`pnpm db:seed`): la FK Membership.roleKey → Role.key
+ * exige que el rol `org_admin` exista al crear la Membership.
  */
 import path from 'node:path';
 import { config } from 'dotenv';
