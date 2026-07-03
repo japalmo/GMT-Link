@@ -260,15 +260,23 @@ export class UsersService {
 
   /**
    * Asigna un rol (sistema o custom) a un usuario en un scope arbitrario
-   * (ORGANIZATION|PROJECT). Valida scopeType contra `allowedScopeTypes` del
-   * rol y, si es PROJECT, que `scopeId` exista. Crea la Membership y
-   * sincroniza FGA por el camino correcto según `Role.isSystem`. Si el sync
-   * FGA falla, borra la Membership creada y responde 502 (enmienda A11).
+   * (ORGANIZATION|PROJECT). El gate `allowedScopeTypes` aplica SOLO a roles
+   * CUSTOM: los roles del SISTEMA conservan la semántica §9-1.1 — asignados
+   * org-scope son "rol por defecto" (Membership sin tupla funcional; solo
+   * org_admin escribe la tupla de acceso admin) y en PROJECT usan el mapeo
+   * fijo legacy. (Validar los del sistema contra `allowedScopeTypes`, que para
+   * 7/8 roles del seed es ['PROJECT'], rompería la asignación org retro-compat
+   * y el approve() de permission-requests.) Si es PROJECT, valida que `scopeId`
+   * exista. Crea la Membership y sincroniza FGA por el camino correcto según
+   * `Role.isSystem`. Si el sync FGA falla, borra la Membership creada y
+   * responde 502 (enmienda A11) — en ambos caminos.
    */
   async assignRoleScoped(userId: string, input: AssignRoleInput): Promise<UserRolesResponse> {
     await this.assertUserExists(userId);
     const role = await this.roles.getRole(input.roleKey);
-    this.assertScopeAllowed(role, input.scopeType);
+    if (!role.isSystem) {
+      this.assertScopeAllowed(role, input.scopeType);
+    }
     if (input.scopeType === 'PROJECT') {
       await this.assertProjectExists(input.scopeId);
     }
@@ -329,7 +337,13 @@ export class UsersService {
     return this.currentRoles(userId);
   }
 
-  /** Quita un rol (sistema o custom) de un usuario en un scope arbitrario. 404 si no existe la Membership. */
+  /**
+   * Quita un rol (sistema o custom) de un usuario en un scope arbitrario.
+   * 404 si no existe la Membership. Simétrico a `assignRoleScoped` (§9-1.1):
+   * un rol del sistema org-scope solo toca FGA si es org_admin (borra la tupla
+   * de acceso admin); en PROJECT usa el sync legacy; custom usa
+   * `syncRoleAssignment` con op 'delete'.
+   */
   async removeRoleScoped(userId: string, input: AssignRoleInput): Promise<UserRolesResponse> {
     await this.assertUserExists(userId);
     const role = await this.roles.getRole(input.roleKey);
@@ -390,11 +404,17 @@ export class UsersService {
   }
 
   /**
-   * Roles isSystem usan el camino legacy (Membership→relación fija); custom usan
-   * syncRoleAssignment. El camino custom solo admite scopes ORGANIZATION|PROJECT
-   * (los únicos niveles FGA de la matriz RBAC); un scopeType fuera de ese rango
-   * ya fue rechazado por `assertScopeAllowed`, pero se re-verifica aquí para
-   * estrechar el tipo antes de `syncRoleAssignment`.
+   * Sincronización FGA de una asignación por scope, según la clase de rol:
+   *  - SISTEMA + ORGANIZATION → semántica §9-1.1 ("rol por defecto"): NO se
+   *    materializa tupla funcional; solo `org_admin` escribe/borra la tupla de
+   *    acceso `organization#admin`. El acceso `member` no se toca (existe desde
+   *    la provisión; el write de FGA no es idempotente).
+   *  - SISTEMA + otro scope (PROJECT) → camino legacy Membership→relación fija
+   *    (`syncMembershipToFGA`; una combinación no mapeada en
+   *    `MEMBERSHIP_RELATION_MAP` lanza — correcto, no se escribe tupla ambigua).
+   *  - CUSTOM → `syncRoleAssignment` (unión multi-rol A5). Solo admite
+   *    ORGANIZATION|PROJECT (los niveles FGA de la matriz); `assertScopeAllowed`
+   *    ya lo garantizó, se re-verifica aquí para estrechar el tipo.
    */
   private async syncScopedAssignment(
     isSystem: boolean,
@@ -402,6 +422,17 @@ export class UsersService {
     op: 'create' | 'delete',
   ): Promise<void> {
     if (isSystem) {
+      if (input.scopeType === 'ORGANIZATION') {
+        if (input.roleKey === ORG_ADMIN_ROLE) {
+          const tuple = this.orgAccessTuple(input.userId, 'admin');
+          if (op === 'create') {
+            await this.fga.writeTuples([tuple]);
+          } else {
+            await this.fga.deleteTuples([tuple]);
+          }
+        }
+        return;
+      }
       await this.fga.syncMembershipToFGA(input, op);
       return;
     }

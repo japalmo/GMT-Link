@@ -223,6 +223,32 @@ describe('PermissionRequestsService.approve', () => {
     expect(view.status).toBe('APROBADA');
   });
 
+  it('aprueba una solicitud de rol del SISTEMA (operator) org-scope: assignRoleScoped se llama con ORGANIZATION y resuelve (§9-1.1, gate de scope solo-custom)', async () => {
+    const pending = buildRow({ id: 'req-sys', userId: 'u2', roleKey: 'operator' });
+    const findUnique = vi.fn(() => Promise.resolve(pending));
+    const update = vi.fn((args: { data: Partial<PermissionRequest> }) =>
+      Promise.resolve(buildRow({ ...pending, ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findUnique, update });
+    const usersBits = buildUsers();
+    const notifBits = buildNotifications();
+    const service = new PermissionRequestsService(prisma, usersBits.users, notifBits.notifications);
+
+    const view = await service.approve('admin-1', 'req-sys');
+
+    // Pin de regresión: con el gate de allowedScopeTypes SOLO para roles custom,
+    // un rol del SISTEMA solicitado org-scope NO revienta con
+    // INVALID_SCOPE_FOR_ROLE (aunque su allowedScopeTypes real sea ['PROJECT']):
+    // assignRoleScoped se invoca con ORGANIZATION/ORG_ID y la aprobación procede.
+    expect(usersBits.assignRoleScoped).toHaveBeenCalledWith('u2', {
+      roleKey: 'operator',
+      scopeType: 'ORGANIZATION',
+      scopeId: ORG_ID,
+    });
+    expect(view.status).toBe('APROBADA');
+    expect(notifBits.create).toHaveBeenCalledTimes(1);
+  });
+
   it('si assignRoleScoped lanza 409 (ya tiene el rol) IGUAL marca APROBADA y notifica', async () => {
     const pending = buildRow();
     const findUnique = vi.fn(() => Promise.resolve(pending));

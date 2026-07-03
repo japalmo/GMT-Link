@@ -35,7 +35,7 @@ type PermissionRequestWithRequester = Prisma.PermissionRequestGetPayload<{
  * (scopeType ORGANIZATION, scopeId ORG_ID) — no hay UI para elegir scope todavía.
  * El admin (autorizado por OpenFGA `can_manage_users` sobre `organization:gmt`,
  * gating en el controller) la aprueba o rechaza. Aprobar APLICA el permiso
- * reusando `UsersService.assignRole` (Membership + sync FGA verificado).
+ * reusando `UsersService.assignRoleScoped` (Membership + sync FGA verificado).
  *
  * Seguridad: el `userId` del solicitante SIEMPRE llega del controller (sesión).
  * Las acciones de admin (listar pendientes, aprobar, rechazar) las gatea el
@@ -112,15 +112,17 @@ export class PermissionRequestsService {
   /**
    * Aprueba una solicitud PENDIENTE: la marca APROBADA (+ decidedBy/At) y APLICA
    * el rol reusando `UsersService.assignRoleScoped` a nivel ORGANIZATION/ORG_ID
-   * (mismo camino que la asignación manual: valida `allowedScopeTypes` del rol
-   * y materializa las tuplas FGA de roles custom). Si el usuario YA tenía el
-   * rol, `assignRoleScoped` lanza 409: se captura como "ya asignado" (no es
-   * error — el objetivo es que el usuario tenga el rol) y la solicitud igual
-   * queda aprobada. Si el rol NO admite scope ORGANIZATION (p. ej. un rol
-   * custom project-level), el 400 INVALID_SCOPE_FOR_ROLE se propaga y la
-   * solicitud queda PENDIENTE — deliberado: ese rol se asigna por proyecto
-   * desde /usuarios, no por este flujo org-level. Notifica al solicitante.
-   * 404 si no existe; 409 si no está PENDIENTE.
+   * (mismo camino que la asignación manual). Si el usuario YA tenía el rol,
+   * `assignRoleScoped` lanza 409: se captura como "ya asignado" (no es error —
+   * el objetivo es que el usuario tenga el rol) y la solicitud igual queda
+   * aprobada. El gate de `allowedScopeTypes` aplica SOLO a roles CUSTOM
+   * (§9-1.1): un rol del SISTEMA solicitado org-scope siempre procede como
+   * "rol por defecto" (solo org_admin toca FGA); en cambio, si el rol es
+   * CUSTOM project-level (no admite scope ORGANIZATION), el 400
+   * INVALID_SCOPE_FOR_ROLE se propaga y la solicitud queda PENDIENTE —
+   * deliberado: ese rol se asigna por proyecto desde /usuarios, no por este
+   * flujo org-level. Notifica al solicitante. 404 si no existe; 409 si no
+   * está PENDIENTE.
    */
   async approve(adminId: string, id: string): Promise<PermissionRequestView> {
     const request = await this.findPending(id);

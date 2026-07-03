@@ -665,6 +665,160 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 });
 
+describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA org-scope (§9-1.1: gate de scope solo para custom)', () => {
+  /** Espías FGA extra (syncMembershipToFGA/syncRoleAssignment) sobre el mock base. */
+  function withScopedFgaSpies(fga: ReturnType<typeof buildFgaMock>): {
+    syncMembershipToFGA: ReturnType<typeof vi.fn>;
+    syncRoleAssignment: ReturnType<typeof vi.fn>;
+  } {
+    const syncMembershipToFGA = vi.fn(() => Promise.resolve(undefined));
+    const syncRoleAssignment = vi.fn(() => Promise.resolve(undefined));
+    (fga.fga as unknown as { syncMembershipToFGA: typeof syncMembershipToFGA }).syncMembershipToFGA =
+      syncMembershipToFGA;
+    (fga.fga as unknown as { syncRoleAssignment: typeof syncRoleAssignment }).syncRoleAssignment =
+      syncRoleAssignment;
+    return { syncMembershipToFGA, syncRoleAssignment };
+  }
+
+  const freshState = (): PrismaState => ({
+    rolesInCatalog: new Set(['operator']),
+    emailExists: false,
+    failPersist: false,
+  });
+
+  it('rol del SISTEMA (viewer) en ORGANIZATION: crea la Membership como "rol por defecto" y NO toca FGA aunque allowedScopeTypes sea [PROJECT]', async () => {
+    const { prisma } = buildPrismaMock(freshState());
+    const membershipCreate = vi.fn(() => Promise.resolve({ id: 'm1' }));
+    (prisma as unknown as { membership: Record<string, unknown> }).membership = {
+      findUnique: vi.fn(() => Promise.resolve(null)),
+      create: membershipCreate,
+      findMany: vi.fn(() =>
+        Promise.resolve([{ roleKey: 'viewer', scopeType: 'ORGANIZATION', scopeId: 'gmt' }]),
+      ),
+    };
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
+      Promise.resolve({ id: 'u1' }),
+    );
+    const fga = buildFgaMock();
+    const spies = withScopedFgaSpies(fga);
+    // allowedScopeTypes ['PROJECT'] como el viewer REAL del seed (grants
+    // project-level): el gate de allowedScopeTypes NO aplica a roles del sistema.
+    const roles = buildRolesMock({ isSystem: true, roleKey: 'viewer', allowedScopeTypes: ['PROJECT'] });
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles);
+
+    const result = await service.assignRoleScoped('u1', {
+      roleKey: 'viewer',
+      scopeType: 'ORGANIZATION',
+      scopeId: 'gmt',
+    });
+
+    expect(membershipCreate).toHaveBeenCalledWith({
+      data: { userId: 'u1', roleKey: 'viewer', scopeType: 'ORGANIZATION', scopeId: 'gmt' },
+    });
+    // §9-1.1: "rol por defecto" → CERO FGA (ni acceso, ni sync legacy, ni unión custom).
+    expect(fga.writeTuples).not.toHaveBeenCalled();
+    expect(fga.deleteTuples).not.toHaveBeenCalled();
+    expect(spies.syncMembershipToFGA).not.toHaveBeenCalled();
+    expect(spies.syncRoleAssignment).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      id: 'u1',
+      roleKeys: ['viewer'],
+      memberships: [{ roleKey: 'viewer', scopeType: 'ORGANIZATION', scopeId: 'gmt' }],
+    });
+  });
+
+  it('org_admin en ORGANIZATION escribe la tupla de acceso admin (organization:gmt), sin sync de membership', async () => {
+    const { prisma } = buildPrismaMock(freshState());
+    (prisma as unknown as { membership: Record<string, unknown> }).membership = {
+      findUnique: vi.fn(() => Promise.resolve(null)),
+      create: vi.fn(() => Promise.resolve({ id: 'm1' })),
+      findMany: vi.fn(() =>
+        Promise.resolve([{ roleKey: 'org_admin', scopeType: 'ORGANIZATION', scopeId: 'gmt' }]),
+      ),
+    };
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
+      Promise.resolve({ id: 'u1' }),
+    );
+    const fga = buildFgaMock();
+    const spies = withScopedFgaSpies(fga);
+    const roles = buildRolesMock({ isSystem: true, roleKey: 'org_admin', allowedScopeTypes: ['PROJECT'] });
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles);
+
+    await service.assignRoleScoped('u1', {
+      roleKey: 'org_admin',
+      scopeType: 'ORGANIZATION',
+      scopeId: 'gmt',
+    });
+
+    expect(fga.writeTuples).toHaveBeenCalledTimes(1);
+    expect(fga.writeTuples).toHaveBeenCalledWith([
+      { user: 'user:u1', relation: 'admin', object: 'organization:gmt' },
+    ]);
+    expect(spies.syncMembershipToFGA).not.toHaveBeenCalled();
+    expect(spies.syncRoleAssignment).not.toHaveBeenCalled();
+  });
+
+  it('removeRoleScoped de rol del SISTEMA (viewer) en ORGANIZATION: borra la Membership sin tocar FGA (§9-1.1)', async () => {
+    const { prisma } = buildPrismaMock(freshState());
+    const membershipDelete = vi.fn(() => Promise.resolve(undefined));
+    (prisma as unknown as { membership: Record<string, unknown> }).membership = {
+      findUnique: vi.fn(() => Promise.resolve({ id: 'm1' })),
+      delete: membershipDelete,
+      findMany: vi.fn(() => Promise.resolve([])),
+    };
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
+      Promise.resolve({ id: 'u1' }),
+    );
+    const fga = buildFgaMock();
+    const spies = withScopedFgaSpies(fga);
+    const roles = buildRolesMock({ isSystem: true, roleKey: 'viewer', allowedScopeTypes: ['PROJECT'] });
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles);
+
+    const result = await service.removeRoleScoped('u1', {
+      roleKey: 'viewer',
+      scopeType: 'ORGANIZATION',
+      scopeId: 'gmt',
+    });
+
+    expect(membershipDelete).toHaveBeenCalledWith({ where: { id: 'm1' } });
+    expect(fga.writeTuples).not.toHaveBeenCalled();
+    expect(fga.deleteTuples).not.toHaveBeenCalled();
+    expect(spies.syncMembershipToFGA).not.toHaveBeenCalled();
+    expect(spies.syncRoleAssignment).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'u1', roleKeys: [], memberships: [] });
+  });
+
+  it('removeRoleScoped de org_admin en ORGANIZATION borra la tupla de acceso admin, sin sync de membership', async () => {
+    const { prisma } = buildPrismaMock(freshState());
+    (prisma as unknown as { membership: Record<string, unknown> }).membership = {
+      findUnique: vi.fn(() => Promise.resolve({ id: 'm1' })),
+      delete: vi.fn(() => Promise.resolve(undefined)),
+      findMany: vi.fn(() => Promise.resolve([])),
+    };
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
+      Promise.resolve({ id: 'u1' }),
+    );
+    const fga = buildFgaMock();
+    const spies = withScopedFgaSpies(fga);
+    const roles = buildRolesMock({ isSystem: true, roleKey: 'org_admin', allowedScopeTypes: ['PROJECT'] });
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles);
+
+    await service.removeRoleScoped('u1', {
+      roleKey: 'org_admin',
+      scopeType: 'ORGANIZATION',
+      scopeId: 'gmt',
+    });
+
+    expect(fga.deleteTuples).toHaveBeenCalledTimes(1);
+    expect(fga.deleteTuples).toHaveBeenCalledWith([
+      { user: 'user:u1', relation: 'admin', object: 'organization:gmt' },
+    ]);
+    expect(fga.writeTuples).not.toHaveBeenCalled();
+    expect(spies.syncMembershipToFGA).not.toHaveBeenCalled();
+    expect(spies.syncRoleAssignment).not.toHaveBeenCalled();
+  });
+});
+
 describe('UsersService — memberships en UserListItem (H13)', () => {
   it('getById expone memberships (roleKey, scopeType, scopeId) para la UI', async () => {
     const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
