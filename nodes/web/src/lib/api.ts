@@ -179,8 +179,11 @@ async function uploadRequest<T>(
 }
 
 /** `GET /auth/me` — usuario autenticado (Postgres). 401 si no hay sesión. */
-export function getMe(): Promise<AuthedUser> {
-  return request<AuthedUser>('/auth/me');
+export async function getMe(): Promise<AuthedUser> {
+  const me = await request<AuthedUser>('/auth/me');
+  // Defensa: un backend previo a la Fase 4 (RBAC) podría no enviar el campo.
+  // Normalizamos a `false` (fail-closed) para que el tipo `boolean` no mienta.
+  return { ...me, canManageRoles: me.canManageRoles ?? false };
 }
 
 /** `POST /auth/login` — valida credenciales y devuelve nuestro JWT. */
