@@ -232,6 +232,12 @@ export class RolesService {
    * al menos una `Membership` con ese `roleKey` (cualquier scope): borrarlo
    * dejaría usuarios con un rol fantasma. El admin debe reasignar/quitar el
    * rol de esos usuarios antes de poder eliminarlo.
+   *
+   * Dos capas (review Task 2.10): el count previo da el mensaje con la
+   * cantidad, pero es TOCTOU — entre count y delete otro request puede asignar
+   * el rol, y `$transaction` en READ COMMITTED no lo serializa. El cierre real
+   * es la FK `Membership.roleKey → Role.key (onDelete: Restrict)`: si la
+   * carrera ocurre, el delete revienta con P2003 y se mapea al mismo 409.
    */
   async deleteRole(key: string): Promise<void> {
     const role = await this.findRoleOrThrow(key);
@@ -247,7 +253,27 @@ export class RolesService {
       });
     }
 
-    await this.prisma.role.delete({ where: { id: role.id } });
+    try {
+      await this.prisma.role.delete({ where: { id: role.id } });
+    } catch (error: unknown) {
+      if (this.isForeignKeyViolation(error)) {
+        throw new ConflictException({
+          code: 'ROLE_IN_USE',
+          message: `El rol "${key}" está asignado a al menos un usuario y no se puede eliminar.`,
+        });
+      }
+      throw error;
+    }
+  }
+
+  /** ¿El error es una violación de foreign key de Prisma (P2003)? */
+  private isForeignKeyViolation(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2003'
+    );
   }
 
   /**

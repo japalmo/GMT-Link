@@ -565,6 +565,38 @@ describe('RolesService.deleteRole', () => {
 
     expect(prisma.role.delete).toHaveBeenCalledWith({ where: { id: 'role_2' } });
   });
+
+  it('mapea P2003 de role.delete (carrera count→delete: la FK Membership.roleKey lo frena) a 409 ROLE_IN_USE', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    // Simula la carrera TOCTOU: el count no vio memberships…
+    prisma.membership.count.mockResolvedValue(0);
+    // …pero entre count y delete otro request asignó el rol → la FK
+    // Membership.roleKey → Role.key (onDelete: Restrict) revienta con P2003.
+    prisma.role.delete.mockRejectedValue(
+      Object.assign(new Error('Foreign key constraint violated on the constraint: `Membership_roleKey_fkey`'), {
+        code: 'P2003',
+        meta: { constraint: 'Membership_roleKey_fkey' },
+      }),
+    );
+
+    await expect(service.deleteRole('c_demo')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'ROLE_IN_USE' },
+    });
+  });
+
+  it('un error de BD distinto de P2003 en role.delete se propaga tal cual (no se disfraza de 409)', async () => {
+    prisma.role.findUnique.mockResolvedValue({
+      id: 'role_2', key: 'c_demo', label: 'Demo', description: null, isSystem: false,
+    });
+    prisma.membership.count.mockResolvedValue(0);
+    const dbError = new Error('db down');
+    prisma.role.delete.mockRejectedValue(dbError);
+
+    await expect(service.deleteRole('c_demo')).rejects.toBe(dbError);
+  });
 });
 
 describe('RolesService.allowedScopeTypes', () => {
