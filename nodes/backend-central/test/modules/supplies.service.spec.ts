@@ -5,10 +5,23 @@ import { SuppliesService } from '../../src/modules/supplies/supplies.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 
+type MockFunction = ReturnType<typeof vi.fn>;
 
 describe('SuppliesService', () => {
-  let prismaMock: Record<string, unknown>;
-  let txMock: Record<string, unknown>;
+  let prismaMock: {
+    $transaction: MockFunction;
+    warehouse: { create: MockFunction; findUnique: MockFunction; findMany: MockFunction };
+    supply: { create: MockFunction; findUnique: MockFunction; findMany: MockFunction };
+    warehouseStock: { findMany: MockFunction };
+    warehouseTransaction: { findMany: MockFunction };
+    provider: { findUnique: MockFunction };
+  };
+  let txMock: {
+    supply: { upsert: MockFunction };
+    warehouse: { findUnique: MockFunction };
+    warehouseStock: { findUnique: MockFunction; upsert: MockFunction; update: MockFunction };
+    warehouseTransaction: { create: MockFunction };
+  };
   let service: SuppliesService;
 
   beforeEach(() => {

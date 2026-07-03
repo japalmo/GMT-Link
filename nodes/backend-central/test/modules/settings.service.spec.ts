@@ -22,6 +22,13 @@ interface PrismaParts {
   upsert: ReturnType<typeof vi.fn>;
 }
 
+/** Firma con la que el servicio invoca `userPreferences.upsert`. */
+type UpsertArgs = {
+  where: { userId: string };
+  create: Record<string, unknown>;
+  update: Record<string, unknown>;
+};
+
 function buildPrisma(
   parts: Partial<PrismaParts> = {},
 ): { prisma: PrismaService; parts: PrismaParts } {
@@ -73,26 +80,24 @@ describe('SettingsService.getMine', () => {
 
 describe('SettingsService.updateMine', () => {
   it('hace upsert SOLO del propio usuario y aplica únicamente los campos enviados', async () => {
-    const upsert = vi.fn(() => Promise.resolve(buildRow({ theme: 'light' })));
+    const upsert = vi.fn<(args: UpsertArgs) => Promise<UserPreferences>>(() =>
+      Promise.resolve(buildRow({ theme: 'light' })),
+    );
     const service = new SettingsService(buildPrisma({ upsert }).prisma);
 
     const view = await service.updateMine('u1', { theme: 'light' });
 
     expect(upsert).toHaveBeenCalledTimes(1);
-    const args = upsert.mock.calls[0]?.[0] as {
-      where: { userId: string };
-      create: Record<string, unknown>;
-      update: Record<string, unknown>;
-    };
-    expect(args.where).toEqual({ userId: 'u1' });
+    const args = upsert.mock.calls[0]?.[0];
+    expect(args?.where).toEqual({ userId: 'u1' });
     // Patch parcial: solo theme presente, sin notifyInApp/notifyEmail.
-    expect(args.update).toEqual({ theme: 'light' });
-    expect(args.create).toEqual({ userId: 'u1', theme: 'light' });
+    expect(args?.update).toEqual({ theme: 'light' });
+    expect(args?.create).toEqual({ userId: 'u1', theme: 'light' });
     expect(view.theme).toBe('light');
   });
 
   it('aplica varios campos a la vez (theme + canales)', async () => {
-    const upsert = vi.fn(() =>
+    const upsert = vi.fn<(args: UpsertArgs) => Promise<UserPreferences>>(() =>
       Promise.resolve(buildRow({ theme: 'dark', notifyInApp: false, notifyEmail: true })),
     );
     const service = new SettingsService(buildPrisma({ upsert }).prisma);
@@ -103,19 +108,21 @@ describe('SettingsService.updateMine', () => {
       notifyEmail: true,
     });
 
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    expect(args.update).toEqual({ theme: 'dark', notifyInApp: false, notifyEmail: true });
+    const args = upsert.mock.calls[0]?.[0];
+    expect(args?.update).toEqual({ theme: 'dark', notifyInApp: false, notifyEmail: true });
     expect(view).toEqual({ theme: 'dark', notifyInApp: false, notifyEmail: true });
   });
 
   it('un PATCH con notifyInApp=false no toca theme (no lo fuerza a default)', async () => {
-    const upsert = vi.fn(() => Promise.resolve(buildRow({ notifyInApp: false })));
+    const upsert = vi.fn<(args: UpsertArgs) => Promise<UserPreferences>>(() =>
+      Promise.resolve(buildRow({ notifyInApp: false })),
+    );
     const service = new SettingsService(buildPrisma({ upsert }).prisma);
 
     await service.updateMine('u1', { notifyInApp: false });
 
-    const args = upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
-    expect(args.update).toEqual({ notifyInApp: false });
-    expect(args.update).not.toHaveProperty('theme');
+    const args = upsert.mock.calls[0]?.[0];
+    expect(args?.update).toEqual({ notifyInApp: false });
+    expect(args?.update).not.toHaveProperty('theme');
   });
 });

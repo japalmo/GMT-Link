@@ -18,7 +18,7 @@ describe('MetricsService', () => {
 
   beforeEach(() => {
     prismaMock = {
-      $transaction: vi.fn((ops: unknown[]) => {
+      $transaction: vi.fn((ops: unknown[] | ((tx: unknown) => unknown)) => {
         if (Array.isArray(ops)) {
           return Promise.all(ops);
         }

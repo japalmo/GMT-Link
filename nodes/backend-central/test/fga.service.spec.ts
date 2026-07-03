@@ -14,9 +14,10 @@ function buildPrismaStub(): PrismaService {
 }
 
 function buildClient() {
+  // Mocks tipados con el contrato real: `check` puede resolver sin `allowed`.
   const client = {
-    check: vi.fn(() => Promise.resolve({ allowed: true })),
-    write: vi.fn(() => Promise.resolve({})),
+    check: vi.fn<FgaClientLike['check']>(() => Promise.resolve({ allowed: true })),
+    write: vi.fn<FgaClientLike['write']>(() => Promise.resolve({})),
   };
   return {
     client,

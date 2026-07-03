@@ -1,0 +1,11 @@
+{
+  // Type-check de src + test (vitest transpila con esbuild sin chequear tipos).
+  // Solo chequeo: no emite JS ni .tsbuildinfo (incremental apagado para no
+  // escribir estado en dist/ ni saltarse chequeos con caché vieja).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["src", "test"]
+}

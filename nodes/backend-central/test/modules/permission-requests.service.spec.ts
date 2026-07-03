@@ -99,7 +99,9 @@ describe('PermissionRequestsService.create', () => {
   });
 
   it('rechaza con 409 si ya hay una PENDIENTE del mismo usuario+roleKey', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow()));
+    const findFirst = vi.fn<
+      (args: { where: Record<string, unknown> }) => Promise<PermissionRequest | null>
+    >(() => Promise.resolve(buildRow()));
     const { prisma, parts } = buildPrisma({ findFirst });
     const service = new PermissionRequestsService(
       prisma,
@@ -110,7 +112,7 @@ describe('PermissionRequestsService.create', () => {
     await expect(service.create('u1', { roleKey: 'operator' })).rejects.toBeInstanceOf(
       ConflictException,
     );
-    const where = findFirst.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    const where = findFirst.mock.calls[0]?.[0]?.where;
     expect(where).toEqual({ userId: 'u1', roleKey: 'operator', status: 'PENDIENTE' });
     expect(parts.create).not.toHaveBeenCalled();
   });
@@ -249,7 +251,12 @@ describe('PermissionRequestsService.reject', () => {
 
 describe('PermissionRequestsService.listMine / listPending', () => {
   it('listMine filtra por userId y ordena createdAt desc', async () => {
-    const findMany = vi.fn(() => Promise.resolve([buildRow()]));
+    const findMany = vi.fn<
+      (args: {
+        where: { userId: string };
+        orderBy: { createdAt: string };
+      }) => Promise<PermissionRequest[]>
+    >(() => Promise.resolve([buildRow()]));
     const { prisma } = buildPrisma({ findMany });
     const service = new PermissionRequestsService(
       prisma,
@@ -259,12 +266,9 @@ describe('PermissionRequestsService.listMine / listPending', () => {
 
     await service.listMine('u1');
 
-    const args = findMany.mock.calls[0]?.[0] as {
-      where: { userId: string };
-      orderBy: { createdAt: string };
-    };
-    expect(args.where).toEqual({ userId: 'u1' });
-    expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    const args = findMany.mock.calls[0]?.[0];
+    expect(args?.where).toEqual({ userId: 'u1' });
+    expect(args?.orderBy).toEqual({ createdAt: 'desc' });
   });
 
   it('listPending filtra status PENDIENTE, incluye al solicitante y lo expone en la vista', async () => {
@@ -272,7 +276,9 @@ describe('PermissionRequestsService.listMine / listPending', () => {
       ...buildRow({ userId: 'u7' }),
       user: { id: 'u7', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gmt.cl' },
     };
-    const findMany = vi.fn(() => Promise.resolve([rowWithUser]));
+    const findMany = vi.fn<
+      (args: { where: { status: string }; include: unknown }) => Promise<(typeof rowWithUser)[]>
+    >(() => Promise.resolve([rowWithUser]));
     const { prisma } = buildPrisma({ findMany });
     const service = new PermissionRequestsService(
       prisma,
@@ -282,12 +288,9 @@ describe('PermissionRequestsService.listMine / listPending', () => {
 
     const result = await service.listPending();
 
-    const args = findMany.mock.calls[0]?.[0] as {
-      where: { status: string };
-      include: unknown;
-    };
-    expect(args.where).toEqual({ status: 'PENDIENTE' });
-    expect(args.include).toBeDefined();
+    const args = findMany.mock.calls[0]?.[0];
+    expect(args?.where).toEqual({ status: 'PENDIENTE' });
+    expect(args?.include).toBeDefined();
     expect(result[0]?.requester).toEqual({
       id: 'u7',
       firstName: 'Ana',

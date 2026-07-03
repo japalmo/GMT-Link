@@ -91,8 +91,9 @@ describe('GamificationService', () => {
       ).createMany.mock.calls;
 
       // Either createMany was not called, or it was called without first_day
-      if (createManyCalls.length > 0) {
-        const data = createManyCalls[0][0].data as Array<{ achievementKey: string }>;
+      const firstCreateManyCall = createManyCalls[0];
+      if (firstCreateManyCall) {
+        const data = firstCreateManyCall[0].data as Array<{ achievementKey: string }>;
         expect(data.find((d) => d.achievementKey === 'first_day')).toBeUndefined();
       }
     });

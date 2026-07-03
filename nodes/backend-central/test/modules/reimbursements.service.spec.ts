@@ -128,31 +128,35 @@ describe('ReimbursementsService', () => {
   });
 
   it('listMine filtra SOLO por el propio userId (más status opcional)', async () => {
-    const findMany = vi.fn(() => Promise.resolve([]));
+    const findMany = vi.fn<
+      (args: { where: { userId: string; status?: FinanceStatus } }) => Promise<Reimbursement[]>
+    >(() => Promise.resolve([]));
     const { prisma } = buildPrisma({ findMany });
     const service = makeService(prisma);
 
     await service.listMine('u1', FinanceStatus.APROBADO);
 
-    const where = findMany.mock.calls[0]?.[0]?.where as { userId: string; status: FinanceStatus };
-    expect(where.userId).toBe('u1');
-    expect(where.status).toBe(FinanceStatus.APROBADO);
+    const where = findMany.mock.calls[0]?.[0]?.where;
+    expect(where?.userId).toBe('u1');
+    expect(where?.status).toBe(FinanceStatus.APROBADO);
   });
 
   it('listAll (gestor) aplica filtros e incluye al solicitante', async () => {
-    const findMany = vi.fn(() => Promise.resolve([buildRowWithRequester()]));
+    const findMany = vi.fn<
+      (args: {
+        where: { status?: FinanceStatus; userId?: string };
+        include: unknown;
+      }) => Promise<Array<ReturnType<typeof buildRowWithRequester>>>
+    >(() => Promise.resolve([buildRowWithRequester()]));
     const { prisma } = buildPrisma({ findMany });
     const service = makeService(prisma);
 
     const views = await service.listAll({ status: FinanceStatus.PENDIENTE, userId: 'u9' });
 
-    const call = findMany.mock.calls[0]?.[0] as {
-      where: { status: FinanceStatus; userId: string };
-      include: unknown;
-    };
-    expect(call.where.status).toBe(FinanceStatus.PENDIENTE);
-    expect(call.where.userId).toBe('u9');
-    expect(call.include).toBeDefined();
+    const call = findMany.mock.calls[0]?.[0];
+    expect(call?.where.status).toBe(FinanceStatus.PENDIENTE);
+    expect(call?.where.userId).toBe('u9');
+    expect(call?.include).toBeDefined();
     expect(views[0]?.requester?.email).toBe('ana@gmt.cl');
   });
 
