@@ -41,8 +41,13 @@ import type {
   RoleKey,
   UpdateProfileInput,
   UpdateRoleInput,
+  UserMembership,
   UserStatus,
 } from '@gmt-platform/contracts';
+
+// Re-export para consumidores del front (enmienda A15: los tipos viven en
+// @gmt-platform/contracts; api.ts solo los re-exporta para no duplicar imports).
+export type { AssignRoleInput, CloneRoleResponse, UserMembership } from '@gmt-platform/contracts';
 import type {
   ProjectView,
   ServiceView,
@@ -223,6 +228,8 @@ export interface UserListItem {
   status: UserStatus;
   isClientUser: boolean;
   roleKeys: RoleKey[];
+  /** Membresías (rol + alcance) del usuario — chips por membership (H13). */
+  memberships: UserMembership[];
   createdAt: string;
 }
 
@@ -259,10 +266,11 @@ export interface ImportUsersResponse {
   errors: ImportUserError[];
 }
 
-/** Respuesta de asignar/quitar un rol: el id y los roleKeys resultantes. */
+/** Respuesta de asignar/quitar un rol: id, roleKeys y memberships resultantes (A4). */
 export interface UserRolesResponse {
   id: string;
   roleKeys: RoleKey[];
+  memberships: UserMembership[];
 }
 
 /** `GET /users?search=` — directorio de usuarios. Orden createdAt desc. */

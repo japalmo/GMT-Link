@@ -291,3 +291,45 @@ describe('api — módulo de roles dinámicos (catálogo + CRUD)', () => {
     expect(JSON.parse(init.body as string)).toEqual({ label: 'Inspector (copia)' });
   });
 });
+
+import { listUsers } from '@/lib/api';
+import type { UserListItem, UserRolesResponse } from '@/lib/api';
+import type { UserMembership } from '@gmt-platform/contracts';
+
+describe('api — UserRolesResponse/UserListItem extendidos con memberships (A4)', () => {
+  beforeEach(() => {
+    mockGetToken.mockReset();
+    mockGetToken.mockReturnValue('tok');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const membership: UserMembership = { roleKey: 'c_inspector', scopeType: 'PROJECT', scopeId: 'p1' };
+
+  it('UserRolesResponse incluye memberships[] y UserListItem las trae del backend', async () => {
+    const rolesResponse: UserRolesResponse = {
+      id: 'u1',
+      roleKeys: ['c_inspector'],
+      memberships: [membership],
+    };
+    expect(rolesResponse.memberships).toEqual([membership]);
+
+    const row: UserListItem = {
+      id: 'u1',
+      firstName: 'Ada',
+      secondName: null,
+      lastName: 'Lovelace',
+      secondLastName: null,
+      email: 'ada@gmt.cl',
+      status: 'ACTIVE',
+      isClientUser: false,
+      roleKeys: ['c_inspector'],
+      memberships: [membership],
+      createdAt: new Date().toISOString(),
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res([row])));
+
+    const result = await listUsers();
+
+    expect(result[0]?.memberships).toEqual([membership]);
+  });
+});
