@@ -7,6 +7,7 @@ import {
   Package,
   Wrench,
   Gauge,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -19,6 +20,8 @@ export interface NavItem {
   module: string;
   /** Marca placeholders aún no implementados (etapas posteriores). */
   placeholder?: boolean;
+  /** Si es `true`, solo se muestra cuando `user.canManageRoles` es `true` (además del filtro de módulo). */
+  requiresManageRoles?: boolean;
 }
 
 /**
@@ -29,6 +32,7 @@ export interface NavItem {
 export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Inicio', to: '/', icon: LayoutDashboard, module: 'dashboard' },
   { label: 'Usuarios', to: '/usuarios', icon: Users, module: 'usuarios' },
+  { label: 'Roles', to: '/roles', icon: ShieldCheck, module: 'usuarios', requiresManageRoles: true },
   { label: 'Directorio', to: '/directorio', icon: Contact, module: 'directorio' },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },

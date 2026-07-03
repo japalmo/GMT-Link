@@ -17,6 +17,7 @@ import PublicAssetPage from '@/pages/public/activo';
 // bundle inicial las dependencias grandes (Three.js en v-metric, mapas en
 // herramientas) y reduce el tiempo de carga inicial en producción.
 const UsuariosPage = lazy(() => import('@/pages/usuarios'));
+const RolesPage = lazy(() => import('@/pages/roles'));
 const PerfilPage = lazy(() => import('@/pages/perfil'));
 const CvPage = lazy(() => import('@/pages/perfil/cv'));
 const DocumentsPage = lazy(() => import('@/pages/documentos'));
@@ -84,6 +85,7 @@ const router = createBrowserRouter([
         children: [
           { path: '/', element: <DashboardPage /> },
           { path: '/usuarios', element: lazyRoute(<UsuariosPage />) },
+          { path: '/roles', element: lazyRoute(<RolesPage />) },
           { path: '/perfil', element: lazyRoute(<PerfilPage />) },
           { path: '/perfil/cv', element: lazyRoute(<CvPage />) },
           { path: '/perfil/documentos', element: lazyRoute(<DocumentsPage />) },

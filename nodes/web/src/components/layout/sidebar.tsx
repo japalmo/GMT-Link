@@ -113,8 +113,15 @@ export function SidebarContent({
   // Visibilidad de módulos por cliente (Módulo 5): el backend (GET /auth/me) expone
   // `user.modules` según el cliente real del usuario. Sin modules (cargando / sesión
   // vieja) no se restringe. Reemplaza el filtro por dominio de email.
+  // Además, gating de "Roles" por canManageRoles (§Fase 5).
   const allowedModules = user?.modules;
-  const canSeeModule = (item: NavItem): boolean => !allowedModules || allowedModules.includes(item.module);
+  const canSeeModule = (item: NavItem): boolean => {
+    if (!allowedModules || !allowedModules.includes(item.module)) {
+      if (allowedModules) return false;
+    }
+    if (item.requiresManageRoles && !user?.canManageRoles) return false;
+    return true;
+  };
   const filteredPrimaryNav = PRIMARY_NAV.filter(canSeeModule);
   const filteredSecondaryNav = SECONDARY_NAV.filter(canSeeModule);
 
