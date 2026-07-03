@@ -112,14 +112,21 @@ export class AuthController {
       throw new UnauthorizedException('El usuario de la sesión ya no existe.');
     }
 
+    // En paralelo: módulos (Postgres) + gate de roles (FGA) — /me es el endpoint
+    // más caliente de la web y ambos resuelven independientes.
+    const [modules, canManageRoles] = await Promise.all([
+      this.resolveModules(user.id),
+      this.resolveCanManageRoles(authUser.id),
+    ]);
+
     return {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       status: user.status,
-      modules: await this.resolveModules(user.id),
-      canManageRoles: await this.resolveCanManageRoles(authUser.id),
+      modules,
+      canManageRoles,
     };
   }
 
