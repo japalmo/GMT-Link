@@ -19,4 +19,6 @@ export interface AuthedUser {
   status: UserStatus;
   /** Módulos del sidebar visibles para este usuario (derivados de su cliente). */
   modules: string[];
+  /** `true` si el usuario tiene la relación FGA `can_manage_roles` (org_admin). Gatea `/roles` en el nav. */
+  canManageRoles: boolean;
 }

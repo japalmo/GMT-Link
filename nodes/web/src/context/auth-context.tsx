@@ -14,6 +14,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // `user` es el AuthedUser completo devuelto por getMe() — desde la matriz RBAC
+  // incluye `canManageRoles` (relación FGA can_manage_roles) sin cambios de lógica:
+  // el objeto se reenvía tal cual, el campo viaja solo gracias al tipo actualizado.
   const [user, setUser] = useState<AuthedUser | null>(null);
   const [loading, setLoading] = useState(true);
 
