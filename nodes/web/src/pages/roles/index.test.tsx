@@ -155,4 +155,20 @@ describe('RolesPage', () => {
     expect(mockToast.warning).toHaveBeenCalledWith(expect.stringContaining('directory:view:extended'));
     expect(mockToast.warning).toHaveBeenCalledWith(expect.stringContaining('document:review'));
   });
+
+  it('eliminar un rol personalizado pide confirmación antes de borrar', async () => {
+    const hook = baseHook();
+    mockUseRoles.mockReturnValue(hook);
+    render(<RolesPage />);
+
+    // Click en "Eliminar" NO borra todavía: abre el diálogo de confirmación.
+    fireEvent.click(screen.getByRole('button', { name: /Eliminar rol Inspector/i }));
+    expect(hook.deleteRole).not.toHaveBeenCalled();
+    await waitFor(() => screen.getByText(/¿Eliminar rol\?/i));
+
+    // Confirmar en el diálogo → recién ahí se borra con la key correcta.
+    fireEvent.click(screen.getByRole('button', { name: /^Eliminar rol$/i }));
+    await waitFor(() => expect(hook.deleteRole).toHaveBeenCalledWith('c_inspector'));
+    expect(mockToast.success).toHaveBeenCalledWith('Rol eliminado.');
+  });
 });

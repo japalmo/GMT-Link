@@ -4,6 +4,7 @@ import type { RoleDetail } from '@gmt-platform/contracts';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useRoles } from '@/hooks/use-roles';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { RoleEditor } from './role-editor';
 import { NewRoleDialog } from './new-role-dialog';
 
@@ -43,6 +44,7 @@ export default function RolesPage(): ReactNode {
     useRoles();
   const [selected, setSelected] = useState<RoleDetail | null>(null);
   const [newRoleOpen, setNewRoleOpen] = useState(false);
+  const [roleToDelete, setRoleToDelete] = useState<RoleDetail | null>(null);
 
   async function selectRole(key: string): Promise<void> {
     try {
@@ -85,14 +87,17 @@ export default function RolesPage(): ReactNode {
     setSelected(created);
   }
 
-  async function handleDelete(key: string): Promise<void> {
-    try {
-      await deleteRole(key);
-      if (selected?.key === key) setSelected(null);
-      toast.success('Rol eliminado.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar el rol.');
-    }
+  /**
+   * Borrado confirmado (destructivo). El `ConfirmDialog` corre esto: si
+   * `deleteRole` lanza (p. ej. 409 ROLE_IN_USE), el diálogo muestra el error
+   * inline y NO cierra; si resuelve, cierra y limpia la selección.
+   */
+  async function confirmDelete(): Promise<void> {
+    if (!roleToDelete) return;
+    const key = roleToDelete.key;
+    await deleteRole(key);
+    if (selected?.key === key) setSelected(null);
+    toast.success('Rol eliminado.');
   }
 
   if (loading) {
@@ -161,7 +166,7 @@ export default function RolesPage(): ReactNode {
                       variant="ghost"
                       size="sm"
                       aria-label={`Eliminar rol ${r.label}`}
-                      onClick={() => void handleDelete(r.key)}
+                      onClick={() => setRoleToDelete(r)}
                     >
                       Eliminar
                     </Button>
@@ -182,6 +187,24 @@ export default function RolesPage(): ReactNode {
       </div>
 
       <NewRoleDialog open={newRoleOpen} onOpenChange={setNewRoleOpen} onCreate={handleCreate} />
+
+      <ConfirmDialog
+        open={roleToDelete !== null}
+        onOpenChange={(open) => !open && setRoleToDelete(null)}
+        title="¿Eliminar rol?"
+        description={
+          roleToDelete ? (
+            <>
+              Se eliminará el rol <strong>{roleToDelete.label}</strong> de forma permanente. Si
+              algún usuario lo tiene asignado, primero deberás quitárselo.
+            </>
+          ) : (
+            ''
+          )
+        }
+        confirmLabel="Eliminar rol"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
