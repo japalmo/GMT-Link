@@ -31,11 +31,16 @@ import type {
   UserSettings,
 } from '@/types/settings';
 import type {
+  CloneRoleResponse,
+  CreateRoleInput,
   DirectoryEntry,
   DirectoryEntryExtended,
+  PermissionCatalogGroup,
   ProfileMe,
+  RoleDetail,
   RoleKey,
   UpdateProfileInput,
+  UpdateRoleInput,
   UserStatus,
 } from '@gmt-platform/contracts';
 import type {
@@ -314,6 +319,59 @@ export function uploadUserAvatar(id: string, file: File): Promise<UserListItem> 
     formData,
     'PATCH',
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Roles dinámicos (§Fase 5 — matriz RBAC)                                    */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /permissions` — catálogo de permisos agrupado por módulo. */
+export function getPermissionsCatalog(): Promise<PermissionCatalogGroup[]> {
+  return request<PermissionCatalogGroup[]>('/permissions');
+}
+
+/** `GET /roles` — todos los roles (sistema + personalizados). */
+export function listRoles(): Promise<RoleDetail[]> {
+  return request<RoleDetail[]>('/roles');
+}
+
+/** `GET /roles/:key` — detalle de un rol. 404 si no existe. */
+export function getRole(key: string): Promise<RoleDetail> {
+  return request<RoleDetail>(`/roles/${encodeURIComponent(key)}`);
+}
+
+/** `POST /roles` — crea un rol personalizado. 400 en validaciones de grants. */
+export function createRole(input: CreateRoleInput): Promise<RoleDetail> {
+  return request<RoleDetail>('/roles', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `PATCH /roles/:key` — edita un rol personalizado. 403 si es del sistema. */
+export function updateRole(key: string, input: UpdateRoleInput): Promise<RoleDetail> {
+  return request<RoleDetail>(`/roles/${encodeURIComponent(key)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `DELETE /roles/:key` — elimina un rol. 403 si es del sistema; 409 si está en uso. */
+export function deleteRole(key: string): Promise<void> {
+  return request<void>(`/roles/${encodeURIComponent(key)}`, { method: 'DELETE' });
+}
+
+/**
+ * `POST /roles/:key/clone` — clona un rol (incluye del sistema) a uno
+ * personalizado nuevo. El backend filtra los grants NO componibles y los
+ * reporta en `omittedPermissionKeys` (enmienda A7 — así clonar roles del
+ * sistema como qa/operator/viewer/client_ito funciona; spec §6.2/§13.4).
+ */
+export function cloneRole(key: string, label: string): Promise<CloneRoleResponse> {
+  return request<CloneRoleResponse>(`/roles/${encodeURIComponent(key)}/clone`, {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
 }
 
 /* -------------------------------------------------------------------------- */

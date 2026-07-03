@@ -150,3 +150,144 @@ describe('api — uploadRequest() (subida multipart de archivos)', () => {
     expect((err as ApiError).status).toBe(413);
   });
 });
+
+import {
+  getPermissionsCatalog,
+  listRoles,
+  getRole,
+  createRole,
+  updateRole,
+  deleteRole,
+  cloneRole,
+} from '@/lib/api';
+import type { CloneRoleResponse, PermissionCatalogGroup, RoleDetail } from '@gmt-platform/contracts';
+
+describe('api — módulo de roles dinámicos (catálogo + CRUD)', () => {
+  beforeEach(() => {
+    mockGetToken.mockReset();
+    mockGetToken.mockReturnValue('tok');
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const group: PermissionCatalogGroup = {
+    module: 'operaciones',
+    items: [
+      {
+        key: 'project:read',
+        label: 'Ver proyecto',
+        module: 'operaciones',
+        kind: 'STRUCTURAL',
+        scopeable: false,
+        fgaObjectType: 'project',
+        composable: true,
+      },
+    ],
+  };
+
+  const roleDetail: RoleDetail = {
+    key: 'c_inspector',
+    label: 'Inspector',
+    description: null,
+    isSystem: false,
+    allowedScopeTypes: ['PROJECT'],
+    grants: [{ permissionKey: 'project:read', scope: 'GLOBAL' }],
+  };
+
+  it('getPermissionsCatalog — GET /permissions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res([group]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getPermissionsCatalog();
+
+    expect(result).toEqual([group]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/permissions');
+    expect(init.method ?? 'GET').toBe('GET');
+  });
+
+  it('listRoles — GET /roles', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res([roleDetail]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await listRoles();
+
+    expect(result).toEqual([roleDetail]);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/roles');
+  });
+
+  it('getRole — GET /roles/:key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(roleDetail));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getRole('c_inspector');
+
+    expect(result).toEqual(roleDetail);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/roles/c_inspector');
+  });
+
+  it('createRole — POST /roles con el body serializado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(roleDetail));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await createRole({ label: 'Inspector', grants: roleDetail.grants });
+
+    expect(result).toEqual(roleDetail);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/roles');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ label: 'Inspector', grants: roleDetail.grants });
+  });
+
+  it('updateRole — PATCH /roles/:key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(roleDetail));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await updateRole('c_inspector', { label: 'Inspector v2' });
+
+    expect(result).toEqual(roleDetail);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/roles/c_inspector');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({ label: 'Inspector v2' });
+  });
+
+  it('deleteRole — DELETE /roles/:key', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204, json: () => Promise.reject(new Error('no debería parsearse')) } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(deleteRole('c_inspector')).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/roles/c_inspector');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('deleteRole — 409 ROLE_IN_USE propaga ApiError con status 409', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res({ message: 'Rol en uso', code: 'ROLE_IN_USE' }, false, 409)));
+
+    const err = await deleteRole('c_inspector').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(409);
+  });
+
+  it('cloneRole — POST /roles/:key/clone devuelve CloneRoleResponse (role + omittedPermissionKeys)', async () => {
+    const cloned: CloneRoleResponse = {
+      role: { ...roleDetail, key: 'c_inspector_2', label: 'Inspector (copia)' },
+      omittedPermissionKeys: ['document:review'],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(res(cloned));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cloneRole('c_inspector', 'Inspector (copia)');
+
+    expect(result).toEqual(cloned);
+    expect(result.omittedPermissionKeys).toEqual(['document:review']);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/roles/c_inspector/clone');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ label: 'Inspector (copia)' });
+  });
+});
