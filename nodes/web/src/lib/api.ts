@@ -31,6 +31,7 @@ import type {
   UserSettings,
 } from '@/types/settings';
 import type {
+  AssignRoleInput,
   CloneRoleResponse,
   CreateRoleInput,
   DirectoryEntry,
@@ -305,18 +306,30 @@ export function importUsers(rows: CreateUserDto[]): Promise<ImportUsersResponse>
   });
 }
 
-/** `POST /users/:id/roles` — asigna un rol. 409 si ya lo tiene. */
-export function assignUserRole(id: string, roleKey: RoleKey): Promise<UserRolesResponse> {
+/**
+ * `POST /users/:id/roles` — asigna un rol con alcance (`AssignRoleInput`).
+ * 400 `INVALID_SCOPE_FOR_ROLE`/`INVALID_SCOPE_ID` si el alcance no es válido
+ * para el rol. Devuelve la `UserRolesResponse` extendida (A4).
+ */
+export function assignUserRole(id: string, input: AssignRoleInput): Promise<UserRolesResponse> {
   return request<UserRolesResponse>(`/users/${encodeURIComponent(id)}/roles`, {
     method: 'POST',
-    body: JSON.stringify({ roleKey }),
+    body: JSON.stringify(input),
   });
 }
 
-/** `DELETE /users/:id/roles/:roleKey` — quita un rol. 404 si no lo tiene. */
-export function removeUserRole(id: string, roleKey: RoleKey): Promise<UserRolesResponse> {
+/**
+ * `DELETE /users/:id/roles?roleKey=&scopeType=&scopeId=` — quita la membership
+ * EXACTA indicada (H13: sin defaults de organización en el remove).
+ */
+export function removeUserRole(id: string, membership: UserMembership): Promise<UserRolesResponse> {
+  const query = new URLSearchParams({
+    roleKey: membership.roleKey,
+    scopeType: membership.scopeType,
+    scopeId: membership.scopeId,
+  });
   return request<UserRolesResponse>(
-    `/users/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleKey)}`,
+    `/users/${encodeURIComponent(id)}/roles?${query.toString()}`,
     { method: 'DELETE' },
   );
 }

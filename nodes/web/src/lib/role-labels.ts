@@ -21,9 +21,13 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   adm_contrato: 'Administrador de Contrato',
 };
 
-/** Devuelve la etiqueta legible de un rol, con fallback al propio key. */
-export function roleLabel(role: RoleKey): string {
-  return ROLE_LABELS[role] ?? role;
+/**
+ * Devuelve la etiqueta legible de un rol, con fallback al propio key. Acepta
+ * cualquier `string` porque las membresías pueden traer claves de roles
+ * dinámicos (personalizados) que no están en el union `RoleKey`.
+ */
+export function roleLabel(role: string): string {
+  return ROLE_LABELS[role as RoleKey] ?? role;
 }
 
 /** Etiquetas legibles (es-CL) para cada {@link UserStatus}. */

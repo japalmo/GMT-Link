@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import { Plus, Upload, UserCog, TriangleAlert, X } from 'lucide-react';
-import type { RoleKey } from '@gmt-platform/contracts';
 import { Button } from '@/components/ui/button';
 import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
 import { useUsers } from '@/hooks/use-users';
@@ -86,7 +85,7 @@ export default function UsuariosPage(): ReactNode {
     {
       id: 'roles',
       header: 'Roles',
-      render: (u) => <RoleChips roleKeys={u.roleKeys} />,
+      render: (u) => <RoleChips memberships={u.memberships} />,
     },
     {
       id: 'estado',
@@ -190,8 +189,8 @@ export default function UsuariosPage(): ReactNode {
       <RolesDialog
         user={rolesUser}
         onOpenChange={(open) => (open ? undefined : setRolesUser(null))}
-        onAssign={(id, roleKey: RoleKey) => assignRole(id, roleKey)}
-        onRemove={(id, roleKey: RoleKey) => removeRole(id, roleKey)}
+        onAssign={(id, input) => assignRole(id, input)}
+        onRemove={(id, membership) => removeRole(id, membership)}
         onChanged={() => void refetch()}
       />
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoleKey } from '@gmt-platform/contracts';
+import type { AssignRoleInput, UserMembership } from '@gmt-platform/contracts';
 import {
   ApiError,
   assignUserRole,
@@ -35,10 +35,10 @@ export interface UseUsersResult {
   create: (dto: CreateUserDto) => Promise<CreateUserResponse>;
   /** Importa usuarios en lote; devuelve creados + errores por fila. */
   importRows: (rows: CreateUserDto[]) => Promise<ImportUsersResponse>;
-  /** Asigna un rol a un usuario. */
-  assignRole: (id: string, roleKey: RoleKey) => Promise<UserRolesResponse>;
-  /** Quita un rol a un usuario. */
-  removeRole: (id: string, roleKey: RoleKey) => Promise<UserRolesResponse>;
+  /** Asigna un rol a un usuario en un alcance concreto. */
+  assignRole: (id: string, input: AssignRoleInput) => Promise<UserRolesResponse>;
+  /** Quita la membership exacta (rol + alcance) de un usuario. */
+  removeRole: (id: string, membership: UserMembership) => Promise<UserRolesResponse>;
 }
 
 /**
@@ -101,14 +101,13 @@ export function useUsers(search?: string): UseUsersResult {
   );
 
   const assignRole = useCallback(
-    (id: string, roleKey: RoleKey): Promise<UserRolesResponse> =>
-      assignUserRole(id, roleKey),
+    (id: string, input: AssignRoleInput): Promise<UserRolesResponse> => assignUserRole(id, input),
     [],
   );
 
   const removeRole = useCallback(
-    (id: string, roleKey: RoleKey): Promise<UserRolesResponse> =>
-      removeUserRole(id, roleKey),
+    (id: string, membership: UserMembership): Promise<UserRolesResponse> =>
+      removeUserRole(id, membership),
     [],
   );
 

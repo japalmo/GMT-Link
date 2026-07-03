@@ -1,16 +1,28 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Plus, X } from 'lucide-react';
-import { ROLE_KEYS, type RoleKey } from '@gmt-platform/contracts';
+import type { AssignRoleInput, RoleDetail, ScopeType, UserMembership } from '@gmt-platform/contracts';
 import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
-import type { UserListItem, UserRolesResponse } from '@/lib/api';
-import { roleLabel } from '@/lib/role-labels';
+import { listProjects, listRoles, type UserListItem, type UserRolesResponse } from '@/lib/api';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 
+/** Id del objeto organización (única org actual) — SOLO como default de asignación org. */
+const ORG_SCOPE_ID = 'gmt';
+
+interface ProjectOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 /**
- * Diálogo de gestión de roles por defecto de un usuario (§1.1). Lista los roles
- * actuales (quitar) y permite agregar uno de los faltantes. Cada acción llama al
- * backend y actualiza el estado local; al cerrar notifica al padre para refrescar.
+ * Diálogo de asignación de roles por alcance de un usuario (§Fase 5 — H13).
+ * Los chips se renderizan POR MEMBERSHIP (rol + badge de alcance:
+ * "Organización" / "P-001 — Proyecto Uno") a partir de `user.memberships`, y
+ * quitar pasa el `{roleKey, scopeType, scopeId}` EXACTO de esa membership —
+ * nada hardcodeado en el remove. El selector de alcance queda limitado a
+ * `role.allowedScopeTypes` del rol elegido; si el alcance es `PROJECT` se
+ * exige elegir un proyecto concreto antes de habilitar "Agregar".
  */
 export function RolesDialog({
   user,
@@ -21,35 +33,91 @@ export function RolesDialog({
 }: {
   user: UserListItem | null;
   onOpenChange: (open: boolean) => void;
-  onAssign: (id: string, roleKey: RoleKey) => Promise<UserRolesResponse>;
-  onRemove: (id: string, roleKey: RoleKey) => Promise<UserRolesResponse>;
+  onAssign: (id: string, input: AssignRoleInput) => Promise<UserRolesResponse>;
+  onRemove: (id: string, membership: UserMembership) => Promise<UserRolesResponse>;
   onChanged: () => void;
 }): ReactNode {
-  const [roles, setRoles] = useState<RoleKey[]>([]);
-  const [toAdd, setToAdd] = useState<RoleKey | ''>('');
-  const [roleToRemove, setRoleToRemove] = useState<RoleKey | null>(null);
+  const [roles, setRoles] = useState<RoleDetail[]>([]);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [memberships, setMemberships] = useState<UserMembership[]>([]);
+  const [toAdd, setToAdd] = useState<string>('');
+  const [scopeType, setScopeType] = useState<ScopeType | ''>('');
+  const [scopeId, setScopeId] = useState<string>('');
+  const [toRemove, setToRemove] = useState<UserMembership | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    setRoles(user ? [...user.roleKeys] : []);
+    if (!user) return;
+    void listRoles().then(setRoles);
+    void listProjects().then((ps) => setProjects(ps.map((p) => ({ id: p.id, code: p.code, name: p.name }))));
+  }, [user]);
+
+  useEffect(() => {
+    setMemberships(user ? [...user.memberships] : []);
     setToAdd('');
-    setRoleToRemove(null);
+    setScopeType('');
+    setScopeId('');
+    setToRemove(null);
     setError(null);
     setDirty(false);
   }, [user]);
 
-  const available = ROLE_KEYS.filter((r) => !roles.includes(r));
+  const selectedRole = roles.find((r) => r.key === toAdd) ?? null;
+
+  /**
+   * Roles ofrecibles en "Agregar rol": se excluye un rol solo-organización que
+   * el usuario ya tenga a nivel organización (no se puede volver a asignar la
+   * misma membership). Los roles de proyecto siempre se ofrecen: pueden
+   * aplicarse a otro proyecto distinto.
+   */
+  const assignableRoles = roles.filter((role) => {
+    const orgOnly = role.allowedScopeTypes.length === 1 && role.allowedScopeTypes[0] === 'ORGANIZATION';
+    if (!orgOnly) return true;
+    return !memberships.some((m) => m.roleKey === role.key && m.scopeType === 'ORGANIZATION');
+  });
+
+  function roleLabelFor(key: string): string {
+    return roles.find((r) => r.key === key)?.label ?? key;
+  }
+
+  /** Badge de alcance de una membership: "Organización" o "P-001 — Proyecto Uno". */
+  function scopeLabelFor(m: UserMembership): string {
+    if (m.scopeType === 'ORGANIZATION') return 'Organización';
+    const project = projects.find((p) => p.id === m.scopeId);
+    return project ? `${project.code} — ${project.name}` : `Proyecto ${m.scopeId}`;
+  }
+
+  function handleSelectRole(key: string): void {
+    setToAdd(key);
+    const role = roles.find((r) => r.key === key);
+    if (!role) {
+      setScopeType('');
+      setScopeId('');
+      return;
+    }
+    const defaultScope = role.allowedScopeTypes[0] ?? 'ORGANIZATION';
+    setScopeType(defaultScope);
+    setScopeId(defaultScope === 'ORGANIZATION' ? ORG_SCOPE_ID : '');
+  }
+
+  const needsProject = scopeType === 'PROJECT';
+  const canAdd = toAdd !== '' && scopeType !== '' && scopeId !== '';
 
   async function add(): Promise<void> {
-    if (!user || toAdd === '') return;
+    // Guarda explícita sobre `scopeType` (no vía `canAdd`) para que TS lo
+    // estreche a `ScopeType` al construir el `AssignRoleInput`.
+    if (!user || toAdd === '' || scopeType === '' || scopeId === '') return;
     setBusy(true);
     setError(null);
     try {
-      const res = await onAssign(user.id, toAdd);
-      setRoles(res.roleKeys);
+      const input: AssignRoleInput = { roleKey: toAdd, scopeType, scopeId };
+      const res = await onAssign(user.id, input);
+      setMemberships(res.memberships);
       setToAdd('');
+      setScopeType('');
+      setScopeId('');
       setDirty(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo asignar el rol.');
@@ -58,17 +126,18 @@ export function RolesDialog({
     }
   }
 
-  async function remove(role: RoleKey): Promise<void> {
+  async function remove(membership: UserMembership): Promise<void> {
     if (!user) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await onRemove(user.id, role);
-      setRoles(res.roleKeys);
+      // H13: se pasa la membership EXACTA (roleKey + scopeType + scopeId), sin defaults.
+      const res = await onRemove(user.id, membership);
+      setMemberships(res.memberships);
       setDirty(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo quitar el rol.');
-      throw err; // propagates to ConfirmDialog
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -85,27 +154,28 @@ export function RolesDialog({
         <ModalContent className="sm:max-w-md">
           <ModalHeader>
             <ModalTitle>Roles de {user ? `${user.firstName} ${user.lastName}` : ''}</ModalTitle>
-            <ModalDescription>
-              Roles por defecto del usuario. Se aplican al asignarlo a un proyecto.
-            </ModalDescription>
+            <ModalDescription>Roles asignados y su alcance (organización o proyecto).</ModalDescription>
           </ModalHeader>
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
-              {roles.length === 0 && (
+              {memberships.length === 0 && (
                 <span className="text-sm text-muted-foreground">Sin roles asignados.</span>
               )}
-              {roles.map((role) => (
+              {memberships.map((m) => (
                 <span
-                  key={role}
+                  key={`${m.roleKey}|${m.scopeType}|${m.scopeId}`}
                   className="inline-flex items-center gap-1 rounded-full bg-secondary py-0.5 pl-2.5 pr-1 text-xs font-medium text-secondary-foreground"
                 >
-                  {roleLabel(role)}
+                  {roleLabelFor(m.roleKey)}
+                  <span className="rounded-full bg-background/60 px-1.5 py-px text-[10px] font-normal text-muted-foreground">
+                    {scopeLabelFor(m)}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setRoleToRemove(role)}
+                    onClick={() => setToRemove(m)}
                     disabled={busy}
-                    aria-label={`Quitar rol ${roleLabel(role)}`}
+                    aria-label={`Quitar rol ${roleLabelFor(m.roleKey)} (${scopeLabelFor(m)})`}
                     className="rounded-full p-0.5 text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                   >
                     <X className="size-3" aria-hidden />
@@ -114,29 +184,74 @@ export function RolesDialog({
               ))}
             </div>
 
-            <div className="flex items-end gap-2">
-              <label className="flex flex-1 flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col gap-1.5">
                 <span className="text-sm font-medium leading-none">Agregar rol</span>
                 <select
+                  aria-label="Agregar rol"
                   value={toAdd}
-                  onChange={(e) => setToAdd(e.target.value as RoleKey | '')}
-                  disabled={busy || available.length === 0}
+                  onChange={(e) => handleSelectRole(e.target.value)}
+                  disabled={busy}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
                 >
-                  <option value="">
-                    {available.length === 0 ? 'Sin roles disponibles' : 'Selecciona un rol…'}
-                  </option>
-                  {available.map((role) => (
-                    <option key={role} value={role}>
-                      {roleLabel(role)}
+                  <option value="">Selecciona un rol…</option>
+                  {assignableRoles.map((role) => (
+                    <option key={role.key} value={role.key}>
+                      {role.label}
                     </option>
                   ))}
                 </select>
               </label>
-              <Button type="button" onClick={() => void add()} disabled={busy || toAdd === ''}>
-                <Plus aria-hidden />
-                Agregar
-              </Button>
+
+              {selectedRole && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium leading-none">Alcance</span>
+                  <select
+                    aria-label="Alcance"
+                    value={scopeType}
+                    onChange={(e) => {
+                      const next = e.target.value as ScopeType;
+                      setScopeType(next);
+                      setScopeId(next === 'ORGANIZATION' ? ORG_SCOPE_ID : '');
+                    }}
+                    disabled={busy || selectedRole.allowedScopeTypes.length <= 1}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                  >
+                    {selectedRole.allowedScopeTypes.map((st) => (
+                      <option key={st} value={st}>
+                        {st === 'ORGANIZATION' ? 'Organización' : 'Proyecto'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {needsProject && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium leading-none">Proyecto</span>
+                  <select
+                    aria-label="Proyecto"
+                    value={scopeId}
+                    onChange={(e) => setScopeId(e.target.value)}
+                    disabled={busy}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                  >
+                    <option value="">Selecciona un proyecto…</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} — {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => void add()} disabled={busy || !canAdd}>
+                  <Plus aria-hidden />
+                  Agregar
+                </Button>
+              </div>
             </div>
 
             {error && (
@@ -155,13 +270,14 @@ export function RolesDialog({
       </Modal>
 
       <ConfirmDialog
-        open={roleToRemove !== null}
-        onOpenChange={(open) => !open && setRoleToRemove(null)}
+        open={toRemove !== null}
+        onOpenChange={(open) => !open && setToRemove(null)}
         title="¿Quitar rol?"
         description={
-          roleToRemove ? (
+          toRemove ? (
             <>
-              ¿Seguro que deseas quitar el rol <strong>{roleLabel(roleToRemove)}</strong> a{' '}
+              ¿Seguro que deseas quitar el rol <strong>{roleLabelFor(toRemove.roleKey)}</strong> (
+              {scopeLabelFor(toRemove)}) a{' '}
               <strong>{user ? `${user.firstName} ${user.lastName}` : ''}</strong>?
             </>
           ) : (
@@ -170,8 +286,9 @@ export function RolesDialog({
         }
         confirmLabel="Quitar rol"
         onConfirm={async () => {
-          if (roleToRemove) {
-            await remove(roleToRemove);
+          if (toRemove) {
+            await remove(toRemove);
+            setToRemove(null);
           }
         }}
       />

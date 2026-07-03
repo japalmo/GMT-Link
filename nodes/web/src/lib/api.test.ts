@@ -295,7 +295,7 @@ describe('api — módulo de roles dinámicos (catálogo + CRUD)', () => {
 
 import { listUsers } from '@/lib/api';
 import type { UserListItem, UserRolesResponse } from '@/lib/api';
-import type { UserMembership } from '@gmt-platform/contracts';
+import type { AssignRoleInput, UserMembership } from '@gmt-platform/contracts';
 
 describe('api — UserRolesResponse/UserListItem extendidos con memberships (A4)', () => {
   beforeEach(() => {
@@ -332,5 +332,61 @@ describe('api — UserRolesResponse/UserListItem extendidos con memberships (A4)
     const result = await listUsers();
 
     expect(result[0]?.memberships).toEqual([membership]);
+  });
+});
+
+import { assignUserRole, removeUserRole } from '@/lib/api';
+
+describe('api — asignación de roles por alcance (switch atómico, Task 5.8)', () => {
+  beforeEach(() => {
+    mockGetToken.mockReset();
+    mockGetToken.mockReturnValue('tok');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const userRoles: UserRolesResponse = {
+    id: 'u1',
+    roleKeys: ['c_inspector'],
+    memberships: [{ roleKey: 'c_inspector', scopeType: 'PROJECT', scopeId: 'p1' }],
+  };
+
+  it('assignUserRole — POST /users/:id/roles con { roleKey, scopeType, scopeId }', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(userRoles));
+    vi.stubGlobal('fetch', fetchMock);
+    const input: AssignRoleInput = { roleKey: 'c_inspector', scopeType: 'PROJECT', scopeId: 'p1' };
+
+    const result = await assignUserRole('u1', input);
+
+    expect(result).toEqual(userRoles);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/users/u1/roles');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual(input);
+  });
+
+  it('assignUserRole — 400 INVALID_SCOPE_FOR_ROLE propaga ApiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(res({ message: 'Alcance inválido', code: 'INVALID_SCOPE_FOR_ROLE' }, false, 400)),
+    );
+    const input: AssignRoleInput = { roleKey: 'c_inspector', scopeType: 'ORGANIZATION', scopeId: 'gmt' };
+
+    const err = await assignUserRole('u1', input).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(400);
+  });
+
+  it('removeUserRole — DELETE /users/:id/roles?roleKey=&scopeType=&scopeId= (membership exacta)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res({ ...userRoles, roleKeys: [], memberships: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await removeUserRole('u1', { roleKey: 'c_inspector', scopeType: 'PROJECT', scopeId: 'p1' });
+
+    expect(result.memberships).toEqual([]);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      'http://localhost:3001/users/u1/roles?roleKey=c_inspector&scopeType=PROJECT&scopeId=p1',
+    );
+    expect(init.method).toBe('DELETE');
   });
 });
