@@ -25,12 +25,26 @@ function buildRow(overrides: Partial<PermissionRequest> = {}): PermissionRequest
   };
 }
 
+/**
+ * Catálogo simulado de la tabla `Role` (Task 3.10, matriz RBAC dinámica): la
+ * validación del roleKey es por EXISTENCIA en BD — incluye roles personalizados
+ * `c_xxx` — no contra la lista estática `ROLE_KEYS`/`isRoleKey`.
+ */
+const CATALOG_ROLE_KEYS: ReadonlySet<string> = new Set([
+  'operator',
+  'qa',
+  'finance',
+  'c_inspector',
+]);
+
 interface PrismaParts {
   findFirst: ReturnType<typeof vi.fn>;
   findUnique: ReturnType<typeof vi.fn>;
   findMany: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  /** `prisma.role.findUnique` (existencia del rol en el catálogo). */
+  roleFindUnique: ReturnType<typeof vi.fn>;
 }
 
 function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
@@ -44,8 +58,22 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     update: parts.update ?? vi.fn((args: { data: Partial<PermissionRequest> }) =>
       Promise.resolve(buildRow({ ...args.data })),
     ),
+    roleFindUnique:
+      parts.roleFindUnique ??
+      vi.fn((args: { where: { key: string } }) =>
+        Promise.resolve(CATALOG_ROLE_KEYS.has(args.where.key) ? { key: args.where.key } : null),
+      ),
   };
-  const prisma = { permissionRequest: resolved } as unknown as PrismaService;
+  const prisma = {
+    permissionRequest: {
+      findFirst: resolved.findFirst,
+      findUnique: resolved.findUnique,
+      findMany: resolved.findMany,
+      create: resolved.create,
+      update: resolved.update,
+    },
+    role: { findUnique: resolved.roleFindUnique },
+  } as unknown as PrismaService;
   return { prisma, parts: resolved };
 }
 
@@ -82,6 +110,42 @@ describe('PermissionRequestsService.create', () => {
     expect(data.status).toBe('PENDIENTE');
     expect(data.reason).toBe('necesito acceso');
     expect(view.status).toBe('PENDIENTE');
+  });
+
+  it('acepta un rol dinámico c_xxx que existe en la tabla Role y crea la solicitud', async () => {
+    const { prisma, parts } = buildPrisma();
+    const service = new PermissionRequestsService(
+      prisma,
+      buildUsers().users,
+      buildNotifications().notifications,
+    );
+
+    const view = await service.create('u1', { roleKey: 'c_inspector' });
+
+    // La existencia se consulta contra la tabla Role (no contra ROLE_KEYS estáticos).
+    expect(parts.roleFindUnique).toHaveBeenCalledTimes(1);
+    const roleArgs = parts.roleFindUnique.mock.calls[0]?.[0] as { where: { key: string } };
+    expect(roleArgs.where).toEqual({ key: 'c_inspector' });
+    const data = parts.create.mock.calls[0]?.[0]?.data as Partial<PermissionRequest>;
+    expect(data.roleKey).toBe('c_inspector');
+    expect(view.roleKey).toBe('c_inspector');
+  });
+
+  it('400 nombrando el rol si el roleKey no existe en la tabla Role, y no escribe', async () => {
+    const { prisma, parts } = buildPrisma();
+    const service = new PermissionRequestsService(
+      prisma,
+      buildUsers().users,
+      buildNotifications().notifications,
+    );
+
+    await expect(service.create('u1', { roleKey: 'no_existe' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(service.create('u1', { roleKey: 'no_existe' })).rejects.toThrow(
+      'El rol "no_existe" no existe en el catálogo.',
+    );
+    expect(parts.create).not.toHaveBeenCalled();
   });
 
   it('rechaza con 400 un roleKey desconocido y no escribe', async () => {

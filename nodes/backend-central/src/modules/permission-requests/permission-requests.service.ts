@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import type { PermissionRequest, Prisma, RequestStatus } from '@prisma/client';
 import { ORG_ID } from '../../common/org.constant';
-import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -59,11 +58,12 @@ export class PermissionRequestsService {
 
   /**
    * Crea una solicitud del propio usuario para `roleKey` a nivel organización.
-   * 400 si el roleKey no es válido; 409 si ya existe una PENDIENTE del mismo
-   * usuario+roleKey (evita duplicados). No notifica al admin (ver JSDoc de clase).
+   * 400 si el roleKey no existe en la tabla `Role` (catálogo dinámico); 409 si
+   * ya existe una PENDIENTE del mismo usuario+roleKey (evita duplicados). No
+   * notifica al admin (ver JSDoc de clase).
    */
   async create(userId: string, dto: CreatePermissionRequestDto): Promise<PermissionRequestView> {
-    const roleKey = this.parseRoleKey(dto.roleKey);
+    const roleKey = await this.validateRoleKey(dto.roleKey);
 
     const existing = await this.prisma.permissionRequest.findFirst({
       where: { userId, roleKey, status: 'PENDIENTE' },
@@ -151,12 +151,22 @@ export class PermissionRequestsService {
 
   // ============ Helpers ============
 
-  /** Valida el roleKey contra el contrato RoleKey (400 si es desconocido). */
-  private parseRoleKey(raw: string): RoleKey {
-    if (!isRoleKey(raw)) {
-      throw new BadRequestException(`Rol desconocido: "${raw}".`);
+  /**
+   * Valida que `roleKey` EXISTA en la tabla `Role` (400 si no está). Matriz
+   * RBAC dinámica (design doc 2026-07-01 §7): cualquier string tipa como
+   * `RoleKey` — incluidos roles personalizados `c_xxx` — así que la única
+   * validación es de existencia contra Postgres, mismo contrato que
+   * `UsersService.validateRoleKeys` (no usar `isRoleKey` como gate).
+   */
+  private async validateRoleKey(roleKey: string): Promise<RoleKey> {
+    const role = await this.prisma.role.findUnique({
+      where: { key: roleKey },
+      select: { key: true },
+    });
+    if (role === null) {
+      throw new BadRequestException(`El rol "${roleKey}" no existe en el catálogo.`);
     }
-    return raw;
+    return roleKey;
   }
 
   /** Solicitud PENDIENTE por id, o excepción: 404 si no existe, 409 si ya decidida. */

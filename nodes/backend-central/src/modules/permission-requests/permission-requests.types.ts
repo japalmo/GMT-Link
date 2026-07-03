@@ -10,7 +10,7 @@ export interface PermissionRequestView {
   id: string;
   /** Solicitante (dueño de la solicitud). */
   userId: string;
-  /** Rol solicitado (validado contra el contrato RoleKey). */
+  /** Rol solicitado (existencia validada contra la tabla `Role`). */
   roleKey: RoleKey;
   /** Scope de la solicitud (en el MVP siempre ORGANIZATION sobre ORG_ID). */
   scopeType: 'ORGANIZATION' | 'DEPARTMENT' | 'PROJECT' | 'SERVICE';
