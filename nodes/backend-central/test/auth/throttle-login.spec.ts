@@ -17,6 +17,7 @@ import { AuthController } from '../../src/auth/auth.controller';
  */
 
 const LIMIT = 5;
+const GLOBAL_LIMIT = 120;
 const TTL_MS = 60_000;
 
 function makeContext(ip: string): ExecutionContext {
@@ -33,7 +34,7 @@ function makeContext(ip: string): ExecutionContext {
 }
 
 async function makeGuard(): Promise<ThrottlerGuard> {
-  const options: ThrottlerModuleOptions = [{ name: 'default', ttl: TTL_MS, limit: LIMIT }];
+  const options: ThrottlerModuleOptions = [{ name: 'default', ttl: TTL_MS, limit: GLOBAL_LIMIT }];
   const storage = new ThrottlerStorageService();
   const reflector = new Reflector();
   const guard = new ThrottlerGuard(options, storage, reflector);
