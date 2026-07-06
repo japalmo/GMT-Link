@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { SessionMiddleware } from './auth/session.middleware';
 import { PermissionsGuard } from './authz/permissions.guard';
@@ -38,6 +39,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     CommonModule,
     StorageModule,
@@ -69,7 +71,10 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     MetricsModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

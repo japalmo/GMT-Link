@@ -19,6 +19,7 @@ import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { hashPassword, verifyPassword } from '../common/password';
 import { signToken } from '../common/jwt';
+import { Throttle } from '@nestjs/throttler';
 import './auth-request.types';
 
 /** Vista pública del usuario autenticado. Nunca expone campos internos. */
@@ -77,6 +78,7 @@ export class AuthController {
   ) {}
 
   /** Login propio: valida email+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   async login(@Body() body: LoginDto): Promise<{ token: string }> {
