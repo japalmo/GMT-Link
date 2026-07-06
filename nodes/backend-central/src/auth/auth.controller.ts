@@ -78,7 +78,7 @@ export class AuthController {
   ) {}
 
   /** Login propio: valida email+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // 5/min por IP: mitiga fuerza bruta de credenciales
   @Post('login')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   async login(@Body() body: LoginDto): Promise<{ token: string }> {

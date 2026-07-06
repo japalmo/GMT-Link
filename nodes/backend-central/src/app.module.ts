@@ -39,6 +39,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 
 @Module({
   imports: [
+    // Límite global anti-abuso: 120 req/min por IP (excluye /health).
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     CommonModule,

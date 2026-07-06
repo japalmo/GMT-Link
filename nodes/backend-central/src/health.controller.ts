@@ -1,6 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { HealthResponse } from '@gmt-platform/contracts';
 
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   @Get()
