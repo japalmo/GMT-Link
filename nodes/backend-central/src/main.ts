@@ -6,9 +6,15 @@ config({ path: resolve(__dirname, '../../../.env') });
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import helmet from 'helmet';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  // Cabeceras de seguridad HTTP (X-Content-Type-Options, HSTS, etc.).
+  // La API es JSON pura (sin HTML propio) → desactivamos la CSP por defecto
+  // de helmet, que sólo aplica a documentos servidos por esta app; el resto
+  // de cabeceras sí se aplican.
+  app.use(helmet({ contentSecurityPolicy: false }));
   // Orígenes permitidos para CORS: configurable por env para Railway/producción.
   // `CORS_ORIGINS` = lista separada por comas (p. ej. "https://web.up.railway.app").
   // En dev cae al frontend local de Vite.
