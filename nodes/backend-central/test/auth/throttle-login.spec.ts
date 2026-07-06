@@ -67,3 +67,38 @@ describe('Rate limit de POST /auth/login', () => {
     await expect(guard.canActivate(ctxB)).resolves.toBe(true);
   });
 });
+
+/**
+ * Verifica que POST /auth/first-login/complete también está limitado a
+ * 5 req / 60 s por IP. El guard se construye con el default GLOBAL (120),
+ * así que este test SOLO pasa si @Throttle({ default: { limit: 5, ttl: 60_000 } })
+ * está presente en el handler completeFirstLogin — si el decorador faltara,
+ * el guard usaría el default de 120 y la 6.ª petición NO lanzaría.
+ */
+function makeFirstLoginContext(ip: string): ExecutionContext {
+  const req = { ip, headers: {}, method: 'POST', url: '/auth/first-login/complete' };
+  const res = { header: () => undefined };
+  return {
+    getClass: () => AuthController,
+    getHandler: () => AuthController.prototype.completeFirstLogin,
+    switchToHttp: () => ({
+      getRequest: () => req,
+      getResponse: () => res,
+    }),
+  } as unknown as ExecutionContext;
+}
+
+describe('Rate limit de POST /auth/first-login/complete', () => {
+  let guard: ThrottlerGuard;
+  beforeEach(async () => {
+    guard = await makeGuard();
+  });
+
+  it('permite las primeras 5 peticiones y bloquea la 6.ª con ThrottlerException (429)', async () => {
+    const ctx = makeFirstLoginContext('203.0.113.7');
+    for (let i = 0; i < LIMIT; i++) {
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    }
+    await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ThrottlerException);
+  });
+});

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 config({ path: resolve(__dirname, '../../../.env') });
 
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import { validateAuthJwtSecret } from './common/env';
@@ -12,7 +13,12 @@ import { validateAuthJwtSecret } from './common/env';
 async function bootstrap(): Promise<void> {
   // Fail-fast: aborta el arranque si AUTH_JWT_SECRET falta o es débil.
   validateAuthJwtSecret();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Detrás del proxy de Railway: confiar en 1 hop para que req.ip sea la IP real
+  // del cliente (X-Forwarded-For). Sin esto el rate-limit por IP colapsa en un
+  // único balde global y un atacante bloquea el login de todos. También habilita
+  // HSTS correcto (helmet detecta https por el proxy).
+  app.set('trust proxy', 1);
   // Cabeceras de seguridad HTTP (X-Content-Type-Options, HSTS, etc.).
   // La API es JSON pura (sin HTML propio) → desactivamos la CSP por defecto
   // de helmet, que sólo aplica a documentos servidos por esta app; el resto

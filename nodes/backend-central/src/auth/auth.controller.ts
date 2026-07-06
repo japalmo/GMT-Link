@@ -192,6 +192,7 @@ export class AuthController {
    * Requiere sesión (401) y que el usuario esté en `PENDING_FIRST_LOGIN`
    * (409 si ya está activo/otro estado).
    */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // cambio de credenciales: 5/min por IP
   @Post('first-login/complete')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   async completeFirstLogin(

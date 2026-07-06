@@ -16,15 +16,15 @@ const MIN_SECRET_BYTES = 32;
  */
 export function validateAuthJwtSecret(): void {
   const secret = process.env.AUTH_JWT_SECRET;
-  if (!secret) {
+  if (!secret || secret.trim().length === 0) {
     throw new Error(
       'AUTH_JWT_SECRET no está configurado. Define un secreto de al menos 32 bytes antes de arrancar.',
     );
   }
-  const bytes = Buffer.byteLength(secret, 'utf8');
+  const bytes = Buffer.byteLength(secret.trim(), 'utf8');
   if (bytes < MIN_SECRET_BYTES) {
     throw new Error(
-      `AUTH_JWT_SECRET es demasiado corto (${bytes} bytes). Se requieren al menos ${MIN_SECRET_BYTES} bytes para HS256.`,
+      `AUTH_JWT_SECRET es demasiado corto (${bytes} bytes útiles). Se requieren al menos ${MIN_SECRET_BYTES} bytes para HS256.`,
     );
   }
 }

@@ -38,4 +38,15 @@ describe('validateAuthJwtSecret', () => {
     process.env.AUTH_JWT_SECRET = '😀'.repeat(16);
     expect(() => validateAuthJwtSecret()).not.toThrow();
   });
+
+  it('lanza si AUTH_JWT_SECRET es solo espacios (whitespace no cuenta como contenido)', () => {
+    process.env.AUTH_JWT_SECRET = ' '.repeat(40);
+    expect(() => validateAuthJwtSecret()).toThrow(/AUTH_JWT_SECRET/);
+  });
+
+  it('lanza si AUTH_JWT_SECRET tiene relleno de espacios: mide solo bytes útiles', () => {
+    // 34 bytes crudos, pero recortando espacios quedan 30 bytes útiles (< 32).
+    process.env.AUTH_JWT_SECRET = '  ' + 'a'.repeat(30) + '  ';
+    expect(() => validateAuthJwtSecret()).toThrow(/32/);
+  });
 });

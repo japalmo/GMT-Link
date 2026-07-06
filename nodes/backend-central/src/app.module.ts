@@ -73,6 +73,8 @@ import { MetricsModule } from './modules/metrics/metrics.module';
   ],
   controllers: [HealthController],
   providers: [
+    // El orden de este array = orden de ejecución de los guards globales en NestJS.
+    // ThrottlerGuard va PRIMERO para descartar floods antes de resolver permisos.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
