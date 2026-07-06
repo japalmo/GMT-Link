@@ -7,8 +7,11 @@ config({ path: resolve(__dirname, '../../../.env') });
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
+import { validateAuthJwtSecret } from './common/env';
 
 async function bootstrap(): Promise<void> {
+  // Fail-fast: aborta el arranque si AUTH_JWT_SECRET falta o es débil.
+  validateAuthJwtSecret();
   const app = await NestFactory.create(AppModule);
   // Cabeceras de seguridad HTTP (X-Content-Type-Options, HSTS, etc.).
   // La API es JSON pura (sin HTML propio) → desactivamos la CSP por defecto
