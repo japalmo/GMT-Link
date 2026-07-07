@@ -87,7 +87,7 @@ export class FaenasService {
     }
     const { projects, ...rest } = faena;
     const metrics = await this.computeMetrics(projects.map((p) => p.id));
-    return { ...rest, projects, metrics };
+    return { ...rest, projects, ...metrics };
   }
 
   /** Actualiza campos editables de una faena. */
@@ -116,13 +116,13 @@ export class FaenasService {
   private async withMetrics<T extends { projects: { id: string }[] }>(faena: T) {
     const { projects, ...rest } = faena;
     const metrics = await this.computeMetrics(projects.map((p) => p.id));
-    return { ...rest, metrics };
+    return { ...rest, ...metrics };
   }
 
   /** Calcula métricas agregadas sobre un conjunto de proyectos. */
   private async computeMetrics(projectIds: string[]) {
     if (projectIds.length === 0) {
-      return { projectsCount: 0, activeProjectsCount: 0, alertsCount: 0 };
+      return { projectsCount: 0, activeProjectsCount: 0, pendingAlertsCount: 0 };
     }
 
     const [activeProjects, alertsCount] = await Promise.all([
@@ -138,7 +138,7 @@ export class FaenasService {
     return {
       projectsCount: projectIds.length,
       activeProjectsCount: activeProjects.length,
-      alertsCount,
+      pendingAlertsCount: alertsCount,
     };
   }
 

@@ -1067,7 +1067,7 @@ function PhaseRow({
         <ModalContent className="sm:max-w-3xl">
           <div className="flex flex-col gap-4">
             <ModalHeader>
-              <ModalTitle>Datos esperados — {phase.name}</ModalTitle>
+              <ModalTitle>Datos esperados: {phase.name}</ModalTitle>
               <ModalDescription>
                 Define las variables tipadas que se capturarán en esta fase. Se reemplaza el spec
                 completo al guardar.

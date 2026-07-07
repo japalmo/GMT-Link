@@ -12,7 +12,9 @@ import {
   MapPin,
   Plus,
   Search,
+  TrendingUp,
 } from 'lucide-react';
+import { Metric } from './index';
 import { useClients } from '@/hooks/use-clients';
 import { useFaenas } from '@/hooks/use-faenas';
 import { useEligibleAdmins } from '@/hooks/use-project-hierarchy';
@@ -191,7 +193,7 @@ export default function ProyectosFaenasPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold leading-tight">
-              Faenas{client ? ` — ${client.name}` : ''}
+              Faenas{client ? ` de ${client.name}` : ''}
             </h1>
             <p className="text-sm text-muted-foreground">
               Selecciona una faena para ver sus proyectos.
@@ -439,18 +441,30 @@ function FaenaCard({ faena, onOpen }: { faena: FaenaView; onOpen: () => void }) 
         </div>
       </CardHeader>
       <CardContent className="pb-3">
-        <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <FolderKanban className="size-3.5" />
-            {faena.projectsCount} {faena.projectsCount === 1 ? 'proyecto' : 'proyectos'}
-          </span>
-          {(start || end) && (
-            <span>
-              {start ?? '—'}
-              {end ? ` → ${end}` : ''}
-            </span>
-          )}
+        <div className="flex gap-2">
+          <Metric
+            icon={<FolderKanban className="size-4" />}
+            value={faena.projectsCount}
+            label="Proyectos"
+          />
+          <Metric
+            icon={<TrendingUp className="size-4" />}
+            value={faena.activeProjectsCount}
+            label="Activos"
+          />
+          <Metric
+            icon={<AlertCircle className="size-4" />}
+            value={faena.pendingAlertsCount}
+            label="Alertas"
+            tone="alert"
+          />
         </div>
+        {(start || end) && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {start ?? 'sin inicio'}
+            {end ? ` a ${end}` : ''}
+          </p>
+        )}
       </CardContent>
       <CardFooter className="flex justify-end pb-3 pt-0">
         <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">

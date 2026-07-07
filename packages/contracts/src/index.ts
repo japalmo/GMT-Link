@@ -295,7 +295,7 @@ export interface ClientView {
 
 /**
  * Vista de una faena para el catálogo `GET /clients/:id/faenas` (Capa 2).
- * Incluye la métrica `projectsCount` de la card.
+ * Expone las 3 métricas de la card al nivel raíz, en paridad con {@link ClientView}.
  */
 export interface FaenaView {
   id: string;
@@ -307,6 +307,8 @@ export interface FaenaView {
   startDate: string | null;
   endDate: string | null;
   projectsCount: number;
+  activeProjectsCount: number;
+  pendingAlertsCount: number;
 }
 
 /**

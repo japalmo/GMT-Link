@@ -287,8 +287,8 @@ export default function ProyectosClientesPage() {
   );
 }
 
-/** Métrica individual del carrusel de la card. */
-function Metric({
+/** Métrica individual del carrusel de la card. Compartida con la Capa 2 (faenas). */
+export function Metric({
   icon,
   value,
   label,

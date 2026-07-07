@@ -589,7 +589,7 @@ function NewProjectDialog({
               <option value="">Sin asignar</option>
               {admins.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.firstName} {a.lastName} — {a.email}
+                  {a.firstName} {a.lastName} ({a.email})
                 </option>
               ))}
             </select>
