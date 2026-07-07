@@ -48,6 +48,7 @@ import {
   listUsers,
   listMetricPhases,
   createMetricPhase,
+  createService,
   setPhaseDataSpec,
   setServiceFrequency,
   type MetricPhase,
@@ -69,6 +70,16 @@ import type {
 
 /** Roles que pueden gestionar el equipo del proyecto (gate demo del tab Trabajadores). */
 const TEAM_MANAGER_ROLES = ['org_admin', 'department_admin', 'project_creator'];
+
+/**
+ * Roles que habilitan la creación de servicios en el proyecto (gate demo del
+ * permiso especial `service:create`). El backend lo aplica de verdad con
+ * OpenFGA (`can_create_service = [user] or project_creator`, ver `fga/model.fga`
+ * y `@RequirePermission('can_create_service')` en `projects.controller`);
+ * este arreglo solo decide si mostrar el botón en la UI, igual que los demás
+ * gates de creación de esta sección.
+ */
+const SERVICE_CREATE_ROLES = ['org_admin', 'department_admin', 'project_creator'];
 
 /** Roles asignables a un trabajador dentro del proyecto (selector del diálogo). */
 const ASSIGNABLE_ROLE_KEYS: string[] = [
@@ -161,6 +172,7 @@ export default function VistaProyectoPage(): ReactNode {
   const { project, loading, error, refetch } = useProject(projectId);
 
   const canManageTeam = useHasRole(TEAM_MANAGER_ROLES);
+  const canCreateService = useHasRole(SERVICE_CREATE_ROLES);
 
   const detail = project as ProjectDetail | null;
   const projectType = detail?.projectType ?? null;
@@ -305,6 +317,7 @@ export default function VistaProyectoPage(): ReactNode {
           services={(project.services ?? []) as ServiceWithFrequency[]}
           isRoutine={isRoutine}
           canManage={canManageTeam}
+          canCreateService={canCreateService}
           onServiceChanged={refetch}
         />
       )}
@@ -611,30 +624,157 @@ function FasesTab({
   services,
   isRoutine,
   canManage,
+  canCreateService,
   onServiceChanged,
 }: {
   projectId: string;
   services: ServiceWithFrequency[];
   isRoutine: boolean;
   canManage: boolean;
+  canCreateService: boolean;
   onServiceChanged: () => Promise<void> | void;
 }): ReactNode {
+  // Crear servicio (gate especial `service:create` / `can_create_service`).
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const openCreate = () => {
+    setCode('');
+    setName('');
+    setFormError(null);
+    setDialogOpen(true);
+  };
+
+  const handleCreateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    const trimmedCode = code.trim().toUpperCase();
+    const trimmedName = name.trim();
+    if (trimmedCode.length !== 3) {
+      setFormError('El código del servicio debe tener exactamente 3 caracteres.');
+      return;
+    }
+    if (!trimmedName) {
+      setFormError('Ingresa el nombre del servicio.');
+      return;
+    }
+    setCreating(true);
+    try {
+      await createService(projectId, {
+        code: trimmedCode,
+        name: trimmedName,
+        // Config de codificación de documentos mínima (JSONB no vacío que exige
+        // el backend); se afina luego desde Operaciones.
+        docCodingConfig: { requiresClientSignature: false },
+      });
+      toast.success('Servicio creado.');
+      setDialogOpen(false);
+      await onServiceChanged();
+    } catch (err) {
+      setFormError(errorToMessage(err, 'No se pudo crear el servicio.'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const createDialog = (
+    <Modal open={dialogOpen} onOpenChange={setDialogOpen}>
+      <ModalContent>
+        <form onSubmit={handleCreateService} className="flex flex-col gap-4">
+          <ModalHeader>
+            <ModalTitle>Nuevo servicio</ModalTitle>
+            <ModalDescription>
+              Define el código y el nombre del servicio del proyecto.
+            </ModalDescription>
+          </ModalHeader>
+
+          {formError && (
+            <Alert variant="destructive" live>
+              {formError}
+            </Alert>
+          )}
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="service-code">Código</Label>
+              <Input
+                id="service-code"
+                value={code}
+                maxLength={3}
+                autoCapitalize="characters"
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="TOP"
+              />
+            </div>
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <Label htmlFor="service-name">Nombre</Label>
+              <Input
+                id="service-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Topografía"
+              />
+            </div>
+          </div>
+
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDialogOpen(false)}
+              disabled={creating}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={creating}>
+              {creating ? 'Creando…' : 'Crear servicio'}
+            </Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    </Modal>
+  );
+
   if (services.length === 0) {
     return (
-      <EmptyState
-        icon={isRoutine ? CalendarClock : Layers}
-        title="Sin servicios en el proyecto"
-        message={
-          isRoutine
-            ? 'Este proyecto no tiene servicios rutinarios definidos todavía.'
-            : 'Crea un servicio en el proyecto (Operaciones) para poder añadir fases.'
-        }
-      />
+      <div className="flex flex-col gap-4">
+        {canCreateService && (
+          <div className="flex justify-end">
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1 size-4" />
+              Crear servicio
+            </Button>
+          </div>
+        )}
+        <EmptyState
+          icon={isRoutine ? CalendarClock : Layers}
+          title="Sin servicios en el proyecto"
+          message={
+            canCreateService
+              ? 'Crea el primer servicio del proyecto para poder añadir fases y datos esperados.'
+              : isRoutine
+                ? 'Este proyecto no tiene servicios rutinarios definidos todavía.'
+                : 'Crea un servicio en el proyecto (Operaciones) para poder añadir fases.'
+          }
+        />
+        {createDialog}
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {canCreateService && (
+        <div className="flex justify-end">
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-1 size-4" />
+            Crear servicio
+          </Button>
+        </div>
+      )}
       {services.map((srv) => (
         <ServiceBlock
           key={srv.id}
@@ -645,6 +785,7 @@ function FasesTab({
           onServiceChanged={onServiceChanged}
         />
       ))}
+      {createDialog}
     </div>
   );
 }

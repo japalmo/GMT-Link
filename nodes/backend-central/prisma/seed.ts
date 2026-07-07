@@ -41,6 +41,12 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'directorio', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
   // ── clientes ──
   { key: 'client:create', label: 'Crear cliente', module: 'clientes', kind: 'FUNCTIONAL', scopeable: false },
+  // ── proveedores / bodegas (subsecciones con permiso especial) ──
+  // Acceso a la subsección Proveedores (list/detalle/crear/productos/ratings/limpiar).
+  // FUNCTIONAL org-scope (siempre GLOBAL): gatea toda la subsección, no un recurso por proyecto.
+  { key: 'provider:access', label: 'Acceder a Proveedores', module: 'proveedores', kind: 'FUNCTIONAL', scopeable: false },
+  // Acceso a la subsección Bodegas/Insumos (bodegas: list/detalle/crear/transacciones; insumos: list/crear/importar).
+  { key: 'warehouse:access', label: 'Acceder a Bodegas', module: 'bodegas', kind: 'FUNCTIONAL', scopeable: false },
   // ── proyectos ──
   { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'faena:create', label: 'Crear faena', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
@@ -118,7 +124,7 @@ const ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
-    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
+    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('provider:access', 'GLOBAL'), g('warehouse:access', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
   },
   {
     key: 'project_creator',

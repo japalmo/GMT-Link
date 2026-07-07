@@ -52,8 +52,15 @@ export class LiquidationsController {
     });
   }
 
-  /** Lista las liquidaciones propias del colaborador autenticado. */
+  /**
+   * Lista las liquidaciones propias del colaborador autenticado.
+   *
+   * Liquidaciones es una sección de gestión (manager-only): aun la vista "mía"
+   * queda tras `can_manage_finance`, igual que create/listAll/delete. El rol por
+   * defecto (worker) NO accede a esta ruta.
+   */
   @Get('me')
+  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
   listMine(@CurrentUser() authUser: AuthUser | undefined) {
     const userId = this.requireUserId(authUser);
     return this.liquidations.listMine(userId);
