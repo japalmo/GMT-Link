@@ -1083,13 +1083,29 @@ export class AssetsService {
       }
     }
 
+    // Mapa itemId → tipo de la plantilla. Solo las preguntas SÍ/NO cuentan como
+    // falla; un campo de texto libre (p. ej. "Observaciones") cuyo texto sea "no"
+    // NO debe forzar el paso a MANTENIMIENTO ni un registro de falla.
+    const itemTypeById = new Map<string, string>();
+    for (const raw of (template.items as unknown as Array<Record<string, unknown>>) ?? []) {
+      if (raw && typeof raw.id === 'string' && typeof raw.type === 'string') {
+        itemTypeById.set(raw.id, raw.type);
+      }
+    }
     let hasFailure = false;
     let failureDetail = '';
     for (const ans of answers) {
-      if (ans.value === false || ans.value === 'no' || ans.value === 'failed') {
+      const itemId = typeof ans.itemId === 'string' ? ans.itemId : '';
+      const isYesNo = itemTypeById.get(itemId) === 'YES_NO';
+      // Un booleano `false` solo puede provenir de una pregunta SÍ/NO. Un string
+      // 'no'/'failed' solo cuenta como falla si el ítem es SÍ/NO (evita que un
+      // campo de texto libre con el texto "no" fuerce MANTENIMIENTO).
+      const negative =
+        ans.value === false ||
+        ((ans.value === 'no' || ans.value === 'failed') && isYesNo);
+      if (negative) {
         hasFailure = true;
-        const itemLabel = ans.label || ans.itemId || 'ítem sin nombre';
-        failureDetail = String(itemLabel);
+        failureDetail = String(ans.label || ans.itemId || 'ítem sin nombre');
         break;
       }
     }

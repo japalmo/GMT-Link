@@ -747,6 +747,7 @@ function ServiceBlock({
   const [savingFreq, setSavingFreq] = useState(false);
 
   const handleSaveFrequency = async (value: ServiceFrequency) => {
+    const previous = frequency;
     setFrequency(value);
     setSavingFreq(true);
     try {
@@ -754,6 +755,7 @@ function ServiceBlock({
       toast.success('Frecuencia actualizada.');
       await onServiceChanged();
     } catch (err) {
+      setFrequency(previous); // revertir el optimismo si el PUT falla
       toast.error(toMessage(err, 'No se pudo actualizar la frecuencia.'));
     } finally {
       setSavingFreq(false);

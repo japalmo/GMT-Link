@@ -103,6 +103,7 @@ export default function RecursosPage(): ReactNode {
     <button
       key={tab}
       onClick={() => { setActiveTab(tab); setSelectedAssetId(null); }}
+      aria-current={activeTab === tab ? 'page' : undefined}
       className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
         activeTab === tab
           ? 'border-primary text-foreground'

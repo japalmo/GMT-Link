@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import type { PDFFont, PDFPage } from 'pdf-lib';
+import type { PDFFont } from 'pdf-lib';
 
 /** Un ítem de la plantilla con su respuesta ya resuelta, listo para dibujar. */
 export interface ChecklistPdfRow {
