@@ -1,9 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import { Eye, Search, Inbox, Users, Building2, AlertCircle } from 'lucide-react';
+import { Eye, Users, Building2 } from 'lucide-react';
 import type { DirectoryEntry } from '@gmt-platform/contracts';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { SearchInput } from '@/components/ui/search-input';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -100,50 +104,26 @@ export default function DirectorioPage(): ReactNode {
     clientsByCompany[comp].push(c);
   });
 
+  const tabItems: TabItem<'colaboradores' | 'clientes'>[] = [
+    { value: 'colaboradores', label: `Colaboradores (${colaboradores.length})`, icon: Users },
+    { value: 'clientes', label: `Clientes (${clientes.length})`, icon: Building2 },
+  ];
+
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8 w-full max-w-7xl mx-auto">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Directorio
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Encuentra a colaboradores y clientes y abre su detalle.
-          </p>
-        </div>
-      </header>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        variant="gradient"
+        title="Directorio"
+        description="Encuentra a colaboradores y clientes y abre su detalle."
+      />
 
       {/* Tabs selector */}
-      <div className="flex border-b border-border gap-2">
-        <button
-          onClick={() => setActiveTab('colaboradores')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === 'colaboradores'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Users className="size-4" />
-          Colaboradores
-          <Badge variant="secondary" className="ml-1 text-[10px] py-0 px-1.5 font-bold">
-            {colaboradores.length}
-          </Badge>
-        </button>
-        <button
-          onClick={() => setActiveTab('clientes')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === 'clientes'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Building2 className="size-4" />
-          Clientes
-          <Badge variant="secondary" className="ml-1 text-[10px] py-0 px-1.5 font-bold">
-            {clientes.length}
-          </Badge>
-        </button>
-      </div>
+      <Tabs<'colaboradores' | 'clientes'>
+        aria-label="Secciones del directorio"
+        items={tabItems}
+        value={activeTab}
+        onValueChange={setActiveTab}
+      />
 
       {activeTab === 'colaboradores' ? (
         <RoleScopedList<DirectoryEntry>
@@ -173,46 +153,21 @@ export default function DirectorioPage(): ReactNode {
       ) : (
         <div className="flex flex-col gap-4">
           {/* Client Search bar */}
-          <div className="relative max-w-md w-full">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              type="search"
-              className="pl-9"
-              placeholder="Buscar clientes por nombre, correo o empresa…"
-              value={clientSearch}
-              onChange={(e) => setClientSearch(e.target.value)}
-              disabled={loading}
-            />
-          </div>
+          <SearchInput
+            className="max-w-md"
+            label="Buscar clientes"
+            placeholder="Buscar clientes por nombre, correo o empresa…"
+            value={clientSearch}
+            onChange={(e) => setClientSearch(e.target.value)}
+            disabled={loading}
+          />
 
           {loading ? (
-            <div className="flex flex-col gap-4">
-              {Array.from({ length: 2 }).map((_, idx) => (
-                <Card key={idx} className="border border-border animate-pulse">
-                  <div className="h-10 bg-muted/60 border-b border-border" />
-                  <div className="p-4 space-y-2">
-                    <div className="h-4 bg-muted/40 rounded w-1/3" />
-                    <div className="h-4 bg-muted/40 rounded w-1/2" />
-                  </div>
-                </Card>
-              ))}
-            </div>
+            <LoadingState label="Cargando clientes…" />
           ) : error ? (
-            <div className="flex flex-col items-center justify-center p-12 border border-destructive/20 bg-destructive/5 rounded-xl text-center">
-              <AlertCircle className="size-8 text-destructive mb-2" />
-              <p className="text-sm text-destructive font-medium">{error}</p>
-              <Button variant="outline" size="sm" className="mt-4" onClick={() => void refetch()}>
-                Reintentar
-              </Button>
-            </div>
+            <ErrorState message={error} onRetry={() => void refetch()} />
           ) : Object.keys(clientsByCompany).length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-card">
-              <Inbox className="size-8 text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">No se encontraron clientes.</p>
-            </div>
+            <EmptyState message="No se encontraron clientes." />
           ) : (
             <div className="flex flex-col gap-6">
               {Object.entries(clientsByCompany).map(([company, list]) => (
@@ -285,6 +240,6 @@ export default function DirectorioPage(): ReactNode {
         fallbackEntry={selected}
         onClose={() => setSelected(null)}
       />
-    </div>
+    </PageContainer>
   );
 }

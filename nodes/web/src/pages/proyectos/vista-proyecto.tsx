@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
   ArrowLeft,
   Briefcase,
   CalendarClock,
@@ -21,6 +20,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { PageContainer } from '@/components/layout/page-container';
 import {
   Card,
   CardContent,
@@ -40,7 +44,7 @@ import { useProject, useAssignments } from '@/hooks/use-project-hierarchy';
 import { useHasRole } from '@/hooks/use-has-role';
 import { roleLabel } from '@/lib/role-labels';
 import {
-  ApiError,
+  errorToMessage,
   listUsers,
   listMetricPhases,
   createMetricPhase,
@@ -134,20 +138,6 @@ interface VariableRow extends PhaseVariableSpecInput {
   _key: string;
 }
 
-/**
- * Clases del `<select>` nativo alineadas con el focus ring del DS (Input /
- * Textarea). No existe un componente Select en el design system todavía; hasta
- * entonces reusamos este estilo para mantener consistencia con los inputs.
- */
-const selectClass =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50';
-
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
-
 function newVariableRow(): VariableRow {
   return {
     _key: crypto.randomUUID(),
@@ -192,46 +182,41 @@ export default function VistaProyectoPage(): ReactNode {
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
-        <div className="h-8 w-64 animate-pulse rounded bg-muted/40" aria-hidden />
-        <div className="h-32 animate-pulse rounded-lg border border-border bg-muted/30" aria-hidden />
-        <div className="h-64 animate-pulse rounded-lg border border-border bg-muted/20" aria-hidden />
-      </div>
+      <PageContainer maxWidth="6xl">
+        <LoadingState rows={6} label="Cargando el proyecto…" />
+      </PageContainer>
     );
   }
 
   if (error || !project) {
     return (
-      <div className="mx-auto w-full max-w-6xl px-4 py-6">
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="size-4" />
-            <span>{error ?? 'No se encontró el proyecto.'}</span>
-          </div>
-        </div>
-        <div className="mt-4">
+      <PageContainer maxWidth="6xl">
+        <ErrorState message={error ?? 'No se encontró el proyecto.'} />
+        <div>
           <Link to="/proyectos" className={buttonVariants({ variant: 'outline' })}>
             <ArrowLeft className="mr-2 size-4" />
             Volver a proyectos
           </Link>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
-  const tabs: { key: TabKey; label: string; icon: typeof Users; visible: boolean }[] = [
-    { key: 'trabajadores', label: 'Trabajadores', icon: Users, visible: canManageTeam },
-    { key: 'documentacion', label: 'Documentación', icon: FileText, visible: true },
+  const allTabItems: TabItem<TabKey>[] = [
+    { value: 'trabajadores', label: 'Trabajadores', icon: Users },
+    { value: 'documentacion', label: 'Documentación', icon: FileText },
     {
-      key: 'fases',
+      value: 'fases',
       label: isRoutine ? 'Servicios' : 'Fases',
       icon: isRoutine ? CalendarClock : Layers,
-      visible: true,
     },
   ];
+  const tabItems = allTabItems.filter(
+    (t) => t.value !== 'trabajadores' || canManageTeam,
+  );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
+    <PageContainer maxWidth="6xl">
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground" aria-label="Ruta">
         <Link to="/proyectos" className="hover:text-foreground">
@@ -302,31 +287,12 @@ export default function VistaProyectoPage(): ReactNode {
       </Card>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {tabs
-          .filter((t) => t.visible)
-          .map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <span className="flex items-center gap-2">
-                  <Icon className="size-4" />
-                  {t.label}
-                </span>
-              </button>
-            );
-          })}
-      </div>
+      <Tabs
+        items={tabItems}
+        value={tab}
+        onValueChange={setTab}
+        aria-label="Secciones del proyecto"
+      />
 
       {/* Contenido del tab */}
       {tab === 'trabajadores' && canManageTeam && (
@@ -342,7 +308,7 @@ export default function VistaProyectoPage(): ReactNode {
           onServiceChanged={refetch}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -417,7 +383,7 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
       }
       setDialogOpen(false);
     } catch (err) {
-      setFormError(toMessage(err, 'No se pudo guardar la asignación.'));
+      setFormError(errorToMessage(err, 'No se pudo guardar la asignación.'));
     } finally {
       setSaving(false);
     }
@@ -429,7 +395,7 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
       await remove(assignmentId);
       toast.success('Trabajador removido del proyecto.');
     } catch (err) {
-      toast.error(toMessage(err, 'No se pudo remover al trabajador.'));
+      toast.error(errorToMessage(err, 'No se pudo remover al trabajador.'));
     } finally {
       setRemovingId(null);
     }
@@ -451,26 +417,15 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex flex-col gap-2" aria-hidden>
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="h-14 animate-pulse rounded-lg bg-muted/30" />
-            ))}
-          </div>
+          <LoadingState rows={3} label="Cargando el equipo…" />
         ) : error ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="size-4" />
-              <span>{error}</span>
-            </div>
-          </div>
+          <ErrorState message={error} />
         ) : assignments.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-card/30 py-12 text-center">
-            <Users className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-            <h3 className="font-semibold">Sin trabajadores asignados</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Agrega trabajadores para conformar el equipo de este proyecto.
-            </p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title="Sin trabajadores asignados"
+            message="Agrega trabajadores para conformar el equipo de este proyecto."
+          />
         ) : (
           <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
             {assignments.map((a) => {
@@ -529,19 +484,19 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
             </ModalHeader>
 
             {formError && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+              <Alert variant="destructive" live>
                 {formError}
-              </div>
+              </Alert>
             )}
 
             {!editingId && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="assign-user">Usuario</Label>
-                <select
+                <Select
                   id="assign-user"
+                  aria-label="Usuario a asignar"
                   value={formUserId}
                   onChange={(e) => setFormUserId(e.target.value)}
-                  className={selectClass}
                 >
                   <option value="">Selecciona un usuario…</option>
                   {users.map((u) => (
@@ -549,37 +504,37 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
                       {u.firstName} {u.lastName} ({u.email})
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="assign-role">Rol</Label>
-                <select
+                <Select
                   id="assign-role"
+                  aria-label="Rol del trabajador"
                   value={formRole}
                   onChange={(e) => setFormRole(e.target.value)}
-                  className={selectClass}
                 >
                   {ASSIGNABLE_ROLE_KEYS.map((rk) => (
                     <option key={rk} value={rk}>
                       {roleLabel(rk)}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="assign-status">Estado</Label>
-                <select
+                <Select
                   id="assign-status"
+                  aria-label="Estado del trabajador"
                   value={formStatus}
                   onChange={(e) => setFormStatus(e.target.value as ProjectWorkerStatus)}
-                  className={selectClass}
                 >
                   <option value="ACTIVO">Activo</option>
                   <option value="INACTIVO">Inactivo</option>
-                </select>
+                </Select>
               </div>
             </div>
 
@@ -639,9 +594,7 @@ function DocumentacionTab(): ReactNode {
             <CardDescription>{s.description}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
-              <p className="text-sm text-muted-foreground">Sin documentos</p>
-            </div>
+            <EmptyState icon={FileText} message="Sin documentos" />
           </CardContent>
         </Card>
       ))}
@@ -668,19 +621,15 @@ function FasesTab({
 }): ReactNode {
   if (services.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-card/30 py-12 text-center">
-        {isRoutine ? (
-          <CalendarClock className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-        ) : (
-          <Layers className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-        )}
-        <h3 className="font-semibold">Sin servicios en el proyecto</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isRoutine
+      <EmptyState
+        icon={isRoutine ? CalendarClock : Layers}
+        title="Sin servicios en el proyecto"
+        message={
+          isRoutine
             ? 'Este proyecto no tiene servicios rutinarios definidos todavía.'
-            : 'Crea un servicio en el proyecto (Operaciones) para poder añadir fases.'}
-        </p>
-      </div>
+            : 'Crea un servicio en el proyecto (Operaciones) para poder añadir fases.'
+        }
+      />
     );
   }
 
@@ -732,7 +681,7 @@ function ServiceBlock({
       const list = await listMetricPhases(service.id);
       if (mountedRef.current) setPhases(list);
     } catch (err) {
-      if (mountedRef.current) setError(toMessage(err, 'No se pudieron cargar las fases.'));
+      if (mountedRef.current) setError(errorToMessage(err, 'No se pudieron cargar las fases.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -756,7 +705,7 @@ function ServiceBlock({
       await onServiceChanged();
     } catch (err) {
       setFrequency(previous); // revertir el optimismo si el PUT falla
-      toast.error(toMessage(err, 'No se pudo actualizar la frecuencia.'));
+      toast.error(errorToMessage(err, 'No se pudo actualizar la frecuencia.'));
     } finally {
       setSavingFreq(false);
     }
@@ -789,7 +738,7 @@ function ServiceBlock({
       setPhaseName('');
       await loadPhases();
     } catch (err) {
-      setPhaseError(toMessage(err, 'No se pudo crear la fase.'));
+      setPhaseError(errorToMessage(err, 'No se pudo crear la fase.'));
     } finally {
       setCreatingPhase(false);
     }
@@ -824,37 +773,35 @@ function ServiceBlock({
             <Label htmlFor={`freq-${service.id}`} className="text-sm">
               Frecuencia
             </Label>
-            <select
+            <Select
               id={`freq-${service.id}`}
+              aria-label="Frecuencia del servicio"
               value={frequency}
               disabled={!canManage || savingFreq}
               onChange={(e) => handleSaveFrequency(e.target.value as ServiceFrequency)}
-              className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-auto"
             >
               {SERVICE_FREQUENCIES.map((f) => (
                 <option key={f.value} value={f.value}>
                   {f.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
 
         {loading ? (
-          <div className="h-16 animate-pulse rounded-lg bg-muted/30" aria-hidden />
+          <LoadingState rows={2} label="Cargando fases…" />
         ) : error ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="size-4" />
-              <span>{error}</span>
-            </div>
-          </div>
+          <ErrorState message={error} onRetry={() => void loadPhases()} />
         ) : phases.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            {isRoutine
-              ? 'Sin rutinas definidas. Crea una para configurar los datos esperados.'
-              : 'Sin fases. Crea una fase para configurar sus datos esperados.'}
-          </p>
+          <EmptyState
+            message={
+              isRoutine
+                ? 'Sin rutinas definidas. Crea una para configurar los datos esperados.'
+                : 'Sin fases. Crea una fase para configurar sus datos esperados.'
+            }
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {phases.map((phase) => (
@@ -881,9 +828,9 @@ function ServiceBlock({
             </ModalHeader>
 
             {phaseError && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+              <Alert variant="destructive" live>
                 {phaseError}
-              </div>
+              </Alert>
             )}
 
             <div className="grid grid-cols-3 gap-4">
@@ -1014,7 +961,7 @@ function PhaseRow({
       setEditorOpen(false);
       await onSaved();
     } catch (err) {
-      setEditorError(toMessage(err, 'No se pudieron guardar los datos esperados.'));
+      setEditorError(errorToMessage(err, 'No se pudieron guardar los datos esperados.'));
     } finally {
       setSaving(false);
     }
@@ -1077,9 +1024,9 @@ function PhaseRow({
             </ModalHeader>
 
             {editorError && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+              <Alert variant="destructive" live>
                 {editorError}
-              </div>
+              </Alert>
             )}
 
             <div className="flex flex-col gap-3">
@@ -1119,20 +1066,20 @@ function PhaseRow({
                     <Label className="text-xs" htmlFor={`type-${row._key}`}>
                       Tipo
                     </Label>
-                    <select
+                    <Select
                       id={`type-${row._key}`}
+                      aria-label="Tipo de variable"
                       value={row.type}
                       onChange={(e) =>
                         updateRow(row._key, { type: e.target.value as VariableType })
                       }
-                      className={selectClass}
                     >
                       {VARIABLE_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
                           {t.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <div className="flex flex-col gap-1 sm:col-span-2">
                     <Label className="text-xs" htmlFor={`unit-${row._key}`}>
@@ -1146,7 +1093,7 @@ function PhaseRow({
                     />
                   </div>
                   <div className="flex items-end justify-between gap-2 sm:col-span-2">
-                    <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <Label className="flex cursor-pointer items-center gap-1.5 text-xs font-normal">
                       <input
                         type="checkbox"
                         checked={row.required ?? false}
@@ -1154,7 +1101,7 @@ function PhaseRow({
                         className="size-4 rounded border-input text-primary focus:ring-primary"
                       />
                       Requerida
-                    </label>
+                    </Label>
                     <Button
                       type="button"
                       variant="ghost"

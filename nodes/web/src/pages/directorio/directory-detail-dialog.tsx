@@ -5,7 +5,7 @@ import type {
   DirectoryEntryExtended,
 } from '@gmt-platform/contracts';
 import {
-  ApiError,
+  errorToMessage,
   getDirectoryEntry,
   getDirectoryExtended,
 } from '@/lib/api';
@@ -17,17 +17,10 @@ import {
   ModalTitle,
 } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { RoleChips } from '@/pages/usuarios/role-chips';
-import { StatusBadge } from '@/pages/usuarios/status-badge';
 import { PersonAvatar } from './person-avatar';
 import { TypeBadge } from './type-badge';
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /** Compone el nombre completo a partir de los campos disponibles. */
 function fullName(
@@ -98,7 +91,7 @@ export function DirectoryDetailDialog({
         const basic = await getDirectoryEntry(id);
         if (active) setEntry(basic);
       } catch (err) {
-        if (active) setError(toMessage(err, 'No se pudo cargar el detalle.'));
+        if (active) setError(errorToMessage(err, 'No se pudo cargar el detalle.'));
         if (active) setLoading(false);
         return;
       }
@@ -161,7 +154,7 @@ export function DirectoryDetailDialog({
                   <h3 className="text-lg font-semibold tracking-tight">{name}</h3>
                   <div className="flex flex-wrap items-center gap-2">
                     <TypeBadge isClientUser={entry.isClientUser} />
-                    {extended && <StatusBadge status={extended.status} />}
+                    {extended && <StatusBadge type="user" status={extended.status} />}
                   </div>
                 </div>
               </div>

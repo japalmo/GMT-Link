@@ -8,7 +8,14 @@ import type {
   RoleGrant,
   UpdateRoleInput,
 } from '@gmt-platform/contracts';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { errorToMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const SCOPE_OPTIONS: ReadonlyArray<{ value: PermissionScopeValue; label: string }> = [
@@ -98,7 +105,7 @@ export function RoleEditor({
     try {
       await onSave(role.key, { label, description: description || undefined, grants });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el rol.');
+      setError(errorToMessage(err, 'No se pudo guardar el rol.'));
     } finally {
       setSaving(false);
     }
@@ -108,34 +115,31 @@ export function RoleEditor({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-1 flex-col gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium leading-none">Nombre</span>
-            <input
-              type="text"
+          <Label className="flex flex-col gap-1.5">
+            <span>Nombre</span>
+            <Input
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               disabled={readOnly}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
             />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium leading-none">Descripción</span>
-            <textarea
+          </Label>
+          <Label className="flex flex-col gap-1.5">
+            <span>Descripción</span>
+            <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={readOnly}
               rows={2}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
             />
-          </label>
+          </Label>
         </div>
 
         {readOnly && (
           <div className="flex shrink-0 items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              <Lock className="size-3" aria-hidden />
+            <Badge variant="neutral">
+              <Lock className="mr-1 size-3" aria-hidden />
               Rol del sistema
-            </span>
+            </Badge>
             <Button type="button" variant="outline" size="sm" onClick={() => onClone(role.key)}>
               <Copy aria-hidden />
               Clonar
@@ -187,19 +191,20 @@ export function RoleEditor({
                         )}
                       >
                         {`Alcance de ${item.label}`}
-                        <select
+                        <Select
                           id={`${checkboxId}-scope`}
+                          aria-label={`Alcance de ${item.label}`}
                           value={draft?.scope ?? 'GLOBAL'}
                           disabled={readOnly || !checked}
                           onChange={(e) => setScope(item.key, e.target.value as PermissionScopeValue)}
-                          className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                          className="h-8 w-auto px-2 text-xs"
                         >
                           {SCOPE_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </label>
                     )}
                   </div>
@@ -211,9 +216,9 @@ export function RoleEditor({
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        <Alert variant="destructive" live>
           {error}
-        </p>
+        </Alert>
       )}
 
       {!readOnly && (

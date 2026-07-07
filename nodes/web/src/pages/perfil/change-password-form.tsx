@@ -1,19 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Check, Eye, EyeOff, TriangleAlert } from 'lucide-react';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 /** Longitud mínima de la contraseña (contrato backend). */
 const MIN_LENGTH = 8;
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /**
  * Sección "Cambiar contraseña" (§6-1.3). Pide la nueva clave y su confirmación,
@@ -59,7 +53,7 @@ export function ChangePasswordForm({
       reset();
       setSuccess(true);
     } catch (err) {
-      setError(toMessage(err, 'No se pudo cambiar la contraseña.'));
+      setError(errorToMessage(err, 'No se pudo cambiar la contraseña.'));
     } finally {
       setSubmitting(false);
     }
@@ -120,13 +114,9 @@ export function ChangePasswordForm({
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
-          <TriangleAlert className="size-4 shrink-0" aria-hidden />
+        <Alert variant="destructive" live icon={TriangleAlert}>
           {error}
-        </p>
+        </Alert>
       )}
 
       {success && (

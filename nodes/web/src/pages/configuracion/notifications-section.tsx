@@ -1,6 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Alert } from '@/components/ui/alert';
 import {
   Card,
   CardContent,
@@ -8,8 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { ErrorState, LoadingState } from '@/components/ui/states';
 import { cn } from '@/lib/utils';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
 import { useSettings } from '@/hooks/use-settings';
 
 /** Conmutador accesible (role=switch) controlado. */
@@ -102,9 +102,7 @@ export function NotificationsSection(): ReactNode {
     try {
       await save({ [key]: !settings[key] });
     } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : 'No se pudo guardar la preferencia.';
-      setSaveError(message);
+      setSaveError(errorToMessage(err, 'No se pudo guardar la preferencia.'));
     } finally {
       setSavingKey(null);
     }
@@ -120,20 +118,9 @@ export function NotificationsSection(): ReactNode {
       </CardHeader>
       <CardContent>
         {loading && !settings ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            Cargando preferencias…
-          </div>
+          <LoadingState rows={2} label="Cargando preferencias…" />
         ) : error && !settings ? (
-          <div className="flex flex-col items-start gap-3 py-6">
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <AlertCircle className="size-4 text-destructive" aria-hidden />
-              {error}
-            </p>
-            <Button variant="outline" size="sm" onClick={() => void refetch()}>
-              Reintentar
-            </Button>
-          </div>
+          <ErrorState message={error} onRetry={() => void refetch()} />
         ) : settings ? (
           <>
             <div className="divide-y divide-border">
@@ -153,9 +140,9 @@ export function NotificationsSection(): ReactNode {
               />
             </div>
             {saveError && (
-              <p className="mt-3 text-sm text-destructive" role="alert">
+              <Alert variant="destructive" live className="mt-3">
                 {saveError}
-              </p>
+              </Alert>
             )}
           </>
         ) : null}

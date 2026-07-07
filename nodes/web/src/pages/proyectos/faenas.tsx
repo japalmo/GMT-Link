@@ -11,7 +11,6 @@ import {
   FolderOpen,
   MapPin,
   Plus,
-  Search,
   TrendingUp,
 } from 'lucide-react';
 import { Metric } from './index';
@@ -23,6 +22,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/ui/states';
 import {
   Card,
   CardContent,
@@ -64,14 +67,6 @@ const STATUS_META: Record<
 };
 
 const STATUS_OPTIONS: FaenaStatus[] = ['PLANIFICADA', 'EN_PROGRESO', 'COMPLETADA'];
-
-/**
- * Clases del `<select>` nativo alineadas con el focus ring del DS (Input /
- * Textarea). No hay componente Select en el design system aún; hasta entonces
- * reusamos este estilo para mantener consistencia con los inputs.
- */
-const selectClass =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
  * Capa 2 — Faenas de un cliente (`/proyectos/cliente/:clientId`). Catálogo de
@@ -215,16 +210,13 @@ export default function ProyectosFaenasPage() {
       </div>
 
       {/* Buscador */}
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por nombre o código…"
-          className="pl-9"
-          aria-label="Buscar faenas"
-        />
-      </div>
+      <SearchInput
+        className="max-w-md flex-none"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Buscar por nombre o código…"
+        label="Buscar faenas"
+      />
 
       {/* Estados: carga / error / contenido */}
       {loading ? (
@@ -240,24 +232,17 @@ export default function ProyectosFaenasPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="size-4" />
-            <span>{error}</span>
-          </div>
-        </div>
+        <ErrorState message={error} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-card/30 py-12 text-center">
-          <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-          <h3 className="text-lg font-semibold">
-            {faenas.length === 0 ? 'No hay faenas' : 'Sin resultados'}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {faenas.length === 0
+        <EmptyState
+          icon={FolderOpen}
+          title={faenas.length === 0 ? 'No hay faenas' : 'Sin resultados'}
+          message={
+            faenas.length === 0
               ? 'Este cliente aún no tiene faenas registradas.'
-              : 'Ninguna faena coincide con la búsqueda.'}
-          </p>
-        </div>
+              : 'Ninguna faena coincide con la búsqueda.'
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((faena) => (
@@ -285,9 +270,9 @@ export default function ProyectosFaenasPage() {
               </ModalDescription>
             </ModalHeader>
             {formError && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+              <Alert variant="destructive" live>
                 {formError}
-              </div>
+              </Alert>
             )}
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-1 flex flex-col gap-1.5">
@@ -317,28 +302,28 @@ export default function ProyectosFaenasPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="faena-status">Estado</Label>
-                <select
+                <Select
                   id="faena-status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as FaenaStatus)}
-                  className={selectClass}
+                  aria-label="Estado de la faena"
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>
                       {STATUS_META[s].label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="faena-supervisor">
                   Supervisor <span className="text-muted-foreground">(opc.)</span>
                 </Label>
-                <select
+                <Select
                   id="faena-supervisor"
                   value={supervisorId}
                   onChange={(e) => setSupervisorId(e.target.value)}
-                  className={selectClass}
+                  aria-label="Supervisor de la faena"
                 >
                   <option value="">Sin asignar</option>
                   {admins.map((a) => (
@@ -346,7 +331,7 @@ export default function ProyectosFaenasPage() {
                       {a.firstName} {a.lastName}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -134,15 +136,12 @@ export default function ImportWizardDemo() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <header className="mb-8">
-        <p className="text-sm font-medium text-muted-foreground">Primitivas · §5</p>
-        <h1 className="text-3xl font-bold tracking-tight">ImportWizard</h1>
-        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-          Overlay de 4 pasos: descargar formato → subir → preview → confirmar.
-          Demo con plantilla de reembolsos y un parser CSV real.
-        </p>
-      </header>
+    <PageContainer maxWidth="3xl">
+      <PageHeader
+        label="Primitivas · §5"
+        title="ImportWizard"
+        description="Overlay de 4 pasos: descargar formato → subir → preview → confirmar. Demo con plantilla de reembolsos y un parser CSV real."
+      />
 
       <Card>
         <CardHeader>
@@ -181,6 +180,6 @@ export default function ImportWizardDemo() {
           </p>
         }
       />
-    </div>
+    </PageContainer>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Info, TriangleAlert } from 'lucide-react';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Modal,
@@ -13,13 +13,6 @@ import {
 } from '@/components/ui/modal';
 import type { PersonalDocumentView } from '@/types/documents';
 import { DOC_ACCEPT, FileField } from '../perfil/file-field';
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /**
  * Modal para subir una versión nueva de un documento existente (§6-1.5). Tras
@@ -63,7 +56,7 @@ export function VersionDialog({
       await onSubmit(document.id, file);
       onOpenChange(false);
     } catch (err) {
-      setError(toMessage(err, 'No se pudo subir la versión.'));
+      setError(errorToMessage(err, 'No se pudo subir la versión.'));
     } finally {
       setSubmitting(false);
     }
@@ -80,11 +73,10 @@ export function VersionDialog({
         </ModalHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          <p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <Info className="size-4 shrink-0" aria-hidden />
+          <Alert>
             La versión anterior se conservará y el documento volverá a quedar en
             revisión.
-          </p>
+          </Alert>
 
           <FileField
             label="Archivo nuevo"
@@ -99,13 +91,9 @@ export function VersionDialog({
           />
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>

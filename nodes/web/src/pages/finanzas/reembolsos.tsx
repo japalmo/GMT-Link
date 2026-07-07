@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
   Ban,
   Check,
   DollarSign,
@@ -9,13 +8,15 @@ import {
   Loader2,
   Plus,
   Printer,
-  RotateCw,
-  TriangleAlert,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { RejectDialog } from '@/components/ui/reject-dialog';
 import {
   Table,
   TableBody,
@@ -34,9 +35,7 @@ import {
   ModalTitle,
 } from '@/components/ui/modal';
 import { useReimbursements } from '@/hooks/use-reimbursements';
-import { downloadReimbursementsPdf } from '@/lib/api';
-import { FinanceStatusBadge } from './finance-status-badge';
-import { RejectDialog } from './reject-dialog';
+import { downloadReimbursementsPdf, errorToMessage } from '@/lib/api';
 import { formatCLP, formatDate } from '@/lib/format';
 import type { CreateReimbursementInput } from '@/types/finance';
 import { DOC_ACCEPT, validateFile } from '../perfil/file-field';
@@ -231,13 +230,9 @@ function NewReimbursementDialog({
           </div>
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>
@@ -524,29 +519,11 @@ export function ReembolsosTab(): ReactNode {
   };
 
   if (loading) {
-    return (
-      <div className="flex animate-pulse flex-col gap-3" aria-hidden>
-        <div className="h-10 rounded-md border border-border bg-muted/40" />
-        <div className="h-14 rounded-md border border-border bg-muted/40" />
-        <div className="h-14 rounded-md border border-border bg-muted/40" />
-      </div>
-    );
+    return <LoadingState rows={4} />;
   }
 
   if (error) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-12 text-center"
-      >
-        <AlertCircle className="size-8 text-destructive" aria-hidden />
-        <p className="max-w-sm text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={() => void refetch()}>
-          <RotateCw aria-hidden />
-          Reintentar
-        </Button>
-      </div>
-    );
+    return <ErrorState message={error} onRetry={() => void refetch()} />;
   }
 
   return (
@@ -568,14 +545,16 @@ export function ReembolsosTab(): ReactNode {
         </div>
 
         {mine.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
-            <FileText className="size-8 text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">Aún no tienes solicitudes de reembolso registradas.</p>
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus aria-hidden />
-              Nueva solicitud
-            </Button>
-          </div>
+          <EmptyState
+            icon={FileText}
+            message="Aún no tienes solicitudes de reembolso registradas."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden />
+                Nueva solicitud
+              </Button>
+            }
+          />
         ) : (
           <div className="rounded-md border border-border bg-card">
             <Table>
@@ -597,7 +576,7 @@ export function ReembolsosTab(): ReactNode {
                     <TableCell className="text-muted-foreground">{item.category || '—'}</TableCell>
                     <TableCell>{formatCLP(item.amount)}</TableCell>
                     <TableCell>
-                      <FinanceStatusBadge status={item.status} />
+                      <StatusBadge type="finance" status={item.status} />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -666,9 +645,7 @@ export function ReembolsosTab(): ReactNode {
           </div>
 
           {managerItems.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-8 text-center text-muted-foreground">
-              <p className="text-sm">No hay reembolsos pendientes ni registrados en el sistema.</p>
-            </div>
+            <EmptyState message="No hay reembolsos pendientes ni registrados en el sistema." />
           ) : (
             <div className="rounded-md border border-border bg-card">
               <Table>
@@ -716,7 +693,7 @@ export function ReembolsosTab(): ReactNode {
                         <TableCell>{item.concept}</TableCell>
                         <TableCell>{formatCLP(item.amount)}</TableCell>
                         <TableCell>
-                          <FinanceStatusBadge status={item.status} />
+                          <StatusBadge type="finance" status={item.status} />
                         </TableCell>
                         <TableCell>
                           {item.receiptUrl ? (
@@ -832,19 +809,17 @@ export function ReembolsosTab(): ReactNode {
           if (!open) setRejectTargetId(null);
         }}
         title="Rechazar reembolso"
+        reasonRequired={false}
         onConfirm={async (reason) => {
-          if (actioning) return;
-          if (rejectTargetId) {
-            setActioning(rejectTargetId);
-            try {
-              await reject(rejectTargetId, reason);
-              toast.success('Reembolso rechazado.');
-            } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Error al rechazar reembolso.');
-              throw err; // rethrow so that the dialog stays open and shows the error
-            } finally {
-              setActioning(null);
-            }
+          if (!rejectTargetId) return;
+          setActioning(rejectTargetId);
+          try {
+            await reject(rejectTargetId, reason);
+            toast.success('Reembolso rechazado.');
+          } catch (err) {
+            throw new Error(errorToMessage(err, 'Error al rechazar reembolso.'));
+          } finally {
+            setActioning(null);
           }
         }}
       />

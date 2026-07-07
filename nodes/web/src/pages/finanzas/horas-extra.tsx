@@ -1,18 +1,20 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
   Ban,
   Check,
   Clock,
   DollarSign,
   Plus,
-  RotateCw,
-  TriangleAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { RejectDialog } from '@/components/ui/reject-dialog';
 import {
   Table,
   TableBody,
@@ -31,8 +33,7 @@ import {
   ModalTitle,
 } from '@/components/ui/modal';
 import { useOvertime } from '@/hooks/use-overtime';
-import { FinanceStatusBadge } from './finance-status-badge';
-import { RejectDialog } from './reject-dialog';
+import { errorToMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import type { CreateOvertimeInput } from '@/types/finance';
 
@@ -145,7 +146,7 @@ function NewOvertimeDialog({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ot-reason">Motivo</Label>
-            <textarea
+            <Textarea
               id="ot-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -153,18 +154,13 @@ function NewOvertimeDialog({
               rows={3}
               required
               disabled={submitting}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>
@@ -228,29 +224,11 @@ export function HorasExtraTab(): ReactNode {
   };
 
   if (loading) {
-    return (
-      <div className="flex animate-pulse flex-col gap-3" aria-hidden>
-        <div className="h-10 rounded-md border border-border bg-muted/40" />
-        <div className="h-14 rounded-md border border-border bg-muted/40" />
-        <div className="h-14 rounded-md border border-border bg-muted/40" />
-      </div>
-    );
+    return <LoadingState rows={4} />;
   }
 
   if (error) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-12 text-center"
-      >
-        <AlertCircle className="size-8 text-destructive" aria-hidden />
-        <p className="max-w-sm text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={() => void refetch()}>
-          <RotateCw aria-hidden />
-          Reintentar
-        </Button>
-      </div>
-    );
+    return <ErrorState message={error} onRetry={() => void refetch()} />;
   }
 
   return (
@@ -266,14 +244,16 @@ export function HorasExtraTab(): ReactNode {
         </div>
 
         {mine.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
-            <Clock className="size-8 text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">Aún no tienes solicitudes de horas extra registradas.</p>
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus aria-hidden />
-              Nueva solicitud
-            </Button>
-          </div>
+          <EmptyState
+            icon={Clock}
+            message="Aún no tienes solicitudes de horas extra registradas."
+            action={
+              <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden />
+                Nueva solicitud
+              </Button>
+            }
+          />
         ) : (
           <div className="rounded-md border border-border bg-card">
             <Table>
@@ -294,7 +274,7 @@ export function HorasExtraTab(): ReactNode {
                       {item.reason}
                     </TableCell>
                     <TableCell>
-                      <FinanceStatusBadge status={item.status} />
+                      <StatusBadge type="finance" status={item.status} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -313,9 +293,7 @@ export function HorasExtraTab(): ReactNode {
           </div>
 
           {managerItems.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-8 text-center text-muted-foreground">
-              <p className="text-sm">No hay solicitudes de horas extra pendientes ni registradas en el sistema.</p>
-            </div>
+            <EmptyState message="No hay solicitudes de horas extra pendientes ni registradas en el sistema." />
           ) : (
             <div className="rounded-md border border-border bg-card">
               <Table>
@@ -348,7 +326,7 @@ export function HorasExtraTab(): ReactNode {
                           {item.reason}
                         </TableCell>
                         <TableCell>
-                          <FinanceStatusBadge status={item.status} />
+                          <StatusBadge type="finance" status={item.status} />
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1.5">
@@ -423,19 +401,17 @@ export function HorasExtraTab(): ReactNode {
           if (!open) setRejectTargetId(null);
         }}
         title="Rechazar solicitud de horas extra"
+        reasonRequired={false}
         onConfirm={async (reason) => {
-          if (actioning) return;
-          if (rejectTargetId) {
-            setActioning(rejectTargetId);
-            try {
-              await reject(rejectTargetId, reason);
-              toast.success('Solicitud rechazada.');
-            } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Error al rechazar solicitud.');
-              throw err;
-            } finally {
-              setActioning(null);
-            }
+          if (!rejectTargetId) return;
+          setActioning(rejectTargetId);
+          try {
+            await reject(rejectTargetId, reason);
+            toast.success('Solicitud rechazada.');
+          } catch (err) {
+            throw new Error(errorToMessage(err, 'Error al rechazar solicitud.'));
+          } finally {
+            setActioning(null);
           }
         }}
       />

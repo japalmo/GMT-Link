@@ -7,7 +7,11 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/components/ui/modal';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { errorToMessage } from '@/lib/api';
 
 /** Diálogo mínimo para nombrar un rol personalizado nuevo (sin permisos: se editan después en el editor). */
 export function NewRoleDialog({
@@ -32,7 +36,7 @@ export function NewRoleDialog({
       setLabel('');
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear el rol.');
+      setError(errorToMessage(err, 'No se pudo crear el rol.'));
     } finally {
       setBusy(false);
     }
@@ -46,21 +50,19 @@ export function NewRoleDialog({
           <ModalDescription>Elige un nombre; los permisos se configuran después.</ModalDescription>
         </ModalHeader>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium leading-none">Nombre</span>
-          <input
-            type="text"
+        <Label className="flex flex-col gap-1.5">
+          <span>Nombre</span>
+          <Input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             disabled={busy}
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
           />
-        </label>
+        </Label>
 
         {error && (
-          <p role="alert" className="text-sm text-destructive">
+          <Alert variant="destructive" live>
             {error}
-          </p>
+          </Alert>
         )}
 
         <ModalFooter>

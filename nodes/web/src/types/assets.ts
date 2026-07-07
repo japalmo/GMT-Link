@@ -73,15 +73,6 @@ export interface CreateAssetInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface UpdateAssetStatusInput {
-  status: AssetStatus;
-  description?: string;
-}
-
-export interface AssignAssetInput {
-  assignedToId: string | null;
-}
-
 export interface ReviewAssetDocInput {
   status: 'APROBADO' | 'RECHAZADO';
   reason?: string;

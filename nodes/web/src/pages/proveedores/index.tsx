@@ -9,7 +9,6 @@ import {
   Sparkles,
   ShoppingBag,
   MessageSquare,
-  AlertTriangle,
   Loader2,
   DollarSign,
   Info,
@@ -17,6 +16,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, LoadingState } from '@/components/ui/states';
 import {
   Card,
   CardContent,
@@ -328,16 +330,17 @@ export default function ProveedoresPage(): ReactNode {
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto py-2">
       {errorMsg && (
-        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          <AlertTriangle className="size-5 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold">Ha ocurrido un problema</p>
-            <p className="mt-1">{errorMsg}</p>
+        <Alert variant="destructive" live>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <p className="font-semibold">Ha ocurrido un problema</p>
+              <p className="mt-1">{errorMsg}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="h-auto p-1">
+              Descartar
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="h-auto p-1">
-            Descartar
-          </Button>
-        </div>
+        </Alert>
       )}
 
       {/* Main Workspace */}
@@ -636,15 +639,13 @@ export default function ProveedoresPage(): ReactNode {
                     )}
 
                     {loadingDetail ? (
-                      <div className="flex items-center justify-center py-12">
-                        <Loader2 className="size-6 animate-spin text-primary" />
-                      </div>
+                      <LoadingState label="Cargando catálogo…" />
                     ) : providerDetail.products.length === 0 ? (
-                      <div className="text-center py-16 border border-dashed rounded-lg border-border bg-muted/10">
-                        <ShoppingBag className="size-8 text-muted-foreground/40 mx-auto" />
-                        <p className="text-xs font-semibold text-muted-foreground mt-2">No hay productos en el catálogo</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">Crea productos manualmente o usa la Limpieza con IA.</p>
-                      </div>
+                      <EmptyState
+                        icon={ShoppingBag}
+                        title="No hay productos en el catálogo"
+                        message="Crea productos manualmente o usa la Limpieza con IA."
+                      />
                     ) : (
                       <div className="max-h-[350px] overflow-y-auto rounded-md border border-border">
                         <Table>
@@ -748,13 +749,9 @@ export default function ProveedoresPage(): ReactNode {
                     )}
 
                     {loadingDetail ? (
-                      <div className="flex justify-center py-6">
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                      </div>
+                      <LoadingState rows={3} label="Cargando calificaciones…" />
                     ) : providerDetail.ratings.length === 0 ? (
-                      <div className="text-center py-10 text-xs text-muted-foreground border border-dashed rounded-lg">
-                        Aún no cuenta con evaluaciones. Haz clic en "Evaluar" para agregar una.
-                      </div>
+                      <EmptyState message='Aún no cuenta con evaluaciones. Haz clic en "Evaluar" para agregar una.' />
                     ) : (
                       <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1">
                         {providerDetail.ratings.map((rate) => (
@@ -836,7 +833,7 @@ export default function ProveedoresPage(): ReactNode {
               {!aiCleanedData ? (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="aiRawText">Copiar y pegar texto crudo/sin formato:</Label>
-                  <textarea
+                  <Textarea
                     id="aiRawText"
                     rows={8}
                     placeholder={`Ejemplo:
@@ -847,7 +844,7 @@ Lista de precios actualizados para GMT:
 - Set de herramientas manuales por $45.000 global.`}
                     value={aiRawText}
                     onChange={(e) => setAiRawText(e.target.value)}
-                    className="w-full text-xs font-mono p-3 rounded-md border bg-muted/40 focus:ring-1 focus:ring-primary focus:outline-none"
+                    className="text-xs font-mono"
                   />
                   <Button
                     type="button"

@@ -1,18 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckSquare, AlertCircle } from 'lucide-react';
-import { ApiError, listTasks } from '@/lib/api';
+import { errorToMessage, listTasks } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { TaskView } from '@/types/operations';
 import { WidgetShell } from './widget-shell';
-
-/** Mensaje legible a partir de un error de API o genérico. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 interface WeekData {
   start: Date;
@@ -49,7 +42,7 @@ export function TareasResumenWidget(): ReactNode {
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudieron cargar las tareas.'));
+        setError(errorToMessage(err, 'No se pudieron cargar las tareas.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);

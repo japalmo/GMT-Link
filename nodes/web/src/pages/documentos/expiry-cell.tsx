@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { CalendarClock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/format';
-import { cn } from '@/lib/utils';
 import type { PersonalDocumentView } from '@/types/documents';
 
 /** Texto auxiliar de días para vencer / vencido. */
@@ -35,14 +35,9 @@ export function ExpiryCell({ document }: { document: PersonalDocumentView }): Re
         {formatDate(document.expiresAt)}
       </span>
       {(expired || document.expiringSoon) && (
-        <span
-          className={cn(
-            'inline-flex w-fit items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium',
-            expired ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800',
-          )}
-        >
+        <Badge variant={expired ? 'danger' : 'warning'} className="w-fit">
           {expired ? 'Vencido' : 'Vence pronto'}
-        </span>
+        </Badge>
       )}
       {days && <span className="text-xs text-muted-foreground">{days}</span>}
     </div>

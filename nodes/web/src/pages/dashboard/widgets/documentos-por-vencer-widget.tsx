@@ -1,18 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock, CheckCircle2 } from 'lucide-react';
-import { ApiError, listDocuments } from '@/lib/api';
+import { errorToMessage, listDocuments } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PersonalDocumentView } from '@/types/documents';
 import { WidgetShell } from './widget-shell';
-
-/** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /** Texto de plazo a partir de los días restantes (puede ser negativo = vencido). */
 function dueLabel(days: number | null): string {
@@ -59,7 +52,7 @@ export function DocumentosPorVencerWidget(): ReactNode {
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudieron cargar tus documentos.'));
+        setError(errorToMessage(err, 'No se pudieron cargar tus documentos.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);

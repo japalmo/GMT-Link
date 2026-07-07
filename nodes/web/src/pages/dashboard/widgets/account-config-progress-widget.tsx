@@ -1,19 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { UserCog } from 'lucide-react';
-import { ApiError, getProfile, getCv, listDocuments } from '@/lib/api';
+import { errorToMessage, getProfile, getCv, listDocuments } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import type { ProfileMe } from '@gmt-platform/contracts';
 import type { CvView } from '@/types/cv';
 import type { PersonalDocumentView } from '@/types/documents';
 import { WidgetShell } from './widget-shell';
-
-/** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /** Un criterio de completitud de la cuenta: etiqueta, si está hecho, y a dónde ir. */
 interface CompletionCheck {
@@ -85,7 +78,7 @@ export function AccountConfigProgressWidget(): ReactNode {
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudo calcular tu configuración.'));
+        setError(errorToMessage(err, 'No se pudo calcular tu configuración.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);

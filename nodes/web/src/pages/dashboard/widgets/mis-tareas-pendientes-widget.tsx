@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ListChecks, CalendarClock } from 'lucide-react';
-import { ApiError, listTasks } from '@/lib/api';
+import { errorToMessage, listTasks } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/format';
 import { useAuth } from '@/context/auth-context';
 import type { TaskView } from '@/types/operations';
 import { WidgetShell } from './widget-shell';
-
-/** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /** Máximo de tareas listadas en el widget para mantenerlo compacto. */
 const MAX_ITEMS = 5;
@@ -54,7 +47,7 @@ export function MisTareasPendientesWidget(): ReactNode {
       if (mountedRef.current) setTasks(data);
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudieron cargar tus tareas.'));
+        setError(errorToMessage(err, 'No se pudieron cargar tus tareas.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);

@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Check, TriangleAlert } from 'lucide-react';
 import type { ProfileMe, UpdateProfileInput } from '@gmt-platform/contracts';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,13 +25,6 @@ function toFormState(profile: ProfileMe): FormState {
     secondLastName: profile.secondLastName ?? '',
     avatarUrl: profile.avatarUrl ?? '',
   };
-}
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
 }
 
 /** Validación básica client-side. Devuelve mensaje o `null` si es válido. */
@@ -105,7 +99,7 @@ export function ProfileForm({
       });
       setSuccess(true);
     } catch (err) {
-      setError(toMessage(err, 'No se pudieron guardar los cambios.'));
+      setError(errorToMessage(err, 'No se pudieron guardar los cambios.'));
     } finally {
       setSaving(false);
     }
@@ -192,13 +186,9 @@ export function ProfileForm({
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
-          <TriangleAlert className="size-4 shrink-0" aria-hidden />
+        <Alert variant="destructive" live icon={TriangleAlert}>
           {error}
-        </p>
+        </Alert>
       )}
 
       {success && (

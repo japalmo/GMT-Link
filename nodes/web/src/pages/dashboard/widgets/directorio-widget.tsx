@@ -1,33 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Contact } from 'lucide-react';
-import { ApiError, listDirectory } from '@/lib/api';
+import { errorToMessage, listDirectory } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
+import { roleLabel } from '@/lib/role-labels';
 import { cn } from '@/lib/utils';
 import { WidgetShell } from './widget-shell';
-import type { DirectoryEntry, RoleKey } from '@gmt-platform/contracts';
-
-/** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
-
-const ROLE_LABELS: Record<RoleKey, string> = {
-  org_admin: 'Admin Org.',
-  department_admin: 'Admin Dept.',
-  project_creator: 'Creador Proy.',
-  operator: 'Operador',
-  qa: 'QA / Calidad',
-  finance: 'Finanzas',
-  viewer: 'Visor',
-  client_ito: 'Cliente ITO',
-  supervisor: 'Supervisor',
-  operador: 'Operador',
-  ito: 'Inspector Técnico (ITO)',
-  adm_contrato: 'Adm. Contrato',
-};
+import type { DirectoryEntry } from '@gmt-platform/contracts';
 
 /**
  * Widget "Directorio" (§6-2.1). Cuenta las personas visibles para el usuario
@@ -60,7 +39,7 @@ export function DirectorioWidget(): ReactNode {
       }
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudo cargar el directorio.'));
+        setError(errorToMessage(err, 'No se pudo cargar el directorio.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -180,7 +159,7 @@ export function DirectorioWidget(): ReactNode {
                 sortedRoles.map(([roleKey, count]) => (
                   <div key={roleKey} className="flex items-center justify-between text-xs">
                     <span className="font-medium text-foreground">
-                      {ROLE_LABELS[roleKey as RoleKey] || roleKey}
+                      {roleLabel(roleKey)}
                     </span>
                     <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
                       {count} {count === 1 ? 'persona' : 'personas'}

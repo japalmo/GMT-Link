@@ -1,13 +1,16 @@
 import { useState, type ReactNode } from 'react';
-import { Plus, Upload, UserCog, TriangleAlert, X } from 'lucide-react';
+import { Plus, Upload, UserCog, X } from 'lucide-react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
 import { useUsers } from '@/hooks/use-users';
 import type { CreateUserDto, ImportUsersResponse, UserListItem } from '@/lib/api';
 import { uploadUserAvatar } from '@/lib/api';
 import { toast } from 'sonner';
 import { RoleChips } from './role-chips';
-import { StatusBadge } from './status-badge';
 import { NewUserDialog } from './new-user-dialog';
 import { ImportUsersDialog } from './import-users-dialog';
 import { RolesDialog } from './roles-dialog';
@@ -90,7 +93,7 @@ export default function UsuariosPage(): ReactNode {
     {
       id: 'estado',
       header: 'Estado',
-      render: (u) => <StatusBadge status={u.status} />,
+      render: (u) => <StatusBadge type="user" status={u.status} />,
     },
     {
       id: 'creado',
@@ -102,54 +105,50 @@ export default function UsuariosPage(): ReactNode {
   ];
 
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Usuarios</h1>
-          <p className="text-sm text-muted-foreground">
-            Provisiona colaboradores y clientes, y gestiona sus roles.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Upload aria-hidden />
-            Importar CSV
-          </Button>
-          <Button onClick={() => setNewUserOpen(true)}>
-            <Plus aria-hidden />
-            Nuevo usuario
-          </Button>
-        </div>
-      </header>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title="Usuarios"
+        description="Provisiona colaboradores y clientes, y gestiona sus roles."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload aria-hidden />
+              Importar CSV
+            </Button>
+            <Button onClick={() => setNewUserOpen(true)}>
+              <Plus aria-hidden />
+              Nuevo usuario
+            </Button>
+          </>
+        }
+      />
 
       {importErrors.length > 0 && (
-        <div
-          className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-          role="alert"
-        >
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 font-medium">
-              <TriangleAlert className="size-4" aria-hidden />
-              {importErrors.length} fila(s) no se importaron
-            </span>
-            <button
-              type="button"
-              onClick={() => setImportErrors([])}
-              aria-label="Descartar errores de importación"
-              className="rounded p-0.5 outline-none hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
+        <Alert variant="warning" live>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">
+                {importErrors.length} fila(s) no se importaron
+              </span>
+              <button
+                type="button"
+                onClick={() => setImportErrors([])}
+                aria-label="Descartar errores de importación"
+                className="rounded p-0.5 outline-none hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </div>
+            <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+              {importErrors.map((err, i) => (
+                <li key={`${err.index}-${i}`}>
+                  Fila {err.index + 1}
+                  {err.email ? ` (${err.email})` : ''}: {err.message}
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-            {importErrors.map((err, i) => (
-              <li key={`${err.index}-${i}`}>
-                Fila {err.index + 1}
-                {err.email ? ` (${err.email})` : ''}: {err.message}
-              </li>
-            ))}
-          </ul>
-        </div>
+        </Alert>
       )}
 
       <RoleScopedList<UserListItem>
@@ -200,6 +199,6 @@ export default function UsuariosPage(): ReactNode {
         credentials={credentials ?? []}
         title={credentialsTitle}
       />
-    </div>
+    </PageContainer>
   );
 }

@@ -1,15 +1,17 @@
 import { useState, type ReactNode } from 'react';
 import {
-  AlertCircle,
   ExternalLink,
   FileText,
   History,
-  RotateCw,
   Trash2,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
 import {
   Table,
   TableBody,
@@ -22,13 +24,17 @@ import { useDocuments } from '@/hooks/use-documents';
 import type { DocumentStatus, PersonalDocumentView } from '@/types/documents';
 import { ProfileTabs } from '../perfil/profile-tabs';
 import { ConfirmDialog } from '../perfil/confirm-dialog';
-import {
-  DocumentStatusBadge,
-  documentStatusLabel,
-} from './document-status-badge';
 import { ExpiryCell } from './expiry-cell';
 import { UploadDocumentDialog } from './upload-document-dialog';
 import { VersionDialog } from './version-dialog';
+
+/** Etiqueta legible (es-CL) por estado, para las opciones del filtro. */
+const STATUS_LABEL: Record<DocumentStatus, string> = {
+  BORRADOR: 'Borrador',
+  EN_REVISION: 'En revisión',
+  APROBADO: 'Aprobado',
+  RECHAZADO: 'Rechazado',
+};
 
 /** Opciones del filtro por estado. */
 const STATUS_OPTIONS: ReadonlyArray<DocumentStatus> = [
@@ -37,18 +43,6 @@ const STATUS_OPTIONS: ReadonlyArray<DocumentStatus> = [
   'APROBADO',
   'RECHAZADO',
 ];
-
-/** Skeleton de carga de la tabla de documentos. */
-function DocumentsSkeleton(): ReactNode {
-  return (
-    <div className="flex animate-pulse flex-col gap-3" aria-hidden>
-      <div className="h-10 rounded-md border border-border bg-muted/40" />
-      <div className="h-14 rounded-md border border-border bg-muted/40" />
-      <div className="h-14 rounded-md border border-border bg-muted/40" />
-      <div className="h-14 rounded-md border border-border bg-muted/40" />
-    </div>
-  );
-}
 
 /**
  * Página "Mis documentos" (§6-1.5).
@@ -70,11 +64,11 @@ export default function DocumentsPage(): ReactNode {
   const hasFilters = Boolean(docs.filters.status) || Boolean(docs.filters.expiring);
 
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8">
+    <PageContainer maxWidth="7xl">
       <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Mis documentos</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Mis documentos</h1>
             <p className="text-sm text-muted-foreground">
               Sube tus documentos y revisa su estado y vencimiento.
             </p>
@@ -91,8 +85,9 @@ export default function DocumentsPage(): ReactNode {
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="filter-status">Estado</Label>
-          <select
+          <Select
             id="filter-status"
+            aria-label="Filtrar por estado"
             value={docs.filters.status ?? ''}
             onChange={(e) =>
               docs.setFilters({
@@ -100,15 +95,15 @@ export default function DocumentsPage(): ReactNode {
                 status: e.target.value ? (e.target.value as DocumentStatus) : undefined,
               })
             }
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="w-auto"
           >
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {documentStatusLabel(s)}
+                {STATUS_LABEL[s]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <label className="flex h-9 items-center gap-2 text-sm text-foreground">
@@ -133,41 +128,33 @@ export default function DocumentsPage(): ReactNode {
         )}
       </div>
 
-      {docs.loading && <DocumentsSkeleton />}
+      {docs.loading && <LoadingState label="Cargando documentos…" />}
 
       {!docs.loading && docs.error && (
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-12 text-center"
-        >
-          <AlertCircle className="size-8 text-destructive" aria-hidden />
-          <p className="max-w-sm text-sm text-destructive">{docs.error}</p>
-          <Button variant="outline" size="sm" onClick={() => void docs.refetch()}>
-            <RotateCw aria-hidden />
-            Reintentar
-          </Button>
-        </div>
+        <ErrorState message={docs.error} onRetry={() => void docs.refetch()} />
       )}
 
       {!docs.loading && !docs.error && docs.documents.length === 0 && (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-14 text-center">
-          <FileText className="size-8 text-muted-foreground" aria-hidden />
-          <p className="text-sm text-muted-foreground">
-            {hasFilters
+        <EmptyState
+          icon={FileText}
+          message={
+            hasFilters
               ? 'No hay documentos que coincidan con los filtros.'
-              : 'Aún no has subido documentos.'}
-          </p>
-          {hasFilters ? (
-            <Button variant="outline" size="sm" onClick={() => docs.setFilters({})}>
-              Quitar filtros
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => setUploadOpen(true)}>
-              <Upload aria-hidden />
-              Subir documento
-            </Button>
-          )}
-        </div>
+              : 'Aún no has subido documentos.'
+          }
+          action={
+            hasFilters ? (
+              <Button variant="outline" size="sm" onClick={() => docs.setFilters({})}>
+                Quitar filtros
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => setUploadOpen(true)}>
+                <Upload aria-hidden />
+                Subir documento
+              </Button>
+            )
+          }
+        />
       )}
 
       {!docs.loading && !docs.error && docs.documents.length > 0 && (
@@ -189,7 +176,7 @@ export default function DocumentsPage(): ReactNode {
                 <TableCell className="font-medium">{doc.name}</TableCell>
                 <TableCell className="text-muted-foreground">{doc.type}</TableCell>
                 <TableCell>
-                  <DocumentStatusBadge status={doc.status} />
+                  <StatusBadge type="document" status={doc.status} />
                 </TableCell>
                 <TableCell>
                   <ExpiryCell document={doc} />
@@ -275,6 +262,6 @@ export default function DocumentsPage(): ReactNode {
           if (toDelete) await docs.deleteDocument(toDelete.id);
         }}
       />
-    </div>
+    </PageContainer>
   );
 }

@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import type { HealthResponse } from '@gmt-platform/contracts';
-import { Activity, Inbox, Search } from 'lucide-react';
+import { Activity, FileWarning, Inbox, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState, LoadingState, ErrorState } from '@/components/ui/states';
+import { Tabs, NavTabs } from '@/components/ui/tabs';
+import { RejectDialog } from '@/components/ui/reject-dialog';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -97,6 +106,10 @@ function Section({
 export default function DesignDemo() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('loading');
   const [loadingBtn, setLoadingBtn] = useState(false);
+  const [demoTab, setDemoTab] = useState<'reembolsos' | 'horas' | 'liquidaciones'>(
+    'reembolsos',
+  );
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   useEffect(() => {
     const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
@@ -360,6 +373,185 @@ export default function DesignDemo() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* ============ PRIMITIVAS NUEVAS (galería DS) ============ */}
+
+        {/* PAGE HEADER */}
+        <Section title="PageHeader">
+          <Card>
+            <CardContent className="flex flex-col gap-8 pt-6">
+              <PageHeader
+                label="GMT Link"
+                title="Recursos físicos"
+                description="Header canónico: text-2xl font-bold tracking-tight."
+                actions={<Button size="sm">Nueva acción</Button>}
+              />
+              <PageHeader
+                variant="gradient"
+                title="Header con degradado"
+                description="variant='gradient' aplica el bg-clip-text del acento."
+              />
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* SELECT + SEARCH INPUT */}
+        <Section title="Select y SearchInput">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="demo-select">Estado</Label>
+              <Select id="demo-select" aria-label="Filtrar por estado" defaultValue="">
+                <option value="">Todos</option>
+                <option value="APROBADO">Aprobado</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="RECHAZADO">Rechazado</option>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="__ignored">Búsqueda</Label>
+              <SearchInput label="Buscar usuarios" placeholder="Buscar…" />
+            </div>
+          </div>
+        </Section>
+
+        {/* BADGES DE ESTADO */}
+        <Section title="Badge — variantes de estado">
+          <Card>
+            <CardContent className="flex flex-wrap gap-2 pt-6">
+              <Badge variant="success">success</Badge>
+              <Badge variant="info">info</Badge>
+              <Badge variant="warning">warning</Badge>
+              <Badge variant="danger">danger</Badge>
+              <Badge variant="neutral">neutral</Badge>
+              <Badge>default</Badge>
+              <Badge variant="secondary">secondary</Badge>
+              <Badge variant="outline">outline</Badge>
+              <Badge variant="destructive">destructive</Badge>
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* STATUS BADGE por dominio */}
+        <Section title="StatusBadge por dominio">
+          <Card>
+            <CardContent className="flex flex-col gap-3 pt-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-24 text-xs text-muted-foreground">document</span>
+                <StatusBadge type="document" status="BORRADOR" />
+                <StatusBadge type="document" status="EN_REVISION" />
+                <StatusBadge type="document" status="APROBADO" />
+                <StatusBadge type="document" status="RECHAZADO" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-24 text-xs text-muted-foreground">finance</span>
+                <StatusBadge type="finance" status="PENDIENTE" />
+                <StatusBadge type="finance" status="APROBADO" />
+                <StatusBadge type="finance" status="PAGADO" />
+                <StatusBadge type="finance" status="RECHAZADO" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-24 text-xs text-muted-foreground">user</span>
+                <StatusBadge type="user" status="PENDING_FIRST_LOGIN" />
+                <StatusBadge type="user" status="ACTIVE" />
+                <StatusBadge type="user" status="SUSPENDED" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-24 text-xs text-muted-foreground">request</span>
+                <StatusBadge type="request" status="PENDIENTE" />
+                <StatusBadge type="request" status="APROBADA" />
+                <StatusBadge type="request" status="RECHAZADA" />
+              </div>
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* ALERTS */}
+        <Section title="Alert">
+          <div className="flex flex-col gap-3">
+            <Alert>Alerta informativa por defecto.</Alert>
+            <Alert variant="info">Variante info (acento primario).</Alert>
+            <Alert variant="warning">Variante warning (ámbar).</Alert>
+            <Alert variant="destructive" live>
+              Variante destructive con role=&quot;alert&quot; — errores de formulario.
+            </Alert>
+            <Alert variant="default" icon={FileWarning}>
+              Con icono lucide personalizado.
+            </Alert>
+          </div>
+        </Section>
+
+        {/* TABS */}
+        <Section title="Tabs (button) y NavTabs (NavLink)">
+          <Card>
+            <CardContent className="flex flex-col gap-6 pt-6">
+              <Tabs
+                aria-label="Secciones de finanzas (demo)"
+                value={demoTab}
+                onValueChange={setDemoTab}
+                items={[
+                  { value: 'reembolsos', label: 'Reembolsos' },
+                  { value: 'horas', label: 'Horas extra' },
+                  { value: 'liquidaciones', label: 'Liquidaciones' },
+                ]}
+              />
+              <p className="text-sm text-muted-foreground">
+                Pestaña activa: <code>{demoTab}</code>
+              </p>
+              <NavTabs
+                aria-label="Navegación de demo"
+                items={[
+                  { to: '/design', label: 'Diseño', end: true },
+                  { to: '/design/tokens', label: 'Tokens' },
+                  { to: '/design/componentes', label: 'Componentes' },
+                ]}
+              />
+            </CardContent>
+          </Card>
+        </Section>
+
+        {/* STATES */}
+        <Section title="Estados (Empty / Loading / Error)">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-lg border border-border">
+              <EmptyState
+                title="Sin resultados"
+                message="Aún no hay elementos para mostrar."
+                action={
+                  <Button variant="outline" size="sm">
+                    Crear el primero
+                  </Button>
+                }
+              />
+            </div>
+            <div className="rounded-lg border border-border">
+              <LoadingState rows={5} />
+            </div>
+            <ErrorState
+              message="No se pudieron cargar los datos."
+              onRetry={() => undefined}
+            />
+          </div>
+        </Section>
+
+        {/* REJECT DIALOG */}
+        <Section title="RejectDialog">
+          <Card>
+            <CardContent className="pt-6">
+              <Button variant="destructive" onClick={() => setRejectOpen(true)}>
+                Rechazar…
+              </Button>
+              <RejectDialog
+                open={rejectOpen}
+                onOpenChange={setRejectOpen}
+                title="Rechazar solicitud"
+                description="Indica el motivo del rechazo (lo verá quien solicitó)."
+                onConfirm={async () => {
+                  await new Promise((r) => window.setTimeout(r, 600));
+                }}
+              />
             </CardContent>
           </Card>
         </Section>

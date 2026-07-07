@@ -2,14 +2,12 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
   ArrowRight,
   Briefcase,
   ChevronRight,
   FileText,
   FolderOpen,
   Plus,
-  Search,
   User,
 } from 'lucide-react';
 import { useFaenaProjects, useEligibleAdmins } from '@/hooks/use-project-hierarchy';
@@ -22,6 +20,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/ui/states';
 import {
   Card,
   CardContent,
@@ -169,19 +171,13 @@ export default function FaenaProyectosPage() {
       </div>
 
       {/* Buscador */}
-      <div className="relative max-w-sm">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nombre, código o contrato…"
-          className="pl-9"
-          aria-label="Buscar proyectos"
-        />
-      </div>
+      <SearchInput
+        className="max-w-sm flex-none"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar por nombre, código o contrato…"
+        label="Buscar proyectos"
+      />
 
       {/* Contenido: carga / error / vacío / grilla */}
       {loading ? (
@@ -194,30 +190,25 @@ export default function FaenaProyectosPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="size-4" />
-            <span>{error}</span>
-          </div>
-        </div>
+        <ErrorState message={error} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-card/30 py-12 text-center">
-          <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-          <h3 className="text-lg font-semibold">
-            {projects.length === 0 ? 'No hay proyectos' : 'Sin resultados'}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {projects.length === 0
+        <EmptyState
+          icon={FolderOpen}
+          title={projects.length === 0 ? 'No hay proyectos' : 'Sin resultados'}
+          message={
+            projects.length === 0
               ? 'Esta faena todavía no tiene proyectos.'
-              : 'Ningún proyecto coincide con tu búsqueda.'}
-          </p>
-          {projects.length === 0 && canCreate && (
-            <Button className="mt-4" onClick={() => setModalOpen(true)}>
-              <Plus className="mr-2 size-4" />
-              Crear el primer proyecto
-            </Button>
-          )}
-        </div>
+              : 'Ningún proyecto coincide con tu búsqueda.'
+          }
+          action={
+            projects.length === 0 && canCreate ? (
+              <Button onClick={() => setModalOpen(true)}>
+                <Plus className="mr-2 size-4" />
+                Crear el primer proyecto
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((proj) => {
@@ -310,14 +301,6 @@ interface NewProjectDialogProps {
   admins: Array<{ id: string; firstName: string; lastName: string; email: string }>;
   onCreate: (dto: CreateProjectInput) => Promise<void>;
 }
-
-/**
- * Clases del `<select>` nativo alineadas con el focus ring del DS (Input /
- * Textarea). No existe un componente Select en el design system todavía; hasta
- * entonces reusamos este estilo consistente en los selectores del formulario.
- */
-const selectClass =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50';
 
 function NewProjectDialog({
   open,
@@ -460,9 +443,9 @@ function NewProjectDialog({
           </ModalHeader>
 
           {formError && (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+            <Alert variant="destructive" live>
               {formError}
-            </div>
+            </Alert>
           )}
 
           <div className="flex flex-col gap-1.5">
@@ -502,9 +485,9 @@ function NewProjectDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-client">Cliente</Label>
-              <select
+              <Select
                 id="np-client"
-                className={selectClass}
+                aria-label="Cliente del proyecto"
                 value={formClientId}
                 onChange={(e) => handleClientChange(e.target.value)}
               >
@@ -514,13 +497,13 @@ function NewProjectDialog({
                     {c.name} ({c.code})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-faena">Faena</Label>
-              <select
+              <Select
                 id="np-faena"
-                className={selectClass}
+                aria-label="Faena del proyecto"
                 value={formFaenaId}
                 onChange={(e) => setFormFaenaId(e.target.value)}
               >
@@ -530,26 +513,23 @@ function NewProjectDialog({
                     {f.name} ({f.code})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
           {locationChanged && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <span>
-                Cambiaste el cliente o la faena: el proyecto se creará en una
-                ubicación distinta a la actual. Se pedirá confirmación al crear.
-              </span>
-            </div>
+            <Alert variant="warning">
+              Cambiaste el cliente o la faena: el proyecto se creará en una
+              ubicación distinta a la actual. Se pedirá confirmación al crear.
+            </Alert>
           )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-type">Tipo de proyecto</Label>
-              <select
+              <Select
                 id="np-type"
-                className={selectClass}
+                aria-label="Tipo de proyecto"
                 value={projectType}
                 onChange={(e) => setProjectType(e.target.value as ProjectType)}
               >
@@ -558,13 +538,13 @@ function NewProjectDialog({
                     {t.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-dept">Departamento</Label>
-              <select
+              <Select
                 id="np-dept"
-                className={selectClass}
+                aria-label="Departamento del proyecto"
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
               >
@@ -574,15 +554,15 @@ function NewProjectDialog({
                     {d.name} ({d.code})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="np-admin">Administrador de proyecto</Label>
-            <select
+            <Select
               id="np-admin"
-              className={selectClass}
+              aria-label="Administrador de proyecto"
               value={projectAdminId}
               onChange={(e) => setProjectAdminId(e.target.value)}
             >
@@ -592,7 +572,7 @@ function NewProjectDialog({
                   {a.firstName} {a.lastName} ({a.email})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">

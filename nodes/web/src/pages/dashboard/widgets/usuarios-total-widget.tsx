@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Users } from 'lucide-react';
-import { ApiError, listUsers } from '@/lib/api';
+import { errorToMessage, listUsers } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import { WidgetShell } from './widget-shell';
-
-/** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /**
  * Widget "Usuarios" (§6-2.1). Solo aparece para admins (el backend lo filtra por
@@ -38,7 +31,7 @@ export function UsuariosTotalWidget(): ReactNode {
       if (mountedRef.current) setCount(users.length);
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudo cargar el total de usuarios.'));
+        setError(errorToMessage(err, 'No se pudo cargar el total de usuarios.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);

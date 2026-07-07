@@ -2,8 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Plus, X } from 'lucide-react';
 import type { AssignRoleInput, RoleDetail, ScopeType, UserMembership } from '@gmt-platform/contracts';
 import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from '@/components/ui/modal';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { listProjects, listRoles, type UserListItem, type UserRolesResponse } from '@/lib/api';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { errorToMessage, listProjects, listRoles, type UserListItem, type UserRolesResponse } from '@/lib/api';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 
 /** Id del objeto organización (única org actual) — SOLO como default de asignación org. */
@@ -120,7 +123,7 @@ export function RolesDialog({
       setScopeId('');
       setDirty(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo asignar el rol.');
+      setError(errorToMessage(err, 'No se pudo asignar el rol.'));
     } finally {
       setBusy(false);
     }
@@ -136,7 +139,7 @@ export function RolesDialog({
       setMemberships(res.memberships);
       setDirty(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo quitar el rol.');
+      setError(errorToMessage(err, 'No se pudo quitar el rol.'));
       throw err;
     } finally {
       setBusy(false);
@@ -185,14 +188,13 @@ export function RolesDialog({
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium leading-none">Agregar rol</span>
-                <select
+              <Label className="flex flex-col gap-1.5">
+                <span>Agregar rol</span>
+                <Select
                   aria-label="Agregar rol"
                   value={toAdd}
                   onChange={(e) => handleSelectRole(e.target.value)}
                   disabled={busy}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
                 >
                   <option value="">Selecciona un rol…</option>
                   {assignableRoles.map((role) => (
@@ -200,13 +202,13 @@ export function RolesDialog({
                       {role.label}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Label>
 
               {selectedRole && (
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium leading-none">Alcance</span>
-                  <select
+                <Label className="flex flex-col gap-1.5">
+                  <span>Alcance</span>
+                  <Select
                     aria-label="Alcance"
                     value={scopeType}
                     onChange={(e) => {
@@ -215,26 +217,24 @@ export function RolesDialog({
                       setScopeId(next === 'ORGANIZATION' ? ORG_SCOPE_ID : '');
                     }}
                     disabled={busy || selectedRole.allowedScopeTypes.length <= 1}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
                   >
                     {selectedRole.allowedScopeTypes.map((st) => (
                       <option key={st} value={st}>
                         {st === 'ORGANIZATION' ? 'Organización' : 'Proyecto'}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </Label>
               )}
 
               {needsProject && (
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium leading-none">Proyecto</span>
-                  <select
+                <Label className="flex flex-col gap-1.5">
+                  <span>Proyecto</span>
+                  <Select
                     aria-label="Proyecto"
                     value={scopeId}
                     onChange={(e) => setScopeId(e.target.value)}
                     disabled={busy}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
                   >
                     <option value="">Selecciona un proyecto…</option>
                     {projects.map((p) => (
@@ -242,8 +242,8 @@ export function RolesDialog({
                         {p.code} — {p.name}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </Label>
               )}
 
               <div className="flex justify-end">
@@ -255,9 +255,9 @@ export function RolesDialog({
             </div>
 
             {error && (
-              <p role="alert" className="text-sm text-destructive">
+              <Alert variant="destructive" live>
                 {error}
-              </p>
+              </Alert>
             )}
           </div>
 

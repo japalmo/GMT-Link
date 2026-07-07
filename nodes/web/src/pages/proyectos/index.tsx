@@ -8,7 +8,6 @@ import {
   FolderKanban,
   FolderOpen,
   Plus,
-  Search,
   TrendingUp,
 } from 'lucide-react';
 import { useClients } from '@/hooks/use-clients';
@@ -17,6 +16,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { SearchInput } from '@/components/ui/search-input';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState } from '@/components/ui/states';
 import {
   Card,
   CardContent,
@@ -149,16 +151,13 @@ export default function ProyectosClientesPage() {
 
       {/* Buscador + filtro */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nombre o código…"
-            className="pl-9"
-            aria-label="Buscar clientes"
-          />
-        </div>
+        <SearchInput
+          className="min-w-[220px]"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar por nombre o código…"
+          label="Buscar clientes"
+        />
         <div className="flex flex-wrap gap-1.5">
           {ACTIVITY_FILTERS.map((f) => (
             <Button
@@ -188,24 +187,17 @@ export default function ProyectosClientesPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="size-4" />
-            <span>{error}</span>
-          </div>
-        </div>
+        <ErrorState message={error} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-card/30 py-12 text-center">
-          <FolderOpen className="mx-auto mb-3 size-10 text-muted-foreground/60" />
-          <h3 className="text-lg font-semibold">
-            {clients.length === 0 ? 'No hay clientes' : 'Sin resultados'}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {clients.length === 0
+        <EmptyState
+          icon={FolderOpen}
+          title={clients.length === 0 ? 'No hay clientes' : 'Sin resultados'}
+          message={
+            clients.length === 0
               ? 'Aún no se ha registrado ningún cliente.'
-              : 'Ningún cliente coincide con la búsqueda o el filtro.'}
-          </p>
-        </div>
+              : 'Ningún cliente coincide con la búsqueda o el filtro.'
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((client) => (
@@ -227,9 +219,9 @@ export default function ProyectosClientesPage() {
               <ModalDescription>Registra un cliente mandante.</ModalDescription>
             </ModalHeader>
             {formError && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+              <Alert variant="destructive" live>
                 {formError}
-              </div>
+              </Alert>
             )}
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-1 flex flex-col gap-1.5">

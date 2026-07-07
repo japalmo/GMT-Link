@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ExternalLink, FileCheck2, TriangleAlert } from 'lucide-react';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,13 +20,6 @@ import type {
   CvCertificationView,
 } from '@/types/cv';
 import { FileField, PDF_ACCEPT } from '../file-field';
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 interface FormState {
   name: string;
@@ -125,7 +119,7 @@ export function CertificationDialog({
       if (file) await onUploadDiploma(certId, file);
       onOpenChange(false);
     } catch (err) {
-      setError(toMessage(err, 'No se pudo guardar la certificación.'));
+      setError(errorToMessage(err, 'No se pudo guardar la certificación.'));
     } finally {
       setSubmitting(false);
     }
@@ -218,13 +212,9 @@ export function CertificationDialog({
           />
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live icon={TriangleAlert}>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>

@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { Check, Copy, KeyRound, TriangleAlert } from 'lucide-react';
+import { Check, Copy, KeyRound } from 'lucide-react';
 import {
   Modal,
   ModalContent,
@@ -8,6 +8,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/components/ui/modal';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -73,16 +74,10 @@ export function CredentialDialog({
           </ModalDescription>
         </ModalHeader>
 
-        <div
-          className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800"
-          role="alert"
-        >
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>
-            Estas claves no se volverán a mostrar. Cópialas ahora; no quedan
-            almacenadas en texto plano.
-          </span>
-        </div>
+        <Alert variant="warning" live>
+          Estas claves no se volverán a mostrar. Cópialas ahora; no quedan
+          almacenadas en texto plano.
+        </Alert>
 
         <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
           {credentials.map((cred) => (

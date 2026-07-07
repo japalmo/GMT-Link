@@ -5,7 +5,6 @@ import {
   Upload,
   Download,
   Sparkles,
-  AlertTriangle,
   Loader2,
   HelpCircle,
   Eye,
@@ -14,6 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert } from '@/components/ui/alert';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -449,74 +452,54 @@ export default function GisToolsPage(): ReactNode {
     );
   };
 
-  return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 py-6">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Herramientas Técnicas GIS
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Módulo de transformación de coordenadas geográficas e inteligencia artificial para análisis topográfico.
-          </p>
-        </div>
+  const tabItems: TabItem<'convert' | 'shoreline'>[] = [
+    { value: 'convert', label: 'Transformación de Coordenadas', icon: Globe },
+    { value: 'shoreline', label: 'Detección de Orillas (Gemini IA)', icon: Sparkles },
+  ];
 
-        {quota && (
-          <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-2 text-xs">
-            <Sparkles className="size-4 text-indigo-500 animate-pulse" />
-            <div>
-              <span className="text-muted-foreground font-semibold">Consultas IA diarias: </span>
-              <Badge variant="outline" className="font-bold border-indigo-500/35 text-indigo-500 bg-indigo-500/5 ml-1">
-                {quota.remaining} restantes
-              </Badge>
+  return (
+    <PageContainer maxWidth="7xl">
+      {/* Page Header */}
+      <PageHeader
+        variant="gradient"
+        title="Herramientas Técnicas GIS"
+        description="Módulo de transformación de coordenadas geográficas e inteligencia artificial para análisis topográfico."
+        actions={
+          quota && (
+            <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-2 text-xs">
+              <Sparkles className="size-4 text-indigo-500 animate-pulse" />
+              <div>
+                <span className="text-muted-foreground font-semibold">Consultas IA diarias: </span>
+                <Badge variant="outline" className="font-bold border-indigo-500/35 text-indigo-500 bg-indigo-500/5 ml-1">
+                  {quota.remaining} restantes
+                </Badge>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )
+        }
+      />
 
       {globalError && (
-        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          <AlertTriangle className="size-5 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold">Error técnico detectado</p>
-            <p className="mt-1">{globalError}</p>
+        <Alert variant="destructive" live>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <p className="font-semibold">Error técnico detectado</p>
+              <p className="mt-1">{globalError}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setGlobalError(null)} className="h-auto p-1">
+              Descartar
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setGlobalError(null)} className="h-auto p-1">
-            Descartar
-          </Button>
-        </div>
+        </Alert>
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-border gap-2">
-        <button
-          onClick={() => setActiveSubTab('convert')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeSubTab === 'convert'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Globe className="size-4" />
-            Transformación de Coordenadas
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveSubTab('shoreline')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeSubTab === 'shoreline'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Sparkles className="size-4" />
-            Detección de Orillas (Gemini IA)
-          </span>
-        </button>
-      </div>
+      <Tabs<'convert' | 'shoreline'>
+        aria-label="Herramientas GIS"
+        items={tabItems}
+        value={activeSubTab}
+        onValueChange={setActiveSubTab}
+      />
 
       {/* Tab Content */}
       <div className="mt-2">
@@ -708,9 +691,9 @@ export default function GisToolsPage(): ReactNode {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   {bulkError && (
-                    <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 p-2.5 rounded">
+                    <Alert variant="destructive" live className="text-xs">
                       {bulkError}
-                    </p>
+                    </Alert>
                   )}
 
                   <div className="flex flex-col gap-2">
@@ -946,6 +929,6 @@ export default function GisToolsPage(): ReactNode {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

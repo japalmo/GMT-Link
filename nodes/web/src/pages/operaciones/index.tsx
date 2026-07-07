@@ -1,8 +1,20 @@
 import { type ReactNode } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
-import { OperacionesTabs, type OperacionesTab } from './operaciones-tabs';
+import { Kanban, Files } from 'lucide-react';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageContainer } from '@/components/layout/page-container';
 import { BacklogTab } from './backlog';
 import { DocumentosTab } from './documentos';
+
+/** Pestaña activa del módulo Operaciones. */
+export type OperacionesTab = 'backlog' | 'documentos';
+
+/** Definición de las pestañas de Operaciones (valor, etiqueta e icono). */
+const OPERACIONES_TABS: ReadonlyArray<TabItem<OperacionesTab>> = [
+  { value: 'backlog', label: 'Backlog (Kanban)', icon: Kanban },
+  { value: 'documentos', label: 'Documentos', icon: Files },
+];
 
 export default function OperacionesPage(): ReactNode {
   const { tab } = useParams<{ tab?: string }>();
@@ -17,25 +29,25 @@ export default function OperacionesPage(): ReactNode {
   // Validate the tab parameter, fallback to 'backlog'
   const activeTab: OperacionesTab = tab === 'documentos' ? 'documentos' : 'backlog';
 
-  const handleTabChange = (newTab: OperacionesTab) => {
+  const handleTabChange = (newTab: OperacionesTab): void => {
     navigate(`/operaciones/${newTab}`);
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8">
-      <header className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Operaciones</h1>
-          <p className="text-sm text-muted-foreground">
-            Backlog Kanban y documentos técnicos aprobados.
-          </p>
-        </div>
-        <OperacionesTabs active={activeTab} onChange={handleTabChange} />
-      </header>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title="Operaciones"
+        description="Backlog Kanban y documentos técnicos aprobados."
+      />
+      <Tabs
+        items={OPERACIONES_TABS}
+        value={activeTab}
+        onValueChange={handleTabChange}
+        aria-label="Secciones de operaciones"
+      />
 
       {activeTab === 'backlog' && <BacklogTab />}
       {activeTab === 'documentos' && <DocumentosTab />}
-    </div>
+    </PageContainer>
   );
 }
-

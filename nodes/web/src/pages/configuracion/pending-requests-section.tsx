@@ -1,5 +1,6 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Check, Inbox, X } from 'lucide-react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -8,17 +9,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import {
-  Modal,
-  ModalClose,
-  ModalContent,
-  ModalDescription,
-  ModalFooter,
-  ModalHeader,
-  ModalTitle,
-} from '@/components/ui/modal';
-import { ApiError } from '@/lib/api';
+import { EmptyState } from '@/components/ui/states';
+import { RejectDialog } from '@/components/ui/reject-dialog';
+import { errorToMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { roleLabel } from '@/lib/role-labels';
 import type { PermissionRequestAdminView } from '@/types/settings';
@@ -45,12 +38,10 @@ export function PendingRequestsSection({
   onApprove,
   onReject,
 }: PendingRequestsSectionProps): ReactNode {
-  const reasonId = useId();
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] =
     useState<PermissionRequestAdminView | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
 
   const handleApprove = async (id: string): Promise<void> => {
     setError(null);
@@ -58,9 +49,7 @@ export function PendingRequestsSection({
     try {
       await onApprove(id);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'No se pudo aprobar la solicitud.',
-      );
+      setError(errorToMessage(err, 'No se pudo aprobar la solicitud.'));
     } finally {
       setActingId(null);
     }
@@ -68,26 +57,18 @@ export function PendingRequestsSection({
 
   const openReject = (req: PermissionRequestAdminView): void => {
     setError(null);
-    setRejectReason('');
     setRejectTarget(req);
   };
 
-  const confirmReject = async (): Promise<void> => {
+  /**
+   * Confirma el rechazo. Lanza para que `RejectDialog` muestre el error y no
+   * cierre; al resolver, el diálogo se cierra solo y limpiamos el objetivo.
+   */
+  const confirmReject = async (reason: string): Promise<void> => {
     if (!rejectTarget) return;
     const { id } = rejectTarget;
-    setError(null);
-    setActingId(id);
-    try {
-      await onReject(id, rejectReason);
-      setRejectTarget(null);
-      setRejectReason('');
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'No se pudo rechazar la solicitud.',
-      );
-    } finally {
-      setActingId(null);
-    }
+    await onReject(id, reason || undefined);
+    setRejectTarget(null);
   };
 
   return (
@@ -100,19 +81,16 @@ export function PendingRequestsSection({
       </CardHeader>
       <CardContent>
         {error && (
-          <p className="mb-3 text-sm text-destructive" role="alert">
+          <Alert variant="destructive" live className="mb-3">
             {error}
-          </p>
+          </Alert>
         )}
 
         {pending.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border py-10 text-center">
-            <Inbox className="size-7 text-muted-foreground" aria-hidden />
-            <p className="max-w-sm text-sm text-muted-foreground">
-              No hay solicitudes pendientes. Cuando alguien pida un rol, aparecerá
-              aquí.
-            </p>
-          </div>
+          <EmptyState
+            icon={Inbox}
+            message="No hay solicitudes pendientes. Cuando alguien pida un rol, aparecerá aquí."
+          />
         ) : (
           <ul className="divide-y divide-border">
             {pending.map((req) => (
@@ -165,51 +143,22 @@ export function PendingRequestsSection({
         )}
       </CardContent>
 
-      <Modal
+      <RejectDialog
         open={rejectTarget !== null}
         onOpenChange={(open) => {
           if (!open) setRejectTarget(null);
         }}
-      >
-        <ModalContent>
-          <ModalHeader>
-            <ModalTitle>Rechazar solicitud</ModalTitle>
-            <ModalDescription>
-              {rejectTarget
-                ? `${requesterName(rejectTarget)} · ${roleLabel(rejectTarget.roleKey)}`
-                : ''}
-            </ModalDescription>
-          </ModalHeader>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={reasonId}>Motivo (opcional)</Label>
-            <textarea
-              id={reasonId}
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              rows={3}
-              maxLength={500}
-              placeholder="Explica por qué se rechaza (lo verá quien solicitó)."
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </div>
-
-          <ModalFooter>
-            <ModalClose asChild>
-              <Button variant="outline" disabled={actingId !== null}>
-                Cancelar
-              </Button>
-            </ModalClose>
-            <Button
-              variant="destructive"
-              onClick={() => void confirmReject()}
-              loading={actingId !== null && rejectTarget !== null}
-            >
-              Rechazar solicitud
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+        title="Rechazar solicitud"
+        description={
+          rejectTarget
+            ? `${requesterName(rejectTarget)} · ${roleLabel(rejectTarget.roleKey)}`
+            : undefined
+        }
+        confirmLabel="Rechazar solicitud"
+        reasonRequired={false}
+        reasonMaxLength={500}
+        onConfirm={confirmReject}
+      />
     </Card>
   );
 }

@@ -1,6 +1,4 @@
 import type { ReactNode } from 'react';
-import { AlertCircle, RotateCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -8,9 +6,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { ErrorState } from '@/components/ui/states';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { PageHeader } from '@/components/layout/page-header';
 import { useProfile } from '@/hooks/use-profile';
 import { RoleChips } from '@/pages/usuarios/role-chips';
-import { StatusBadge } from '@/pages/usuarios/status-badge';
 import { PersonAvatar } from '@/pages/directorio/person-avatar';
 import { ProfileForm } from './profile-form';
 import { ChangePasswordForm } from './change-password-form';
@@ -46,30 +46,16 @@ export default function PerfilPage(): ReactNode {
   return (
     <div className="flex flex-col gap-6 p-6 sm:p-8">
       <header className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Mi perfil</h1>
-          <p className="text-sm text-muted-foreground">
-            Revisa y actualiza tu información personal y tu contraseña.
-          </p>
-        </div>
+        <PageHeader
+          title="Mi perfil"
+          description="Revisa y actualiza tu información personal y tu contraseña."
+        />
         <ProfileTabs />
       </header>
 
       {loading && <ProfileSkeleton />}
 
-      {!loading && error && (
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-12 text-center"
-        >
-          <AlertCircle className="size-8 text-destructive" aria-hidden />
-          <p className="max-w-sm text-sm text-destructive">{error}</p>
-          <Button variant="outline" size="sm" onClick={() => void refetch()}>
-            <RotateCw aria-hidden />
-            Reintentar
-          </Button>
-        </div>
-      )}
+      {!loading && error && <ErrorState message={error} onRetry={() => void refetch()} />}
 
       {!loading && !error && profile && (
         <>
@@ -85,7 +71,7 @@ export default function PerfilPage(): ReactNode {
                 <h2 className="text-xl font-semibold tracking-tight">
                   {profile.firstName} {profile.lastName}
                 </h2>
-                <StatusBadge status={profile.status} />
+                <StatusBadge type="user" status={profile.status} />
                 <span className="inline-flex items-center whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                   {profile.isClientUser ? 'Cliente' : 'Colaborador'}
                 </span>

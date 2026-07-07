@@ -1,17 +1,17 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
   Download,
   FileText,
   Plus,
-  RotateCw,
   Trash2,
-  TriangleAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import {
   Table,
   TableBody,
@@ -183,13 +183,13 @@ function UploadLiquidationDialog({
         <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4" noValidate>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="liq-user">Colaborador</Label>
-            <select
+            <Select
               id="liq-user"
+              aria-label="Colaborador de la liquidación"
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
               disabled={submitting || usersLoading}
               required
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="">Selecciona un colaborador...</option>
               {users.map((u) => (
@@ -197,7 +197,7 @@ function UploadLiquidationDialog({
                   {u.lastName}, {u.firstName} ({u.email})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -228,13 +228,9 @@ function UploadLiquidationDialog({
           </div>
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>
@@ -311,29 +307,11 @@ export function LiquidacionesTab(): ReactNode {
   };
 
   if (loading) {
-    return (
-      <div className="flex animate-pulse flex-col gap-3" aria-hidden>
-        <div className="h-10 rounded-md border border-border bg-muted/40" />
-        <div className="h-14 rounded-md border border-border bg-muted/40" />
-        <div className="h-14 rounded-md border border-border bg-muted/40" />
-      </div>
-    );
+    return <LoadingState rows={4} />;
   }
 
   if (error) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-12 text-center"
-      >
-        <AlertCircle className="size-8 text-destructive" aria-hidden />
-        <p className="max-w-sm text-sm text-destructive">{error}</p>
-        <Button variant="outline" size="sm" onClick={() => void refetch()}>
-          <RotateCw aria-hidden />
-          Reintentar
-        </Button>
-      </div>
-    );
+    return <ErrorState message={error} onRetry={() => void refetch()} />;
   }
 
   return (
@@ -345,10 +323,10 @@ export function LiquidacionesTab(): ReactNode {
         </div>
 
         {mine.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center text-muted-foreground">
-            <FileText className="size-8" aria-hidden />
-            <p className="text-sm">Aún no se han cargado liquidaciones de sueldo para ti en la plataforma.</p>
-          </div>
+          <EmptyState
+            icon={FileText}
+            message="Aún no se han cargado liquidaciones de sueldo para ti en la plataforma."
+          />
         ) : (
           <div className="flex flex-col gap-6">
             {/* StepperDownload primitive widget */}
@@ -413,9 +391,7 @@ export function LiquidacionesTab(): ReactNode {
           </div>
 
           {managerItems.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-8 text-center text-muted-foreground">
-              <p className="text-sm">No hay liquidaciones registradas en el sistema para ningún colaborador.</p>
-            </div>
+            <EmptyState message="No hay liquidaciones registradas en el sistema para ningún colaborador." />
           ) : (
             <div className="rounded-md border border-border bg-card">
               <Table>

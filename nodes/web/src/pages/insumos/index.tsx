@@ -7,7 +7,6 @@ import {
   Search,
   FileSpreadsheet,
   History,
-  AlertTriangle,
   MapPin,
   TrendingUp,
   Boxes,
@@ -16,6 +15,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, LoadingState } from '@/components/ui/states';
 import {
   Card,
   CardContent,
@@ -415,16 +417,17 @@ export default function InsumosPage(): ReactNode {
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto py-2">
       {errorMsg && (
-        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          <AlertTriangle className="size-5 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold">Ha ocurrido un problema</p>
-            <p className="mt-1">{errorMsg}</p>
+        <Alert variant="destructive" live>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <p className="font-semibold">Ha ocurrido un problema</p>
+              <p className="mt-1">{errorMsg}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="h-auto p-1">
+              Descartar
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setErrorMsg(null)} className="h-auto p-1">
-            Descartar
-          </Button>
-        </div>
+        </Alert>
       )}
 
       {/* Main Grid */}
@@ -796,34 +799,30 @@ export default function InsumosPage(): ReactNode {
                         <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground/60" />
                       </div>
 
-                      <div className="relative">
-                        <select
-                          value={stockCategoryFilter}
-                          onChange={(e) => setStockCategoryFilter(e.target.value)}
-                          className="h-8 rounded-md border border-input bg-background px-3 py-1 text-xs text-foreground shadow-sm hover:bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring"
-                        >
-                          <option value="ALL">Categoría: Todos</option>
-                          {categories.map((cat) => (
-                            <option key={cat} value={cat}>
-                              {cat}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <Select
+                        aria-label="Filtrar por categoría"
+                        value={stockCategoryFilter}
+                        onChange={(e) => setStockCategoryFilter(e.target.value)}
+                        className="h-8 w-auto text-xs"
+                      >
+                        <option value="ALL">Categoría: Todos</option>
+                        {categories.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </Select>
                     </div>
                   </CardHeader>
                   <CardContent className="flex-1 overflow-x-auto">
                     {loadingDetail ? (
-                      <div className="flex flex-col items-center justify-center py-20">
-                        <Loader2 className="size-8 animate-spin text-primary" />
-                        <span className="text-xs text-muted-foreground mt-2">Cargando existencias...</span>
-                      </div>
+                      <LoadingState label="Cargando existencias…" />
                     ) : filteredStocks.length === 0 ? (
-                      <div className="text-center py-20 border border-dashed rounded-lg border-border/60">
-                        <Package className="size-10 text-muted-foreground/40 mx-auto" />
-                        <p className="text-sm font-semibold text-muted-foreground/80 mt-2">Sin existencias registradas</p>
-                        <p className="text-xs text-muted-foreground mt-1">Registra un ingreso o carga un CSV para inicializar el stock.</p>
-                      </div>
+                      <EmptyState
+                        icon={Package}
+                        title="Sin existencias registradas"
+                        message="Registra un ingreso o carga un CSV para inicializar el stock."
+                      />
                     ) : (
                       <div className="max-h-[360px] overflow-y-auto rounded-md border border-border">
                         <Table>
@@ -886,13 +885,9 @@ export default function InsumosPage(): ReactNode {
                 </CardHeader>
                 <CardContent>
                   {loadingDetail ? (
-                    <div className="flex justify-center py-10">
-                      <Loader2 className="size-6 animate-spin text-primary" />
-                    </div>
+                    <LoadingState rows={4} label="Cargando movimientos…" />
                   ) : !warehouseDetail?.transactions || warehouseDetail.transactions.length === 0 ? (
-                    <div className="text-center py-10 text-xs text-muted-foreground border border-dashed rounded-lg">
-                      No hay transacciones registradas históricamente.
-                    </div>
+                    <EmptyState message="No hay transacciones registradas históricamente." />
                   ) : (
                     <div className="max-h-[300px] overflow-y-auto rounded-md border border-border">
                       <Table>

@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 import {
   Modal,
   ModalContent,
@@ -981,23 +982,23 @@ export default function MetricsDashboard(): ReactNode {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <label htmlFor="startDate" className="text-[10px] font-semibold text-muted-foreground uppercase">Desde</label>
-              <input
+              <Label htmlFor="startDate" className="text-[10px] font-semibold text-muted-foreground uppercase">Desde</Label>
+              <Input
                 id="startDate"
                 type="date"
                 value={startDateFilter}
                 onChange={(e) => setStartDateFilter(e.target.value)}
-                className="rounded-lg border border-input bg-background px-2.5 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-500"
+                className="h-8 w-auto px-2.5 py-1 text-xs"
               />
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="endDate" className="text-[10px] font-semibold text-muted-foreground uppercase">Hasta</label>
-              <input
+              <Label htmlFor="endDate" className="text-[10px] font-semibold text-muted-foreground uppercase">Hasta</Label>
+              <Input
                 id="endDate"
                 type="date"
                 value={endDateFilter}
                 onChange={(e) => setEndDateFilter(e.target.value)}
-                className="rounded-lg border border-input bg-background px-2.5 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-500"
+                className="h-8 w-auto px-2.5 py-1 text-xs"
               />
             </div>
             {(startDateFilter || endDateFilter) && (
@@ -1261,18 +1262,19 @@ export default function MetricsDashboard(): ReactNode {
                   />
                 </div>
                 
-                <select
+                <Select
+                  aria-label="Filtrar pozas por estado"
                   value={statusFilter}
                   onChange={(e) =>
                     setStatusFilter(e.target.value as 'all' | 'safe' | 'warning' | 'danger')
                   }
-                  className="rounded-xl border border-input bg-background px-3 h-9 text-xs"
+                  className="w-auto rounded-xl text-xs"
                 >
                   <option value="all">Todos los Estados</option>
                   <option value="safe">Seguro</option>
                   <option value="warning">Precaución</option>
                   <option value="danger">Crítico</option>
-                </select>
+                </Select>
               </div>
 
               {/* Elements scrollable box */}

@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { Eye, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -14,7 +18,6 @@ import {
   type RoleScopedColumn,
   type RoleScopedFilter,
 } from '@/components/primitives/role-scoped-list';
-import { cn } from '@/lib/utils';
 
 /** Colaborador ficticio — datos en memoria, solo para la demo. */
 interface Collaborator {
@@ -51,19 +54,17 @@ const STATUS_LABELS: Record<Collaborator['status'], string> = {
   suspended: 'Suspendido',
 };
 
+const STATUS_VARIANT: Record<
+  Collaborator['status'],
+  'success' | 'neutral' | 'danger'
+> = {
+  active: 'success',
+  pending: 'neutral',
+  suspended: 'danger',
+};
+
 function StatusBadge({ status }: { status: Collaborator['status'] }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-        status === 'active' && 'bg-primary/10 text-primary',
-        status === 'pending' && 'bg-muted text-muted-foreground',
-        status === 'suspended' && 'bg-destructive/10 text-destructive',
-      )}
-    >
-      {STATUS_LABELS[status]}
-    </span>
-  );
+  return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABELS[status]}</Badge>;
 }
 
 const columns: ReadonlyArray<RoleScopedColumn<Collaborator>> = [
@@ -151,15 +152,12 @@ export default function RoleScopedListDemo() {
   const items = demoState === 'empty' ? [] : COLLABORATORS;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <header className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-muted-foreground">Primitivas · §5</p>
-        <h1 className="text-2xl font-bold tracking-tight">RoleScopedList</h1>
-        <p className="max-w-prose text-sm text-muted-foreground">
-          Lista genérica filtrada por permisos. Búsqueda, filtros, ordenamiento y
-          paginación client-side. Datos ficticios en memoria.
-        </p>
-      </header>
+    <PageContainer maxWidth="6xl">
+      <PageHeader
+        label="Primitivas · §5"
+        title="RoleScopedList"
+        description="Lista genérica filtrada por permisos. Búsqueda, filtros, ordenamiento y paginación client-side. Datos ficticios en memoria."
+      />
 
       <Card>
         <CardHeader>
@@ -171,12 +169,9 @@ export default function RoleScopedListDemo() {
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="flex flex-col gap-1.5 sm:min-w-44">
             <Label htmlFor="demo-state">Estado simulado</Label>
-            <select
+            <Select
               id="demo-state"
-              className={cn(
-                'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors',
-                'outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40',
-              )}
+              aria-label="Estado simulado de la demo"
               value={demoState}
               onChange={(e) => setDemoState(e.target.value as DemoState)}
             >
@@ -185,12 +180,12 @@ export default function RoleScopedListDemo() {
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-foreground">Scoping (canAccess)</span>
-            <label className="inline-flex h-9 items-center gap-2 text-sm">
+            <Label className="inline-flex h-9 items-center gap-2 font-normal">
               <input
                 type="checkbox"
                 className="size-4 rounded border-input accent-primary outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -198,7 +193,7 @@ export default function RoleScopedListDemo() {
                 onChange={(e) => setScoped(e.target.checked)}
               />
               Ocultar filas confidenciales
-            </label>
+            </Label>
           </div>
 
           {demoState === 'error' && (
@@ -234,6 +229,6 @@ export default function RoleScopedListDemo() {
           </>
         )}
       />
-    </div>
+    </PageContainer>
   );
 }

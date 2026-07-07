@@ -11,7 +11,6 @@ import {
   Wrench,
   Car,
   Plus,
-  Search,
   Filter,
   History,
   FileText,
@@ -36,6 +35,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -46,7 +51,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
-import { RejectDialog } from './reject-dialog';
+import { RejectDialog } from '@/components/ui/reject-dialog';
 import {
   Table,
   TableBody,
@@ -95,48 +100,35 @@ export default function RecursosPage(): ReactNode {
 
   const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos';
 
-  const tabButton = (
-    tab: RecursosTab,
-    icon: ReactNode,
-    label: string,
-  ): ReactNode => (
-    <button
-      key={tab}
-      onClick={() => { setActiveTab(tab); setSelectedAssetId(null); }}
-      aria-current={activeTab === tab ? 'page' : undefined}
-      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-        activeTab === tab
-          ? 'border-primary text-foreground'
-          : 'border-transparent text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-    </button>
-  );
+  const tabItems: TabItem<RecursosTab>[] = [
+    { value: 'equipos', label: 'Equipos', icon: Wrench },
+    { value: 'vehiculos', label: 'Vehículos', icon: Car },
+    { value: 'insumos', label: 'Insumos', icon: Package },
+    ...(canManageSupplyChain
+      ? ([
+          { value: 'proveedores', label: 'Proveedores', icon: Building },
+          { value: 'bodegas', label: 'Bodegas', icon: FileSpreadsheet },
+        ] as const)
+      : []),
+  ];
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-          Recursos Físicos
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Administra los activos, vehículos, herramientas y la cadena de suministro de GMT.
-        </p>
-      </div>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        variant="gradient"
+        title="Recursos Físicos"
+        description="Administra los activos, vehículos, herramientas y la cadena de suministro de GMT."
+      />
 
-      {/* Tabs */}
-      <div className="flex flex-wrap border-b border-border gap-2">
-        {tabButton('equipos', <Wrench className="size-4" />, 'Equipos')}
-        {tabButton('vehiculos', <Car className="size-4" />, 'Vehículos')}
-        {tabButton('insumos', <Package className="size-4" />, 'Insumos')}
-        {canManageSupplyChain && tabButton('proveedores', <Building className="size-4" />, 'Proveedores')}
-        {canManageSupplyChain && tabButton('bodegas', <FileSpreadsheet className="size-4" />, 'Bodegas')}
-      </div>
+      <Tabs<RecursosTab>
+        aria-label="Secciones de recursos"
+        items={tabItems}
+        value={activeTab}
+        onValueChange={(tab) => {
+          setActiveTab(tab);
+          setSelectedAssetId(null);
+        }}
+      />
 
       {/* Tab Content */}
       <div className="mt-4">
@@ -163,7 +155,7 @@ export default function RecursosPage(): ReactNode {
           <InsumosPage />
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -341,22 +333,20 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       {/* Search and Filters Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-card/40 border border-border p-4 rounded-xl">
         <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[300px]">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por código, nombre..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <SearchInput
+            className="max-w-sm"
+            label="Buscar activos"
+            placeholder="Buscar por código, nombre..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
           <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
-            <select
+            <Select
+              aria-label="Filtrar por estado"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="ALL">Todos los Estados</option>
               <option value="DISPONIBLE">Disponibles</option>
@@ -365,18 +355,19 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
               <option value="BAJA">De Baja</option>
               <option value="DEFECTUOSO">Defectuoso</option>
               <option value="NO_DISPONIBLE">No Disponible</option>
-            </select>
+            </Select>
 
-            <select
+            <Select
+              aria-label="Filtrar por proyecto"
               value={filterProj}
               onChange={(e) => setFilterProj(e.target.value)}
-              className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring max-w-[150px]"
+              className="max-w-[150px]"
             >
               <option value="ALL">Todos los Proyectos</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -412,18 +403,15 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
 
       {/* Catalog Render (Table View) */}
       {loading ? (
-        <div className="h-64 animate-pulse rounded-xl bg-muted/40 border border-border" />
+        <LoadingState label="Cargando activos…" />
       ) : error ? (
-        <div className="p-4 border border-destructive/20 bg-destructive/5 text-destructive rounded-xl flex items-center gap-3">
-          <AlertCircle className="size-5" />
-          <span>{error}</span>
-        </div>
+        <ErrorState message={error} />
       ) : filteredAssets.length === 0 ? (
-        <div className="py-16 text-center border border-dashed border-border rounded-xl bg-card/25">
-          <Wrench className="size-12 text-muted-foreground/40 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold">No se encontraron activos</h3>
-          <p className="text-muted-foreground text-sm mt-1">Intenta ajustando los filtros de búsqueda o cambia de pestaña.</p>
-        </div>
+        <EmptyState
+          icon={Wrench}
+          title="No se encontraron activos"
+          message="Intenta ajustando los filtros de búsqueda o cambia de pestaña."
+        />
       ) : (
         <div className="border border-border rounded-xl overflow-hidden bg-card/40">
           <Table>
@@ -551,15 +539,15 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="asset-type">Tipo de Activo</Label>
-                    <select
+                    <Select
                       id="asset-type"
+                      aria-label="Tipo de activo"
                       value={newType}
                       onChange={(e) => setNewType(e.target.value as AssetType)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value="EQUIPO">Equipo / Instrumento</option>
                       <option value="VEHICULO">Vehículo de Flota</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
@@ -587,32 +575,32 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="asset-proj">Proyecto Asignado</Label>
-                    <select
+                    <Select
                       id="asset-proj"
+                      aria-label="Proyecto asignado"
                       value={newProjId}
                       onChange={(e) => setNewProjId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value="">Global / Sin asignar</option>
                       {projects.map((p) => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="asset-assigned">Responsable</Label>
-                    <select
+                    <Select
                       id="asset-assigned"
+                      aria-label="Responsable del activo"
                       value={newAssignedId}
                       onChange={(e) => setNewAssignedId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value="">Sin asignar</option>
                       {users.map((u) => (
                         <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </div>
 
@@ -1434,17 +1422,18 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor="doc-type" className="text-xs">Categoría</Label>
-                      <select
+                      <Select
                         id="doc-type"
+                        aria-label="Categoría del documento"
                         value={docType}
                         onChange={(e) => setDocType(e.target.value)}
-                        className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-xs transition-colors outline-none"
+                        className="h-8 text-xs"
                       >
                         <option value="CERT">Certificado</option>
                         <option value="MANUAL">Manual Técnico</option>
                         <option value="SEGURO">Seguro / Póliza</option>
                         <option value="HOJA_VIDA">Hoja de Vida / Checklists</option>
-                      </select>
+                      </Select>
                     </div>
                     <div className="flex flex-col gap-1">
                       <Label htmlFor="doc-exp" className="text-xs">Expiración (Opcional)</Label>
@@ -1788,15 +1777,16 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                               </div>
 
                               <div className="w-full md:w-32">
-                                <select
+                                <Select
+                                  aria-label={`Tipo de respuesta del ítem ${index + 1}`}
                                   value={item.type}
                                   onChange={(e) => handleUpdateItemInTpl(item.id, 'type', e.target.value)}
-                                  className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs outline-none"
+                                  className="h-8 px-2 text-xs"
                                 >
                                   <option value="YES_NO">Sí / No</option>
                                   <option value="NUMBER">Número</option>
                                   <option value="TEXT">Texto</option>
-                                </select>
+                                </Select>
                               </div>
 
                               <div className="flex items-center gap-1.5">
@@ -2428,18 +2418,18 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               <CardContent className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="status-select">Nuevo Estado</Label>
-                  <select
+                  <Select
                     id="status-select"
+                    aria-label="Nuevo estado del activo"
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value as AssetStatus)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none"
                   >
                     <option value="DISPONIBLE">Disponible</option>
                     <option value="MANTENIMIENTO">En Mantenimiento</option>
                     <option value="DEFECTUOSO">Defectuoso</option>
                     <option value="NO_DISPONIBLE">No Disponible</option>
                     <option value="BAJA">De Baja / Retirado</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -2477,17 +2467,17 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               <CardContent className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="assign-select">Colaborador Responsable</Label>
-                  <select
+                  <Select
                     id="assign-select"
+                    aria-label="Colaborador responsable"
                     value={newAssignId}
                     onChange={(e) => setNewAssignId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none"
                   >
                     <option value="">Desasignar responsable</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end gap-2">

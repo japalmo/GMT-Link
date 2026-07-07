@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { FileUser } from 'lucide-react';
-import { ApiError, getCv } from '@/lib/api';
+import { errorToMessage, getCv } from '@/lib/api';
 import { buttonVariants } from '@/components/ui/button';
 import type { CvView } from '@/types/cv';
 import { WidgetShell } from './widget-shell';
-
-/** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /** Completitud aproximada del CV: resumen + 3 secciones con al menos una entrada. */
 function completeness(cv: CvView): number {
@@ -50,7 +43,7 @@ export function MiCvWidget(): ReactNode {
       if (mountedRef.current) setCv(data);
     } catch (err) {
       if (mountedRef.current) {
-        setError(toMessage(err, 'No se pudo cargar tu CV.'));
+        setError(errorToMessage(err, 'No se pudo cargar tu CV.'));
       }
     } finally {
       if (mountedRef.current) setLoading(false);

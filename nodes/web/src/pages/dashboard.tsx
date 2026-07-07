@@ -5,6 +5,9 @@ import { useDashboard } from '@/hooks/use-dashboard';
 import { renderWidget } from '@/pages/dashboard/widgets/registry';
 import { DashboardCustomizer } from '@/pages/dashboard/dashboard-customizer';
 import { Button } from '@/components/ui/button';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 
 /**
  * Inicio (dashboard modular §6-2.1). Carga los widgets + layout reconciliado del
@@ -28,45 +31,24 @@ export default function DashboardPage(): ReactNode {
     .sort((a, b) => a.order - b.order);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium text-muted-foreground">Inicio</p>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Hola{user ? `, ${user.firstName}` : ''}.
-          </h1>
-          <p className="max-w-prose text-sm text-muted-foreground">
-            Resumen general de tareas y actividades en curso.
-          </p>
-        </div>
-        {!loading && !error && (
-          <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
-            <Settings2 className="mr-2 h-4 w-4" />
-            {editing ? 'Cerrar' : 'Personalizar'}
-          </Button>
-        )}
-      </header>
+    <PageContainer maxWidth="6xl">
+      <PageHeader
+        label="Inicio"
+        title={`Hola${user ? `, ${user.firstName}` : ''}.`}
+        description="Resumen general de tareas y actividades en curso."
+        actions={
+          !loading && !error ? (
+            <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              {editing ? 'Cerrar' : 'Personalizar'}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      {loading && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-48 animate-pulse rounded-xl border bg-muted/40"
-              aria-hidden
-            />
-          ))}
-        </div>
-      )}
+      {loading && <LoadingState rows={4} label="Cargando tu inicio…" />}
 
-      {!loading && error && (
-        <div className="flex flex-col items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-6">
-          <p className="text-sm text-destructive">{error}</p>
-          <Button variant="outline" size="sm" onClick={() => void refetch()}>
-            Reintentar
-          </Button>
-        </div>
-      )}
+      {!loading && error && <ErrorState message={error} onRetry={() => void refetch()} />}
 
       {!loading && !error && editing && (
         <DashboardCustomizer
@@ -82,9 +64,7 @@ export default function DashboardPage(): ReactNode {
 
       {!loading && !error && !editing && (
         visible.length === 0 ? (
-          <div className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
-            No tienes widgets visibles. Usa "Personalizar" para activarlos.
-          </div>
+          <EmptyState message='No tienes widgets visibles. Usa "Personalizar" para activarlos.' />
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {visible.map((it) => (
@@ -99,6 +79,6 @@ export default function DashboardPage(): ReactNode {
           </div>
         )
       )}
-    </div>
+    </PageContainer>
   );
 }

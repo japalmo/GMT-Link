@@ -8,7 +8,6 @@ import { useUsers } from '@/hooks/use-users';
 import { useProfile } from '@/hooks/use-profile';
 import {
   Plus,
-  Search,
   Filter,
   HelpCircle,
   AlertTriangle,
@@ -25,7 +24,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState } from '@/components/ui/states';
+import { SearchInput } from '@/components/ui/search-input';
 import {
   Card,
   CardContent,
@@ -34,6 +38,17 @@ import {
 } from '@/components/ui/card';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
 import type { TaskView, TaskStatus, TaskDataSpec } from '@/types/operations';
+
+/** Etiqueta legible + variante de `Badge` por estado de tarea del backlog. */
+const TASK_STATUS_META: Record<
+  TaskStatus,
+  { label: string; variant: NonNullable<BadgeProps['variant']> }
+> = {
+  PENDIENTE: { label: 'Pendiente', variant: 'warning' },
+  EN_PROGRESO: { label: 'En progreso', variant: 'info' },
+  REVISADO: { label: 'Revisado', variant: 'neutral' },
+  COMPLETADO: { label: 'Completado', variant: 'success' },
+};
 
 export function BacklogTab(): ReactNode {
   const { profile } = useProfile();
@@ -473,19 +488,6 @@ export function BacklogTab(): ReactNode {
     return `${hours > 0 ? `${hours}h ` : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getStatusColor = (status: TaskStatus) => {
-    switch (status) {
-      case 'PENDIENTE':
-        return 'bg-amber-500/10 border-amber-500/20 text-amber-500';
-      case 'EN_PROGRESO':
-        return 'bg-blue-500/10 border-blue-500/20 text-blue-500';
-      case 'REVISADO':
-        return 'bg-purple-500/10 border-purple-500/20 text-purple-500';
-      case 'COMPLETADO':
-        return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500';
-    }
-  };
-
   return (
     <div className="flex flex-col gap-6">
       {/* Barra de Filtros */}
@@ -534,14 +536,14 @@ export function BacklogTab(): ReactNode {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-proj" className="text-xs">Proyecto</Label>
-            <select
+            <Select
               id="filter-proj"
+              aria-label="Filtrar backlog por proyecto"
               value={filterProject}
               onChange={(e) => {
                 setFilterProject(e.target.value);
                 setFilterService('all'); // reset service on project change
               }}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="all">Todos los proyectos</option>
               {projects.map((p) => (
@@ -549,17 +551,17 @@ export function BacklogTab(): ReactNode {
                   {p.name} ({p.code})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-srv" className="text-xs">Servicio</Label>
-            <select
+            <Select
               id="filter-srv"
+              aria-label="Filtrar backlog por servicio"
               value={filterService}
               disabled={filterProject === 'all'}
               onChange={(e) => setFilterService(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             >
               <option value="all">Todos los servicios</option>
               {filterProjectServices.map((s) => (
@@ -567,16 +569,16 @@ export function BacklogTab(): ReactNode {
                   {s.name} ({s.code})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-user" className="text-xs">Responsable</Label>
-            <select
+            <Select
               id="filter-user"
+              aria-label="Filtrar backlog por responsable"
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="all">Todos los responsables</option>
               <option value="unassigned">Sin Asignar</option>
@@ -585,21 +587,18 @@ export function BacklogTab(): ReactNode {
                   {u.firstName} {u.lastName}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-search" className="text-xs">Buscar</Label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                id="filter-search"
-                value={filterSearch}
-                onChange={(e) => setFilterSearch(e.target.value)}
-                placeholder="Buscar por nombre..."
-                className="pl-9"
-              />
-            </div>
+            <SearchInput
+              id="filter-search"
+              label="Buscar tarea por nombre"
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              placeholder="Buscar por nombre..."
+            />
           </div>
         </div>
       </div>
@@ -626,9 +625,9 @@ export function BacklogTab(): ReactNode {
                 <div className="flex flex-col gap-1 border-b pb-2">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm tracking-wide text-foreground">
-                      {status}
+                      {TASK_STATUS_META[status].label}
                     </span>
-                    <Badge className={getStatusColor(status)}>
+                    <Badge variant={TASK_STATUS_META[status].variant}>
                       {columnTasks.length}
                     </Badge>
                   </div>
@@ -865,10 +864,11 @@ export function BacklogTab(): ReactNode {
                   })}
 
                   {columnTasks.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 text-center rounded-lg border border-dashed border-border bg-card/10">
-                      <HelpCircle className="size-6 text-muted-foreground/40 mb-1" />
-                      <span className="text-xs text-muted-foreground font-medium">Sin tareas</span>
-                    </div>
+                    <EmptyState
+                      icon={HelpCircle}
+                      message="Sin tareas"
+                      className="rounded-lg border border-dashed border-border bg-card/10 p-8"
+                    />
                   )}
                 </div>
               </div>
@@ -970,7 +970,9 @@ export function BacklogTab(): ReactNode {
                       </div>
                     </td>
                     <td className="p-3">
-                      <Badge className={getStatusColor(t.status)}>{t.status}</Badge>
+                      <Badge variant={TASK_STATUS_META[t.status].variant}>
+                        {TASK_STATUS_META[t.status].label}
+                      </Badge>
                     </td>
                     <td className="p-3 font-medium font-mono">{t.estimatedPoints}</td>
                     <td className="p-3 font-medium font-mono">
@@ -1106,9 +1108,9 @@ export function BacklogTab(): ReactNode {
             </ModalHeader>
             <div className="flex flex-col gap-4 py-4 min-h-[250px]">
               {formError && (
-                <div className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-medium">
+                <Alert variant="destructive" live>
                   {formError}
-                </div>
+                </Alert>
               )}
 
               {wizardStep === 1 && (
@@ -1126,11 +1128,11 @@ export function BacklogTab(): ReactNode {
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-desc">Descripción</Label>
-                    <textarea
+                    <Textarea
                       id="task-desc"
                       value={taskDesc}
                       onChange={(e) => setTaskDesc(e.target.value)}
-                      className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="min-h-24"
                       placeholder="Detalles sobre lo que se espera..."
                     />
                   </div>
@@ -1141,15 +1143,15 @@ export function BacklogTab(): ReactNode {
                 <div className="flex flex-col gap-4 animate-in fade-in duration-200">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-proj">Proyecto</Label>
-                    <select
+                    <Select
                       id="task-proj"
+                      aria-label="Proyecto de la tarea"
                       required
                       value={taskProjId}
                       onChange={(e) => {
                         setTaskProjId(e.target.value);
                         setTaskSrvId(''); // reset service
                       }}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                     >
                       <option value="">Selecciona proyecto</option>
                       {projects.map((p) => (
@@ -1157,17 +1159,17 @@ export function BacklogTab(): ReactNode {
                           {p.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-srv">Servicio (Opcional)</Label>
-                    <select
+                    <Select
                       id="task-srv"
+                      aria-label="Servicio de la tarea"
                       value={taskSrvId}
                       disabled={!taskProjId}
                       onChange={(e) => setTaskSrvId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 bg-slate-900"
                     >
                       <option value="">Ninguno</option>
                       {projectServices.map((s) => (
@@ -1175,7 +1177,7 @@ export function BacklogTab(): ReactNode {
                           {s.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -1208,8 +1210,9 @@ export function BacklogTab(): ReactNode {
                 <div className="flex flex-col gap-4 animate-in fade-in duration-200">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-product">Producto / Entregable Esperado</Label>
-                    <select
+                    <Select
                       id="task-product"
+                      aria-label="Producto o entregable esperado de la tarea"
                       required
                       value={taskProduct}
                       onChange={(e) =>
@@ -1217,13 +1220,12 @@ export function BacklogTab(): ReactNode {
                           e.target.value as 'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics',
                         )
                       }
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                     >
                       <option value="time_only">Solo registro de tiempo</option>
                       <option value="pdf_report">Informe en PDF</option>
                       <option value="file_generic">Archivo genérico / Entregable pesado</option>
                       <option value="custom_metrics">Ingreso de datos / Mediciones (Atacama)</option>
-                    </select>
+                    </Select>
                     <p className="text-[11px] text-muted-foreground mt-1">
                       Define qué debe ingresar u ocurrir al finalizar la tarea.
                     </p>
@@ -1235,11 +1237,11 @@ export function BacklogTab(): ReactNode {
                 <div className="flex flex-col gap-4 animate-in fade-in duration-200">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-assigned">Responsable de Ejecución</Label>
-                    <select
+                    <Select
                       id="task-assigned"
+                      aria-label="Responsable de ejecución de la tarea"
                       value={taskAssignedId}
                       onChange={(e) => setTaskAssignedId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                     >
                       <option value="">Sin Asignar</option>
                       {users.map((u) => (
@@ -1247,16 +1249,16 @@ export function BacklogTab(): ReactNode {
                           {u.firstName} {u.lastName}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="task-client">Mandante/ITO Solicitante</Label>
-                    <select
+                    <Select
                       id="task-client"
+                      aria-label="Mandante o ITO solicitante"
                       value={taskClientId}
                       onChange={(e) => setTaskClientId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                     >
                       <option value="">Ninguno</option>
                       {users.map((u) => (
@@ -1264,7 +1266,7 @@ export function BacklogTab(): ReactNode {
                           {u.firstName} {u.lastName}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="border rounded-lg p-3 bg-muted/20 text-xs flex flex-col gap-2 mt-2">
@@ -1339,9 +1341,9 @@ export function BacklogTab(): ReactNode {
             </ModalHeader>
             <div className="flex flex-col gap-4 py-4 min-h-[250px]">
               {itoFormError && (
-                <div className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-medium">
+                <Alert variant="destructive" live>
                   {itoFormError}
-                </div>
+                </Alert>
               )}
 
               <div className="flex flex-col gap-1.5">
@@ -1357,23 +1359,23 @@ export function BacklogTab(): ReactNode {
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ito-desc">Descripción detallada</Label>
-                <textarea
+                <Textarea
                   id="ito-desc"
                   value={itoDesc}
                   onChange={(e) => setItoDesc(e.target.value)}
-                  className="flex min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="min-h-24"
                   placeholder="Detalla qué necesitas y por qué..."
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ito-proj">Proyecto Mandante</Label>
-                <select
+                <Select
                   id="ito-proj"
+                  aria-label="Proyecto mandante del requerimiento"
                   required
                   value={itoProjId}
                   onChange={(e) => setItoProjId(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                 >
                   <option value="">Selecciona proyecto</option>
                   {projects.map((p) => (
@@ -1381,13 +1383,14 @@ export function BacklogTab(): ReactNode {
                       {p.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ito-product">Producto / Entregable Esperado</Label>
-                <select
+                <Select
                   id="ito-product"
+                  aria-label="Producto o entregable esperado del requerimiento"
                   required
                   value={itoProduct}
                   onChange={(e) =>
@@ -1395,13 +1398,12 @@ export function BacklogTab(): ReactNode {
                       e.target.value as 'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics',
                     )
                   }
-                  className="flex h-9 w-full rounded-md border border-input bg-slate-900 px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring bg-slate-900"
                 >
                   <option value="time_only">Solo registro de tiempo</option>
                   <option value="pdf_report">Informe en PDF</option>
                   <option value="file_generic">Archivo genérico / Entregable pesado</option>
                   <option value="custom_metrics">Ingreso de datos / Mediciones (Atacama)</option>
-                </select>
+                </Select>
               </div>
             </div>
             <ModalFooter className="flex justify-end gap-2 border-t pt-4">
@@ -1436,22 +1438,22 @@ export function BacklogTab(): ReactNode {
 
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="edit-desc">Descripción</Label>
-                  <textarea
+                  <Textarea
                     id="edit-desc"
                     value={editDesc}
                     onChange={(e) => setEditDesc(e.target.value)}
-                    className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="min-h-20"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="edit-assigned">Responsable</Label>
-                    <select
+                    <Select
                       id="edit-assigned"
+                      aria-label="Responsable de la tarea"
                       value={editAssignedId}
                       onChange={(e) => setEditAssignedId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value="">Sin Asignar</option>
                       {users.map((u) => (
@@ -1459,7 +1461,7 @@ export function BacklogTab(): ReactNode {
                           {u.firstName} {u.lastName}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
@@ -1500,11 +1502,11 @@ export function BacklogTab(): ReactNode {
 
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="edit-client">Mandante/ITO Solicitante</Label>
-                  <select
+                  <Select
                     id="edit-client"
+                    aria-label="Mandante o ITO solicitante"
                     value={editClientId}
                     onChange={(e) => setEditClientId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Ninguno</option>
                     {users.map((u) => (
@@ -1512,7 +1514,7 @@ export function BacklogTab(): ReactNode {
                         {u.firstName} {u.lastName}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
               <ModalFooter>
@@ -1605,11 +1607,11 @@ export function BacklogTab(): ReactNode {
               )}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="time-log-note">Nota / Comentario (Opcional)</Label>
-                <textarea
+                <Textarea
                   id="time-log-note"
                   value={timeLogNote}
                   onChange={(e) => setTimeLogNote(e.target.value)}
-                  className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="min-h-20"
                   placeholder="Detalla qué actividad vas a realizar o qué avance lograste..."
                 />
               </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { TriangleAlert } from 'lucide-react';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,13 +15,6 @@ import {
 } from '@/components/ui/modal';
 import type { UploadDocumentFields } from '@/types/documents';
 import { DOC_ACCEPT, FileField } from '../perfil/file-field';
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 /** Sugerencias de tipo de documento (texto libre; el backend acepta cualquiera). */
 const TYPE_SUGGESTIONS = [
@@ -99,7 +92,7 @@ export function UploadDocumentDialog({
       );
       onOpenChange(false);
     } catch (err) {
-      setError(toMessage(err, 'No se pudo subir el documento.'));
+      setError(errorToMessage(err, 'No se pudo subir el documento.'));
     } finally {
       setSubmitting(false);
     }
@@ -182,13 +175,9 @@ export function UploadDocumentDialog({
           </div>
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>

@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import type { RoleKey } from '@gmt-platform/contracts';
 import { Modal, ModalContent, ModalDescription, ModalFooter, ModalHeader, ModalTitle } from '@/components/ui/modal';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { CreateUserDto } from '@/lib/api';
@@ -231,9 +232,9 @@ export function NewUserDialog({
           </label>
 
           {error && (
-            <p id={errorId} role="alert" className="text-sm text-destructive">
+            <Alert id={errorId} variant="destructive" live>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>

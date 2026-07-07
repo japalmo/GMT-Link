@@ -1,9 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Modal,
   ModalClose,
@@ -15,13 +17,6 @@ import {
 } from '@/components/ui/modal';
 import { toDateInputValue } from '@/lib/format';
 import type { CvExperienceInput, CvExperienceView } from '@/types/cv';
-
-/** Mensaje legible a partir de un error desconocido. */
-function toMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message.length > 0) return error.message;
-  return fallback;
-}
 
 interface FormState {
   role: string;
@@ -100,7 +95,7 @@ export function ExperienceDialog({
       });
       onOpenChange(false);
     } catch (err) {
-      setError(toMessage(err, 'No se pudo guardar la experiencia.'));
+      setError(errorToMessage(err, 'No se pudo guardar la experiencia.'));
     } finally {
       setSubmitting(false);
     }
@@ -163,7 +158,7 @@ export function ExperienceDialog({
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-foreground">
+          <Label className="flex items-center gap-2">
             <input
               type="checkbox"
               className="size-4 rounded border-input outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -172,29 +167,24 @@ export function ExperienceDialog({
               disabled={submitting}
             />
             Trabajo aquí actualmente
-          </label>
+          </Label>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="exp-description">Descripción</Label>
-            <textarea
+            <Textarea
               id="exp-description"
               value={form.description}
               onChange={(e) => update('description', e.target.value)}
               disabled={submitting}
               rows={3}
-              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <p className="text-xs text-muted-foreground">Opcional.</p>
           </div>
 
           {error && (
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+            <Alert variant="destructive" live icon={TriangleAlert}>
               {error}
-            </p>
+            </Alert>
           )}
 
           <ModalFooter>

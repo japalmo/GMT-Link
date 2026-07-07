@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { usePermissionRequests } from '@/hooks/use-permission-requests';
 import { AppearanceSection } from './appearance-section';
 import { NotificationsSection } from './notifications-section';
@@ -20,14 +22,12 @@ export default function ConfiguracionPage(): ReactNode {
     usePermissionRequests();
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <header className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-muted-foreground">Configuración</p>
-        <h1 className="text-2xl font-bold tracking-tight">Configuración</h1>
-        <p className="text-sm text-muted-foreground">
-          Personaliza tu interfaz, tus notificaciones y solicita accesos.
-        </p>
-      </header>
+    <PageContainer maxWidth="3xl">
+      <PageHeader
+        label="Configuración"
+        title="Configuración"
+        description="Personaliza tu interfaz, tus notificaciones y solicita accesos."
+      />
 
       <AppearanceSection />
       <NotificationsSection />
@@ -45,6 +45,6 @@ export default function ConfiguracionPage(): ReactNode {
           onReject={reject}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

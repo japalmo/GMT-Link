@@ -103,6 +103,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Normaliza un error desconocido a un mensaje legible para la UI. Reconoce
+ * `ApiError` (usa su `message`), `Error` genérico (si trae mensaje) y cae al
+ * `fallback` en cualquier otro caso. Reemplaza los `toMessage` locales
+ * duplicados en los diálogos de rechazo (finanzas / recursos).
+ */
+export function errorToMessage(
+  error: unknown,
+  fallback = 'Ocurrió un error',
+): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error && error.message.length > 0) return error.message;
+  return fallback;
+}
+
 /** Forma del cuerpo de error que devuelve NestJS (best-effort). */
 interface NestErrorBody {
   message?: string | string[];
@@ -301,11 +316,6 @@ export function listUsers(search?: string): Promise<UserListItem[]> {
     ? `?search=${encodeURIComponent(search.trim())}`
     : '';
   return request<UserListItem[]>(`/users${query}`);
-}
-
-/** `GET /users/:id` — detalle de un usuario. 404 si no existe. */
-export function getUser(id: string): Promise<UserListItem> {
-  return request<UserListItem>(`/users/${encodeURIComponent(id)}`);
 }
 
 /** `POST /users` — crea un usuario y devuelve su clave provisoria (única vez). */
@@ -836,11 +846,6 @@ export function listAllReimbursements(filters: {
   return request<ReimbursementView[]>(`/reimbursements${query ? `?${query}` : ''}`);
 }
 
-/** `GET /reimbursements/:id` — detalle. Lo ve el dueño O un gestor. 404 si no. */
-export function getReimbursement(id: string): Promise<ReimbursementView> {
-  return request<ReimbursementView>(`/reimbursements/${encodeURIComponent(id)}`);
-}
-
 /**
  * `POST /reimbursements/:id/receipt` — sube/actualiza la boleta (multipart, campo
  * `file` PDF/imagen). SOLO el dueño y solo si está PENDIENTE. Devuelve el
@@ -957,11 +962,6 @@ export function listAllOvertime(filters: {
   if (filters.userId) params.set('userId', filters.userId);
   const query = params.toString();
   return request<OvertimeView[]>(`/overtime${query ? `?${query}` : ''}`);
-}
-
-/** `GET /overtime/:id` — detalle. Lo ve el dueño O un gestor. 404 si no. */
-export function getOvertime(id: string): Promise<OvertimeView> {
-  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}`);
 }
 
 /** `POST /overtime/:id/approve` — aprueba (gestor). PENDIENTE→APROBADO; 409 si no. */
@@ -1788,10 +1788,6 @@ export function listMetricElements(projectId: string): Promise<MetricElement[]> 
   return request<MetricElement[]>(`/metrics/elements?projectId=${encodeURIComponent(projectId)}`);
 }
 
-export function getMetricElementByCode(code: string): Promise<MetricElement> {
-  return request<MetricElement>(`/metrics/elements/code/${encodeURIComponent(code)}`);
-}
-
 export function listMetricPhases(serviceId: string): Promise<MetricPhase[]> {
   return request<MetricPhase[]>(`/metrics/phases?serviceId=${encodeURIComponent(serviceId)}`);
 }
@@ -1896,11 +1892,6 @@ export function createClient(dto: CreateClientInput): Promise<ClientView> {
   });
 }
 
-/** `GET /clients/:id` — detalle de un cliente. 404 si no existe. */
-export function getClient(id: string): Promise<ClientView> {
-  return request<ClientView>(`/clients/${encodeURIComponent(id)}`);
-}
-
 /** `PATCH /clients/:id` — edita un cliente. Gate `client:create` (403 si falta). */
 export function updateClient(id: string, dto: UpdateClientInput): Promise<ClientView> {
   return request<ClientView>(`/clients/${encodeURIComponent(id)}`, {
@@ -1922,11 +1913,6 @@ export function createFaena(clientId: string, dto: CreateFaenaInput): Promise<Fa
     method: 'POST',
     body: JSON.stringify(dto),
   });
-}
-
-/** `GET /faenas/:id` — detalle de una faena. 404 si no existe. */
-export function getFaena(id: string): Promise<FaenaView> {
-  return request<FaenaView>(`/faenas/${encodeURIComponent(id)}`);
 }
 
 /** `PATCH /faenas/:id` — edita una faena. Gate `faena:create` (403 si falta). */

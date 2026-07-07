@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { ApiError } from '@/lib/api';
+import { errorToMessage } from '@/lib/api';
 import { useTheme } from '@/components/theme/theme-provider';
 import type { ThemePreference } from '@/types/settings';
 
@@ -40,9 +41,7 @@ export function AppearanceSection(): ReactNode {
     try {
       await setTheme(value);
     } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : 'No se pudo guardar el tema.';
-      setError(message);
+      setError(errorToMessage(err, 'No se pudo guardar el tema.'));
     } finally {
       setSaving(null);
     }
@@ -107,9 +106,9 @@ export function AppearanceSection(): ReactNode {
         </fieldset>
 
         {error && (
-          <p className="mt-3 text-sm text-destructive" role="alert">
+          <Alert variant="destructive" live className="mt-3">
             {error}
-          </p>
+          </Alert>
         )}
       </CardContent>
     </Card>

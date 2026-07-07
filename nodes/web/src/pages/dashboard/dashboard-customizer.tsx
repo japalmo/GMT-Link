@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Eye, EyeOff } from 'lucide-react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { AvailableWidget, DashboardLayoutItem } from '@/types/dashboard';
 
@@ -112,17 +114,17 @@ export function DashboardCustomizer({
                 </Button>
               </div>
 
-              <label
+              <Label
                 htmlFor={checkboxId}
-                className="flex min-w-0 flex-1 cursor-pointer flex-col"
+                className="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5"
               >
                 <span className="truncate text-sm font-medium">
                   {titleFor(item.widgetKey)}
                 </span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-xs font-normal text-muted-foreground">
                   {descFor(item.widgetKey)}
                 </span>
-              </label>
+              </Label>
 
               <div className="flex items-center gap-2">
                 {item.visible ? (
@@ -146,9 +148,9 @@ export function DashboardCustomizer({
       </ul>
 
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <Alert variant="destructive" live>
           {error}
-        </p>
+        </Alert>
       )}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

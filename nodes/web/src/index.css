@@ -44,6 +44,20 @@
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
 
+  /*
+   * Tokens de estado (respaldan las variantes soft de Badge / StatusBadge:
+   * success/info/warning/danger/neutral). Los chips usan utilidades Tailwind
+   * (bg soft /10 + text) por su soporte dark-mode uniforme; estos tokens exponen
+   * el color base para usos que necesiten la variable cruda (bordes, íconos,
+   * gráficos). Escala semántica: success=emerald, info=blue, warning=amber,
+   * danger=rose, neutral=zinc.
+   */
+  --status-success: oklch(0.72 0.17 155);
+  --status-info: oklch(0.62 0.17 255);
+  --status-warning: oklch(0.79 0.16 80);
+  --status-danger: oklch(0.64 0.22 15);
+  --status-neutral: oklch(0.55 0.02 260);
+
   /* Radios */
   --radius: 0.625rem;
   --radius-sm: calc(var(--radius) - 4px);
@@ -110,6 +124,22 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
+  /* Colores de estado como tokens (bg-status-success, text-status-danger, …). */
+  --color-status-success: var(--status-success);
+  --color-status-info: var(--status-info);
+  --color-status-warning: var(--status-warning);
+  --color-status-danger: var(--status-danger);
+  --color-status-neutral: var(--status-neutral);
+
+  /*
+   * Escala de radios (design system):
+   *   rounded-md  → controles (button, input, select, textarea, badge)
+   *   rounded-lg  → cards, alerts/error states, modales
+   *   rounded-xl  → tablas y superficies grandes (cuando aplique)
+   * Escala de gap (columnas de layout):
+   *   gap-4 (denso) · gap-6 (default de página) · gap-8 (secciones amplias)
+   *   PageContainer usa gap-6 por defecto; PageHeader/PageContainer con py-8 sm:py-10.
+   */
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);

@@ -3,6 +3,8 @@ import { FileText, Send, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { EmptyState } from '@/components/ui/states';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -100,18 +102,16 @@ export default function ApprovalWorkflowDemo() {
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-muted-foreground">Primitiva · §5</p>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
-          <FileText className="size-6 text-primary" aria-hidden />
-          ApprovalWorkflow
-        </h1>
-        <p className="max-w-prose text-sm text-muted-foreground">
-          Flujo genérico PENDIENTE → APROBADO / RECHAZADO con conservación de la
-          versión anterior y gancho de notificación. La decisión de permisos la
-          inyecta el consumidor (aquí, un toggle que simula OpenFGA).
-        </p>
-      </header>
+      <PageHeader
+        label="Primitiva · §5"
+        title={
+          <span className="flex items-center gap-2">
+            <FileText className="size-6 text-primary" aria-hidden />
+            ApprovalWorkflow
+          </span>
+        }
+        description="Flujo genérico PENDIENTE → APROBADO / RECHAZADO con conservación de la versión anterior y gancho de notificación. La decisión de permisos la inyecta el consumidor (aquí, un toggle que simula OpenFGA)."
+      />
 
       {/* Controles de la demo */}
       <Card>
@@ -143,7 +143,7 @@ export default function ApprovalWorkflowDemo() {
               <Send aria-hidden />
               Enviar nueva versión
             </Button>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <Label className="flex cursor-pointer items-center gap-2 font-normal">
               <input
                 type="checkbox"
                 className="size-4 accent-[var(--primary)]"
@@ -154,7 +154,7 @@ export default function ApprovalWorkflowDemo() {
               <span>
                 <code className="text-xs">canApprove</code> (simula OpenFGA)
               </span>
-            </label>
+            </Label>
           </div>
         </CardContent>
       </Card>
@@ -178,9 +178,7 @@ export default function ApprovalWorkflowDemo() {
         <Card>
           <CardContent className="pt-6">
             {log.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aún no hay transiciones. Envía una versión o aprueba/rechaza.
-              </p>
+              <EmptyState message="Aún no hay transiciones. Envía una versión o aprueba/rechaza." />
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {log.map((line, index) => (

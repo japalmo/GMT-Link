@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { AlertCircle, ExternalLink, FileCheck2, RotateCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ExternalLink, FileCheck2 } from 'lucide-react';
+import { ErrorState } from '@/components/ui/states';
+import { PageHeader } from '@/components/layout/page-header';
 import { useCv } from '@/hooks/use-cv';
 import { formatDate, formatDateRange } from '@/lib/format';
 import type {
@@ -66,29 +67,17 @@ export default function CvPage(): ReactNode {
   return (
     <div className="flex flex-col gap-6 p-6 sm:p-8">
       <header className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Mi CV</h1>
-          <p className="text-sm text-muted-foreground">
-            Tu trayectoria, formación y certificaciones.
-          </p>
-        </div>
+        <PageHeader
+          title="Mi CV"
+          description="Tu trayectoria, formación y certificaciones."
+        />
         <ProfileTabs />
       </header>
 
       {cv.loading && <CvSkeleton />}
 
       {!cv.loading && cv.error && (
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-12 text-center"
-        >
-          <AlertCircle className="size-8 text-destructive" aria-hidden />
-          <p className="max-w-sm text-sm text-destructive">{cv.error}</p>
-          <Button variant="outline" size="sm" onClick={() => void cv.refetch()}>
-            <RotateCw aria-hidden />
-            Reintentar
-          </Button>
-        </div>
+        <ErrorState message={cv.error} onRetry={() => void cv.refetch()} />
       )}
 
       {!cv.loading && !cv.error && cv.cv && (

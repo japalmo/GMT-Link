@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/states';
 import {
   Card,
   CardContent,
@@ -46,13 +47,15 @@ export function CvSection({
       </CardHeader>
       <CardContent>
         {isEmpty ? (
-          <div className="rounded-md border border-dashed border-border px-4 py-8 text-center">
-            <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-            <Button size="sm" variant="ghost" onClick={onAdd} className="mt-3">
-              <Plus aria-hidden />
-              {addLabel}
-            </Button>
-          </div>
+          <EmptyState
+            message={emptyMessage}
+            action={
+              <Button size="sm" variant="ghost" onClick={onAdd}>
+                <Plus aria-hidden />
+                {addLabel}
+              </Button>
+            }
+          />
         ) : (
           children
         )}

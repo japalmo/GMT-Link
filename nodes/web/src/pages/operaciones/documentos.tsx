@@ -4,7 +4,6 @@ import { useProjects, useProjectDocuments } from '@/hooks/use-operations';
 import { useProfile } from '@/hooks/use-profile';
 import {
   Plus,
-  Search,
   FileText,
   CheckCircle2,
   XCircle,
@@ -17,7 +16,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Alert } from '@/components/ui/alert';
+import { EmptyState, LoadingState } from '@/components/ui/states';
+import { SearchInput } from '@/components/ui/search-input';
+import { RejectDialog } from '@/components/ui/reject-dialog';
 import {
   Card,
   CardContent,
@@ -27,7 +31,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
+import { errorToMessage } from '@/lib/api';
 import type { ProjectDocumentStatus } from '@/types/operations';
+
+/** Etiqueta legible + variante de `Badge` por estado de documento de proyecto. */
+const DOC_STATUS_META: Record<
+  ProjectDocumentStatus,
+  { label: string; variant: NonNullable<BadgeProps['variant']> }
+> = {
+  BORRADOR: { label: 'Borrador', variant: 'neutral' },
+  PENDIENTE_QA: { label: 'Pendiente QA', variant: 'warning' },
+  PENDIENTE_CLIENTE: { label: 'Pendiente Cliente', variant: 'info' },
+  APROBADO: { label: 'Aprobado', variant: 'success' },
+  RECHAZADO: { label: 'Rechazado', variant: 'danger' },
+};
 
 export function formatRevision(version: number): string {
   if (version === 0) return 'rev0';
@@ -65,10 +82,6 @@ export function DocumentosTab(): ReactNode {
   const [formError, setFormError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Reject form states
-  const [rejectReason, setRejectReason] = useState('');
-  const [isRejecting, setIsRejecting] = useState(false);
-
   // Revision file input ref
   const revisionInputRef = useRef<HTMLInputElement>(null);
 
@@ -100,11 +113,6 @@ export function DocumentosTab(): ReactNode {
     if (!activeDocId) return null;
     return documents.find((d) => d.id === activeDocId) || null;
   }, [activeDocId, documents]);
-
-  const handleCloseRejectModal = () => {
-    setRejectOpen(false);
-    setRejectReason('');
-  };
 
   const handleCreateDocument = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,34 +197,13 @@ export function DocumentosTab(): ReactNode {
     }
   };
 
-  const handleReject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeDoc || !rejectReason.trim()) return;
-
-    setIsRejecting(true);
+  const handleReject = async (reason: string): Promise<void> => {
+    if (!activeDoc) return;
     try {
-      await reject(activeDoc.id, rejectReason);
-      handleCloseRejectModal();
+      await reject(activeDoc.id, reason);
       toast.success('Documento rechazado.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al rechazar el documento.');
-    } finally {
-      setIsRejecting(false);
-    }
-  };
-
-  const getStatusColor = (status: ProjectDocumentStatus) => {
-    switch (status) {
-      case 'BORRADOR':
-        return 'bg-muted border-border text-muted-foreground';
-      case 'PENDIENTE_QA':
-        return 'bg-amber-500/10 border-amber-500/20 text-amber-500';
-      case 'PENDIENTE_CLIENTE':
-        return 'bg-purple-500/10 border-purple-500/20 text-purple-500';
-      case 'APROBADO':
-        return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500';
-      case 'RECHAZADO':
-        return 'bg-destructive/10 border-destructive/20 text-destructive';
+      throw new Error(errorToMessage(err, 'Error al rechazar el documento.'));
     }
   };
 
@@ -242,14 +229,14 @@ export function DocumentosTab(): ReactNode {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-doc-proj" className="text-xs">Proyecto</Label>
-            <select
+            <Select
               id="filter-doc-proj"
+              aria-label="Filtrar documentos por proyecto"
               value={filterProject}
               onChange={(e) => {
                 setFilterProject(e.target.value);
                 setFilterService('all');
               }}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="all">Todos los proyectos</option>
               {projects.map((p) => (
@@ -257,17 +244,17 @@ export function DocumentosTab(): ReactNode {
                   {p.name} ({p.code})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="filter-doc-srv" className="text-xs">Servicio</Label>
-            <select
+            <Select
               id="filter-doc-srv"
+              aria-label="Filtrar documentos por servicio"
               value={filterService}
               disabled={filterProject === 'all'}
               onChange={(e) => setFilterService(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             >
               <option value="all">Todos los servicios</option>
               {filterProjectServices.map((s) => (
@@ -275,28 +262,25 @@ export function DocumentosTab(): ReactNode {
                   {s.name} ({s.code})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="search-doc" className="text-xs">Buscar Código o Nombre</Label>
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                id="search-doc"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Ej. GMT-ALS-GEO-MAP-001..."
-                className="pl-9"
-              />
-            </div>
+            <SearchInput
+              id="search-doc"
+              label="Buscar documento por código o nombre"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Ej. GMT-ALS-GEO-MAP-001..."
+            />
           </div>
         </div>
       </div>
 
       {/* Grid Principal: Listado y Detalle */}
       {loading ? (
-        <div className="h-64 animate-pulse rounded-xl bg-muted/40 border border-border" />
+        <LoadingState rows={6} />
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Listado de Documentos */}
@@ -341,8 +325,8 @@ export function DocumentosTab(): ReactNode {
                           <Badge variant="outline" className="text-[10px]">
                             {formatRevision(doc.version)}
                           </Badge>
-                          <Badge className={getStatusColor(doc.status)}>
-                            {doc.status}
+                          <Badge variant={DOC_STATUS_META[doc.status].variant}>
+                            {DOC_STATUS_META[doc.status].label}
                           </Badge>
                         </div>
                       </div>
@@ -350,13 +334,11 @@ export function DocumentosTab(): ReactNode {
                   })}
 
                   {filteredDocs.length === 0 && (
-                    <div className="py-16 text-center">
-                      <FolderOpen className="size-10 text-muted-foreground/60 mx-auto mb-3" />
-                      <h3 className="font-semibold text-base">No se encontraron documentos</h3>
-                      <p className="text-sm text-muted-foreground px-4">
-                        Modifica los filtros o sube un nuevo documento para ver su flujo de aprobación.
-                      </p>
-                    </div>
+                    <EmptyState
+                      icon={FolderOpen}
+                      title="No se encontraron documentos"
+                      message="Modifica los filtros o sube un nuevo documento para ver su flujo de aprobación."
+                    />
                   )}
                 </div>
               </CardContent>
@@ -606,9 +588,9 @@ export function DocumentosTab(): ReactNode {
             </ModalHeader>
             <div className="flex flex-col gap-4 py-4">
               {formError && (
-                <div className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive font-medium">
+                <Alert variant="destructive" live>
                   {formError}
-                </div>
+                </Alert>
               )}
 
               <div className="flex flex-col gap-1.5">
@@ -625,15 +607,15 @@ export function DocumentosTab(): ReactNode {
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="doc-proj">Proyecto</Label>
-                  <select
+                  <Select
                     id="doc-proj"
+                    aria-label="Proyecto del documento"
                     required
                     value={docProjId}
                     onChange={(e) => {
                       setDocProjId(e.target.value);
                       setDocSrvId(''); // Reset service
                     }}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="">Selecciona proyecto</option>
                     {projects.map((p) => (
@@ -641,18 +623,18 @@ export function DocumentosTab(): ReactNode {
                         {p.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="doc-srv">Servicio</Label>
-                  <select
+                  <Select
                     id="doc-srv"
+                    aria-label="Servicio del documento"
                     required
                     value={docSrvId}
                     disabled={!docProjId}
                     onChange={(e) => setDocSrvId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   >
                     <option value="">Selecciona servicio</option>
                     {projectServices.map((s) => (
@@ -660,53 +642,53 @@ export function DocumentosTab(): ReactNode {
                         {s.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="doc-type">Tipo de Documento</Label>
-                  <select
+                  <Select
                     id="doc-type"
+                    aria-label="Tipo de documento"
                     value={docType}
                     onChange={(e) => setDocType(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="INF">Informe (INF)</option>
                     <option value="PLN">Plano (PLN)</option>
                     <option value="PRC">Procedimiento (PRC)</option>
                     <option value="EST">Estudio (EST)</option>
                     <option value="REP">Reporte (REP)</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="doc-area">Código de Área</Label>
-                  <select
+                  <Select
                     id="doc-area"
+                    aria-label="Código de área del documento"
                     value={docArea}
                     onChange={(e) => setDocArea(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <option value="NT">Geotecnia / No Destructivo (NT)</option>
                     <option value="CIV">Obras Civiles (CIV)</option>
                     <option value="MEC">Mecánica (MEC)</option>
                     <option value="MIN">Minería (MIN)</option>
                     <option value="INS">Instrumentación (INS)</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="doc-file">Archivo PDF</Label>
-                <input
+                <Input
                   id="doc-file"
                   type="file"
                   required
                   accept=".pdf"
                   onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs file:border-0 file:bg-transparent file:text-sm file:font-medium text-muted-foreground outline-none"
+                  className="file:border-0 file:bg-transparent file:text-sm file:font-medium"
                 />
               </div>
             </div>
@@ -723,39 +705,14 @@ export function DocumentosTab(): ReactNode {
       </Modal>
 
       {/* MODAL RECHAZAR DOCUMENTO */}
-      <Modal open={rejectOpen} onOpenChange={(open) => { if (!open) handleCloseRejectModal(); }}>
-        <ModalContent className="max-w-sm">
-          <form onSubmit={handleReject}>
-            <ModalHeader>
-              <ModalTitle>Rechazar Documento</ModalTitle>
-              <ModalDescription>
-                Por favor indica el motivo del rechazo para informar al autor.
-              </ModalDescription>
-            </ModalHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reject-reason">Motivo del Rechazo</Label>
-                <textarea
-                  id="reject-reason"
-                  required
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className="flex min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  placeholder="Detalla qué correcciones son necesarias..."
-                />
-              </div>
-            </div>
-            <ModalFooter>
-              <Button type="button" variant="ghost" onClick={handleCloseRejectModal}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="destructive" disabled={isRejecting}>
-                {isRejecting ? 'Procesando...' : 'Rechazar Documento'}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
+      <RejectDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        title="Rechazar Documento"
+        description="Por favor indica el motivo del rechazo para informar al autor."
+        confirmLabel="Rechazar Documento"
+        onConfirm={handleReject}
+      />
     </div>
   );
 }

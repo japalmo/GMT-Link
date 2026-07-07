@@ -3,6 +3,9 @@ import { Plus, Lock } from 'lucide-react';
 import type { RoleDetail } from '@gmt-platform/contracts';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ErrorState, LoadingState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import { useRoles } from '@/hooks/use-roles';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { RoleEditor } from './role-editor';
@@ -102,37 +105,32 @@ export default function RolesPage(): ReactNode {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center p-6" role="status" aria-label="Cargando roles">
-        <div className="size-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
-      </div>
+      <PageContainer maxWidth="7xl">
+        <LoadingState label="Cargando roles…" />
+      </PageContainer>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center gap-3 p-8 text-center">
-        <p className="text-sm text-destructive">{error}</p>
-        <Button variant="outline" onClick={() => void refetch()}>
-          Reintentar
-        </Button>
-      </div>
+      <PageContainer maxWidth="7xl">
+        <ErrorState message={error} onRetry={() => void refetch()} />
+      </PageContainer>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Roles</h1>
-          <p className="text-sm text-muted-foreground">
-            Crea roles a medida componiendo permisos del catálogo por módulo.
-          </p>
-        </div>
-        <Button onClick={() => setNewRoleOpen(true)}>
-          <Plus aria-hidden />
-          Nuevo rol
-        </Button>
-      </header>
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title="Roles"
+        description="Crea roles a medida componiendo permisos del catálogo por módulo."
+        actions={
+          <Button onClick={() => setNewRoleOpen(true)}>
+            <Plus aria-hidden />
+            Nuevo rol
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
         <aside className="flex flex-col gap-4">
@@ -205,6 +203,6 @@ export default function RolesPage(): ReactNode {
         confirmLabel="Eliminar rol"
         onConfirm={confirmDelete}
       />
-    </div>
+    </PageContainer>
   );
 }
