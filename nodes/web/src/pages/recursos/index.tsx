@@ -7,6 +7,7 @@ import { useProfile } from '@/hooks/use-profile';
 import { useHasRole } from '@/hooks/use-has-role';
 import InsumosPage from '@/pages/insumos';
 import ProveedoresPage from '@/pages/proveedores';
+import BodegasPage from '@/pages/bodegas';
 import {
   Wrench,
   Car,
@@ -152,7 +153,7 @@ export default function RecursosPage(): ReactNode {
         )}
 
         {canManageSupplyChain && activeTab === 'bodegas' && (
-          <InsumosPage />
+          <BodegasPage />
         )}
       </div>
     </PageContainer>

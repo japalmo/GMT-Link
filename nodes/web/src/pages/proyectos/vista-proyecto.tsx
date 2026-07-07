@@ -6,6 +6,7 @@ import {
   Briefcase,
   CalendarClock,
   ChevronRight,
+  Download,
   FileText,
   FolderGit2,
   Layers,
@@ -51,11 +52,32 @@ import {
   createService,
   setPhaseDataSpec,
   setServiceFrequency,
+  listProjectDocuments,
+  uploadProjectDocument,
+  deleteProjectDocument,
   type MetricPhase,
   type MetricVariable,
   type UserListItem,
 } from '@/lib/api';
-import type { ProjectView, ServiceView } from '@/types/operations';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import type {
+  ProjectView,
+  ServiceView,
+  ProjectDocumentView,
+  ProjectDocumentStatus,
+} from '@/types/operations';
+import {
+  UploadProjectDocumentDialog,
+  type UploadProjectDocumentFields,
+} from './upload-project-document-dialog';
+import { formatDate } from '@/lib/format';
 import type {
   ProjectType,
   ServiceFrequency,
@@ -310,7 +332,13 @@ export default function VistaProyectoPage(): ReactNode {
       {tab === 'trabajadores' && canManageTeam && (
         <TrabajadoresTab projectId={project.id} />
       )}
-      {tab === 'documentacion' && <DocumentacionTab />}
+      {tab === 'documentacion' && (
+        <DocumentacionTab
+          projectId={project.id}
+          services={project.services ?? []}
+          canManage={canManageTeam}
+        />
+      )}
       {tab === 'fases' && (
         <FasesTab
           projectId={project.id}
@@ -572,46 +600,214 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
 }
 
 /* ==========================================================================
-   Tab 2 — Documentación (secciones reales, sin contenido aún)
+   Tab 2 — Documentación (módulo `project-documents` real)
+
+   El backend NO tiene un enum de categoría con {bases, procedimientos,
+   contratos, otros}: cada documento lleva `documentType` (código libre 2–4
+   chars), `areaCode`, `code`, `status` y `version` (ver §7 del plan maestro y
+   CreateProjectDocumentDto). Por eso se renderiza UN listado real de los
+   documentos del proyecto en lugar de 4 secciones ficticias.
    ========================================================================== */
 
-const DOC_SECTIONS = [
-  {
-    key: 'bases',
-    title: 'Bases técnicas',
-    description: 'Especificaciones y requisitos técnicos del contrato.',
-  },
-  {
-    key: 'procedimientos',
-    title: 'Procedimientos',
-    description: 'Protocolos y procedimientos operativos del proyecto.',
-  },
-  {
-    key: 'contratos',
-    title: 'Contratos',
-    description: 'Documentos contractuales y anexos.',
-  },
-  { key: 'otros', title: 'Otros', description: 'Documentación complementaria.' },
-];
+/** Etiqueta + variante de {@link Badge} por estado de documento de proyecto. */
+const PROJECT_DOC_STATUS: Record<
+  ProjectDocumentStatus,
+  { label: string; variant: 'neutral' | 'warning' | 'info' | 'success' | 'danger' }
+> = {
+  BORRADOR: { label: 'Borrador', variant: 'neutral' },
+  PENDIENTE_QA: { label: 'Pendiente QA', variant: 'warning' },
+  PENDIENTE_CLIENTE: { label: 'Pendiente cliente', variant: 'info' },
+  APROBADO: { label: 'Aprobado', variant: 'success' },
+  RECHAZADO: { label: 'Rechazado', variant: 'danger' },
+};
 
-function DocumentacionTab(): ReactNode {
+function ProjectDocStatusBadge({ status }: { status: ProjectDocumentStatus }): ReactNode {
+  const meta = PROJECT_DOC_STATUS[status];
+  return <Badge variant={meta.variant}>{meta.label}</Badge>;
+}
+
+/**
+ * Hook de documentos del proyecto: carga real vía `listProjectDocuments`, con
+ * estados carga/error y `refetch`. Patrón `mountedRef` del repo.
+ */
+function useProjectDocuments(projectId: string): {
+  documents: ProjectDocumentView[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+} {
+  const [documents, setDocuments] = useState<ProjectDocumentView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listProjectDocuments(projectId);
+      if (mountedRef.current) setDocuments(data);
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(errorToMessage(err, 'No se pudieron cargar los documentos.'));
+      }
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return { documents, loading, error, refetch: load };
+}
+
+function DocumentacionTab({
+  projectId,
+  services,
+  canManage,
+}: {
+  projectId: string;
+  services: ServiceView[];
+  canManage: boolean;
+}): ReactNode {
+  const { documents, loading, error, refetch } = useProjectDocuments(projectId);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleUpload = useCallback(
+    async (fields: UploadProjectDocumentFields, file: File) => {
+      await uploadProjectDocument({ ...fields, projectId }, file);
+      toast.success('Documento subido.');
+      await refetch();
+    },
+    [projectId, refetch],
+  );
+
+  const handleDelete = useCallback(
+    async (doc: ProjectDocumentView) => {
+      if (!window.confirm(`¿Eliminar el documento "${doc.name}"?`)) return;
+      setDeletingId(doc.id);
+      try {
+        await deleteProjectDocument(doc.id);
+        toast.success('Documento eliminado.');
+        await refetch();
+      } catch (err) {
+        toast.error(errorToMessage(err, 'No se pudo eliminar el documento.'));
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [refetch],
+  );
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      {DOC_SECTIONS.map((s) => (
-        <Card key={s.key}>
-          <CardHeader>
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
             <div className="flex items-center gap-2">
               <FileText className="size-4 text-primary" />
-              <CardTitle className="text-base">{s.title}</CardTitle>
+              <CardTitle className="text-base">Documentos del proyecto</CardTitle>
             </div>
-            <CardDescription>{s.description}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EmptyState icon={FileText} message="Sin documentos" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+            <CardDescription>
+              Documentación técnica y contractual, con su codificación y estado de firma.
+            </CardDescription>
+          </div>
+          {canManage && (
+            <Button size="sm" onClick={() => setDialogOpen(true)}>
+              <Plus aria-hidden />
+              Subir documento
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <LoadingState label="Cargando documentos…" />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => void refetch()} />
+        ) : documents.length === 0 ? (
+          <EmptyState icon={FileText} message="Sin documentos" />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Servicio</TableHead>
+                <TableHead>Rev.</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Actualizado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {documents.map((doc) => (
+                <TableRow key={doc.id}>
+                  <TableCell className="font-mono text-xs">{doc.code}</TableCell>
+                  <TableCell className="font-medium">{doc.name}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {doc.service?.code ?? '—'}
+                  </TableCell>
+                  <TableCell className="tabular-nums">v{doc.version}</TableCell>
+                  <TableCell>
+                    <ProjectDocStatusBadge status={doc.status} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {formatDate(doc.updatedAt)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      {doc.fileUrl && (
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+                          title="Ver / descargar"
+                          aria-label={`Ver o descargar ${doc.name}`}
+                        >
+                          <Download className="size-4" aria-hidden />
+                        </a>
+                      )}
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Eliminar"
+                          aria-label={`Eliminar ${doc.name}`}
+                          loading={deletingId === doc.id}
+                          disabled={deletingId !== null}
+                          onClick={() => void handleDelete(doc)}
+                        >
+                          <Trash2 className="size-4" aria-hidden />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <UploadProjectDocumentDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        services={services}
+        onSubmit={handleUpload}
+      />
+    </Card>
   );
 }
 
