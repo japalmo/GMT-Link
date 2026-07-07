@@ -39,6 +39,21 @@ export interface WidgetDefinition {
  */
 export const WIDGET_CATALOG: readonly WidgetDefinition[] = [
   {
+    key: 'accesos-directos',
+    title: 'Accesos directos',
+    description: 'Atajos a checklist de vehículos, horas extra y detección de orilla de playa.',
+  },
+  {
+    key: 'mis-tareas-pendientes',
+    title: 'Mis tareas pendientes',
+    description: 'Tareas asignadas a ti que están pendientes.',
+  },
+  {
+    key: 'account-config-progress',
+    title: 'Configuración de cuenta',
+    description: 'Progreso de completitud de tu perfil, documentos y CV.',
+  },
+  {
     key: 'usuarios-total',
     title: 'Usuarios',
     description: 'Total de usuarios de la organización.',
