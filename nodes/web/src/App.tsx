@@ -26,6 +26,11 @@ const FinanzasPage = lazy(() => import('@/pages/finanzas'));
 const NotificacionesPage = lazy(() => import('@/pages/notificaciones'));
 const ConfiguracionPage = lazy(() => import('@/pages/configuracion'));
 const OperacionesPage = lazy(() => import('@/pages/operaciones'));
+// Proyectos — jerarquía A0 Cliente → Faena → Proyecto → Vista (cimientos A1).
+const ProyectosClientesPage = lazy(() => import('@/pages/proyectos'));
+const ProyectosFaenasPage = lazy(() => import('@/pages/proyectos/faenas'));
+const ProyectosListaPage = lazy(() => import('@/pages/proyectos/faena-proyectos'));
+const ProyectoDetallePage = lazy(() => import('@/pages/proyectos/vista-proyecto'));
 const RecursosPage = lazy(() => import('@/pages/recursos'));
 const GisToolsPage = lazy(() => import('@/pages/gis-tools'));
 const MetricsDashboard = lazy(() => import('@/pages/v-metric'));
@@ -96,6 +101,15 @@ const router = createBrowserRouter([
           { path: '/finanzas/:tab', element: lazyRoute(<FinanzasPage />) },
           { path: '/operaciones', element: lazyRoute(<OperacionesPage />) },
           { path: '/operaciones/:tab', element: lazyRoute(<OperacionesPage />) },
+          // Proyectos: jerarquía A0 (rutas exactas que consumen las páginas reales
+          // de la fase siguiente). :clientId / :faenaId / :projectId via useParams.
+          { path: '/proyectos', element: lazyRoute(<ProyectosClientesPage />) },
+          { path: '/proyectos/cliente/:clientId', element: lazyRoute(<ProyectosFaenasPage />) },
+          {
+            path: '/proyectos/cliente/:clientId/faena/:faenaId',
+            element: lazyRoute(<ProyectosListaPage />),
+          },
+          { path: '/proyectos/proyecto/:projectId', element: lazyRoute(<ProyectoDetallePage />) },
           { path: '/recursos', element: lazyRoute(<RecursosPage />) },
           { path: '/herramientas', element: lazyRoute(<GisToolsPage />) },
           { path: '/v-metric', element: lazyRoute(<MetricsDashboard />) },

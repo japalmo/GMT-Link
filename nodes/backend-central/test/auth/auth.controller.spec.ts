@@ -5,7 +5,7 @@ import { AuthController } from '../../src/auth/auth.controller';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import { CompleteFirstLoginDto } from '../../src/auth/dto/complete-first-login.dto';
-import { verifyPassword } from '../../src/common/password';
+import { hashPassword, verifyPassword } from '../../src/common/password';
 import '../../src/auth/auth-request.types';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 import type { FgaService } from '../../src/fga/fga.service';
@@ -27,7 +27,7 @@ interface Mocks {
 }
 
 function buildController(options: {
-  user?: UserRow | { status: string } | null;
+  user?: UserRow | { status: string; passwordHash?: string | null } | null;
   canManageRoles?: boolean;
 }): Mocks {
   const findUnique = vi.fn(() => Promise.resolve(options.user ?? null));
@@ -52,9 +52,10 @@ function buildController(options: {
   };
 }
 
-function dto(newPassword: string): CompleteFirstLoginDto {
+function dto(newPassword: string, currentPassword = 'Provisoria-2026'): CompleteFirstLoginDto {
   const d = new CompleteFirstLoginDto();
   d.newPassword = newPassword;
+  d.currentPassword = currentPassword;
   return d;
 }
 
@@ -91,7 +92,7 @@ describe('AuthController · GET /auth/me', () => {
       lastName: 'Prueba',
       status: 'ACTIVE',
       // sin memberships → todos los módulos (no se restringe el acceso)
-      modules: ['dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'recursos', 'herramientas', 'v-metric'],
+      modules: ['dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'proyectos', 'recursos', 'herramientas', 'v-metric'],
       canManageRoles: false,
     });
   });
@@ -164,12 +165,16 @@ describe('AuthController · POST /auth/first-login/complete', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('camino feliz: PENDING → fija passwordHash (bcrypt) y activa el usuario', async () => {
+  it('camino feliz: PENDING + provisoria correcta → fija passwordHash (bcrypt) y activa el usuario', async () => {
+    const provisionalHash = await hashPassword('Provisoria-2026');
     const { controller, update, awardPoints } = buildController({
-      user: { status: 'PENDING_FIRST_LOGIN' },
+      user: { status: 'PENDING_FIRST_LOGIN', passwordHash: provisionalHash },
     });
 
-    const result = await controller.completeFirstLogin(ACTIVE_USER, dto('password123'));
+    const result = await controller.completeFirstLogin(
+      ACTIVE_USER,
+      dto('password123', 'Provisoria-2026'),
+    );
 
     expect(update).toHaveBeenCalledTimes(1);
     const call = update.mock.calls[0]?.[0] as {
@@ -180,9 +185,35 @@ describe('AuthController · POST /auth/first-login/complete', () => {
     expect(call.data.status).toBe('ACTIVE');
     expect(typeof call.data.passwordHash).toBe('string');
     expect(call.data.passwordHash.length).toBeGreaterThan(0);
-    // el hash almacenado verifica contra la contraseña en claro
+    // el hash almacenado verifica contra la NUEVA contraseña en claro
     await expect(verifyPassword('password123', call.data.passwordHash)).resolves.toBe(true);
     expect(awardPoints).toHaveBeenCalledWith('u1', 'FIRST_LOGIN');
     expect(result).toEqual({ status: 'ACTIVE' });
+  });
+
+  it('re-auth: lanza 401 si la contraseña provisoria es incorrecta (no cambia la clave)', async () => {
+    const provisionalHash = await hashPassword('Provisoria-2026');
+    const { controller, update, awardPoints } = buildController({
+      user: { status: 'PENDING_FIRST_LOGIN', passwordHash: provisionalHash },
+    });
+
+    await expect(
+      controller.completeFirstLogin(ACTIVE_USER, dto('password123', 'CLAVE-EQUIVOCADA')),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    // Un token filtrado en estado pendiente NO basta para tomar la cuenta.
+    expect(update).not.toHaveBeenCalled();
+    expect(awardPoints).not.toHaveBeenCalled();
+  });
+
+  it('re-auth: lanza 401 si el usuario no tiene passwordHash (no se puede verificar la provisoria)', async () => {
+    const { controller, update, awardPoints } = buildController({
+      user: { status: 'PENDING_FIRST_LOGIN', passwordHash: null },
+    });
+
+    await expect(
+      controller.completeFirstLogin(ACTIVE_USER, dto('password123', 'loquesea')),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(update).not.toHaveBeenCalled();
+    expect(awardPoints).not.toHaveBeenCalled();
   });
 });

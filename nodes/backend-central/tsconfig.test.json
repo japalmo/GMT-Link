@@ -7,5 +7,5 @@
     "noEmit": true,
     "incremental": false
   },
-  "include": ["src", "test", "prisma/seed-admin.ts"]
+  "include": ["src", "test", "prisma/seed-admin.ts", "prisma/seed-admin.core.ts"]
 }

@@ -8,6 +8,7 @@ import {
   Wrench,
   Gauge,
   ShieldCheck,
+  FolderKanban,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +35,7 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Usuarios', to: '/usuarios', icon: Users, module: 'usuarios' },
   { label: 'Roles', to: '/roles', icon: ShieldCheck, module: 'usuarios', requiresManageRoles: true },
   { label: 'Directorio', to: '/directorio', icon: Contact, module: 'directorio' },
+  { label: 'Proyectos', to: '/proyectos', icon: FolderKanban, module: 'proyectos' },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },
   { label: 'Recursos', to: '/recursos', icon: Package, module: 'recursos' },

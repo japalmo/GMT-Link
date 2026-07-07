@@ -42,6 +42,7 @@ const ALL_MODULES = [
   'directorio',
   'finanzas',
   'operaciones',
+  'proyectos',
   'recursos',
   'herramientas',
   'v-metric',
@@ -204,13 +205,22 @@ export class AuthController {
     }
     const user = await this.prisma.user.findUnique({
       where: { id: authUser.id },
-      select: { status: true },
+      select: { status: true, passwordHash: true },
     });
     if (!user) {
       throw new UnauthorizedException('El usuario de la sesión ya no existe.');
     }
     if (user.status !== 'PENDING_FIRST_LOGIN') {
       throw new ConflictException('El primer login ya fue completado.');
+    }
+    // Re-autenticación: exigir la contraseña provisoria vigente antes de fijar la
+    // nueva. Un token filtrado en estado pendiente (JWT 7d, sin revocación) no
+    // basta para tomar control de la cuenta sin conocer la clave provisoria.
+    const provisionalOk = user.passwordHash
+      ? await verifyPassword(body.currentPassword, user.passwordHash)
+      : false;
+    if (!provisionalOk) {
+      throw new UnauthorizedException('La contraseña provisoria no es correcta.');
     }
     const passwordHash = await hashPassword(body.newPassword);
     await this.prisma.user.update({

@@ -1,16 +1,15 @@
 import type { ReactNode } from 'react';
-import { Briefcase, Kanban, Files } from 'lucide-react';
+import { Kanban, Files } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type OperacionesTab = 'proyectos' | 'backlog' | 'documentos';
+export type OperacionesTab = 'backlog' | 'documentos';
 
 interface OperacionesTabsProps {
   active: OperacionesTab;
   onChange: (tab: OperacionesTab) => void;
 }
 
-const TABS: ReadonlyArray<{ value: OperacionesTab; label: string; icon: typeof Briefcase }> = [
-  { value: 'proyectos', label: 'Proyectos', icon: Briefcase },
+const TABS: ReadonlyArray<{ value: OperacionesTab; label: string; icon: typeof Kanban }> = [
   { value: 'backlog', label: 'Backlog (Kanban)', icon: Kanban },
   { value: 'documentos', label: 'Documentos', icon: Files },
 ];

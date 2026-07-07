@@ -28,3 +28,6 @@ nodes/backend-central/prisma/backups/
 
 # Claude Code (local)
 .claude/settings.local.json
+
+# Datos de runtime / uploads del backend local (91MB) — nunca versionar
+/apps/

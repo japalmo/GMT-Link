@@ -58,6 +58,19 @@ import type {
   TaskTimeLogView,
 } from '@/types/operations';
 import type {
+  ClientView,
+  CreateClientInput,
+  UpdateClientInput,
+  FaenaView,
+  CreateFaenaInput,
+  CreateProjectInput,
+  ProjectWorkerAssignmentView,
+  AssignWorkerInput,
+  PhaseDataSpecInput,
+  ServiceFrequency,
+  UserRef,
+} from '@/types/projects';
+import type {
   AssetView,
   AssetPublicView,
   AssetDocumentView,
@@ -197,12 +210,17 @@ export function login(email: string, password: string): Promise<{ token: string 
 
 /**
  * `POST /auth/first-login/complete` — fija la contraseña y activa la cuenta.
+ * Exige la contraseña provisoria/actual (`currentPassword`): el backend la
+ * re-verifica antes de aceptar el cambio (un token pendiente no basta por sí solo).
  * No devuelve datos de interés para la UI más allá del éxito.
  */
-export async function completeFirstLogin(newPassword: string): Promise<void> {
+export async function completeFirstLogin(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
   await request<{ status: string }>('/auth/first-login/complete', {
     method: 'POST',
-    body: JSON.stringify({ newPassword }),
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 
@@ -1012,24 +1030,31 @@ export function deleteLiquidation(id: string): Promise<void> {
 
 /* --- Proyectos --- */
 
-export function listProjects(): Promise<ProjectView[]> {
-  return request<ProjectView[]>('/projects');
+/**
+ * `GET /projects[?faenaId=]` — lista de proyectos. Sin argumentos devuelve todos
+ * (uso legacy en Operaciones / V-Metric / roles-dialog). Con `faenaId` filtra por
+ * faena (Capa 3 de la jerarquía A0 Cliente → Faena → Proyecto).
+ */
+export function listProjects(faenaId?: string): Promise<ProjectView[]> {
+  const query = faenaId ? `?faenaId=${encodeURIComponent(faenaId)}` : '';
+  return request<ProjectView[]>(`/projects${query}`);
 }
 
 export function listDepartments(): Promise<Array<{ id: string; name: string; code: string }>> {
   return request<Array<{ id: string; name: string; code: string }>>('/projects/departments');
 }
 
-export function listClients(): Promise<Array<{ id: string; name: string; code: string }>> {
-  return request<Array<{ id: string; name: string; code: string }>>('/projects/clients');
-}
-
-export function createProject(dto: {
-  code: string;
-  name: string;
-  departmentId: string;
-  clientId: string;
-}): Promise<ProjectView> {
+/**
+ * `POST /projects` — crea un proyecto. Acepta el DTO legacy de Operaciones
+ * (`{code,name,departmentId,clientId}`) o el `CreateProjectInput` extendido de la
+ * jerarquía A0 (`contractNumber`/`projectType`/`faenaId`/`projectAdminId`). El
+ * backend valida los gates y campos según el shape recibido.
+ */
+export function createProject(
+  dto:
+    | { code: string; name: string; departmentId: string; clientId: string }
+    | CreateProjectInput,
+): Promise<ProjectView> {
   return request<ProjectView>('/projects', {
     method: 'POST',
     body: JSON.stringify(dto),
@@ -1735,6 +1760,23 @@ export function listMetricPhases(serviceId: string): Promise<MetricPhase[]> {
   return request<MetricPhase[]>(`/metrics/phases?serviceId=${encodeURIComponent(serviceId)}`);
 }
 
+/**
+ * `POST /metrics/phases` — crea una fase/sprint dentro de un servicio (A0). El
+ * gate `can_submit_measurements` sobre el proyecto de la fase lo resuelve el
+ * backend. Devuelve la fase creada (sin variables todavía; el DataSpec se fija
+ * luego con {@link setPhaseDataSpec}).
+ */
+export function createMetricPhase(dto: {
+  code: string;
+  name: string;
+  serviceId: string;
+}): Promise<MetricPhase> {
+  return request<MetricPhase>('/metrics/phases', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
 export function listMetricVariables(phaseId: string): Promise<MetricVariable[]> {
   return request<MetricVariable[]>(`/metrics/variables?phaseId=${encodeURIComponent(phaseId)}`);
 }
@@ -1790,5 +1832,163 @@ export function deleteMetricElement(id: string): Promise<void> {
   return request<void>(`/metrics/elements/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Proyectos — jerarquía A0: Cliente → Faena → Proyecto → Trabajadores        */
+/* -------------------------------------------------------------------------- */
+/*
+ * Capa 1 (Clientes), Capa 2 (Faenas), Capa 3 (Proyectos por faena) y Capa 4
+ * (asignación de trabajadores). Los gates (`client:create`, `faena:create`,
+ * `project:team:manage`) los resuelve el backend con OpenFGA; el front oculta
+ * los botones de creación con `useHasRole` (gating de demo). La LECTURA de
+ * faenas es abierta; las mutaciones devuelven 403 si falta el gate.
+ */
+
+/* --- Capa 1: Clientes (GET /clients con métricas) --- */
+
+/** `GET /clients` — catálogo de clientes con métricas de card (A0 Capa 1). */
+export function listClients(): Promise<ClientView[]> {
+  return request<ClientView[]>('/clients');
+}
+
+/** `POST /clients` — crea un cliente. Gate `client:create` (403 si falta). */
+export function createClient(dto: CreateClientInput): Promise<ClientView> {
+  return request<ClientView>('/clients', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `GET /clients/:id` — detalle de un cliente. 404 si no existe. */
+export function getClient(id: string): Promise<ClientView> {
+  return request<ClientView>(`/clients/${encodeURIComponent(id)}`);
+}
+
+/** `PATCH /clients/:id` — edita un cliente. Gate `client:create` (403 si falta). */
+export function updateClient(id: string, dto: UpdateClientInput): Promise<ClientView> {
+  return request<ClientView>(`/clients/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/* --- Capa 2: Faenas (GET /clients/:id/faenas — lectura abierta) --- */
+
+/** `GET /clients/:clientId/faenas` — faenas de un cliente con métricas (lectura abierta). */
+export function listFaenas(clientId: string): Promise<FaenaView[]> {
+  return request<FaenaView[]>(`/clients/${encodeURIComponent(clientId)}/faenas`);
+}
+
+/** `POST /clients/:clientId/faenas` — crea una faena. Gate `faena:create` (403 si falta). */
+export function createFaena(clientId: string, dto: CreateFaenaInput): Promise<FaenaView> {
+  return request<FaenaView>(`/clients/${encodeURIComponent(clientId)}/faenas`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `GET /faenas/:id` — detalle de una faena. 404 si no existe. */
+export function getFaena(id: string): Promise<FaenaView> {
+  return request<FaenaView>(`/faenas/${encodeURIComponent(id)}`);
+}
+
+/** `PATCH /faenas/:id` — edita una faena. Gate `faena:create` (403 si falta). */
+export function updateFaena(id: string, dto: Partial<CreateFaenaInput>): Promise<FaenaView> {
+  return request<FaenaView>(`/faenas/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/* --- Capa 3: Proyectos por faena --- */
+/*
+ * La lista/creación de proyectos usan {@link listProjects}(faenaId) y
+ * {@link createProject}(CreateProjectInput) definidas arriba (sección legacy,
+ * ya extendidas para A0). {@link getProject} añade el detalle por id.
+ */
+
+/** `GET /projects/:id` — detalle de un proyecto. 404 si no existe. */
+export function getProject(id: string): Promise<ProjectView> {
+  return request<ProjectView>(`/projects/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `GET /projects/eligible-admins` — usuarios elegibles como administrador de
+ * proyecto (selector `projectAdminId` del wizard de creación, A0 Capa 3).
+ */
+export function listEligibleAdmins(): Promise<UserRef[]> {
+  return request<UserRef[]>('/projects/eligible-admins');
+}
+
+/* --- Capa 4: Asignación de trabajadores (gate project:team:manage) --- */
+
+/** `GET /projects/:projectId/assignments` — trabajadores asignados al proyecto. */
+export function listAssignments(projectId: string): Promise<ProjectWorkerAssignmentView[]> {
+  return request<ProjectWorkerAssignmentView[]>(
+    `/projects/${encodeURIComponent(projectId)}/assignments`,
+  );
+}
+
+/** `POST /projects/:projectId/assignments` — asigna un trabajador. Gate `project:team:manage`. */
+export function createAssignment(
+  projectId: string,
+  dto: AssignWorkerInput,
+): Promise<ProjectWorkerAssignmentView> {
+  return request<ProjectWorkerAssignmentView>(
+    `/projects/${encodeURIComponent(projectId)}/assignments`,
+    { method: 'POST', body: JSON.stringify(dto) },
+  );
+}
+
+/** `PATCH /projects/:projectId/assignments/:assignmentId` — edita una asignación. Gate `project:team:manage`. */
+export function updateAssignment(
+  projectId: string,
+  assignmentId: string,
+  dto: Partial<AssignWorkerInput>,
+): Promise<ProjectWorkerAssignmentView> {
+  return request<ProjectWorkerAssignmentView>(
+    `/projects/${encodeURIComponent(projectId)}/assignments/${encodeURIComponent(assignmentId)}`,
+    { method: 'PATCH', body: JSON.stringify(dto) },
+  );
+}
+
+/** `DELETE /projects/:projectId/assignments/:assignmentId` — quita una asignación. Gate `project:team:manage`. */
+export function removeAssignment(projectId: string, assignmentId: string): Promise<void> {
+  return request<void>(
+    `/projects/${encodeURIComponent(projectId)}/assignments/${encodeURIComponent(assignmentId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+/* --- Datos esperados por fase / frecuencia de servicios --- */
+
+/**
+ * `PUT /metrics/phases/:phaseId/dataspec` — fija las variables tipadas esperadas
+ * de una fase (editor de datos esperados, A0). Reemplaza el spec completo.
+ */
+export function setPhaseDataSpec(
+  phaseId: string,
+  dto: PhaseDataSpecInput,
+): Promise<void> {
+  return request<void>(`/metrics/phases/${encodeURIComponent(phaseId)}/dataspec`, {
+    method: 'PUT',
+    body: JSON.stringify(dto),
+  });
+}
+
+/**
+ * `PATCH /projects/:projectId/services/:serviceId` — fija la frecuencia de un
+ * servicio RUTINARIO (A0). Devuelve el servicio actualizado.
+ */
+export function setServiceFrequency(
+  projectId: string,
+  serviceId: string,
+  dto: { frequency: ServiceFrequency },
+): Promise<ServiceView> {
+  return request<ServiceView>(
+    `/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(serviceId)}`,
+    { method: 'PATCH', body: JSON.stringify(dto) },
+  );
 }
 

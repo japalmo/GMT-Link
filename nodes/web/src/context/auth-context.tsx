@@ -8,7 +8,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  completeFirstLogin: (newPassword: string) => Promise<void>;
+  completeFirstLogin: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -54,11 +54,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Tras fijar la clave, el MISMO token sigue válido (solo cambia el status); refrescamos el perfil.
-  const completeFirstLogin = useCallback(async (newPassword: string): Promise<void> => {
-    await apiCompleteFirstLogin(newPassword);
-    const me = await getMe();
-    setUser(me);
-  }, []);
+  const completeFirstLogin = useCallback(
+    async (currentPassword: string, newPassword: string): Promise<void> => {
+      await apiCompleteFirstLogin(currentPassword, newPassword);
+      const me = await getMe();
+      setUser(me);
+    },
+    [],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, loading, login, logout, completeFirstLogin }),

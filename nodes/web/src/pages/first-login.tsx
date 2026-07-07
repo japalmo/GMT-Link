@@ -22,6 +22,7 @@ const MIN_LENGTH = 8;
  */
 export default function FirstLoginPage() {
   const { user, completeFirstLogin } = useAuth();
+  const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,10 @@ export default function FirstLoginPage() {
     e.preventDefault();
     setError(null);
 
+    if (!current) {
+      setError('Ingresa la contraseña provisoria que te asignó el admin.');
+      return;
+    }
     if (password.length < MIN_LENGTH) {
       setError(`La contraseña debe tener al menos ${MIN_LENGTH} caracteres.`);
       return;
@@ -42,7 +47,7 @@ export default function FirstLoginPage() {
 
     setSubmitting(true);
     try {
-      await completeFirstLogin(password);
+      await completeFirstLogin(current, password);
       // Al refrescar el user a ACTIVE, el router redirige a /.
     } catch (err) {
       setError(
@@ -67,12 +72,28 @@ export default function FirstLoginPage() {
             <CardTitle>Define tu contraseña</CardTitle>
             <CardDescription>
               {user ? `Hola ${user.firstName}. ` : ''}
-              Es tu primer ingreso. Por seguridad, reemplaza la clave provisoria
-              por una nueva (mínimo {MIN_LENGTH} caracteres) antes de continuar.
+              Es tu primer ingreso. Por seguridad, confirma la clave provisoria que
+              te asignó el admin y reemplázala por una nueva (mínimo {MIN_LENGTH}{' '}
+              caracteres) antes de continuar.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="current-password">Contraseña provisoria</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={current}
+                  onChange={(e) => setCurrent(e.target.value)}
+                  aria-invalid={error ? true : undefined}
+                  disabled={submitting}
+                  autoFocus
+                />
+              </div>
+
               <div className="flex flex-col gap-2">
                 <Label htmlFor="new-password">Nueva contraseña</Label>
                 <Input
@@ -85,7 +106,6 @@ export default function FirstLoginPage() {
                   aria-invalid={error ? true : undefined}
                   aria-describedby="new-password-hint"
                   disabled={submitting}
-                  autoFocus
                 />
                 <p id="new-password-hint" className="text-xs text-muted-foreground">
                   Al menos {MIN_LENGTH} caracteres.
