@@ -226,3 +226,165 @@ export interface CloneRoleResponse {
   role: RoleDetail;
   omittedPermissionKeys: string[];
 }
+
+// ============ Proyectos: jerarquía Cliente → Faena → Proyecto (Demo A0) ============
+
+/** Tipo de proyecto (espejo del enum Prisma `ProjectType`, plan demo A0.1). */
+export type ProjectType = 'SPOT' | 'OBRAS_CIVILES' | 'RUTINARIO';
+
+/** Estado de una faena (espejo del enum Prisma `FaenaStatus`, plan demo A0.1). */
+export type FaenaStatus = 'PLANIFICADA' | 'EN_PROGRESO' | 'COMPLETADA';
+
+/** Estado de la asignación de un trabajador a un proyecto (enum Prisma `ProjectWorkerStatus`). */
+export type ProjectWorkerStatus = 'ACTIVO' | 'INACTIVO';
+
+/** Frecuencia de un servicio RUTINARIO (espejo del enum Prisma `ServiceFrequency`). */
+export type ServiceFrequency =
+  | 'DIARIA'
+  | 'SEMANAL'
+  | 'QUINCENAL'
+  | 'MENSUAL'
+  | 'A_DEMANDA';
+
+/**
+ * Tipo de dato de una Variable de fase/servicio (espejo del enum Prisma
+ * `VariableType`, ampliado en el plan demo A0.1). `SCALAR/FILE/LIST` son los
+ * heredados; el resto son los tipos enriquecidos para el editor de datos
+ * esperados por fase.
+ */
+export type VariableType =
+  | 'SCALAR'
+  | 'FILE'
+  | 'LIST'
+  | 'ENTERO'
+  | 'DECIMAL'
+  | 'BOOLEAN'
+  | 'METROS'
+  | 'M3'
+  | 'TEXTO'
+  | 'IMAGEN'
+  | 'PLANO'
+  | 'POLIGONO'
+  | 'ORTOFOTO'
+  | 'PDF'
+  | 'GEODATA'
+  | 'OTRO';
+
+/** Referencia mínima de un usuario embebida en vistas (id + nombre + email). */
+export interface UserRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+/**
+ * Vista de un cliente para el catálogo `GET /clients` (Capa 1). Incluye las
+ * métricas del carrusel de la card: total histórico de proyectos, activos y
+ * alertas pendientes (tasks PENDIENTE en proyectos del cliente).
+ */
+export interface ClientView {
+  id: string;
+  code: string;
+  name: string;
+  rut: string | null;
+  projectsCount: number;
+  activeProjectsCount: number;
+  pendingAlertsCount: number;
+}
+
+/**
+ * Vista de una faena para el catálogo `GET /clients/:id/faenas` (Capa 2).
+ * Incluye la métrica `projectsCount` de la card.
+ */
+export interface FaenaView {
+  id: string;
+  code: string;
+  name: string;
+  clientId: string;
+  supervisorId: string | null;
+  status: FaenaStatus;
+  startDate: string | null;
+  endDate: string | null;
+  projectsCount: number;
+}
+
+/**
+ * Vista de la asignación de un trabajador a un proyecto (Capa 4 / tab
+ * Trabajadores). `user` se hidrata cuando el endpoint incluye el detalle.
+ */
+export interface ProjectWorkerAssignmentView {
+  id: string;
+  projectId: string;
+  userId: string;
+  roleKey: RoleKey;
+  status: ProjectWorkerStatus;
+  startDate: string | null;
+  endDate: string | null;
+  user?: UserRef;
+}
+
+// ============ Proyectos: inputs de creación/edición (Demo A0) ============
+
+/** Body de `POST /clients` (A0.3). `code` ≤ 4 chars (codificación §7). */
+export interface CreateClientInput {
+  code: string;
+  name: string;
+  rut?: string;
+}
+
+/** Body de `PATCH /clients/:id` (A0.3). Todos opcionales. */
+export interface UpdateClientInput {
+  code?: string;
+  name?: string;
+  rut?: string;
+}
+
+/** Body de `POST /clients/:id/faenas` (A0.4). `code` 3-4 chars, único por cliente. */
+export interface CreateFaenaInput {
+  code: string;
+  name: string;
+  supervisorId?: string;
+  status?: FaenaStatus;
+  startDate?: string;
+  endDate?: string;
+}
+
+/**
+ * Body de `POST /projects` extendido (A0.4). Suma los campos de la jerarquía
+ * demo (`contractNumber`, `projectType`, `faenaId`, `projectAdminId`) al
+ * contrato de creación de proyecto existente.
+ */
+export interface CreateProjectInput {
+  code: string;
+  name: string;
+  clientId: string;
+  contractNumber?: string;
+  projectType?: ProjectType;
+  faenaId?: string;
+  projectAdminId?: string;
+}
+
+/** Body de `POST /projects/:id/assignments` (A0.4, gate `project:team:manage`). */
+export interface AssignWorkerInput {
+  userId: string;
+  roleKey: RoleKey;
+  status?: ProjectWorkerStatus;
+  startDate?: string;
+  endDate?: string;
+}
+
+/** Una variable dentro del spec de datos esperados de una fase (A0.4). */
+export interface PhaseVariableSpecInput {
+  code: string;
+  name: string;
+  type: VariableType;
+  unit?: string;
+  description?: string;
+  required?: boolean;
+}
+
+/** Body de `PUT /metrics/phases/:id/dataspec` (A0.4): las variables tipadas de la fase. */
+export interface PhaseDataSpecInput {
+  variables: PhaseVariableSpecInput[];
+}

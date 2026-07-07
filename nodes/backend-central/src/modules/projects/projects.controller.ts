@@ -1,11 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
+  Patch,
   Post,
   Put,
+  Query,
   UnauthorizedException,
   UsePipes,
   ValidationPipe,
@@ -15,7 +18,14 @@ import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { FgaService } from '../../fga/fga.service';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, CreateServiceDto, UpdateProjectKpisDto } from './dto/projects.dto';
+import {
+  CreateAssignmentDto,
+  CreateProjectDto,
+  CreateServiceDto,
+  UpdateAssignmentDto,
+  UpdateProjectKpisDto,
+  UpdateServiceFrequencyDto,
+} from './dto/projects.dto';
 
 @Controller('projects')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
@@ -54,11 +64,25 @@ export class ProjectsController {
 
   /**
    * Lista todos los proyectos a los que el usuario tiene acceso.
+   * Filtra opcionalmente por faena (`?faenaId=`).
    */
   @Get()
-  listAll(@CurrentUser() authUser: AuthUser | undefined) {
+  listAll(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('faenaId') faenaId?: string,
+  ) {
     const userId = this.requireUserId(authUser);
-    return this.projects.listAll(userId);
+    return this.projects.listAll(userId, faenaId);
+  }
+
+  /**
+   * Lista los usuarios internos elegibles como administrador de proyecto
+   * (para el selector del formulario de creación de proyecto).
+   */
+  @Get('eligible-admins')
+  listEligibleAdmins(@CurrentUser() authUser: AuthUser | undefined) {
+    this.requireUserId(authUser);
+    return this.projects.listEligibleAdmins();
   }
 
   /**
@@ -116,6 +140,69 @@ export class ProjectsController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.projects.updateKpis(id, dto, userId);
+  }
+
+  /**
+   * Setea la frecuencia de un servicio del proyecto.
+   * Gate: can_define_kpi (project_creator/admin) — misma gestión de configuración
+   * del proyecto que KPIs/servicios.
+   */
+  @Patch(':id/services/:sid')
+  @RequirePermission('can_define_kpi', { type: 'project', param: 'id' })
+  setServiceFrequency(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('sid') sid: string,
+    @Body() dto: UpdateServiceFrequencyDto,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.setServiceFrequency(id, sid, dto);
+  }
+
+  // ── Asignación de trabajadores (project:team:manage → can_manage_team) ──────
+
+  @Get(':id/assignments')
+  @RequirePermission('can_manage_team', { type: 'project', param: 'id' })
+  listAssignments(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.listAssignments(id);
+  }
+
+  @Post(':id/assignments')
+  @RequirePermission('can_manage_team', { type: 'project', param: 'id' })
+  createAssignment(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: CreateAssignmentDto,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.createAssignment(id, dto);
+  }
+
+  @Patch(':id/assignments/:aid')
+  @RequirePermission('can_manage_team', { type: 'project', param: 'id' })
+  updateAssignment(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('aid') aid: string,
+    @Body() dto: UpdateAssignmentDto,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.updateAssignment(id, aid, dto);
+  }
+
+  @Delete(':id/assignments/:aid')
+  @RequirePermission('can_manage_team', { type: 'project', param: 'id' })
+  removeAssignment(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('aid') aid: string,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.removeAssignment(id, aid);
   }
 
   private requireUserId(authUser: AuthUser | undefined): string {

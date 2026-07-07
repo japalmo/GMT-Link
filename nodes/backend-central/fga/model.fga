@@ -57,6 +57,9 @@ type project
     # (retrocompatible) pero NO de can_create_service — otorgar "Crear servicios" a un
     # rol custom ya no habilita la gestión de activos (desacople de la deuda Task 2.2).
     define can_manage_assets: [user] or project_creator
+    # gestión de trabajadores del proyecto (§8 project:team:manage): componible
+    # ([user]) y derivado de project_creator o del admin del departamento.
+    define can_manage_team: [user] or project_creator or admin from department
     define can_submit_measurements: [user] or operator or qa or project_creator
 
 type service

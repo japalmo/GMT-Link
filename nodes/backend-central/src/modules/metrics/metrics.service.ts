@@ -10,6 +10,7 @@ import {
   SaveDataPointDto,
   SaveCubicacionDto,
   SaveReservorioMetadataDto,
+  SetPhaseDataSpecDto,
 } from './dto/metrics.dto';
 import { randomUUID, randomInt, createHash } from 'crypto';
 
@@ -208,6 +209,78 @@ export class MetricsService {
       where: { phaseId },
       orderBy: { code: 'asc' },
     });
+  }
+
+  /**
+   * Define el "DataSpec" de una fase: el conjunto de Variables a capturar.
+   * Semántica declarativa (PUT): upsert por `code` de las variables enviadas y
+   * borrado de las que ya no figuran en el spec. `@@unique([phaseId, code])`
+   * hace de clave natural.
+   *
+   * NOTA: `required` viaja en el DTO por completitud de la API pero NO se
+   * persiste — el modelo `Variable` no tiene esa columna (no se toca el schema
+   * en esta tarea). TODO: añadir `Variable.required Boolean` en una migración
+   * futura para materializarlo.
+   */
+  async setPhaseDataSpec(phaseId: string, dto: SetPhaseDataSpecDto) {
+    const phase = await this.prisma.phase.findUnique({ where: { id: phaseId } });
+    if (!phase) {
+      throw new NotFoundException(`Fase con ID ${phaseId} no encontrada.`);
+    }
+
+    const codes = dto.variables.map((v) => v.code);
+    const uniqueCodes = new Set(codes);
+    if (uniqueCodes.size !== codes.length) {
+      throw new BadRequestException('El DataSpec tiene códigos de variable duplicados.');
+    }
+
+    // Guard anti-pérdida de datos: NO eliminar variables que ya tengan
+    // DataPoints capturados. Variable→DataPoint es onDelete: Cascade, así que
+    // borrarlas destruiría mediciones/cubicaciones reales de forma silenciosa e
+    // irrecuperable. Rechazamos la edición en ese caso en vez de destruir datos.
+    const toRemove = await this.prisma.variable.findMany({
+      where: { phaseId, code: { notIn: codes } },
+      select: { code: true, _count: { select: { dataPoints: true } } },
+    });
+    const withData = toRemove.filter((v) => v._count.dataPoints > 0);
+    if (withData.length > 0) {
+      throw new BadRequestException(
+        `No se pueden eliminar variables con datos ya capturados: ${withData
+          .map((v) => v.code)
+          .join(', ')}. Consérvalas en el DataSpec o elimina primero sus datos.`,
+      );
+    }
+
+    await this.prisma.$transaction([
+      // Borrar solo variables fuera del spec (ya garantizado: sin DataPoints).
+      this.prisma.variable.deleteMany({
+        where: { phaseId, code: { notIn: codes } },
+      }),
+      // Upsert de cada variable del spec.
+      ...dto.variables.map((v) =>
+        this.prisma.variable.upsert({
+          where: { phaseId_code: { phaseId, code: v.code } },
+          update: {
+            name: v.name,
+            type: v.type,
+            unit: v.unit ?? null,
+            description: v.description ?? null,
+            required: v.required ?? false,
+          },
+          create: {
+            phaseId,
+            code: v.code,
+            name: v.name,
+            type: v.type,
+            unit: v.unit ?? null,
+            description: v.description ?? null,
+            required: v.required ?? false,
+          },
+        }),
+      ),
+    ]);
+
+    return this.getVariables(phaseId);
   }
 
   // ── Datos de Medición / Cubicaciones ─────────────────────────────────────────

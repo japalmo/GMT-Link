@@ -15,6 +15,7 @@ import {
   SaveCubicacionDto,
   SaveReservorioMetadataDto,
   LogActivityDto,
+  SetPhaseDataSpecDto,
 } from './dto/metrics.dto';
 
 
@@ -116,6 +117,22 @@ export class MetricsController {
     const projectId = await this.service.getProjectIdForPhaseId(phaseId);
     await this.requireProjectPermission(userId, projectId, 'can_view');
     return this.service.getVariables(phaseId);
+  }
+
+  /**
+   * Define/actualiza el DataSpec de una fase (variables a capturar).
+   * Gate: can_submit_measurements sobre el proyecto de la fase (mismo que crear fase).
+   */
+  @Put('phases/:id/dataspec')
+  async setPhaseDataSpec(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') phaseId: string,
+    @Body() dto: SetPhaseDataSpecDto,
+  ) {
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForPhaseId(phaseId);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
+    return this.service.setPhaseDataSpec(phaseId, dto);
   }
 
   // ── Datos de Medición / Cubicaciones ─────────────────────────────────────────

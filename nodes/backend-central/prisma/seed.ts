@@ -39,8 +39,12 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'role:assign', label: 'Asignar roles a usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: true },
   // ── directorio ──
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'directorio', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
+  // ── clientes ──
+  { key: 'client:create', label: 'Crear cliente', module: 'clientes', kind: 'FUNCTIONAL', scopeable: false },
   // ── proyectos ──
   { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'faena:create', label: 'Crear faena', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'project:team:manage', label: 'Gestionar trabajadores del proyecto', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_manage_team', scopeable: true },
   // ⚠️ Granularidad compartida (review Tasks 2.2 y 2.4): project:read,
   // measurement:read y task:read materializan la MISMA tupla FGA (`can_view`
   // sobre project). Otorgar cualquiera de los tres en un rol custom concede
@@ -93,6 +97,7 @@ const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'asset:history:view', label: 'Ver históricos de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_history', scopeable: true },
   { key: 'asset:doc:upload', label: 'Subir doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_doc', scopeable: true },
   { key: 'asset:doc:approve', label: 'Aprobar doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_and_approve_doc', scopeable: true },
+  { key: 'asset:fields:edit', label: 'Editar campos de equipo', module: 'recursos', kind: 'FUNCTIONAL', scopeable: true },
 ];
 
 interface RoleDef {
@@ -113,7 +118,7 @@ const ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
-    grants: [g('project:create', 'GLOBAL'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
+    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
   },
   {
     key: 'project_creator',

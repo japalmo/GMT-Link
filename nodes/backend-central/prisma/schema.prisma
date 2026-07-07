@@ -12,53 +12,56 @@ datasource db {
 
 // ============ IDENTIDAD ============
 model User {
-  id             String     @id @default(cuid())
-  firstName      String
-  secondName     String?
-  lastName       String
-  secondLastName String?
-  email          String     @unique
-  avatarUrl      String?
-  passwordHash   String?    // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
-  status         UserStatus @default(PENDING_FIRST_LOGIN)
-  points         Int        @default(0) // gamificación
-  isClientUser   Boolean    @default(false)
-  clientId       String?
-  client         Client?    @relation(fields: [clientId], references: [id])
-  memberships    Membership[]
-  cv             CV?
-  documents      PersonalDocument[] @relation("UserDocuments")
-  reviewedDocs   PersonalDocument[] @relation("DocumentReviewer")
-  dashboard      DashboardConfig?
-  preferences    UserPreferences?
-  notifications  Notification[]      @relation("UserNotifications")
-  permissionRequests PermissionRequest[] @relation("RequestedBy")
-  decidedRequests    PermissionRequest[] @relation("DecidedBy")
-  reimbursements        Reimbursement[]   @relation("ReimbursementRequester")
-  approvedReimbursements Reimbursement[]  @relation("ReimbursementApprover")
-  overtimeRequests      OvertimeRequest[] @relation("OvertimeRequester")
-  approvedOvertime      OvertimeRequest[] @relation("OvertimeApprover")
-  liquidations          Liquidation[]     @relation("UserLiquidations")
-  tasksAssigned         Task[]            @relation("TaskAssignee")
-  tasksCreated          Task[]            @relation("TaskCreator")
-  clientTasksRequested  Task[]            @relation("TaskClientRequester")
-  projectDocuments      ProjectDocument[] @relation("ProjectDocumentOwner")
-  signedQADocs          ProjectDocument[] @relation("DocumentQASigner")
-  signedClientDocs      ProjectDocument[] @relation("DocumentClientSigner")
-  assignedAssets        Asset[]           @relation("AssignedAssets")
-  inUseAssets           Asset[]           @relation("InUseAssets")
-  reviewedAssetDocs     AssetDocument[]   @relation("AssetDocReviewer")
-  assetHistoryEntries   AssetHistoryEntry[] @relation("AssetHistoryActor")
-  reviewedChecklists    ChecklistTemplate[] @relation("ChecklistReviewer")
-  submittedChecklists   ChecklistSubmission[] @relation("ChecklistSubmitter")
-  providerRatings       ProviderRating[]  @relation("ProviderRatingActor")
-  warehouseTransactions WarehouseTransaction[] @relation("WarehouseTransactionActor")
-  geminiUsages          GeminiUsage[]     @relation("GeminiUsageActor")
-  pointsLogs            PointsLog[]       @relation("PointsLogUser")
-  achievements          UserAchievement[] @relation("UserAchievements")
-  dataPointsCreated     DataPoint[]       @relation("DataPointCreator")
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                     String                    @id @default(cuid())
+  firstName              String
+  secondName             String?
+  lastName               String
+  secondLastName         String?
+  email                  String                    @unique
+  avatarUrl              String?
+  passwordHash           String? // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
+  status                 UserStatus                @default(PENDING_FIRST_LOGIN)
+  points                 Int                       @default(0) // gamificación
+  isClientUser           Boolean                   @default(false)
+  clientId               String?
+  client                 Client?                   @relation(fields: [clientId], references: [id])
+  memberships            Membership[]
+  cv                     CV?
+  documents              PersonalDocument[]        @relation("UserDocuments")
+  reviewedDocs           PersonalDocument[]        @relation("DocumentReviewer")
+  dashboard              DashboardConfig?
+  preferences            UserPreferences?
+  notifications          Notification[]            @relation("UserNotifications")
+  permissionRequests     PermissionRequest[]       @relation("RequestedBy")
+  decidedRequests        PermissionRequest[]       @relation("DecidedBy")
+  reimbursements         Reimbursement[]           @relation("ReimbursementRequester")
+  approvedReimbursements Reimbursement[]           @relation("ReimbursementApprover")
+  overtimeRequests       OvertimeRequest[]         @relation("OvertimeRequester")
+  approvedOvertime       OvertimeRequest[]         @relation("OvertimeApprover")
+  liquidations           Liquidation[]             @relation("UserLiquidations")
+  tasksAssigned          Task[]                    @relation("TaskAssignee")
+  tasksCreated           Task[]                    @relation("TaskCreator")
+  clientTasksRequested   Task[]                    @relation("TaskClientRequester")
+  projectDocuments       ProjectDocument[]         @relation("ProjectDocumentOwner")
+  signedQADocs           ProjectDocument[]         @relation("DocumentQASigner")
+  signedClientDocs       ProjectDocument[]         @relation("DocumentClientSigner")
+  assignedAssets         Asset[]                   @relation("AssignedAssets")
+  inUseAssets            Asset[]                   @relation("InUseAssets")
+  reviewedAssetDocs      AssetDocument[]           @relation("AssetDocReviewer")
+  assetHistoryEntries    AssetHistoryEntry[]       @relation("AssetHistoryActor")
+  reviewedChecklists     ChecklistTemplate[]       @relation("ChecklistReviewer")
+  submittedChecklists    ChecklistSubmission[]     @relation("ChecklistSubmitter")
+  providerRatings        ProviderRating[]          @relation("ProviderRatingActor")
+  warehouseTransactions  WarehouseTransaction[]    @relation("WarehouseTransactionActor")
+  geminiUsages           GeminiUsage[]             @relation("GeminiUsageActor")
+  pointsLogs             PointsLog[]               @relation("PointsLogUser")
+  achievements           UserAchievement[]         @relation("UserAchievements")
+  dataPointsCreated      DataPoint[]               @relation("DataPointCreator")
+  faenasSupervised       Faena[]                   @relation("FaenaSupervisor")
+  projectsAdmin          Project[]                 @relation("ProjectAdmin")
+  projectAssignments     ProjectWorkerAssignment[] @relation("ProjectAssignments")
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 }
 
 enum UserStatus {
@@ -75,6 +78,26 @@ model Client {
   rut      String?
   users    User[]
   projects Project[]
+  faenas   Faena[]
+}
+
+// ============ FAENA (agrupador de proyectos por cliente) ============
+model Faena {
+  id           String      @id @default(cuid())
+  code         String
+  name         String
+  clientId     String
+  client       Client      @relation(fields: [clientId], references: [id])
+  supervisorId String?
+  supervisor   User?       @relation("FaenaSupervisor", fields: [supervisorId], references: [id])
+  status       FaenaStatus @default(PLANIFICADA)
+  startDate    DateTime?
+  endDate      DateTime?
+  projects     Project[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([clientId, code])
 }
 
 model Department {
@@ -85,30 +108,55 @@ model Department {
 }
 
 model Project {
-  id           String     @id @default(cuid())
-  code         String // 3 chars, único dentro del depto
-  name         String
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
-  clientId     String
-  client       Client     @relation(fields: [clientId], references: [id])
-  services     Service[]
-  kpis         Json?
-  tasks        Task[]
-  documents    ProjectDocument[]
-  assets       Asset[]           @relation("ProjectAssets")
-  elements     Element[]         @relation("ProjectElements")
-  createdAt    DateTime   @default(now())
+  id             String                    @id @default(cuid())
+  code           String // 3 chars, único dentro del depto
+  name           String
+  description    String?
+  departmentId   String
+  department     Department                @relation(fields: [departmentId], references: [id])
+  clientId       String
+  client         Client                    @relation(fields: [clientId], references: [id])
+  contractNumber String?
+  projectType    ProjectType?
+  faenaId        String?
+  faena          Faena?                    @relation(fields: [faenaId], references: [id])
+  projectAdminId String?
+  projectAdmin   User?                     @relation("ProjectAdmin", fields: [projectAdminId], references: [id])
+  workers        ProjectWorkerAssignment[]
+  services       Service[]
+  kpis           Json?
+  tasks          Task[]
+  documents      ProjectDocument[]
+  assets         Asset[]                   @relation("ProjectAssets")
+  elements       Element[]                 @relation("ProjectElements")
+  createdAt      DateTime                  @default(now())
 
   @@unique([departmentId, code])
 }
 
+// ============ ASIGNACIÓN DE TRABAJADORES A PROYECTO ============
+model ProjectWorkerAssignment {
+  id        String              @id @default(cuid())
+  projectId String
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation("ProjectAssignments", fields: [userId], references: [id])
+  roleKey   String
+  status    ProjectWorkerStatus @default(ACTIVO)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime            @default(now())
+
+  @@unique([projectId, userId, roleKey])
+}
+
 model Service {
-  id              String  @id @default(cuid())
+  id              String            @id @default(cuid())
   code            String // 3 chars
   name            String
   projectId       String
-  project         Project @relation(fields: [projectId], references: [id])
+  project         Project           @relation(fields: [projectId], references: [id])
+  frequency       ServiceFrequency?
   docCodingConfig Json
   tasks           Task[]
   documents       ProjectDocument[]
@@ -124,11 +172,11 @@ model Role {
   label       String
   description String?
   isSystem    Boolean          @default(false) // rol sembrado (estructural/SuperAdmin): no editable/borrable por admin
-  createdById String?                           // quién lo creó (null = semilla del sistema)
+  createdById String? // quién lo creó (null = semilla del sistema)
   permissions RolePermission[]
   memberships Membership[]
   createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
 }
 
 model Permission {
@@ -137,8 +185,8 @@ model Permission {
   label       String
   module      String           @default("system") // agrupador de la matriz UI (Módulo 4)
   kind        PermissionKind   @default(FUNCTIONAL) // FUNCTIONAL = filtro de datos; STRUCTURAL = relación FGA
-  fgaRelation String?                              // si STRUCTURAL: relación FGA a consultar
-  scopeable   Boolean          @default(true)      // false = sin selector de scope (siempre GLOBAL)
+  fgaRelation String? // si STRUCTURAL: relación FGA a consultar
+  scopeable   Boolean          @default(true) // false = sin selector de scope (siempre GLOBAL)
   roles       RolePermission[]
 }
 
@@ -146,8 +194,8 @@ model RolePermission {
   roleId       String
   permissionId String
   scope        PermissionScope @default(PROJECT) // "Solo propios / Proyecto / Todo" de la matriz (ADR-0001)
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission      @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
 }
@@ -177,9 +225,9 @@ enum ScopeType {
 
 // Alcance de un permiso dentro de un rol (Módulo 4, ADR-0001).
 enum PermissionScope {
-  OWN     // Solo propios — predicado SQL createdById = userId
+  OWN // Solo propios — predicado SQL createdById = userId
   PROJECT // Solo proyectos asociados — membresía vía FGA/Membership
-  GLOBAL  // Todo / org-wide
+  GLOBAL // Todo / org-wide
 }
 
 // Cómo se enforcea un permiso: filtro de datos (FUNCTIONAL) vs. relación FGA (STRUCTURAL).
@@ -416,30 +464,30 @@ enum TaskStatus {
 }
 
 model Task {
-  id              String     @id @default(cuid())
+  id              String        @id @default(cuid())
   name            String
   description     String?
-  status          TaskStatus @default(PENDIENTE)
+  status          TaskStatus    @default(PENDIENTE)
   projectId       String
-  project         Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   serviceId       String?
-  service         Service?   @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  service         Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   assignedToId    String?
-  assignedTo      User?      @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdById     String
-  createdBy       User       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  estimatedPoints Int        @default(0)
+  createdBy       User          @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  estimatedPoints Int           @default(0)
   actualPoints    Int?
-  recurrence      String?    // cron expression para tareas cíclicas
-  clientUserId    String?    // ITO/cliente que solicitó la tarea
-  clientUser      User?      @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
+  recurrence      String? // cron expression para tareas cíclicas
+  clientUserId    String? // ITO/cliente que solicitó la tarea
+  clientUser      User?         @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
   // Módulo 5 — instancia de ejecución (captura de datos SEPARADA; soft-links opcionales):
-  phaseId         String?    // contexto de captura (fase/periodo)
-  elementId       String?    // poza/sector objetivo
-  dataSpec        Json?      // "datos a obtener" que define el Supervisor (variable codes + labels)
+  phaseId         String? // contexto de captura (fase/periodo)
+  elementId       String? // poza/sector objetivo
+  dataSpec        Json? // "datos a obtener" que define el Supervisor (variable codes + labels)
   timeLogs        TaskTimeLog[]
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([projectId, status])
   @@index([assignedToId])
@@ -451,7 +499,7 @@ model TaskTimeLog {
   id        String    @id @default(cuid())
   taskId    String
   task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId    String    // el operador que ejecuta
+  userId    String // el operador que ejecuta
   startedAt DateTime
   endedAt   DateTime? // null = en curso
   note      String?
@@ -475,7 +523,7 @@ model ProjectDocument {
   name            String
   code            String                @unique // formato: GMT-{Client}-{Depto}-{Project}-{Service}-{TipoDoc}-{Area}-{No}
   fileUrl         String
-  fileHash        String?               // hash SHA-256 para integridad (FES)
+  fileHash        String? // hash SHA-256 para integridad (FES)
   status          ProjectDocumentStatus @default(BORRADOR)
   version         Int                   @default(0) // rev0 = 0, revA = 1, etc.
   previousFileUrl String?
@@ -491,7 +539,7 @@ model ProjectDocument {
   clientSignerId  String?
   clientSigner    User?                 @relation("DocumentClientSigner", fields: [clientSignerId], references: [id], onDelete: SetNull)
   clientSignedAt  DateTime?
-  rejectionReason String?               // motivo de rechazo si aplica
+  rejectionReason String? // motivo de rechazo si aplica
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
@@ -518,33 +566,33 @@ enum AssetStatus {
 }
 
 model Asset {
-  id           String      @id @default(cuid())
-  code         String      @unique // codificación automática; identifica el activo en el QR / ficha pública
-  type         AssetType
-  name         String
-  description  String?
-  status       AssetStatus @default(DISPONIBLE)
+  id                   String                @id @default(cuid())
+  code                 String                @unique // codificación automática; identifica el activo en el QR / ficha pública
+  type                 AssetType
+  name                 String
+  description          String?
+  status               AssetStatus           @default(DISPONIBLE)
   // Pertenencia opcional a un proyecto (FGA asset.project → can_view_list / can_create).
-  projectId    String?
-  project      Project?    @relation("ProjectAssets", fields: [projectId], references: [id], onDelete: SetNull)
+  projectId            String?
+  project              Project?              @relation("ProjectAssets", fields: [projectId], references: [id], onDelete: SetNull)
   // Responsable que corre el checklist (FGA asset.assigned → can_run_checklist).
-  assignedToId String?
-  assignedTo   User?       @relation("AssignedAssets", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedToId         String?
+  assignedTo           User?                 @relation("AssignedAssets", fields: [assignedToId], references: [id], onDelete: SetNull)
   // Disputa "en uso": quién lo tiene tomado y desde cuándo.
-  inUseById    String?
-  inUseBy      User?       @relation("InUseAssets", fields: [inUseById], references: [id], onDelete: SetNull)
-  inUseSince   DateTime?
+  inUseById            String?
+  inUseBy              User?                 @relation("InUseAssets", fields: [inUseById], references: [id], onDelete: SetNull)
+  inUseSince           DateTime?
   // Ancla "Solo propios" (Módulo 4, ADR-0001): quién creó el activo.
-  createdById  String?
+  createdById          String?
   // Campos específicos por subtipo (ciclos de carga/calibración en equipos; km/ubicación en vehículos).
-  metadata     Json?
-  documents    AssetDocument[]
-  history      AssetHistoryEntry[]
-  accessories  AssetAccessory[]
-  checklistTemplate ChecklistTemplate?
+  metadata             Json?
+  documents            AssetDocument[]
+  history              AssetHistoryEntry[]
+  accessories          AssetAccessory[]
+  checklistTemplate    ChecklistTemplate?
   checklistSubmissions ChecklistSubmission[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([type, status])
   @@map("assets")
@@ -589,14 +637,14 @@ model AssetHistoryEntry {
 
 // Accesorios asociados a un equipo/activo (Etapa 5.2)
 model AssetAccessory {
-  id          String   @id @default(cuid())
-  assetId     String
-  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
+  id           String   @id @default(cuid())
+  assetId      String
+  asset        Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
   serialNumber String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([assetId])
   @@map("asset_accessories")
@@ -604,19 +652,19 @@ model AssetAccessory {
 
 // Plantilla de checklist (ApprovalWorkflow §5): versionable + revisor.
 model ChecklistTemplate {
-  id              String         @id @default(cuid())
-  assetId         String         @unique
-  asset           Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  id              String                @id @default(cuid())
+  assetId         String                @unique
+  asset           Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
   name            String
-  items           Json           // array de { id, label, type: 'YES_NO' | 'TEXT' | 'NUMBER', required: boolean }
-  status          DocumentStatus @default(EN_REVISION)
-  previousItems   Json?          // versión anterior para el ApprovalWorkflow
+  items           Json // array de { id, label, type: 'YES_NO' | 'TEXT' | 'NUMBER', required: boolean }
+  status          DocumentStatus        @default(EN_REVISION)
+  previousItems   Json? // versión anterior para el ApprovalWorkflow
   reviewedById    String?
-  reviewedBy      User?          @relation("ChecklistReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedBy      User?                 @relation("ChecklistReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt      DateTime?
   rejectionReason String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   submissions     ChecklistSubmission[]
 
   @@index([assetId])
@@ -632,7 +680,7 @@ model ChecklistSubmission {
   template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   userId     String
   user       User              @relation("ChecklistSubmitter", fields: [userId], references: [id], onDelete: Cascade)
-  answers    Json              // array de { itemId, value: string/boolean/number, comment?: string }
+  answers    Json // array de { itemId, value: string/boolean/number, comment?: string }
   createdAt  DateTime          @default(now())
 
   @@index([assetId])
@@ -641,18 +689,18 @@ model ChecklistSubmission {
 
 // ============ PROVEEDORES (Etapa 5.5) ============
 model Provider {
-  id        String           @id @default(cuid())
-  rut       String?          @unique
+  id        String            @id @default(cuid())
+  rut       String?           @unique
   name      String
   email     String?
   phone     String?
   address   String?
-  score     Float            @default(0.0)
+  score     Float             @default(0.0)
   products  ProviderProduct[]
   ratings   ProviderRating[]
   supplies  Supply[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   @@map("providers")
 }
@@ -663,7 +711,7 @@ model ProviderProduct {
   provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  price       Int?     // CLP sin decimales
+  price       Int? // CLP sin decimales
   unit        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -672,32 +720,32 @@ model ProviderProduct {
 }
 
 model ProviderRating {
-  id          String   @id @default(cuid())
-  providerId  String
-  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  score       Int      // 1 a 5
-  comment     String?
-  actorId     String
-  actor       User     @relation("ProviderRatingActor", fields: [actorId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  score      Int // 1 a 5
+  comment    String?
+  actorId    String
+  actor      User     @relation("ProviderRatingActor", fields: [actorId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
 
   @@map("provider_ratings")
 }
 
 // ============ INSUMOS (Etapa 5.4) ============
 model Supply {
-  id          String             @id @default(cuid())
-  code        String             @unique
-  name        String
-  description String?
-  category    String?
-  unit        String             @default("unidades")
-  providerId  String?
-  provider    Provider?          @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  stocks      WarehouseStock[]
+  id           String                 @id @default(cuid())
+  code         String                 @unique
+  name         String
+  description  String?
+  category     String?
+  unit         String                 @default("unidades")
+  providerId   String?
+  provider     Provider?              @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  stocks       WarehouseStock[]
   transactions WarehouseTransaction[]
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
 
   @@map("supplies")
 }
@@ -728,17 +776,17 @@ model WarehouseStock {
 }
 
 model WarehouseTransaction {
-  id          String               @id @default(cuid())
+  id          String          @id @default(cuid())
   warehouseId String
-  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   supplyId    String
-  supply      Supply               @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  supply      Supply          @relation(fields: [supplyId], references: [id], onDelete: Cascade)
   type        WarehouseTxType
   quantity    Float
   reason      String?
   actorId     String?
-  actor       User?                @relation("WarehouseTransactionActor", fields: [actorId], references: [id], onDelete: SetNull)
-  createdAt   DateTime             @default(now())
+  actor       User?           @relation("WarehouseTransactionActor", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
 
   @@map("warehouse_transactions")
 }
@@ -753,7 +801,7 @@ model GeminiUsage {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation("GeminiUsageActor", fields: [userId], references: [id], onDelete: Cascade)
-  action    String   // "SHORE_DETECTION" | "DATA_CLEANING"
+  action    String // "SHORE_DETECTION" | "DATA_CLEANING"
   createdAt DateTime @default(now())
 
   @@map("gemini_usage")
@@ -764,7 +812,7 @@ model PointsLog {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation("PointsLogUser", fields: [userId], references: [id], onDelete: Cascade)
-  action    String   // e.g. "FIRST_LOGIN", "COMPLETE_CV", "UPLOAD_DOC", "COMPLETE_TASK", etc.
+  action    String // e.g. "FIRST_LOGIN", "COMPLETE_CV", "UPLOAD_DOC", "COMPLETE_TASK", etc.
   points    Int
   createdAt DateTime @default(now())
 
@@ -775,7 +823,7 @@ model UserAchievement {
   id             String   @id @default(cuid())
   userId         String
   user           User     @relation("UserAchievements", fields: [userId], references: [id], onDelete: Cascade)
-  achievementKey String   // e.g. "first_day", "cv_complete", "warehouse_10", etc.
+  achievementKey String // e.g. "first_day", "cv_complete", "warehouse_10", etc.
   unlockedAt     DateTime @default(now())
 
   @@unique([userId, achievementKey])
@@ -785,47 +833,49 @@ model UserAchievement {
 // ============ METRICS / PROJECTS DATA INTEGRACIÓN ============
 
 model Element {
-  id              String         @id @default(cuid())
-  code            String         @unique
+  id              String      @id @default(cuid())
+  code            String      @unique
   name            String
-  type            String         // "POZA" | "ACOPIO" | "RESERVORIO"
-  locationPolygon String?        // Contorno en formato WKT o GeoJSON string
-  metadata        Json?          // Niveles/cotas de referencia estáticas: cota_fondo, cota_segura, etc.
+  type            String // "POZA" | "ACOPIO" | "RESERVORIO"
+  locationPolygon String? // Contorno en formato WKT o GeoJSON string
+  metadata        Json? // Niveles/cotas de referencia estáticas: cota_fondo, cota_segura, etc.
   projectId       String
-  project         Project        @relation("ProjectElements", fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project     @relation("ProjectElements", fields: [projectId], references: [id], onDelete: Cascade)
   dataPoints      DataPoint[]
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@map("elements")
 }
 
 model Phase {
-  id        String          @id @default(cuid())
-  code      String          // e.g. "mayo-2026", "semana-12"
-  name      String
-  serviceId String
-  service   Service         @relation("ServicePhases", fields: [serviceId], references: [id], onDelete: Cascade)
-  variables Variable[]
+  id         String      @id @default(cuid())
+  code       String // e.g. "mayo-2026", "semana-12"
+  name       String
+  serviceId  String
+  service    Service     @relation("ServicePhases", fields: [serviceId], references: [id], onDelete: Cascade)
+  variables  Variable[]
   dataPoints DataPoint[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   @@unique([serviceId, code])
   @@map("phases")
 }
 
 model Variable {
-  id         String        @id @default(cuid())
-  code       String        // e.g. "vol_salmuera", "cota_espejo", "dem_file"
-  name       String
-  type       VariableType
-  unit       String?       // e.g. "m³", "m"
-  phaseId    String
-  phase      Phase         @relation(fields: [phaseId], references: [id], onDelete: Cascade)
-  dataPoints DataPoint[]
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  id          String       @id @default(cuid())
+  code        String // e.g. "vol_salmuera", "cota_espejo", "dem_file"
+  name        String
+  description String?
+  type        VariableType
+  unit        String? // e.g. "m³", "m"
+  required    Boolean      @default(false)
+  phaseId     String
+  phase       Phase        @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  dataPoints  DataPoint[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@unique([phaseId, code])
   @@map("variables")
@@ -835,23 +885,61 @@ enum VariableType {
   SCALAR
   FILE
   LIST
+  ENTERO
+  DECIMAL
+  BOOLEAN
+  METROS
+  M3
+  TEXTO
+  IMAGEN
+  PLANO
+  POLIGONO
+  ORTOFOTO
+  PDF
+  GEODATA
+  OTRO
+}
+
+enum ProjectType {
+  SPOT
+  OBRAS_CIVILES
+  RUTINARIO
+}
+
+enum FaenaStatus {
+  PLANIFICADA
+  EN_PROGRESO
+  COMPLETADA
+}
+
+enum ProjectWorkerStatus {
+  ACTIVO
+  INACTIVO
+}
+
+enum ServiceFrequency {
+  DIARIA
+  SEMANAL
+  QUINCENAL
+  MENSUAL
+  A_DEMANDA
 }
 
 model DataPoint {
-  id         String          @id @default(cuid())
-  value      String          // El valor en formato string (o JSON string si es LIST)
-  fileUrl    String?         // URL de descarga del archivo si es tipo FILE (almacenamiento asíncrono)
-  variableId String
-  variable   Variable        @relation(fields: [variableId], references: [id], onDelete: Cascade)
-  elementId  String?
-  element    Element?        @relation(fields: [elementId], references: [id], onDelete: Cascade)
-  phaseId    String
-  phase      Phase           @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  value       String // El valor en formato string (o JSON string si es LIST)
+  fileUrl     String? // URL de descarga del archivo si es tipo FILE (almacenamiento asíncrono)
+  variableId  String
+  variable    Variable @relation(fields: [variableId], references: [id], onDelete: Cascade)
+  elementId   String?
+  element     Element? @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  phaseId     String
+  phase       Phase    @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   createdById String
-  createdBy  User            @relation("DataPointCreator", fields: [createdById], references: [id])
-  taskId     String?         // Módulo 5 — traza OPCIONAL a la Tarea de ejecución (sin FK dura)
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  createdBy   User     @relation("DataPointCreator", fields: [createdById], references: [id])
+  taskId      String? // Módulo 5 — traza OPCIONAL a la Tarea de ejecución (sin FK dura)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@map("data_points")
 }

@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsObject, IsEnum, IsBoolean, ArrayNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
+import { VariableType } from '@prisma/client';
 
 export class CreateElementDto {
   @IsString()
@@ -38,6 +39,42 @@ export class CreatePhaseDto {
   @IsString()
   @IsNotEmpty()
   serviceId!: string;
+}
+
+// ── DataSpec de una fase: definición de las Variables a capturar ────────────
+
+export class DataSpecVariableDto {
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsEnum(VariableType)
+  @IsNotEmpty()
+  type!: VariableType;
+
+  @IsString()
+  @IsOptional()
+  unit?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  required?: boolean;
+}
+
+export class SetPhaseDataSpecDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => DataSpecVariableDto)
+  variables!: DataSpecVariableDto[];
 }
 
 export class SaveDataPointDto {

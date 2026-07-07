@@ -27,6 +27,7 @@ describe('composable-permissions (SPINE Fase 2)', () => {
       'task:create': 'project',
       'task:assign': 'project',
       'asset:manage': 'project',
+      'project:team:manage': 'project',
     });
   });
 

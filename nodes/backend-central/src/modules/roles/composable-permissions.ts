@@ -31,6 +31,7 @@ export const COMPOSABLE_STRUCTURAL: Readonly<Record<string, FgaObjectType>> = {
   'task:read': 'project',
   'task:create': 'project',
   'task:assign': 'project',
+  'project:team:manage': 'project',
   // Gate propio de la gestión de activos (resuelve el acople de la review de
   // seguridad Task 1.5): `asset.can_create = can_manage_assets from project` y el
   // controller de activos gatea con can_manage_assets. service:create ya NO

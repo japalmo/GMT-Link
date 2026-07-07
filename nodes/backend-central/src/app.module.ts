@@ -36,6 +36,8 @@ import { ProvidersModule } from './modules/providers/providers.module';
 import { ToolsModule } from './modules/tools/tools.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
+import { ClientsModule } from './modules/clients/clients.module';
+import { FaenasModule } from './modules/faenas/faenas.module';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     ToolsModule,
     GamificationModule,
     MetricsModule,
+    ClientsModule,
+    FaenasModule,
   ],
   controllers: [HealthController],
   providers: [

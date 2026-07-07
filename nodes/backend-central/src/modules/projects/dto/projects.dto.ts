@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsObject, IsString, Length } from 'class-validator';
-import { Prisma } from '@prisma/client';
+import { IsEnum, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, Length } from 'class-validator';
+import { Prisma, ProjectType, ProjectWorkerStatus, ServiceFrequency } from '@prisma/client';
 
 export class CreateProjectDto {
   @IsString()
@@ -12,12 +12,32 @@ export class CreateProjectDto {
   name!: string;
 
   @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
   @IsNotEmpty()
   departmentId!: string;
 
   @IsString()
   @IsNotEmpty()
   clientId!: string;
+
+  @IsString()
+  @IsOptional()
+  contractNumber?: string;
+
+  @IsEnum(ProjectType)
+  @IsOptional()
+  projectType?: ProjectType;
+
+  @IsString()
+  @IsOptional()
+  faenaId?: string;
+
+  @IsString()
+  @IsOptional()
+  projectAdminId?: string;
 }
 
 export class CreateServiceDto {
@@ -39,4 +59,53 @@ export class UpdateProjectKpisDto {
   @IsObject()
   @IsNotEmpty()
   kpis!: Prisma.InputJsonValue;
+}
+
+/** Setea la frecuencia de un servicio del proyecto. */
+export class UpdateServiceFrequencyDto {
+  @IsEnum(ServiceFrequency)
+  @IsNotEmpty()
+  frequency!: ServiceFrequency;
+}
+
+// ── Asignación de trabajadores a proyecto ──────────────────────────────────
+
+export class CreateAssignmentDto {
+  @IsString()
+  @IsNotEmpty()
+  userId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  roleKey!: string;
+
+  @IsEnum(ProjectWorkerStatus)
+  @IsOptional()
+  status?: ProjectWorkerStatus;
+
+  @IsISO8601()
+  @IsOptional()
+  startDate?: string;
+
+  @IsISO8601()
+  @IsOptional()
+  endDate?: string;
+}
+
+export class UpdateAssignmentDto {
+  @IsEnum(ProjectWorkerStatus)
+  @IsOptional()
+  status?: ProjectWorkerStatus;
+
+  @IsString()
+  @IsOptional()
+  roleKey?: string;
+
+  @IsISO8601()
+  @IsOptional()
+  startDate?: string;
+
+  @IsISO8601()
+  @IsOptional()
+  endDate?: string;
 }

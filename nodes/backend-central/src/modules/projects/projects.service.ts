@@ -2,7 +2,14 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { ScopeType, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
-import { CreateProjectDto, CreateServiceDto, UpdateProjectKpisDto } from './dto/projects.dto';
+import {
+  CreateAssignmentDto,
+  CreateProjectDto,
+  CreateServiceDto,
+  UpdateAssignmentDto,
+  UpdateProjectKpisDto,
+  UpdateServiceFrequencyDto,
+} from './dto/projects.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -31,14 +38,39 @@ export class ProjectsService {
       );
     }
 
+    // Validar referencias opcionales antes de abrir la transacción.
+    if (dto.faenaId) {
+      const faena = await this.prisma.faena.findUnique({ where: { id: dto.faenaId } });
+      if (!faena) {
+        throw new BadRequestException('La faena indicada no existe.');
+      }
+      if (faena.clientId !== dto.clientId) {
+        throw new BadRequestException('La faena no pertenece al cliente del proyecto.');
+      }
+    }
+    if (dto.projectAdminId) {
+      const admin = await this.prisma.user.findUnique({
+        where: { id: dto.projectAdminId },
+        select: { id: true },
+      });
+      if (!admin) {
+        throw new BadRequestException('El administrador de proyecto indicado no existe.');
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // 1. Crear el proyecto
       const project = await tx.project.create({
         data: {
           code: dto.code.toUpperCase(),
           name: dto.name,
+          description: dto.description ?? null,
           departmentId: dto.departmentId,
           clientId: dto.clientId,
+          contractNumber: dto.contractNumber ?? null,
+          projectType: dto.projectType ?? null,
+          faenaId: dto.faenaId ?? null,
+          projectAdminId: dto.projectAdminId ?? null,
           kpis: {},
         },
       });
@@ -88,7 +120,7 @@ export class ProjectsService {
    *  - Si es org_admin, ve todos.
    *  - Si no, ve proyectos donde tenga membresía directa (PROJECT) o indirecta (DEPARTMENT).
    */
-  async listAll(userId: string) {
+  async listAll(userId: string, faenaId?: string) {
     // 1. Verificar si es administrador global
     const globalAdmin = await this.prisma.membership.findFirst({
       where: {
@@ -100,6 +132,7 @@ export class ProjectsService {
 
     if (globalAdmin) {
       const projects = await this.prisma.project.findMany({
+        where: faenaId ? { faenaId } : {},
         include: {
           department: true,
           client: true,
@@ -126,13 +159,16 @@ export class ProjectsService {
       .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
       .map((m) => m.scopeId);
 
+    const accessClause = {
+      OR: [
+        { id: { in: projectIds } },
+        { departmentId: { in: departmentIds } },
+      ],
+    };
     const projects = await this.prisma.project.findMany({
-      where: {
-        OR: [
-          { id: { in: projectIds } },
-          { departmentId: { in: departmentIds } },
-        ],
-      },
+      // Solo envolvemos en AND cuando hay filtro por faena; sin filtro,
+      // la cláusula de acceso queda tal cual (evita cambiar la forma del where).
+      where: faenaId ? { AND: [accessClause, { faenaId }] } : accessClause,
       include: {
         department: true,
         client: true,
@@ -258,6 +294,139 @@ export class ProjectsService {
     return this.prisma.client.findMany({
       orderBy: { name: 'asc' },
     });
+  }
+
+  /**
+   * Usuarios elegibles como administrador de proyecto.
+   * Se listan los usuarios internos ACTIVOS (no usuarios de cliente): el admin
+   * de proyecto es un rol interno de GMT. El gate de acceso al endpoint lo pone
+   * el controller (project:create).
+   */
+  async listEligibleAdmins() {
+    return this.prisma.user.findMany({
+      where: { isClientUser: false, status: { not: 'SUSPENDED' } },
+      select: { id: true, firstName: true, lastName: true, email: true },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  }
+
+  /** Setea la frecuencia de un servicio del proyecto. */
+  async setServiceFrequency(projectId: string, serviceId: string, dto: UpdateServiceFrequencyDto) {
+    const service = await this.prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service || service.projectId !== projectId) {
+      throw new NotFoundException('El servicio no existe en este proyecto.');
+    }
+    return this.prisma.service.update({
+      where: { id: serviceId },
+      data: { frequency: dto.frequency },
+    });
+  }
+
+  // ── Asignación de trabajadores a proyecto ──────────────────────────────────
+
+  async listAssignments(projectId: string) {
+    await this.assertProjectExists(projectId);
+    return this.prisma.projectWorkerAssignment.findMany({
+      where: { projectId },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Asigna un trabajador al proyecto (persistencia en Postgres).
+   * TODO(FGA): materializar la tupla funcional del rol asignado sobre el
+   * proyecto (p. ej. (user:U, operator, project:P)) cuando se defina el mapeo
+   * roleKey→relación FGA de trabajadores. Por ahora la autorización de acceso
+   * a datos se resuelve vía Membership/roles existentes.
+   */
+  async createAssignment(projectId: string, dto: CreateAssignmentDto) {
+    await this.assertProjectExists(projectId);
+    await this.assertUserExists(dto.userId);
+
+    const existing = await this.prisma.projectWorkerAssignment.findFirst({
+      where: { projectId, userId: dto.userId, roleKey: dto.roleKey },
+    });
+    if (existing) {
+      throw new BadRequestException('El trabajador ya está asignado con ese rol en el proyecto.');
+    }
+
+    return this.prisma.projectWorkerAssignment.create({
+      data: {
+        projectId,
+        userId: dto.userId,
+        roleKey: dto.roleKey,
+        status: dto.status,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+  }
+
+  async updateAssignment(projectId: string, assignmentId: string, dto: UpdateAssignmentDto) {
+    const assignment = await this.getAssignmentInProject(projectId, assignmentId);
+
+    // El cambio de roleKey no debe colisionar con otra asignación del mismo
+    // usuario en el proyecto (@@unique([projectId, userId, roleKey])).
+    if (dto.roleKey && dto.roleKey !== assignment.roleKey) {
+      const clash = await this.prisma.projectWorkerAssignment.findFirst({
+        where: { projectId, userId: assignment.userId, roleKey: dto.roleKey },
+      });
+      if (clash) {
+        throw new BadRequestException('El trabajador ya está asignado con ese rol en el proyecto.');
+      }
+    }
+
+    return this.prisma.projectWorkerAssignment.update({
+      where: { id: assignmentId },
+      data: {
+        status: dto.status,
+        roleKey: dto.roleKey,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+  }
+
+  async removeAssignment(projectId: string, assignmentId: string) {
+    await this.getAssignmentInProject(projectId, assignmentId);
+    await this.prisma.projectWorkerAssignment.delete({ where: { id: assignmentId } });
+    return { success: true };
+  }
+
+  private async getAssignmentInProject(projectId: string, assignmentId: string) {
+    const assignment = await this.prisma.projectWorkerAssignment.findUnique({
+      where: { id: assignmentId },
+    });
+    if (!assignment || assignment.projectId !== projectId) {
+      throw new NotFoundException('La asignación no existe en este proyecto.');
+    }
+    return assignment;
+  }
+
+  private async assertProjectExists(projectId: string): Promise<void> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
+    if (!project) {
+      throw new NotFoundException('El proyecto no existe.');
+    }
+  }
+
+  private async assertUserExists(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) {
+      throw new BadRequestException('El usuario indicado no existe.');
+    }
   }
 
   private async injectCurrentKpi<T extends { id: string; kpis: unknown }>(project: T) {
