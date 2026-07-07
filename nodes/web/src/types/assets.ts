@@ -1,5 +1,11 @@
 export type AssetType = 'EQUIPO' | 'VEHICULO';
-export type AssetStatus = 'DISPONIBLE' | 'EN_USO' | 'MANTENIMIENTO' | 'BAJA';
+export type AssetStatus =
+  | 'DISPONIBLE'
+  | 'EN_USO'
+  | 'MANTENIMIENTO'
+  | 'BAJA'
+  | 'DEFECTUOSO'
+  | 'NO_DISPONIBLE';
 export type DocumentStatus = 'BORRADOR' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO';
 
 export interface AssetView {

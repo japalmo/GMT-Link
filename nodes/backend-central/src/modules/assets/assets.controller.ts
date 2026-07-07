@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UnauthorizedException,
   UploadedFile,
   UseInterceptors,
@@ -17,6 +18,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { AssetStatus, AssetType } from '@prisma/client';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
@@ -479,6 +481,24 @@ export class AssetsController {
   @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
   listChecklistSubmissions(@Param('id') id: string): Promise<ChecklistSubmissionView[]> {
     return this.assets.listChecklistSubmissions(id);
+  }
+
+  /**
+   * Genera y descarga un PDF con la plantilla + respuestas de una submission de
+   * checklist. Mismo permiso que ver el activo (`can_view_list`).
+   * Responde `application/pdf`.
+   */
+  @Get(':id/checklist/submissions/:submissionId/pdf')
+  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
+  async getChecklistSubmissionPdf(
+    @Param('id') id: string,
+    @Param('submissionId') submissionId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const pdf = await this.assets.generateChecklistSubmissionPdf(id, submissionId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="checklist-${submissionId}.pdf"`);
+    res.end(Buffer.from(pdf));
   }
 
   private requireUserId(authUser: AuthUser | undefined): string {

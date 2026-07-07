@@ -563,6 +563,8 @@ enum AssetStatus {
   EN_USO
   MANTENIMIENTO
   BAJA
+  DEFECTUOSO
+  NO_DISPONIBLE
 }
 
 model Asset {

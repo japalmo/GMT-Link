@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAssets } from '@/hooks/use-assets';
 import { useProjects } from '@/hooks/use-operations';
 import { listUsers } from '@/lib/api';
 import { useProfile } from '@/hooks/use-profile';
+import { useHasRole } from '@/hooks/use-has-role';
 import InsumosPage from '@/pages/insumos';
 import ProveedoresPage from '@/pages/proveedores';
 import {
@@ -75,9 +75,46 @@ interface UserOption {
   lastName: string;
 }
 
+type RecursosTab = 'equipos' | 'vehiculos' | 'insumos' | 'proveedores' | 'bodegas';
+
 export default function RecursosPage(): ReactNode {
-  const [activeTab, setActiveTab] = useState<'activos' | 'insumos' | 'proveedores' | 'bodegas'>('activos');
+  // Proveedores y Bodegas solo son visibles para roles de gestión (§ gating de
+  // demo). Equipos, Vehículos e Insumos son visibles para cualquier usuario.
+  const canManageSupplyChain = useHasRole(['org_admin', 'department_admin']);
+
+  const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+
+  // Si el usuario pierde el rol estando en una pestaña restringida, lo devolvemos
+  // a una pestaña pública (fail-closed) para no dejar contenido gateado a la vista.
+  useEffect(() => {
+    if (!canManageSupplyChain && (activeTab === 'proveedores' || activeTab === 'bodegas')) {
+      setActiveTab('equipos');
+    }
+  }, [canManageSupplyChain, activeTab]);
+
+  const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos';
+
+  const tabButton = (
+    tab: RecursosTab,
+    icon: ReactNode,
+    label: string,
+  ): ReactNode => (
+    <button
+      key={tab}
+      onClick={() => { setActiveTab(tab); setSelectedAssetId(null); }}
+      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+        activeTab === tab
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        {icon}
+        {label}
+      </span>
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto px-4 py-6">
@@ -92,68 +129,24 @@ export default function RecursosPage(): ReactNode {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border gap-2">
-        <button
-          onClick={() => { setActiveTab('activos'); setSelectedAssetId(null); }}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'activos'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Wrench className="size-4" />
-            Activos (Equipos/Vehículos)
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('insumos')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'insumos'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Package className="size-4" />
-            Insumos
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('proveedores')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'proveedores'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Building className="size-4" />
-            Proveedores
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('bodegas')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'bodegas'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <FileSpreadsheet className="size-4" />
-            Bodegas
-          </span>
-        </button>
+      <div className="flex flex-wrap border-b border-border gap-2">
+        {tabButton('equipos', <Wrench className="size-4" />, 'Equipos')}
+        {tabButton('vehiculos', <Car className="size-4" />, 'Vehículos')}
+        {tabButton('insumos', <Package className="size-4" />, 'Insumos')}
+        {canManageSupplyChain && tabButton('proveedores', <Building className="size-4" />, 'Proveedores')}
+        {canManageSupplyChain && tabButton('bodegas', <FileSpreadsheet className="size-4" />, 'Bodegas')}
       </div>
 
       {/* Tab Content */}
       <div className="mt-4">
-        {activeTab === 'activos' && (
+        {isAssetTab && (
           selectedAssetId ? (
             <AssetDetailView id={selectedAssetId} onBack={() => setSelectedAssetId(null)} />
           ) : (
-            <ActivosCatalogView onSelectAsset={setSelectedAssetId} />
+            <ActivosCatalogView
+              subsection={activeTab === 'vehiculos' ? 'vehiculos' : 'equipos'}
+              onSelectAsset={setSelectedAssetId}
+            />
           )
         )}
 
@@ -161,11 +154,11 @@ export default function RecursosPage(): ReactNode {
           <InsumosPage />
         )}
 
-        {activeTab === 'proveedores' && (
+        {canManageSupplyChain && activeTab === 'proveedores' && (
           <ProveedoresPage />
         )}
 
-        {activeTab === 'bodegas' && (
+        {canManageSupplyChain && activeTab === 'bodegas' && (
           <InsumosPage />
         )}
       </div>
@@ -178,16 +171,21 @@ export default function RecursosPage(): ReactNode {
    ========================================================================== */
 
 interface ActivosCatalogViewProps {
+  /** Subsección dedicada: 'equipos' filtra type=EQUIPO, 'vehiculos' type=VEHICULO. */
+  subsection: 'equipos' | 'vehiculos';
   onSelectAsset: (id: string) => void;
 }
 
-function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNode {
+function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewProps): ReactNode {
   const { profile } = useProfile();
   const { assets, loading, error, create, takeUse, releaseUse } = useAssets();
   const { projects } = useProjects();
   const [users, setUsers] = useState<UserOption[]>([]);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = searchParams.get('tab') || 'equipos';
+  const isVehicles = subsection === 'vehiculos';
+
+  // Botón "Nuevo" gateado por rol de gestión (useHasRole); el tipo del alta se
+  // fija según la subsección activa.
+  const canCreate = useHasRole(['org_admin', 'department_admin', 'project_creator']);
 
   // Search & Filter state
   const [search, setSearch] = useState('');
@@ -232,7 +230,7 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
       asset.code.toLowerCase().includes(search.toLowerCase()) ||
       (asset.description && asset.description.toLowerCase().includes(search.toLowerCase()));
 
-    const matchesTab = currentTab === 'vehiculos' ? asset.type === 'VEHICULO' : asset.type === 'EQUIPO';
+    const matchesTab = isVehicles ? asset.type === 'VEHICULO' : asset.type === 'EQUIPO';
     const matchesStatus = filterStatus === 'ALL' || asset.status === filterStatus;
     const matchesProj = filterProj === 'ALL' || asset.projectId === filterProj;
 
@@ -328,6 +326,10 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
         return <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">Mantenimiento</Badge>;
       case 'BAJA':
         return <Badge className="bg-rose-500/10 text-rose-500 border-rose-500/20">De Baja</Badge>;
+      case 'DEFECTUOSO':
+        return <Badge className="bg-orange-500/10 text-orange-500 border-orange-500/20">Defectuoso</Badge>;
+      case 'NO_DISPONIBLE':
+        return <Badge className="bg-zinc-500/10 text-zinc-400 border-zinc-500/20">No Disponible</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -360,6 +362,8 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
               <option value="EN_USO">En Uso</option>
               <option value="MANTENIMIENTO">En Mantenimiento</option>
               <option value="BAJA">De Baja</option>
+              <option value="DEFECTUOSO">Defectuoso</option>
+              <option value="NO_DISPONIBLE">No Disponible</option>
             </select>
 
             <select
@@ -376,53 +380,33 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
         </div>
 
         <div className="flex gap-2">
-          {isAdmin && (
-            <Button onClick={() => setCreateModalOpen(true)}>
+          {canCreate && (
+            <Button
+              onClick={() => {
+                setNewType(isVehicles ? 'VEHICULO' : 'EQUIPO');
+                setCreateModalOpen(true);
+              }}
+            >
               <Plus className="size-4 mr-2" />
-              Nuevo Activo
+              {isVehicles ? 'Nuevo Vehículo' : 'Nuevo Equipo'}
             </Button>
           )}
         </div>
       </div>
 
-      {/* Visual Subtabs for Equipos / Vehiculos */}
-      <div className="flex border-b border-border gap-2">
-        <button
-          onClick={() => {
-            setSearchParams((prev) => {
-              prev.set('tab', 'equipos');
-              return prev;
-            });
-          }}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            currentTab === 'equipos'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Wrench className="size-4" />
-            Equipos
-          </span>
-        </button>
-        <button
-          onClick={() => {
-            setSearchParams((prev) => {
-              prev.set('tab', 'vehiculos');
-              return prev;
-            });
-          }}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            currentTab === 'vehiculos'
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Car className="size-4" />
-            Vehículos
-          </span>
-        </button>
+      {/* Encabezado de la subsección dedicada (Equipos o Vehículos) */}
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {isVehicles ? <Car className="size-5" /> : <Wrench className="size-5" />}
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">{isVehicles ? 'Vehículos de Flota' : 'Equipos e Instrumentos'}</h2>
+          <p className="text-xs text-muted-foreground">
+            {isVehicles
+              ? 'Camionetas y vehículos con checklist de camioneta, telemetría y kilometraje.'
+              : 'Instrumentos, herramientas y equipos con ciclos de carga y calibración.'}
+          </p>
+        </div>
       </div>
 
       {/* Catalog Render (Table View) */}
@@ -449,7 +433,7 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
                 <TableHead>Estado</TableHead>
                 <TableHead>Proyecto</TableHead>
                 <TableHead>Responsable</TableHead>
-                {currentTab === 'equipos' ? (
+                {!isVehicles ? (
                   <>
                     <TableHead>Ciclos de Carga</TableHead>
                     <TableHead>Próxima Calibración</TableHead>
@@ -490,7 +474,7 @@ function ActivosCatalogView({ onSelectAsset }: ActivosCatalogViewProps): ReactNo
                         ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName.charAt(0)}.`
                         : 'Sin asignar'}
                     </TableCell>
-                    {currentTab === 'equipos' ? (
+                    {!isVehicles ? (
                       <>
                         <TableCell>{meta.chargeCycles !== undefined ? meta.chargeCycles : 'N/A'}</TableCell>
                         <TableCell>
@@ -733,6 +717,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     reviewTemplate,
     submitChecklistAnswers,
     listSubmissions,
+    getSubmissionPdf,
     submitTelemetryAnswers,
   } = useAssets();
 
@@ -759,7 +744,10 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   const [newAssignId, setNewAssignId] = useState('');
 
   // Tabs for detailed view
-  const [detailTab, setDetailTab] = useState<'documentos' | 'accesorios' | 'checklist' | 'telemetria'>('documentos');
+  const [detailTab, setDetailTab] = useState<'documentos' | 'accesorios' | 'checklist' | 'historial' | 'telemetria'>('documentos');
+
+  // Descarga de PDF de una inspección (submissionId en curso).
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [rejectingTpl, setRejectingTpl] = useState(false);
@@ -1127,12 +1115,58 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
         };
       });
 
-      await submitChecklistAnswers(id, { templateId: template.id, answers });
+      const submission = await submitChecklistAnswers(id, { templateId: template.id, answers });
       setExecutionAnswers({});
       void loadData();
-      toast.success('Checklist enviado correctamente.');
+      // Confirmamos que quedó en el historial y ofrecemos la descarga del PDF.
+      toast.success('Checklist enviado y registrado en el historial.', {
+        action: {
+          label: 'Descargar PDF',
+          onClick: () => void handleDownloadPdf(submission.id),
+        },
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al enviar checklist.');
+    }
+  };
+
+  // Descarga el PDF de una inspección (endpoint GET .../submissions/:sid/pdf),
+  // obtiene el blob y dispara la descarga en el navegador vía objectURL.
+  const handleDownloadPdf = async (submissionId: string) => {
+    if (downloadingPdfId) return;
+    setDownloadingPdfId(submissionId);
+    try {
+      const blob = await getSubmissionPdf(id, submissionId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `checklist-${asset?.code ?? id}-${submissionId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al descargar el PDF.');
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  };
+
+  // "Reportar uso": lleva al operador al checklist de operación. Si es vehículo y
+  // aún no hay plantilla configurada, precarga la plantilla estándar de camioneta.
+  const goToChecklist = (loadVehicleTemplate = false) => {
+    setDetailTab('checklist');
+    setShowTplConfig(false);
+    if (loadVehicleTemplate && (!template || template.items.length === 0)) {
+      setShowTplConfig(true);
+      setTplItems([
+        { id: '1', label: 'Motor: Nivel de aceite e inspección visual', type: 'YES_NO', required: true },
+        { id: '2', label: 'Frenos: Nivel de líquido e inspección visual', type: 'YES_NO', required: true },
+        { id: '3', label: 'Neumáticos: Presión y estado general', type: 'YES_NO', required: true },
+        { id: '4', label: 'Luces: Altas, bajas, intermitentes y freno', type: 'YES_NO', required: true },
+        { id: 'kilometraje', label: 'Kilometraje actual del vehículo (odómetro)', type: 'NUMBER', required: true },
+        { id: '6', label: 'Observaciones generales o novedades', type: 'TEXT', required: false },
+      ]);
     }
   };
 
@@ -1279,7 +1313,25 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               <div>
                 <p className="text-xs text-muted-foreground">Control de disputa en vivo</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => goToChecklist(false)}
+                >
+                  <ClipboardCheck className="size-3.5 mr-1.5" />
+                  Reportar uso
+                </Button>
+                {asset.type === 'VEHICULO' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => goToChecklist(true)}
+                  >
+                    <ListTodo className="size-3.5 mr-1.5" />
+                    Checklist de camioneta
+                  </Button>
+                )}
                 {asset.status === 'DISPONIBLE' && (
                   <Button size="sm" onClick={() => void handleTakeUse()} disabled={actioning !== null}>
                     {actioning === 'takeUse' ? 'Tomando...' : 'Tomar en Uso'}
@@ -1325,6 +1377,16 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               }`}
             >
               <ListTodo className="size-3.5" /> Checklist y Control
+            </button>
+            <button
+              onClick={() => setDetailTab('historial')}
+              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                detailTab === 'historial'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <History className="size-3.5" /> Historial ({history.length})
             </button>
             {asset.type === 'VEHICULO' && (
               <button
@@ -1929,12 +1991,66 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                                 </div>
                               ))}
                             </div>
+
+                            <div className="flex justify-end mt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px]"
+                                disabled={downloadingPdfId !== null}
+                                onClick={() => void handleDownloadPdf(sub.id)}
+                              >
+                                <FileText className="size-3 mr-1.5" />
+                                {downloadingPdfId === sub.id ? 'Generando...' : 'Descargar PDF'}
+                              </Button>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Historial de Uso Tab */}
+          {detailTab === 'historial' && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <History className="size-4 text-primary" /> Historial de Uso
+                </CardTitle>
+                <CardDescription>
+                  Bitácora de eventos del activo: tomas, liberaciones, checklists y cambios de estado.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {history.length === 0 ? (
+                  <p className="text-center text-xs text-muted-foreground border border-dashed py-8 rounded">
+                    No hay registros de uso para este activo todavía.
+                  </p>
+                ) : (
+                  <div className="relative border-l border-border ml-2 pl-4 space-y-4 py-2">
+                    {history.map((h) => (
+                      <div key={h.id} className="relative text-xs">
+                        <span className="absolute -left-[21px] top-1 size-2 rounded-full bg-primary border border-background" />
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-[10px] py-0">{h.type}</Badge>
+                            <span className="font-medium text-foreground">{h.description}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                            <span>Por {h.actor ? `${h.actor.firstName} ${h.actor.lastName}` : 'Sistema'}</span>
+                            <span className="font-mono">
+                              {new Date(h.createdAt).toLocaleDateString('es-CL')} {new Date(h.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -2319,6 +2435,8 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                   >
                     <option value="DISPONIBLE">Disponible</option>
                     <option value="MANTENIMIENTO">En Mantenimiento</option>
+                    <option value="DEFECTUOSO">Defectuoso</option>
+                    <option value="NO_DISPONIBLE">No Disponible</option>
                     <option value="BAJA">De Baja / Retirado</option>
                   </select>
                 </div>

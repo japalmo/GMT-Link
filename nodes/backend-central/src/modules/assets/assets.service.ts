@@ -7,6 +7,7 @@ import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { CreateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
+import { composeChecklistPdf } from './checklist-pdf.util';
 import {
   AssetDocumentView,
   AssetHistoryEntryView,
@@ -391,8 +392,15 @@ export class AssetsService {
       throw new NotFoundException('El activo no existe.');
     }
 
-    // Si transiciona a MANTENIMIENTO o BAJA y estaba en uso, liberarlo primero
-    const needsRelease = (dto.status === AssetStatus.MANTENIMIENTO || dto.status === AssetStatus.BAJA) && asset.inUseById;
+    // Si transiciona a un estado no operativo (MANTENIMIENTO/BAJA/DEFECTUOSO/NO_DISPONIBLE)
+    // y estaba en uso, liberarlo primero.
+    const nonOperationalStatuses: AssetStatus[] = [
+      AssetStatus.MANTENIMIENTO,
+      AssetStatus.BAJA,
+      AssetStatus.DEFECTUOSO,
+      AssetStatus.NO_DISPONIBLE,
+    ];
+    const needsRelease = nonOperationalStatuses.includes(dto.status) && asset.inUseById;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.asset.update({
@@ -1163,6 +1171,72 @@ export class AssetsService {
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.toSubmissionView(r));
+  }
+
+  /**
+   * Genera un PDF con la plantilla + respuestas de una ChecklistSubmission.
+   * Devuelve los bytes (application/pdf). Lanza 404 si la submission no existe
+   * o no pertenece al activo indicado.
+   */
+  async generateChecklistSubmissionPdf(assetId: string, submissionId: string): Promise<Uint8Array> {
+    const submission = await this.prisma.checklistSubmission.findUnique({
+      where: { id: submissionId },
+      include: { user: true, template: true, asset: true },
+    });
+    if (!submission || submission.assetId !== assetId) {
+      throw new NotFoundException('El checklist enviado no corresponde a este activo.');
+    }
+
+    const templateItems = (submission.template.items as unknown as Record<string, unknown>[]) ?? [];
+    const answers = (submission.answers as unknown as Record<string, unknown>[]) ?? [];
+
+    // Indexa respuestas por itemId para resolver el valor de cada ítem de la plantilla.
+    const answerByItemId = new Map<string, Record<string, unknown>>();
+    for (const ans of answers) {
+      const key = ans.itemId ?? ans.id;
+      if (key !== undefined && key !== null) {
+        answerByItemId.set(String(key), ans);
+      }
+    }
+
+    // Construye una fila por cada ítem de la plantilla (preserva orden y etiquetas).
+    // Si la plantilla no tiene ítems, cae a las respuestas crudas.
+    const source = templateItems.length > 0 ? templateItems : answers;
+    const rows = source.map((item) => {
+      const itemId = item.id ?? item.itemId;
+      const ans = itemId !== undefined && itemId !== null ? answerByItemId.get(String(itemId)) : undefined;
+      const effective = ans ?? item;
+      const label = String(item.label ?? item.itemId ?? item.id ?? 'Ítem sin nombre');
+      const comment = effective.comment !== undefined && effective.comment !== null && String(effective.comment) !== ''
+        ? String(effective.comment)
+        : undefined;
+      return {
+        label,
+        valueLabel: this.formatChecklistValue(effective.value),
+        comment,
+      };
+    });
+
+    const submittedByName = submission.user
+      ? `${submission.user.firstName} ${submission.user.lastName}`.trim()
+      : 'Desconocido';
+
+    return composeChecklistPdf({
+      assetCode: submission.asset.code,
+      assetName: submission.asset.name,
+      templateName: submission.template.name,
+      submittedBy: submittedByName,
+      submittedAt: submission.createdAt.toISOString(),
+      rows,
+    });
+  }
+
+  /** Formatea el valor de una respuesta a una etiqueta legible para el PDF. */
+  private formatChecklistValue(value: unknown): string {
+    if (value === undefined || value === null || value === '') return '-';
+    if (value === true || value === 'yes' || value === 'ok') return 'Sí';
+    if (value === false || value === 'no' || value === 'failed') return 'No';
+    return String(value);
   }
 
   async updateTelemetry(id: string, userId: string, dto: SubmitTelemetryDto): Promise<AssetView> {

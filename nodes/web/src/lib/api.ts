@@ -1392,6 +1392,42 @@ export function listChecklistSubmissions(id: string): Promise<ChecklistSubmissio
   return request<ChecklistSubmissionView[]>(`/assets/${encodeURIComponent(id)}/checklist/submissions`);
 }
 
+/**
+ * `GET /assets/:id/checklist/submissions/:submissionId/pdf`: genera en el
+ * SERVIDOR el PDF de una inspección de checklist (plantilla + respuestas) y lo
+ * devuelve como `Blob` para descargar. Mismo permiso que ver el activo. El
+ * llamador arma el objeto de descarga (`URL.createObjectURL`).
+ */
+export async function downloadChecklistPdf(
+  assetId: string,
+  submissionId: string,
+): Promise<Blob> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${API_URL}/assets/${encodeURIComponent(assetId)}/checklist/submissions/${encodeURIComponent(submissionId)}/pdf`,
+      { headers },
+    );
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', 0);
+  }
+
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(extractMessage(body, `Error ${res.status} al generar el PDF.`), res.status);
+  }
+  return res.blob();
+}
+
 export function submitTelemetry(
   id: string,
   dto: { latitude: number; longitude: number; speed: number },
