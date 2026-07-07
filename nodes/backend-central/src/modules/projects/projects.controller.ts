@@ -17,6 +17,7 @@ import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { FgaService } from '../../fga/fga.service';
+import { ORG_ID, ORG_OBJECT_TYPE } from '../../common/org.constant';
 import { ProjectsService } from './projects.service';
 import {
   CreateAssignmentDto,
@@ -46,14 +47,22 @@ export class ProjectsController {
   ) {
     const userId = this.requireUserId(authUser);
 
-    // Verificar permiso FGA
-    const isDepartmentAdmin = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'admin',
-      object: `department:${dto.departmentId}`,
-    });
+    // Un admin de la ORGANIZACIÓN puede crear proyectos en cualquier departamento;
+    // el admin del departamento específico también. (Verificación FGA.)
+    const [isOrgAdmin, isDepartmentAdmin] = await Promise.all([
+      this.fga.check({
+        user: `user:${userId}`,
+        relation: 'admin',
+        object: `${ORG_OBJECT_TYPE}:${ORG_ID}`,
+      }),
+      this.fga.check({
+        user: `user:${userId}`,
+        relation: 'admin',
+        object: `department:${dto.departmentId}`,
+      }),
+    ]);
 
-    if (!isDepartmentAdmin) {
+    if (!isOrgAdmin && !isDepartmentAdmin) {
       throw new ForbiddenException(
         'No tienes permiso para crear proyectos en este departamento.',
       );

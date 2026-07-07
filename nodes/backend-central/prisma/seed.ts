@@ -140,6 +140,18 @@ const ROLES: ReadonlyArray<RoleDef> = [
   },
 ];
 
+/**
+ * Departamentos internos de GMT (agrupan proyectos administrativamente). Se
+ * siembran idempotentes para que exista al menos uno al crear proyectos: el
+ * `admin` de un departamento deriva del `admin` de la organización (model.fga),
+ * así que el org_admin es admin de todos.
+ */
+const DEPARTMENTS = [
+  { code: 'OPS', name: 'Operaciones' },
+  { code: 'GEO', name: 'Geofísica y Geotecnia' },
+  { code: 'TOP', name: 'Topografía' },
+];
+
 async function main(): Promise<void> {
   for (const p of PERMISSIONS) {
     const data = {
@@ -169,6 +181,15 @@ async function main(): Promise<void> {
     }
   }
   console.log(`Roles asegurados: ${ROLES.map((r) => r.key).join(', ')}`);
+
+  for (const d of DEPARTMENTS) {
+    await prisma.department.upsert({
+      where: { code: d.code },
+      update: { name: d.name },
+      create: { code: d.code, name: d.name },
+    });
+  }
+  console.log(`Departamentos asegurados: ${DEPARTMENTS.length}`);
   console.log(`Bundles rol→permiso: ${await prisma.rolePermission.count()}`);
 }
 

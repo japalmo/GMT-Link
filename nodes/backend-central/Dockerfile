@@ -27,5 +27,7 @@ RUN pnpm --filter @gmt-platform/backend-central build
 ENV NODE_ENV=production
 WORKDIR /app/nodes/backend-central
 
-# Release + arranque: aplica migraciones y levanta. PORT lo inyecta Railway.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node dist/main.js"]
+# Release + arranque: migraciones + seed idempotente del catálogo de permisos/roles/
+# departamentos (para que cambios de permisos lleguen a prod) + levanta. El seed es
+# no-fatal (no debe tumbar el arranque si algo falla). PORT lo inyecta Railway.
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && (pnpm exec prisma db seed || echo 'db seed failed, continuing') && node dist/main.js"]
