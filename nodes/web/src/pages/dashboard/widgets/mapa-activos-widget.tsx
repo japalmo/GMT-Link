@@ -7,7 +7,6 @@ import type { AssetView } from '@/types/assets';
 import { WidgetShell } from './widget-shell';
 
 import type L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 /** Mensaje legible de error. */
 function toMessage(error: unknown, fallback: string): string {
@@ -32,8 +31,10 @@ export function MapaActivosWidget(): ReactNode {
   const markersRef = useRef<L.Marker[]>([]);
 
   useEffect(() => {
-    import('leaflet').then((module) => {
-      setLModule(module.default);
+    // Carga bajo demanda: ni el JS ni el CSS de Leaflet entran al bundle inicial.
+    // El CSS se importa dentro del mismo import() dinámico que el módulo.
+    Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')]).then(([module]) => {
+      if (mountedRef.current) setLModule(module.default);
     });
   }, []);
 

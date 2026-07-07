@@ -112,35 +112,95 @@ export function useAssets(): UseAssetsResult {
     void load();
   }, [load]);
 
+  // Reemplaza (o inserta) un activo en el estado local sin refetch total.
+  const upsertAsset = useCallback((asset: AssetView) => {
+    if (!mountedRef.current) return;
+    setAssets((prev) => {
+      const idx = prev.findIndex((a) => a.id === asset.id);
+      if (idx === -1) return [asset, ...prev];
+      const next = prev.slice();
+      next[idx] = asset;
+      return next;
+    });
+  }, []);
+
   const create = useCallback(async (input: CreateAssetInput) => {
     const asset = await createAsset(input);
-    void load();
+    upsertAsset(asset);
     return asset;
-  }, [load]);
+  }, [upsertAsset]);
 
   const updateStatus = useCallback(async (id: string, status: AssetStatus, description?: string) => {
-    const asset = await updateAssetStatus(id, status, description);
-    void load();
-    return asset;
-  }, [load]);
+    let previous: AssetView[] = [];
+    if (mountedRef.current) {
+      setAssets((prev) => {
+        previous = prev;
+        return prev.map((a) => (a.id === id ? { ...a, status } : a));
+      });
+    }
+    try {
+      const asset = await updateAssetStatus(id, status, description);
+      upsertAsset(asset);
+      return asset;
+    } catch (err) {
+      if (mountedRef.current) setAssets(previous);
+      throw err;
+    }
+  }, [upsertAsset]);
 
   const assign = useCallback(async (id: string, assignedToId: string | null) => {
-    const asset = await assignAsset(id, assignedToId);
-    void load();
-    return asset;
-  }, [load]);
+    let previous: AssetView[] = [];
+    if (mountedRef.current) {
+      setAssets((prev) => {
+        previous = prev;
+        return prev.map((a) => (a.id === id ? { ...a, assignedToId } : a));
+      });
+    }
+    try {
+      const asset = await assignAsset(id, assignedToId);
+      upsertAsset(asset);
+      return asset;
+    } catch (err) {
+      if (mountedRef.current) setAssets(previous);
+      throw err;
+    }
+  }, [upsertAsset]);
 
   const takeUse = useCallback(async (id: string) => {
-    const asset = await takeAssetUse(id);
-    void load();
-    return asset;
-  }, [load]);
+    let previous: AssetView[] = [];
+    if (mountedRef.current) {
+      setAssets((prev) => {
+        previous = prev;
+        return prev;
+      });
+    }
+    try {
+      const asset = await takeAssetUse(id);
+      upsertAsset(asset);
+      return asset;
+    } catch (err) {
+      if (mountedRef.current) setAssets(previous);
+      throw err;
+    }
+  }, [upsertAsset]);
 
   const releaseUse = useCallback(async (id: string) => {
-    const asset = await releaseAssetUse(id);
-    void load();
-    return asset;
-  }, [load]);
+    let previous: AssetView[] = [];
+    if (mountedRef.current) {
+      setAssets((prev) => {
+        previous = prev;
+        return prev;
+      });
+    }
+    try {
+      const asset = await releaseAssetUse(id);
+      upsertAsset(asset);
+      return asset;
+    } catch (err) {
+      if (mountedRef.current) setAssets(previous);
+      throw err;
+    }
+  }, [upsertAsset]);
 
   const uploadDoc = useCallback(async (id: string, name: string, type: string, file: File, expirationDate?: string) => {
     const doc = await uploadAssetDocument(id, name, type, file, expirationDate);

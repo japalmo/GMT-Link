@@ -18,6 +18,42 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/three/') || id.includes('\\three\\')) return 'vendor-three';
+          if (
+            id.includes('/leaflet/') ||
+            id.includes('\\leaflet\\') ||
+            id.includes('/react-leaflet/') ||
+            id.includes('\\react-leaflet\\')
+          ) {
+            return 'vendor-leaflet';
+          }
+          if (
+            id.includes('/react-router-dom/') ||
+            id.includes('\\react-router-dom\\') ||
+            id.includes('/react-router/') ||
+            id.includes('\\react-router\\')
+          ) {
+            return 'vendor-router';
+          }
+          if (
+            id.includes('/react-dom/') ||
+            id.includes('\\react-dom\\') ||
+            id.includes('/react/') ||
+            id.includes('\\react\\')
+          ) {
+            return 'vendor-react';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
