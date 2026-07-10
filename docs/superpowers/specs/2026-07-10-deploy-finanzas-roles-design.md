@@ -39,7 +39,7 @@ Tailwind v4 + shadcn/ui (`nodes/web`); auth propia JWT+bcrypt; `PermissionServic
 | **1b · Usuarios de prueba** | 1 mockup por rol; el owner ingresa con cada uno | deploy `web-dev` |
 | **1c · Ciclo prueba↔corrección** | el owner prueba, se corrige, hasta conforme | validado |
 | **2 · Proyectos (simplificado)** | forms cliente/faena/proyecto · mapa satelital faena · cards trabajador+detalle · docs HSE/Calidad · servicios con encargados. Oculto, habilitable por permiso | spec propio |
-| **3 · Cuentas reales + email** | usuarios reales por lote · plantilla de correo (con owner) · envío de credenciales · promover `web-dev`→`web` | deploy real |
+| **3 · Cuentas reales + email** *(diferida, solo con OK explícito del owner)* | crear los usuarios reales (Humberto, John, …) por lote · plantilla de correo (con owner) · envío de credenciales · promover `web-dev`→`web` | deploy real |
 | **∥ Infra/Seguridad** | repo→privado + branch protection · 2ª web (dev) · scrub cred dev + `.gitignore` + rotar creds legacy · SMTP en Railway · alinear `R2_*` | base segura |
 | **∥ V-Metric** | cablear el shell nuevo a Railway `/metrics` | mini-spec propio |
 
@@ -233,11 +233,16 @@ Botón en subsección Reembolsos (permiso `finance:print:batch`, exclusivo finan
 ---
 
 ## 6. Usuarios de prueba (Fase 1b) + ciclo (1c)
-- Seed/script que crea **1 usuario mockup por rol** (admin_contrato, trabajador, admin_finanzas,
-  analista_rh, analista_finanzas, asesor_hse, gerencia_proyectos, gerencia_rh, gerencia_general,
-  admin_ti) con claves conocidas (solo en `web-dev`), + solicitudes de reembolso/HE de ejemplo.
-- El owner ingresa con cada uno y valida permisos/UX. Se corrige en ciclo hasta conforme.
-- **No** se envían emails en esta fase.
+- **IMPORTANTE: estas son cuentas MOCKUP de prueba, con identidades FICTICIAS — NO son las cuentas
+  reales.** Ej: `mock_admin_contrato` / `mock_trabajador` / `mock_admin_finanzas` … con emails
+  ficticios (p.ej. `mock+admincontrato@example.test`) y claves conocidas, **solo en `web-dev`**.
+  Sirven exclusivamente para que el owner valide cada rol. **No se crean todavía las cuentas reales**
+  (Humberto Leiva, John Santa, etc. — esas viven en Fase 3, diferidas y solo con OK explícito del owner).
+- Seed/script que crea **1 mockup por rol** (admin_contrato, trabajador, admin_finanzas, analista_rh,
+  analista_finanzas, asesor_hse, gerencia_proyectos, gerencia_rh, gerencia_general, admin_ti) + solicitudes
+  de reembolso/HE de ejemplo (data de juguete).
+- El owner ingresa con cada mockup y valida permisos/UX. Se corrige en ciclo hasta conforme.
+- **No** se envían emails en esta fase. **No** se tocan datos ni identidades reales.
 
 ---
 
