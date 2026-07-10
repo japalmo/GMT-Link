@@ -960,3 +960,93 @@ model OtpCode {
   @@index([email])
   @@map("otp_codes")
 }
+
+// ============ V-METRIC — DATA HISTÓRICA (migrada de Firestore) ============
+// Tablas standalone: preservan tal cual el export de Firestore de V-Metric.
+// NO tienen FKs a modelos GMT; `usuario`/`uid` son identidades históricas de V-Metric,
+// NO se relacionan con User. `sourceId` = id de documento Firestore (idempotencia por upsert).
+// Los valores numéricos venían como string en Firestore → se parsean a Float al importar.
+
+// Reservorios de V-Metric (Firestore: reservorios/{codigo}).
+model VmetricReservorio {
+  id           String    @id @default(cuid())
+  sourceId     String    @unique // _id de Firestore (== codigo, p.ej. "R2")
+  codigo       String
+  demBlobPath  String? // dem_blob_path
+  demUpdatedAt DateTime? // dem_updated_at
+  demFilename  String? // dem_filename
+  demUrl       String? // dem_url
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("vmetric_reservorios")
+}
+
+// Cubicaciones (cálculos de volumen) de V-Metric (Firestore: cubicaciones/{id}).
+model VmetricCubicacion {
+  id                   String    @id @default(cuid())
+  sourceId             String    @unique // _id de Firestore
+  reservorioCodigo     String? // reservorio_codigo
+  cotaSal              Float? // cota_sal
+  cotaAgua             Float? // cota_agua
+  fraccionOcluida      Float? // fraccion_ocluida
+  volSalM3             Float? // vol_sal_m3
+  volSalmueraLibreM3   Float? // vol_salmuera_libre_m3
+  volSalmueraOcluidaM3 Float? // vol_salmuera_ocluida_m3
+  volSalmueraTotalM3   Float? // vol_salmuera_total_m3
+  areaEspejoM2         Float? // area_espejo_m2
+  precisionCeldaM      Float? // precision_celda_m
+  origen               String? // origen
+  versionModelo        String? // version_modelo
+  demFilename          String? // dem_filename
+  demIdLocal           Float? // dem_id_local
+  usuario              String? // usuario histórico V-Metric (NO FK a User)
+  uid                  String? // uid histórico V-Metric (NO FK a User)
+  deleted              Boolean   @default(false)
+  deletedBy            String? // deleted_by
+  deletedAt            DateTime? // deleted_at
+  sourceCreatedAt      DateTime? // created_at (de Firestore)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([reservorioCodigo])
+  @@map("vmetric_cubicaciones")
+}
+
+// DEMs (modelos digitales de elevación) de V-Metric (Firestore: dems/{id}).
+// Los .tif ya están en el bucket R2 `vmetric-dems` bajo la key `r2Key` (== blob_path).
+model VmetricDem {
+  id               String    @id @default(cuid())
+  sourceId         String    @unique // _id de Firestore
+  reservorioCodigo String? // reservorio_codigo
+  archivo          String? // archivo
+  r2Key            String? // blob_path == key en R2 (null en DEMs históricos que solo tenían storage_url)
+  r2Url            String? // storage_url (URL pública histórica, opcional)
+  demId            Float? // dem_id
+  drone            String? // drone (metadato opcional presente en algunos DEMs)
+  usuario          String? // usuario histórico V-Metric (NO FK a User)
+  uid              String? // uid histórico V-Metric (NO FK a User)
+  sourceCreatedAt  DateTime? // created_at (de Firestore)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([reservorioCodigo])
+  @@map("vmetric_dems")
+}
+
+// Cotas de referencia por reservorio (Firestore: cotas_referencia/{id}, p.ej. "R2_cota_sal_ref").
+model VmetricCotaReferencia {
+  id           String    @id @default(cuid())
+  sourceId     String    @unique // _id de Firestore
+  reservorio   String? // reservorio
+  nombreCota   String? // nombreCota
+  valorCota    Float? // valorCota
+  operador     String? // operador
+  observacion  String? // observacion
+  datetimeCota DateTime? // datetimeCota
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([reservorio])
+  @@map("vmetric_cotas_referencia")
+}
