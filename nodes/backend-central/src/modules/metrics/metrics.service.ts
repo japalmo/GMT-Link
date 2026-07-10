@@ -4,6 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email.service';
 import { FgaService } from '../../fga/fga.service';
 import { sanitizeFilename } from '../../common/storage/local-storage.service';
+import { StorageService } from '../../common/storage/storage.service';
+import { R2StorageService } from '../../common/storage/r2-storage.service';
 import {
   CreateElementDto,
   CreatePhaseDto,
@@ -35,7 +37,18 @@ export class MetricsService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly fga: FgaService,
+    private readonly storage: StorageService,
   ) {}
+
+  /**
+   * ¿El backend de almacenamiento activo es Cloudflare R2 (durable)? Cuando lo es,
+   * el flujo de DEMs entrega URLs firmadas de R2 (PUT/GET) en vez del mecanismo de
+   * token+disco local. El narrowing por `instanceof` da acceso tipado a los métodos
+   * específicos de R2.
+   */
+  private get r2(): R2StorageService | null {
+    return this.storage instanceof R2StorageService ? this.storage : null;
+  }
 
   // ── Resolución de projectId para autorización (D3) ──────────────────────────
   // Los endpoints del cliente PyQt no llevan projectId directo; estos resolvers
@@ -511,6 +524,18 @@ export class MetricsService {
   }
 
   async createDemUploadUrl(body: { reservorio_codigo: string; filename: string }) {
+    // Con R2 activo: URL firmada PUT directa a R2 bajo `dems/<reservorio>/<archivo>`.
+    // El cliente de escritorio sube el .tif directo a R2, sin pasar por el backend.
+    const r2 = this.r2;
+    if (r2) {
+      const key = this.demKey(body.reservorio_codigo, body.filename);
+      return {
+        upload_url: await r2.createPresignedPutUrl(key),
+        blob_path: key,
+      };
+    }
+
+    // Sin R2 (dev): mecanismo de token + subida a disco local (comportamiento previo).
     const uuid = randomUUID();
     const token = randomUUID();
     const cleanFilename = `${uuid}-${sanitizeFilename(body.filename)}`;
@@ -522,6 +547,12 @@ export class MetricsService {
       upload_url: `${baseUrl}/metrics/upload?token=${token}`,
       blob_path: `${baseUrl}/metrics/uploads/${cleanFilename}`,
     };
+  }
+
+  /** Construye la key R2 de un DEM: `dems/<reservorio>/<archivo>` (sanitizada, sin traversal). */
+  private demKey(reservorioCodigo: string, filename: string): string {
+    const safeReservorio = reservorioCodigo.replace(/[^a-zA-Z0-9_-]/g, '') || 'misc';
+    return `dems/${safeReservorio}/${sanitizeFilename(filename)}`;
   }
 
   async registerDemMetadata(userId: string, body: { reservorio_codigo: string; archivo: string; blob_path: string; phase_code?: string }) {
@@ -597,6 +628,16 @@ export class MetricsService {
   }
 
   async getDemDownloadUrl(body: { blob_path: string }) {
+    // Con R2 activo y un blob_path que es una key (no una URL absoluta legacy),
+    // firmamos una URL GET de descarga directa de R2 con vigencia acotada.
+    const r2 = this.r2;
+    if (r2 && !/^https?:\/\//i.test(body.blob_path)) {
+      return {
+        download_url: await r2.createPresignedGetUrl(body.blob_path),
+      };
+    }
+
+    // Sin R2 (o blob_path legacy con URL absoluta): se devuelve tal cual.
     return {
       download_url: body.blob_path,
     };

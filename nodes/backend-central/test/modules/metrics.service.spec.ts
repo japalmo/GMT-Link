@@ -5,6 +5,7 @@ import { MetricsService } from '../../src/modules/metrics/metrics.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { EmailService } from '../../src/common/email.service';
 import type { FgaService } from '../../src/fga/fga.service';
+import type { StorageService } from '../../src/common/storage/storage.service';
 import type { SaveDataPointDto } from '../../src/modules/metrics/dto/metrics.dto';
 
 describe('MetricsService', () => {
@@ -14,6 +15,8 @@ describe('MetricsService', () => {
   let emailServiceMock: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let fgaServiceMock: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let storageServiceMock: any;
   let service: MetricsService;
 
   beforeEach(() => {
@@ -78,10 +81,19 @@ describe('MetricsService', () => {
       check: vi.fn(() => Promise.resolve(true)),
     };
 
+    // Storage genérico (no-R2): al no ser instancia de R2StorageService, el servicio
+    // usa el camino local por defecto (token + disco), como antes de integrar R2.
+    storageServiceMock = {
+      save: vi.fn(() => Promise.resolve({ key: 'k', url: 'http://localhost:3001/files/k' })),
+      read: vi.fn(() => Promise.resolve(Buffer.from(''))),
+      delete: vi.fn(() => Promise.resolve()),
+    };
+
     service = new MetricsService(
       prismaMock as unknown as PrismaService,
       emailServiceMock as unknown as EmailService,
       fgaServiceMock as unknown as FgaService,
+      storageServiceMock as unknown as StorageService,
     );
   });
 

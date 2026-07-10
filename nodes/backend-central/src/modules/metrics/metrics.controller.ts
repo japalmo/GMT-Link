@@ -5,6 +5,7 @@ import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { R2StorageService } from '../../common/storage/r2-storage.service';
 import { sanitizeFilename } from '../../common/storage/local-storage.service';
 import {
   CreateElementDto,
@@ -355,12 +356,17 @@ export class MetricsController {
    }
 
    private async getMaxBytes(): Promise<number> {
+     // Default según el backend activo: R2 (durable) admite DEMs pesados (600 MB);
+     // el storage local de dev mantiene el tope conservador de 10 MB. `STORAGE_MAX_BYTES`
+     // (si se define) tiene prioridad sobre ambos.
+     const isR2 = this.storage instanceof R2StorageService;
+     const fallback = isR2 ? 600 * 1024 * 1024 : 10 * 1024 * 1024;
      const raw = process.env.STORAGE_MAX_BYTES;
      if (raw === undefined) {
-       return 10 * 1024 * 1024; // 10 MB default
+       return fallback;
      }
      const parsed = Number(raw);
-     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 10 * 1024 * 1024;
+     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
    }
 
   @Get('uploads/:filename')
