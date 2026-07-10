@@ -24,6 +24,8 @@ import { Select } from '@/components/ui/select';
 import { SearchInput } from '@/components/ui/search-input';
 import { Alert } from '@/components/ui/alert';
 import { EmptyState, ErrorState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -136,7 +138,7 @@ export default function FaenaProyectosPage() {
   }, [projects, search]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageContainer maxWidth="7xl">
       {/* Breadcrumb */}
       <nav
         aria-label="Ruta de navegación"
@@ -154,21 +156,18 @@ export default function FaenaProyectosPage() {
       </nav>
 
       {/* Encabezado + acción */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Proyectos de la faena</h1>
-          <p className="text-sm text-muted-foreground">
-            {faena?.name ?? 'Faena'}
-            {faena?.code ? ` · ${faena.code}` : ''}
-          </p>
-        </div>
-        {canCreate && (
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="mr-2 size-4" />
-            Nuevo proyecto
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Proyectos de la faena"
+        description={`${faena?.name ?? 'Faena'}${faena?.code ? ` · ${faena.code}` : ''}`}
+        actions={
+          canCreate ? (
+            <Button onClick={() => setModalOpen(true)}>
+              <Plus className="mr-2 size-4" />
+              Nuevo proyecto
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* Buscador */}
       <SearchInput
@@ -284,7 +283,7 @@ export default function FaenaProyectosPage() {
           navigate(`/proyectos/proyecto/${created.id}`);
         }}
       />
-    </div>
+    </PageContainer>
   );
 }
 

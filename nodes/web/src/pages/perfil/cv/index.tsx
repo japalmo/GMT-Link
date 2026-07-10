@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ExternalLink, FileCheck2 } from 'lucide-react';
 import { ErrorState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCv } from '@/hooks/use-cv';
 import { formatDate, formatDateRange } from '@/lib/format';
@@ -65,7 +66,7 @@ export default function CvPage(): ReactNode {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8">
+    <PageContainer maxWidth="3xl">
       <header className="flex flex-col gap-4">
         <PageHeader
           title="Mi CV"
@@ -277,6 +278,6 @@ export default function CvPage(): ReactNode {
           />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

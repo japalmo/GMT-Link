@@ -112,7 +112,6 @@ export default function DirectorioPage(): ReactNode {
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
-        variant="gradient"
         title="Directorio"
         description="Encuentra a colaboradores y clientes y abre su detalle."
       />

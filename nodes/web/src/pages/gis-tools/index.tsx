@@ -461,7 +461,6 @@ export default function GisToolsPage(): ReactNode {
     <PageContainer maxWidth="7xl">
       {/* Page Header */}
       <PageHeader
-        variant="gradient"
         title="Herramientas Técnicas GIS"
         description="Módulo de transformación de coordenadas geográficas e inteligencia artificial para análisis topográfico."
         actions={

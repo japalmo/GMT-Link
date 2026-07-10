@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Table,
   TableBody,
@@ -65,21 +66,19 @@ export default function DocumentsPage(): ReactNode {
 
   return (
     <PageContainer maxWidth="7xl">
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Mis documentos</h1>
-            <p className="text-sm text-muted-foreground">
-              Sube tus documentos y revisa su estado y vencimiento.
-            </p>
-          </div>
-          <Button onClick={() => setUploadOpen(true)}>
-            <Upload aria-hidden />
-            Subir documento
-          </Button>
-        </div>
+      <div className="flex flex-col gap-4">
+        <PageHeader
+          title="Mis documentos"
+          description="Sube tus documentos y revisa su estado y vencimiento."
+          actions={
+            <Button onClick={() => setUploadOpen(true)}>
+              <Upload aria-hidden />
+              Subir documento
+            </Button>
+          }
+        />
         <ProfileTabs />
-      </header>
+      </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap items-end gap-4">

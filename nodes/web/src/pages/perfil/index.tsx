@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/card';
 import { ErrorState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { useProfile } from '@/hooks/use-profile';
 import { RoleChips } from '@/pages/usuarios/role-chips';
@@ -44,7 +45,7 @@ export default function PerfilPage(): ReactNode {
   const { profile, loading, error, refetch, save, changePassword } = useProfile();
 
   return (
-    <div className="flex flex-col gap-6 p-6 sm:p-8">
+    <PageContainer maxWidth="3xl">
       <header className="flex flex-col gap-4">
         <PageHeader
           title="Mi perfil"
@@ -106,6 +107,6 @@ export default function PerfilPage(): ReactNode {
           </Card>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

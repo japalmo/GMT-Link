@@ -415,7 +415,7 @@ export default function InsumosPage(): ReactNode {
   const maxStockQty = topStocks.length > 0 ? Math.max(...topStocks.map((s) => s.quantity)) : 1;
 
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto py-2">
+    <div className="flex flex-col gap-6">
       {errorMsg && (
         <Alert variant="destructive" live>
           <div className="flex items-start justify-between gap-3">

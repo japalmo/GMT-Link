@@ -116,7 +116,6 @@ export default function RecursosPage(): ReactNode {
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
-        variant="gradient"
         title="Recursos Físicos"
         description="Administra los activos, vehículos, herramientas y la cadena de suministro de GMT."
       />

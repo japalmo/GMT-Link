@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Building2,
   ChevronRight,
   FolderKanban,
   FolderOpen,
@@ -26,6 +25,8 @@ import { Select } from '@/components/ui/select';
 import { SearchInput } from '@/components/ui/search-input';
 import { Alert } from '@/components/ui/alert';
 import { EmptyState, ErrorState } from '@/components/ui/states';
+import { PageContainer } from '@/components/layout/page-container';
+import { PageHeader } from '@/components/layout/page-header';
 import {
   Card,
   CardContent,
@@ -163,7 +164,7 @@ export default function ProyectosFaenasPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <PageContainer maxWidth="7xl">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <button
@@ -181,33 +182,24 @@ export default function ProyectosFaenasPage() {
       </nav>
 
       {/* Encabezado */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Building2 className="size-5" aria-hidden />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold leading-tight">
-              Faenas{client ? ` de ${client.name}` : ''}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Selecciona una faena para ver sus proyectos.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/proyectos')}>
-            <ArrowLeft className="mr-2 size-4" />
-            Volver
-          </Button>
-          {canCreate && (
-            <Button onClick={openModal}>
-              <Plus className="mr-2 size-4" />
-              Nueva faena
+      <PageHeader
+        title={`Faenas${client ? ` de ${client.name}` : ''}`}
+        description="Selecciona una faena para ver sus proyectos."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => navigate('/proyectos')}>
+              <ArrowLeft className="mr-2 size-4" />
+              Volver
             </Button>
-          )}
-        </div>
-      </div>
+            {canCreate && (
+              <Button onClick={openModal}>
+                <Plus className="mr-2 size-4" />
+                Nueva faena
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Buscador */}
       <SearchInput
@@ -374,7 +366,7 @@ export default function ProyectosFaenasPage() {
           </form>
         </ModalContent>
       </Modal>
-    </div>
+    </PageContainer>
   );
 }
 
