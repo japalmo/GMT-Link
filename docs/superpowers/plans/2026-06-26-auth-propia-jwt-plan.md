@@ -18,7 +18,7 @@
 - **JWT:** `jsonwebtoken`, HS256, TTL `7d`, payload `{ sub: userId }`, secreto `process.env.AUTH_JWT_SECRET`. Helper `common/jwt.ts` (funciones puras, sin DI — el middleware las llama directo).
 - **Login:** `POST /auth/login {email,password}` → `{ token }`. 401 genérico si no matchea. Cualquier `status` puede loguear (el routing del front maneja PENDING/SUSPENDED).
 - **Contrato web↔back:** el JWT solo lleva `sub`; `status`/roles/módulos se releen en `/auth/me`. Tras first-login (status→ACTIVE) el MISMO token sigue válido; la web solo re-llama `getMe()`.
-- **Admin sembrado:** `admin@gmt.cl` / `AdminGmt2026` (ya definido en `seed-admin.ts`), rol `org_admin` (grants GLOBAL de todo el catálogo).
+- **Admin sembrado:** `admin@gmt.cl` / `<ADMIN_PASSWORD>` (ya definido en `seed-admin.ts`), rol `org_admin` (grants GLOBAL de todo el catálogo).
 - **Shell (esta máquina):** Bash para `git`; **PowerShell** para `pnpm`/`tsc`/`vitest`/`railway`/`node` (Git Bash no corre node). Ramas: trabajo en `feat/modulos-1-4` (= `main` remoto).
 
 ## Estructura de archivos
@@ -501,7 +501,7 @@ async function ensurePostgresUser(): Promise<string> {
 Run: `pnpm --filter "@gmt-platform/backend-central" exec tsx prisma/seed.ts` (catálogo) y luego `pnpm --filter "@gmt-platform/backend-central" exec tsx prisma/seed-admin.ts`
 Expected: imprime las credenciales; crea/actualiza `admin@gmt.cl` ACTIVE con `passwordHash`.
 - [ ] **Step 3: Verificar login local end-to-end (PowerShell, backend `pnpm dev` corriendo en 3001).**
-Run: `Invoke-RestMethod -Method Post -Uri http://localhost:3001/auth/login -ContentType application/json -Body (@{email='admin@gmt.cl';password='AdminGmt2026'} | ConvertTo-Json)`
+Run: `Invoke-RestMethod -Method Post -Uri http://localhost:3001/auth/login -ContentType application/json -Body (@{email='admin@gmt.cl';password='<ADMIN_PASSWORD>'} | ConvertTo-Json)`
 Expected: `{ token = <jwt> }`. Luego `Invoke-RestMethod http://localhost:3001/auth/me -Headers @{ Authorization = "Bearer <token>" }` → devuelve el admin ACTIVE con módulos.
 - [ ] **Step 4: Commit.**
 ```bash
@@ -703,7 +703,7 @@ pnpm --filter "@gmt-platform/web" test
 pnpm lint
 ```
 Expected: todo verde (excepto el spec de OpenFGA que necesita FGA vivo).
-- [ ] **Step 2: Smoke UI (preview o pnpm dev).** Levantar backend+web, abrir el login, entrar como `admin@gmt.cl` / `AdminGmt2026` → dashboard. Ir a Usuarios → crear un usuario → aparece la clave provisoria. Cerrar sesión, entrar con el nuevo usuario + clave provisoria → pantalla de primer login → fijar clave → entra ACTIVE. Confirmar en consola/red que NO hay llamadas a Firebase.
+- [ ] **Step 2: Smoke UI (preview o pnpm dev).** Levantar backend+web, abrir el login, entrar como `admin@gmt.cl` / `<ADMIN_PASSWORD>` → dashboard. Ir a Usuarios → crear un usuario → aparece la clave provisoria. Cerrar sesión, entrar con el nuevo usuario + clave provisoria → pantalla de primer login → fijar clave → entra ACTIVE. Confirmar en consola/red que NO hay llamadas a Firebase.
 - [ ] **Step 3: Commit (si hubo ajustes).** `git commit -am "test(auth): verificación integral del flujo propio"` (o skip si no hubo cambios).
 
 ## Tarea 17: Desplegar OpenFGA en Railway (datastore Postgres)
@@ -741,11 +741,11 @@ pnpm --filter "@gmt-platform/backend-central" exec tsx prisma/seed-admin.ts
 - [ ] **Step 5: Verificar el login en producción.**
 ```
 $BE = "backend-central-production-698d.up.railway.app"
-$r = Invoke-RestMethod -Method Post -Uri ("https://" + $BE + "/auth/login") -ContentType application/json -Body (@{email='admin@gmt.cl';password='AdminGmt2026'} | ConvertTo-Json)
+$r = Invoke-RestMethod -Method Post -Uri ("https://" + $BE + "/auth/login") -ContentType application/json -Body (@{email='admin@gmt.cl';password='<ADMIN_PASSWORD>'} | ConvertTo-Json)
 Invoke-RestMethod -Uri ("https://" + $BE + "/auth/me") -Headers @{ Authorization = "Bearer " + $r.token }
 ```
 Expected: token emitido; `/auth/me` devuelve el admin ACTIVE con módulos.
-- [ ] **Step 6: Entregar la URL.** Abrir **https://web-production-83ed62.up.railway.app**, entrar como `admin@gmt.cl` / `AdminGmt2026`, crear un usuario, verificar el flujo completo en vivo. Entregar URL + credencial al usuario.
+- [ ] **Step 6: Entregar la URL.** Abrir **https://web-production-83ed62.up.railway.app**, entrar como `admin@gmt.cl` / `<ADMIN_PASSWORD>`, crear un usuario, verificar el flujo completo en vivo. Entregar URL + credencial al usuario.
 
 ---
 

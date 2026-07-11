@@ -4,11 +4,12 @@
  * `PrismaClient` ni ejecuta nada al importarse. El entrypoint `seed-admin.ts`
  * inyecta el `PrismaClient` y orquesta la corrida contra Postgres/OpenFGA.
  *
- * Credenciales según entorno (ver resolveAdminSeed):
- *  - dev:  clave fija pública `AdminGmt2026`, status ACTIVE (cómodo en local).
- *  - prod: `ADMIN_PASSWORD` si está definida; si no, una clave ALEATORIA
- *          impresa una sola vez. Status PENDING_FIRST_LOGIN para FORZAR el
- *          cambio de clave en el primer login (flujo /auth/first-login/complete).
+ * Credenciales según entorno (ver resolveAdminSeed): NUNCA hay clave fija en el
+ * repo. La clave sale de `ADMIN_PASSWORD`; si no está, se genera una ALEATORIA y
+ * se imprime una sola vez.
+ *  - dev:  status ACTIVE (cómodo en local; no fuerza cambio de clave).
+ *  - prod: status PENDING_FIRST_LOGIN para FORZAR el cambio de clave en el primer
+ *          login (flujo /auth/first-login/complete).
  *          Nunca se re-baja el passwordHash/estado de un admin ya existente (C3).
  */
 import { OpenFgaClient } from '@openfga/sdk';
@@ -25,9 +26,6 @@ export const ADMIN = {
   roleKey: 'org_admin',
 } as const;
 
-/** Clave fija SOLO para desarrollo local. Nunca se usa en producción. */
-const DEV_PASSWORD = 'AdminGmt2026';
-
 /** Resultado de la decisión de credenciales del admin según el entorno. */
 export interface AdminSeedResolution {
   /** Clave en claro a sembrar (se hashea antes de persistir). */
@@ -42,22 +40,27 @@ export interface AdminSeedResolution {
 
 /**
  * Decide, de forma pura (testeable), con qué credenciales/estado se siembra el
- * admin. En prod jamás devuelve la clave pública fija.
+ * admin. NUNCA hay clave fija en el repo: la clave sale de `ADMIN_PASSWORD` o,
+ * si falta, de una aleatoria fuerte. Dev y prod comparten ese camino; sólo
+ * difieren en el `status`/`mustChangePassword` (dev no fuerza el cambio).
  */
 export function resolveAdminSeed(env: NodeJS.ProcessEnv): AdminSeedResolution {
   const isProd = env.NODE_ENV === 'production';
-  if (!isProd) {
-    return { password: DEV_PASSWORD, status: 'ACTIVE', generated: false, mustChangePassword: false };
-  }
   const provided = env.ADMIN_PASSWORD?.trim();
   if (provided) {
-    return { password: provided, status: 'PENDING_FIRST_LOGIN', generated: false, mustChangePassword: true };
+    return {
+      password: provided,
+      status: isProd ? 'PENDING_FIRST_LOGIN' : 'ACTIVE',
+      generated: false,
+      mustChangePassword: isProd,
+    };
   }
+  // Sin ADMIN_PASSWORD: clave aleatoria impresa una vez (jamás una clave fija en el repo).
   return {
     password: generateProvisionalPassword(16),
-    status: 'PENDING_FIRST_LOGIN',
+    status: isProd ? 'PENDING_FIRST_LOGIN' : 'ACTIVE',
     generated: true,
-    mustChangePassword: true,
+    mustChangePassword: isProd,
   };
 }
 

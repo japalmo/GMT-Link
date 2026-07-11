@@ -30,7 +30,7 @@
 - `AuthController.login` es `POST /auth/login`, decorado con `@Post('login')` y `@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))`, firma `async login(@Body() body: LoginDto): Promise<{ token: string }>`. Sin throttling propio.
 - `common/jwt.ts` lee `AUTH_JWT_SECRET` perezosamente (`secret()`) y sólo verifica que exista (no longitud).
 - `common/password.ts` exporta `hashPassword`/`verifyPassword` (bcryptjs, SALT_ROUNDS=12). `common/provisional-password.ts` exporta `generateProvisionalPassword(length=12)` (CSPRNG, mínimo 12).
-- `prisma/seed-admin.ts` siembra `admin@gmt.cl / AdminGmt2026` con `status: UserStatus.ACTIVE` fijo e imprime la clave — inseguro en prod. Importa `path`, `dotenv`, `@openfga/sdk`, `PrismaClient, UserStatus` de `@prisma/client`, `hashPassword` de `../src/common/password`. Carga `.env` con `config({ path: path.resolve(process.cwd(), '../../.env') })` (cwd al correr `pnpm --filter` es `nodes/backend-central`, `../../.env` = raíz del repo).
+- `prisma/seed-admin.ts` siembra `admin@gmt.cl / <ADMIN_PASSWORD>` con `status: UserStatus.ACTIVE` fijo e imprime la clave — inseguro en prod. Importa `path`, `dotenv`, `@openfga/sdk`, `PrismaClient, UserStatus` de `@prisma/client`, `hashPassword` de `../src/common/password`. Carga `.env` con `config({ path: path.resolve(process.cwd(), '../../.env') })` (cwd al correr `pnpm --filter` es `nodes/backend-central`, `../../.env` = raíz del repo).
 - `enum UserStatus { PENDING_FIRST_LOGIN, ACTIVE, SUSPENDED }` ya existe (`prisma/schema.prisma` línea 64-65); `default` del campo `status` es `PENDING_FIRST_LOGIN` (línea 23). `POST /auth/first-login/complete` fuerza el cambio de clave cuando el user está en `PENDING_FIRST_LOGIN`. **Reutilizamos ese estado** — sin migración nueva.
 - Tests con **vitest** (`vitest.config.ts`: `include: ['test/**/*.spec.ts']`, entorno node). Patrón real (`test/auth/login.spec.ts`): construir la clase con mocks `vi.fn()`, `process.env.AUTH_JWT_SECRET = 'test-secret-para-vitest-32bytes-min'` en `beforeAll`. **`@nestjs/testing` y `supertest` NO están instalados** → los tests no usan `Test.createTestingModule` ni HTTP real; se construyen instancias directas.
 - `tsconfig.test.json` tiene `"include": ["src", "test"]` (NO incluye `prisma/`). El nuevo spec de Task 4 importa `../../prisma/seed-admin`, por lo que `typecheck:test` fallará salvo que se añada `"prisma"` al include. **Corrección obligatoria, no opcional.**
@@ -424,10 +424,10 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ### Task 4: siembra segura del admin en producción
 
-**Diseño (leyendo `seed-admin.ts` y el enum `UserStatus`):** hoy el seed fija `status: ACTIVE` y clave pública `AdminGmt2026`. En producción eso re-siembra una credencial conocida en cada release. Solución concreta:
+**Diseño (leyendo `seed-admin.ts` y el enum `UserStatus`):** hoy el seed fija `status: ACTIVE` y clave pública `<ADMIN_PASSWORD>`. En producción eso re-siembra una credencial conocida en cada release. Solución concreta:
 
 - Detectar producción con `NODE_ENV === 'production'`.
-- En **dev** (comportamiento actual): sigue usando `admin@gmt.cl / AdminGmt2026`, `status: ACTIVE`, e imprime la clave (cómodo para desarrollo local).
+- En **dev** (comportamiento actual): sigue usando `admin@gmt.cl / <ADMIN_PASSWORD>`, `status: ACTIVE`, e imprime la clave (cómodo para desarrollo local).
 - En **prod**:
   - La contraseña viene de `ADMIN_PASSWORD` (env) si está definida; si no, se **genera aleatoria** con `generateProvisionalPassword(16)` (existe en `src/common/provisional-password.ts`, CSPRNG) e se **imprime una sola vez** en el log del release.
   - El admin se siembra con `status: PENDING_FIRST_LOGIN` (estado ya existente) para **forzar el cambio de clave** en el primer login vía `POST /auth/first-login/complete` (ya implementado). Aun cuando la clave se imprima en logs del deploy, deja de ser válida en cuanto el admin la cambia.
@@ -465,7 +465,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   describe('resolveAdminSeed', () => {
     it('dev: usa la clave fija y status ACTIVE', () => {
       const r = resolveAdminSeed({ NODE_ENV: 'development' } as NodeJS.ProcessEnv);
-      expect(r.password).toBe('AdminGmt2026');
+      expect(r.password).toBe('<ADMIN_PASSWORD>');
       expect(r.status).toBe('ACTIVE');
       expect(r.mustChangePassword).toBe(false);
       expect(r.generated).toBe(false);
@@ -485,12 +485,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
       expect(r.mustChangePassword).toBe(true);
       expect(r.generated).toBe(true);
       expect(r.password.length).toBeGreaterThanOrEqual(12);
-      expect(r.password).not.toBe('AdminGmt2026');
+      expect(r.password).not.toBe('<ADMIN_PASSWORD>');
     });
 
     it('prod nunca usa la clave pública fija', () => {
       const r = resolveAdminSeed({ NODE_ENV: 'production' } as NodeJS.ProcessEnv);
-      expect(r.password).not.toBe('AdminGmt2026');
+      expect(r.password).not.toBe('<ADMIN_PASSWORD>');
     });
   });
   ```
@@ -513,7 +513,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
    *  2. OpenFGA    — tupla user:<id> admin organization:gmt (§4.3).
    *
    * Credenciales según entorno (ver resolveAdminSeed):
-   *  - dev:  clave fija pública `AdminGmt2026`, status ACTIVE (cómodo en local).
+   *  - dev:  clave fija pública `<ADMIN_PASSWORD>`, status ACTIVE (cómodo en local).
    *  - prod: `ADMIN_PASSWORD` si está definida; si no, una clave ALEATORIA
    *          impresa una sola vez. Status PENDING_FIRST_LOGIN para FORZAR el
    *          cambio de clave en el primer login (flujo /auth/first-login/complete).
@@ -541,7 +541,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   } as const;
 
   /** Clave fija SOLO para desarrollo local. Nunca se usa en producción. */
-  const DEV_PASSWORD = 'AdminGmt2026';
+  const DEV_PASSWORD = '<ADMIN_PASSWORD>';
 
   /** Resultado de la decisión de credenciales del admin según el entorno. */
   export interface AdminSeedResolution {
@@ -728,7 +728,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```powershell
   pnpm --filter @gmt-platform/backend-central seed:admin
   ```
-  Salida esperada: imprime `status ACTIVE` y `password: AdminGmt2026` (comportamiento dev sin cambios, porque `NODE_ENV` no es `production`). Si no hay BD disponible, omitir este paso; los tests del Step 5-6 ya cubren la lógica de resolución.
+  Salida esperada: imprime `status ACTIVE` y `password: <ADMIN_PASSWORD>` (comportamiento dev sin cambios, porque `NODE_ENV` no es `production`). Si no hay BD disponible, omitir este paso; los tests del Step 5-6 ya cubren la lógica de resolución.
 
 - [ ] **Step 8 (commit).**
   Bash:
@@ -933,7 +933,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 > - `src/health.controller.ts` (verificado): `GET /health` → `{ status:'ok', service:'gmt-link-api', timestamp }`.
 > - `src/auth/*.controller.ts` (verificado): `POST /auth/login` devuelve `{ token }` (sólo valida email+passwordHash, NO gatea por `status`); `GET /auth/me` (requiere Bearer; usa Postgres + FGA vía `resolveCanManageRoles`). Existe también `POST /auth/first-login/complete`.
 > - `prisma/seed.ts` (verificado): idempotente (upsert de Permission/Role/RolePermission); imprime `Permisos asegurados: N`, `Roles asegurados: ...`, `Bundles rol→permiso: N`.
-> - `prisma/seed-admin.ts` (verificado): idempotente; requiere catálogo sembrado ANTES (FK `Membership.roleKey → Role.key`); admin `admin@gmt.cl` / `AdminGmt2026`, `ORG_ID='gmt'`, rol `org_admin`. Imprime `Postgres: User asegurado admin@gmt.cl ...`, `Postgres: Membership org_admin ORGANIZATION:gmt asegurada`, y `OpenFGA: tupla escrita ...` / `... ya existía ...` (o `OpenFGA omitido: FGA_STORE_ID vacío.` si no hay FGA). Lee `../../.env`.
+> - `prisma/seed-admin.ts` (verificado): idempotente; requiere catálogo sembrado ANTES (FK `Membership.roleKey → Role.key`); admin `admin@gmt.cl` / `<ADMIN_PASSWORD>`, `ORG_ID='gmt'`, rol `org_admin`. Imprime `Postgres: User asegurado admin@gmt.cl ...`, `Postgres: Membership org_admin ORGANIZATION:gmt asegurada`, y `OpenFGA: tupla escrita ...` / `... ya existía ...` (o `OpenFGA omitido: FGA_STORE_ID vacío.` si no hay FGA). Lee `../../.env`.
 > - `.dockerignore` (verificado, raíz): excluye `.env` y `.env.*` (sólo permite `.env.example`) → **dentro del contenedor NO hay `.env`**. Por eso `fga:bootstrap`/`seed:*` sólo pueden correr en local (con el `.env` de la raíz) o vía `railway run` (que corre en local).
 > - `nodes/backend-central/fga/model.fga` (verificado) existe: lo consume `fga:bootstrap`.
 > - `docs/railway-deploy.md` (verificado) existe (a actualizar en Task 8).
@@ -1333,7 +1333,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   $BE = "<api-domain>"
   $r = Invoke-RestMethod -Method Post -Uri ("https://" + $BE + "/auth/login") `
     -ContentType application/json `
-    -Body (@{ email = 'admin@gmt.cl'; password = 'AdminGmt2026' } | ConvertTo-Json)
+    -Body (@{ email = 'admin@gmt.cl'; password = '<ADMIN_PASSWORD>' } | ConvertTo-Json)
   $r.token
   ```
   Salida esperada: un JWT (`eyJ...`) — el endpoint devuelve `{ token }`. Si devuelve 401, revisar que `seed:admin` corrió contra `postgres-gmt` (Task 7 Step 6). Si devuelve 500, falta `AUTH_JWT_SECRET` en el `api` (Task 4 Step 1).
@@ -1357,12 +1357,12 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   ```powershell
   Start-Process "https://<web-domain>"
   ```
-  Salida esperada (manual): la SPA carga, se entra con `admin@gmt.cl` / `AdminGmt2026`, el dashboard renderiza sin errores de red en consola (las llamadas van a `https://<api-domain>`), y una acción de admin (p. ej. crear un usuario y ver la clave provisoria en la UI, §9) funciona end-to-end.
+  Salida esperada (manual): la SPA carga, se entra con `admin@gmt.cl` / `<ADMIN_PASSWORD>`, el dashboard renderiza sin errores de red en consola (las llamadas van a `https://<api-domain>`), y una acción de admin (p. ej. crear un usuario y ver la clave provisoria en la UI, §9) funciona end-to-end.
 
 - [ ] **Step 5 (entrega): registrar URLs y credenciales de la demo.**
   - Web: `https://<web-domain>`
   - API: `https://<api-domain>`
-  - Admin: `admin@gmt.cl` / `AdminGmt2026`
+  - Admin: `admin@gmt.cl` / `<ADMIN_PASSWORD>`
 
 - [ ] **Step 6: Commit de cierre de la fase** (docs). Actualizar `docs/railway-deploy.md` marcando la Fase 2 completada con los dominios reales, y commitear (Bash):
   ```bash
@@ -2572,7 +2572,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 ### Task 7: Smoke-test manual — login contra Railway + cubicación end-to-end
 
-**Files:** ninguno (verificación manual). Requisitos previos: servicio `api` en Railway con `AUTH_JWT_SECRET` seteado, admin sembrado (`admin@gmt.cl / AdminGmt2026`) y un reservorio con permiso de medición para ese usuario.
+**Files:** ninguno (verificación manual). Requisitos previos: servicio `api` en Railway con `AUTH_JWT_SECRET` seteado, admin sembrado (`admin@gmt.cl / <ADMIN_PASSWORD>`) y un reservorio con permiso de medición para ese usuario.
 
 - [ ] **Step 1: Apuntar V-Metric a Railway (PowerShell).** Editar `C:/Users/juana/GMT/proyectos/v-metric/.env`, con `<API_URL_RAILWAY>` del Step 1 de Task 5, para que la línea `VMETRIC_GMT_LINK_API_URL` quede:
 ```
@@ -2588,13 +2588,13 @@ Salida esperada: `AUTH base: <API_URL_RAILWAY>`.
 
 - [ ] **Step 2: Probar `login` + `me` contra Railway por CLI (PowerShell).**
 ```powershell
-python -c "from poza import gmt_auth; t=gmt_auth.login('admin@gmt.cl','AdminGmt2026'); print('token len', len(t)); s=gmt_auth.me(t); print('me:', s.email, s.rol, s.activo)"
+python -c "from poza import gmt_auth; t=gmt_auth.login('admin@gmt.cl','<ADMIN_PASSWORD>'); print('token len', len(t)); s=gmt_auth.me(t); print('me:', s.email, s.rol, s.activo)"
 ```
 Salida esperada: `token len <n>` (JWT no vacío) y `me: admin@gmt.cl admin True`. Un `GmtAuthError status_code=401` indica credenciales/seed o `AUTH_JWT_SECRET` mal configurados.
 
 - [ ] **Step 3: Verificar persistencia keyring (PowerShell).**
 ```powershell
-python -c "from poza import gmt_auth, credential_store as cs; t=gmt_auth.login('admin@gmt.cl','AdminGmt2026'); cs.save_token('admin@gmt.cl', t); print('guardado?', cs.load_token('admin@gmt.cl') is not None); print('last', cs.load_last_email())"
+python -c "from poza import gmt_auth, credential_store as cs; t=gmt_auth.login('admin@gmt.cl','<ADMIN_PASSWORD>'); cs.save_token('admin@gmt.cl', t); print('guardado?', cs.load_token('admin@gmt.cl') is not None); print('last', cs.load_last_email())"
 ```
 Salida esperada: `guardado? True` y `last admin@gmt.cl`. Confirmar en Windows: "Administrador de credenciales" → Credenciales de Windows → entrada `V-Metric`.
 
@@ -2602,7 +2602,7 @@ Salida esperada: `guardado? True` y `last admin@gmt.cl`. Confirmar en Windows: "
 ```powershell
 python app.py
 ```
-Verificación: el correo aparece autocompletado; login con `admin@gmt.cl / AdminGmt2026` abre la ventana principal sin errores en consola; al cerrar y reabrir entra **directo** (sesión restaurada vía `/auth/me`).
+Verificación: el correo aparece autocompletado; login con `admin@gmt.cl / <ADMIN_PASSWORD>` abre la ventana principal sin errores en consola; al cerrar y reabrir entra **directo** (sesión restaurada vía `/auth/me`).
 
 - [ ] **Step 5: Cubicación end-to-end.** En la app, abrir el Workspace de un reservorio con permiso, forzar descarga del DEM (`getLatestDem` → `getDemDownloadUrl`) y guardar una cubicación (`saveCubicacion`). Verificación:
 - La cubicación se guarda sin "Se requiere una sesión autenticada." ni 401. (Esto confirma que `GmtSession.id_token` habilita `firebase_sync`.)

@@ -51,9 +51,18 @@ Dominio público: sólo **api** y **web**. El resto se comunica por
 | `FGA_MODEL_ID` | tras el bootstrap (§4) | — |
 | `NVIDIA_API_KEY` | clave NVIDIA NIM (texto) | 🔒 |
 | `NVIDIA_API_KEY_VISION` | clave NVIDIA NIM (visión) | 🔒 |
-| `CORS_ORIGINS` | URL pública del web, p. ej. `https://gmt-link-web.up.railway.app` | — |
+| `CORS_ORIGINS` | URLs públicas del frontend separadas por comas (web **y** web-dev, §3), p. ej. `https://gmt-link-web.up.railway.app,https://web-dev-production-xxxx.up.railway.app` | — |
+| `SMTP_HOST` | host SMTP; **vacío = no se envían correos** (NoopEmailService). Se llena en Fase 3. | — |
+| `SMTP_PORT` | puerto SMTP (default 587) | — |
+| `SMTP_USER` | usuario SMTP | 🔒 |
+| `SMTP_PASS` | password SMTP | 🔒 |
+| `EMAIL_FROM` | remitente, default `no-reply@gmt.cl` | — |
 | `NODE_ENV` | `production` | — |
 | `PORT` | lo inyecta Railway (no fijar) | — |
+
+> El envío de credenciales por email queda **DESACTIVADO** hasta Fase 3 (spec §4.3/§7):
+> con `SMTP_HOST` vacío el backend usa `NoopEmailService`. En Fase 1b/1c la clave
+> provisoria se ve en la UI, así que estas variables pueden quedar sin definir por ahora.
 
 > **`AUTH_JWT_SECRET` es obligatorio y validado al arrancar.** El bootstrap
 > (`src/common/env.ts` → `validateAuthJwtSecret`, invocado en `main.ts`) **aborta
@@ -83,6 +92,22 @@ Dominio público: sólo **api** y **web**. El resto se comunica por
 
 > No hay variables `VITE_FIREBASE_*`: la web ya no usa Firebase Auth. Tras cambiar
 > `VITE_API_URL` hay que re-desplegar la web (se compila en build).
+
+### Servicio Web-Dev (pruebas)
+
+Segundo servicio web `web-dev` en el mismo env `production`, mismo Dockerfile que `web`,
+**misma `api` y misma BD**. Se deploya lo nuevo aquí; cuando el owner valida, se promueve a `web`.
+
+| Variable | Valor |
+| :-- | :-- |
+| `RAILWAY_DOCKERFILE_PATH` | `nodes/web/Dockerfile` |
+| `VITE_API_URL` | **la misma** URL pública del `api` que usa `web` |
+
+Crear: `railway add --service web-dev --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=nodes/web/Dockerfile' --variables 'VITE_API_URL=<url-api>'` y luego `railway domain --service web-dev`.
+
+> **CORS:** el dominio de `web-dev` debe agregarse a `CORS_ORIGINS` del `api` (lista separada
+> por comas, junto al de `web`), o el navegador bloqueará las llamadas. Ver el runbook
+> `docs/infra/git-railway-setup.md` para los pasos exactos que ejecuta el owner.
 
 ---
 

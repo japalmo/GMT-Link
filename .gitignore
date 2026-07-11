@@ -31,3 +31,16 @@ nodes/backend-central/prisma/backups/
 
 # Datos de runtime / uploads del backend local (91MB) — nunca versionar
 /apps/
+
+# Secretos / llaves — NUNCA versionar
+*.key
+*.pem
+*-firebase-adminsdk-*.json
+firebase-key.json
+service-account*.json
+cubicador-app-key.json
+
+# Datos de runtime del backend (DEMs, uploads pesados) — nunca versionar.
+# NOTA: NO afecta a prisma/data-reservorios.json ni a nodes/web/public/dem
+# (data pública versionada intencionalmente; ver runbook docs/infra/git-railway-setup.md).
+/data/

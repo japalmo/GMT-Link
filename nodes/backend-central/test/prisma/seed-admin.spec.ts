@@ -4,18 +4,31 @@ import { resolveAdminSeed, ensurePostgresUser } from '../../prisma/seed-admin.co
 
 /**
  * resolveAdminSeed decide, según el entorno, con qué credenciales y estado se
- * siembra el admin:
- *  - dev: clave fija pública + ACTIVE (cómodo para desarrollo local).
+ * siembra el admin. NUNCA hay clave fija en el repo: la clave sale de
+ * ADMIN_PASSWORD o, si falta, de una aleatoria fuerte.
+ *  - dev: usa ADMIN_PASSWORD si está (o una aleatoria) + status ACTIVE (no
+ *    fuerza cambio; cómodo para desarrollo local).
  *  - prod: ADMIN_PASSWORD si está; si no, una aleatoria; status PENDING para
  *    forzar cambio de clave en el primer login.
  */
 describe('resolveAdminSeed', () => {
-  it('dev: usa la clave fija y status ACTIVE', () => {
-    const r = resolveAdminSeed({ NODE_ENV: 'development' } as NodeJS.ProcessEnv);
-    expect(r.password).toBe('AdminGmt2026');
+  it('dev con ADMIN_PASSWORD: usa esa clave, status ACTIVE, sin forzar cambio', () => {
+    const r = resolveAdminSeed({
+      NODE_ENV: 'development',
+      ADMIN_PASSWORD: 'ClaveDevLocal!',
+    } as NodeJS.ProcessEnv);
+    expect(r.password).toBe('ClaveDevLocal!');
     expect(r.status).toBe('ACTIVE');
     expect(r.mustChangePassword).toBe(false);
     expect(r.generated).toBe(false);
+  });
+
+  it('dev sin ADMIN_PASSWORD: genera una clave aleatoria (nunca una fija del repo), status ACTIVE', () => {
+    const r = resolveAdminSeed({ NODE_ENV: 'development' } as NodeJS.ProcessEnv);
+    expect(r.status).toBe('ACTIVE');
+    expect(r.mustChangePassword).toBe(false);
+    expect(r.generated).toBe(true);
+    expect(r.password.length).toBeGreaterThanOrEqual(12);
   });
 
   it('prod con ADMIN_PASSWORD: usa esa clave y status PENDING_FIRST_LOGIN', () => {
@@ -32,12 +45,6 @@ describe('resolveAdminSeed', () => {
     expect(r.mustChangePassword).toBe(true);
     expect(r.generated).toBe(true);
     expect(r.password.length).toBeGreaterThanOrEqual(12);
-    expect(r.password).not.toBe('AdminGmt2026');
-  });
-
-  it('prod nunca usa la clave pública fija', () => {
-    const r = resolveAdminSeed({ NODE_ENV: 'production' } as NodeJS.ProcessEnv);
-    expect(r.password).not.toBe('AdminGmt2026');
   });
 });
 

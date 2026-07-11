@@ -199,7 +199,7 @@ choques de propiedad del contrato.**
 **Infra (D)**
 - [ ] Repo `japalmo/GMT-Link` PRIVATE + branch protection en `main` (PR + 1 aprobación, sin push directo).
 - [ ] Servicio Railway **`web-dev`** sirviendo la SPA contra la misma api/BD; su dominio en `CORS_ORIGINS`.
-- [ ] `AdminGmt2026` fuera de código/tests/docs de ejecución; `.env.example` alineado (R2/SMTP/ADMIN_PASSWORD).
+- [ ] `<ADMIN_PASSWORD>` fuera de código/tests/docs de ejecución; `.env.example` alineado (R2/SMTP/ADMIN_PASSWORD).
 - [ ] Runbook `docs/infra/git-railway-setup.md` entregado al owner.
 
 **Mockups (E)**

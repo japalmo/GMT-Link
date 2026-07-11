@@ -1427,7 +1427,7 @@ cd C:/Users/juana/GMT/proyectos/gmt-link/nodes/backend-central && npx tsx prisma
   Output esperado: admin con `username=admin`, usuario de prueba `username=colaborador`.
 
 - [ ] Levantar `pnpm dev` (raíz) y en `http://localhost:5173` iniciar sesión con **usuario** `admin`
-  y la clave dev (`AdminGmt2026`). Verificar que entra (identidad por username, no email).
+  y la clave dev (`<ADMIN_PASSWORD>`). Verificar que entra (identidad por username, no email).
 - [ ] Crear un usuario desde la UI: verificar autosugerencia de username al tipear el email
   institucional, la validación ≥1 email, y que la credencial mostrada trae **usuario** + clave.
 - [ ] Importar un CSV de 2 filas (una con username explícito, otra sin → autogenerado) y verificar el
