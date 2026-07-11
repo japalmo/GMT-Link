@@ -14,6 +14,7 @@
     "seed:auth-dev": "tsx prisma/seed-auth-dev.ts",
     "seed:admin": "tsx prisma/seed-admin.ts",
     "seed:capstone": "tsx prisma/seed-capstone.ts",
+    "seed:mockups": "tsx prisma/seed-mockups.ts",
     "test": "pnpm run typecheck:test && vitest run",
     "typecheck:test": "tsc -p tsconfig.test.json"
   },
