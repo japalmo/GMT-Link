@@ -41,12 +41,12 @@ export const WIDGET_CATALOG: readonly WidgetDefinition[] = [
   {
     key: 'accesos-directos',
     title: 'Accesos directos',
-    description: 'Atajos a checklist de vehículos, horas extra y detección de orilla de playa.',
+    description: 'Atajo para registrar horas extra.',
   },
   {
-    key: 'mis-tareas-pendientes',
-    title: 'Mis tareas pendientes',
-    description: 'Tareas asignadas a ti que están pendientes.',
+    key: 'mis-solicitudes-recientes',
+    title: 'Mis solicitudes recientes',
+    description: 'Tus últimas solicitudes de reembolso y horas extra con su estado.',
   },
   {
     key: 'account-config-progress',
@@ -60,38 +60,13 @@ export const WIDGET_CATALOG: readonly WidgetDefinition[] = [
     permission: { relation: 'can_manage_users', type: ORG_OBJECT_TYPE, id: ORG_ID },
   },
   {
-    key: 'directorio',
-    title: 'Directorio',
-    description: 'Acceso rápido al directorio de personas.',
-  },
-  {
-    key: 'mis-documentos-por-vencer',
-    title: 'Mis documentos por vencer',
-    description: 'Documentos personales que vencen en los próximos 30 días.',
-  },
-  {
     key: 'mi-cv',
     title: 'Mi CV',
     description: 'Resumen de tu hoja de vida y accesos directos.',
   },
   {
-    key: 'flota-resumen',
-    title: 'Flota',
-    description: 'Resumen de vehículos (placeholder).',
-  },
-  {
     key: 'gamificacion',
     title: 'Mi Progreso',
     description: 'Tus puntos, logros y badges acumulados.',
-  },
-  {
-    key: 'tareas-resumen',
-    title: 'Resumen de Tareas',
-    description: 'Tareas activas y completadas.',
-  },
-  {
-    key: 'mapa-activos',
-    title: 'Ubicación de Activos',
-    description: 'Última ubicación registrada de vehículos y equipos.',
   },
 ] as const;

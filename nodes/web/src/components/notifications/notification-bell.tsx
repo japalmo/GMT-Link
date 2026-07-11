@@ -138,10 +138,12 @@ export function NotificationBell({
           role="dialog"
           aria-label="Notificaciones recientes"
           className={cn(
-            'absolute z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card shadow-lg outline-none',
+            'absolute z-50 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card shadow-lg outline-none',
             'animate-content-in',
-            // En la topbar la campana está a la derecha → abrir hacia la izquierda.
-            variant === 'icon' ? 'right-0' : 'left-0',
+            // Topbar (icon): campana arriba-derecha → panel HACIA ABAJO, alineado a la derecha.
+            // Sidebar footer (row): pegado al borde inferior → panel HACIA ARRIBA, a la izquierda,
+            // para que no se corte fuera de pantalla.
+            variant === 'icon' ? 'top-full mt-2 right-0' : 'bottom-full mb-2 left-0',
           )}
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">

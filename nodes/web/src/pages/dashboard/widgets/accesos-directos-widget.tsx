@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, ClipboardCheck, Clock, Waves, type LucideIcon } from 'lucide-react';
+import { Zap, Clock, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WidgetShell } from './widget-shell';
 
@@ -18,15 +18,12 @@ interface Shortcut {
  * exportado, por eso se navega en lugar de reusar el componente directamente.
  */
 const SHORTCUTS: readonly Shortcut[] = [
-  { label: 'Checklist vehículos', icon: ClipboardCheck, to: '/recursos' },
   { label: 'Registrar horas extra', icon: Clock, to: '/finanzas/horas' },
-  { label: 'Detección orilla de playa', icon: Waves, to: '/herramientas' },
 ] as const;
 
 /**
  * Widget "Accesos directos" (§6-2.1). Tarjeta con botones que llevan al
- * trabajador a las acciones de uso frecuente (checklist de vehículos, registro
- * de horas extra y herramienta de detección de orilla de playa).
+ * trabajador a las acciones de uso frecuente (por ahora, registrar horas extra).
  */
 export function AccesosDirectosWidget(): ReactNode {
   const navigate = useNavigate();
@@ -34,7 +31,7 @@ export function AccesosDirectosWidget(): ReactNode {
   return (
     <WidgetShell
       title="Accesos directos"
-      description="Acciones frecuentes a un clic"
+      description="Registra tus horas extra a un clic"
       icon={Zap}
     >
       <div className="flex flex-col gap-2">
