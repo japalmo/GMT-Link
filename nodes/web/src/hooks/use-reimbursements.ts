@@ -40,8 +40,11 @@ export interface UseReimbursementsResult {
   error: string | null;
   /** Vuelve a cargar mis reembolsos + (si soy gestor) la lista global. */
   refetch: () => Promise<void>;
-  /** Crea un reembolso propio y refresca. Propaga el error al llamador. */
-  create: (input: CreateReimbursementInput) => Promise<void>;
+  /**
+   * Crea un reembolso propio y refresca. Devuelve la vista creada (para poder
+   * adjuntarle la boleta a continuación). Propaga el error al llamador.
+   */
+  create: (input: CreateReimbursementInput) => Promise<ReimbursementView>;
   /** Importa un lote de reembolsos propios y refresca. */
   importBatch: (items: CreateReimbursementInput[]) => Promise<void>;
   /** Adjunta/actualiza la boleta (solo dueño, solo si PENDIENTE) y refresca. */
@@ -129,8 +132,9 @@ export function useReimbursements(): UseReimbursementsResult {
 
   const create = useCallback(
     async (input: CreateReimbursementInput) => {
-      await createReimbursement(input);
+      const created = await createReimbursement(input);
       await refreshAll();
+      return created;
     },
     [refreshAll],
   );

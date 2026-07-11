@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
   Ban,
@@ -8,10 +8,6 @@ import {
   Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Alert } from '@/components/ui/alert';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { RejectDialog } from '@/components/ui/reject-dialog';
@@ -23,161 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Modal,
-  ModalClose,
-  ModalContent,
-  ModalDescription,
-  ModalFooter,
-  ModalHeader,
-  ModalTitle,
-} from '@/components/ui/modal';
 import { useOvertime } from '@/hooks/use-overtime';
 import { errorToMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
-import type { CreateOvertimeInput } from '@/types/finance';
-
-/** Helper to get today's date in YYYY-MM-DD local format. */
-function getTodayString(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-interface NewOvertimeDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSubmit: (input: CreateOvertimeInput) => Promise<void>;
-}
-
-function NewOvertimeDialog({
-  open,
-  onOpenChange,
-  onSubmit,
-}: NewOvertimeDialogProps): ReactNode {
-  const [hours, setHours] = useState('');
-  const [date, setDate] = useState(getTodayString());
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setHours('');
-      setDate(getTodayString());
-      setReason('');
-      setError(null);
-    }
-  }, [open]);
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
-    setError(null);
-
-    const parsedHours = parseFloat(hours);
-    if (!hours || Number.isNaN(parsedHours) || parsedHours <= 0) {
-      setError('Las horas deben ser un número mayor a cero.');
-      return;
-    }
-    if (!date) {
-      setError('La fecha es obligatoria.');
-      return;
-    }
-    if (!reason.trim()) {
-      setError('El motivo es obligatorio.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await onSubmit({
-        hours: parsedHours,
-        date,
-        reason: reason.trim(),
-      });
-      onOpenChange(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar la solicitud.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal open={open} onOpenChange={(next) => (submitting ? undefined : onOpenChange(next))}>
-      <ModalContent>
-        <ModalHeader>
-          <ModalTitle>Reportar horas extra</ModalTitle>
-          <ModalDescription>
-            Ingresa la fecha, cantidad de horas trabajadas y el motivo detallado de la jornada.
-          </ModalDescription>
-        </ModalHeader>
-
-        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4" noValidate>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ot-hours">Horas trabajadas</Label>
-              <Input
-                id="ot-hours"
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                placeholder="Ej. 2.5"
-                required
-                disabled={submitting}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ot-date">Fecha de trabajo</Label>
-              <Input
-                id="ot-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                disabled={submitting}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ot-reason">Motivo</Label>
-            <Textarea
-              id="ot-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Explica el trabajo realizado durante estas horas extra."
-              rows={3}
-              required
-              disabled={submitting}
-            />
-          </div>
-
-          {error && (
-            <Alert variant="destructive" live>
-              {error}
-            </Alert>
-          )}
-
-          <ModalFooter>
-            <ModalClose asChild>
-              <Button type="button" variant="outline" disabled={submitting}>
-                Cancelar
-              </Button>
-            </ModalClose>
-            <Button type="submit" loading={submitting}>
-              Enviar solicitud
-            </Button>
-          </ModalFooter>
-        </form>
-      </ModalContent>
-    </Modal>
-  );
-}
+import { HorasExtraFormDialog } from './horas-extra-form';
 
 export function HorasExtraTab(): ReactNode {
   const {
@@ -269,12 +114,20 @@ export function HorasExtraTab(): ReactNode {
                 {mine.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{formatDate(item.date)}</TableCell>
-                    <TableCell className="font-semibold">{item.hours} hrs</TableCell>
-                    <TableCell className="text-muted-foreground max-w-md truncate" title={item.reason}>
-                      {item.reason}
+                    <TableCell className="font-semibold">
+                      {item.hours != null ? `${item.hours} hrs` : '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground max-w-md truncate" title={item.reason ?? undefined}>
+                      {item.reason ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge type="finance" status={item.status} />
+                      {item.isDraft ? (
+                        <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                          Borrador
+                        </span>
+                      ) : (
+                        <StatusBadge type="finance" status={item.status} />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -321,16 +174,24 @@ export function HorasExtraTab(): ReactNode {
                           </div>
                         </TableCell>
                         <TableCell>{formatDate(item.date)}</TableCell>
-                        <TableCell className="font-semibold">{item.hours} hrs</TableCell>
-                        <TableCell className="max-w-xs truncate" title={item.reason}>
-                          {item.reason}
+                        <TableCell className="font-semibold">
+                          {item.hours != null ? `${item.hours} hrs` : '—'}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate" title={item.reason ?? undefined}>
+                          {item.reason ?? '—'}
                         </TableCell>
                         <TableCell>
-                          <StatusBadge type="finance" status={item.status} />
+                          {item.isDraft ? (
+                            <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              Borrador
+                            </span>
+                          ) : (
+                            <StatusBadge type="finance" status={item.status} />
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-end gap-1.5">
-                            {item.status === 'PENDIENTE' && (
+                            {item.status === 'PENDIENTE' && !item.isDraft && (
                               <>
                                 <Button
                                   variant="outline"
@@ -389,7 +250,7 @@ export function HorasExtraTab(): ReactNode {
         </section>
       )}
 
-      <NewOvertimeDialog
+      <HorasExtraFormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSubmit={create}

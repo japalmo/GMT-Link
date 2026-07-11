@@ -849,15 +849,54 @@ export function listMyReimbursements(
  * 403 si no se tiene `can_manage_finance` (el llamador lo trata como "no gestor"
  * sin romper la UI). Las filas incluyen `requester`.
  */
-export function listAllReimbursements(filters: {
+export interface ReimbursementListFilters {
   status?: FinanceStatus;
   userId?: string;
-}): Promise<ReimbursementView[]> {
+  /** ISO-8601. */
+  dateFrom?: string;
+  /** ISO-8601. */
+  dateTo?: string;
+  /** ISO-8601 (día exacto). */
+  date?: string;
+  /** "YYYY-MM" (mes contable, cierre día 20). */
+  month?: string;
+  order?: 'asc' | 'desc';
+  /** Selector "pendientes de impresión". */
+  printed?: boolean;
+}
+
+export function listAllReimbursements(
+  filters: ReimbursementListFilters,
+): Promise<ReimbursementView[]> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.userId) params.set('userId', filters.userId);
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.date) params.set('date', filters.date);
+  if (filters.month) params.set('month', filters.month);
+  if (filters.order) params.set('order', filters.order);
+  if (filters.printed !== undefined) params.set('printed', String(filters.printed));
   const query = params.toString();
   return request<ReimbursementView[]>(`/reimbursements${query ? `?${query}` : ''}`);
+}
+
+/**
+ * `GET /reimbursements/summary` — totales agregados por el servidor (§5.2). Solo
+ * gestores (403 si no). C2 agrega client-side, pero el wrapper queda disponible.
+ */
+export function reimbursementsSummary(
+  filters: ReimbursementListFilters = {},
+): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.userId) params.set('userId', filters.userId);
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.date) params.set('date', filters.date);
+  if (filters.month) params.set('month', filters.month);
+  const query = params.toString();
+  return request<unknown>(`/reimbursements/summary${query ? `?${query}` : ''}`);
 }
 
 /**
@@ -909,14 +948,41 @@ export function payReimbursement(id: string): Promise<ReimbursementView> {
   );
 }
 
+/** Orientación de página del PDF de impresión en lote (espeja el DTO del backend). */
+export type PrintOrientation = 'portrait' | 'landscape';
+/** Tamaño de hoja del PDF de impresión en lote (espeja el DTO del backend). */
+export type PrintPageSize = 'A4' | 'letter';
+
+/** Resultado del OCR de boleta (`POST /reimbursements/scan-receipt`). Parcial. */
+export interface ReceiptScanResult {
+  concept?: string;
+  amount?: number;
+  /** "YYYY-MM-DD". */
+  date?: string;
+  category?: string;
+}
+
+/**
+ * `POST /reimbursements/scan-receipt` — OCR NVIDIA de la boleta (multipart `file`).
+ * Devuelve campos sugeridos (parciales); el usuario los corrige antes de crear.
+ */
+export function scanReceipt(file: File): Promise<ReceiptScanResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return uploadRequest<ReceiptScanResult>('/reimbursements/scan-receipt', formData);
+}
+
 /**
  * `POST /reimbursements/print` — genera en el SERVIDOR un PDF con las boletas de
- * los reembolsos indicados, en grilla de `perPage` (2/4/6) por página (§6-3.2).
- * Solo gestores (403 si no). Devuelve el PDF como `Blob` para descargar.
+ * los reembolsos indicados, en grilla de `perPage` (2/4/6) por página, con
+ * `orientation` y `size` opcionales (§5.7). Solo gestores (403 si no). Devuelve el
+ * PDF como `Blob`. NO marca impresas: eso lo hace `markReimbursementsPrinted`.
  */
 export async function downloadReimbursementsPdf(
   ids: string[],
   perPage: 2 | 4 | 6,
+  orientation: PrintOrientation = 'portrait',
+  size: PrintPageSize = 'A4',
 ): Promise<Blob> {
   const headers = new Headers();
   const token = getToken();
@@ -928,7 +994,7 @@ export async function downloadReimbursementsPdf(
     res = await fetch(`${API_URL}/reimbursements/print`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ids, perPage }),
+      body: JSON.stringify({ ids, perPage, orientation, size }),
     });
   } catch {
     throw new ApiError('No se pudo conectar con el servidor.', 0);
@@ -944,6 +1010,17 @@ export async function downloadReimbursementsPdf(
     throw new ApiError(extractMessage(body, `Error ${res.status} al generar el PDF.`), res.status);
   }
   return res.blob();
+}
+
+/**
+ * `POST /reimbursements/print/mark` — marca `printedAt` en cada reembolso tras una
+ * descarga confirmada (§5.7). Solo gestores (403 si no). Devuelve cuántas marcó.
+ */
+export function markReimbursementsPrinted(ids: string[]): Promise<{ marked: number }> {
+  return request<{ marked: number }>('/reimbursements/print/mark', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
 }
 
 /* --- Horas extra --- */
@@ -967,15 +1044,66 @@ export function listMyOvertime(status?: FinanceStatus): Promise<OvertimeView[]> 
  * si no se tiene `can_manage_finance` (el llamador lo trata como "no gestor" sin
  * romper la UI). Las filas incluyen `requester`.
  */
-export function listAllOvertime(filters: {
+export interface OvertimeListFilters {
   status?: FinanceStatus;
   userId?: string;
-}): Promise<OvertimeView[]> {
+  projectId?: string;
+  clientId?: string;
+  /** ISO-8601. */
+  dateFrom?: string;
+  /** ISO-8601. */
+  dateTo?: string;
+  /** ISO-8601 (día exacto). */
+  date?: string;
+  /** "YYYY-MM" (mes contable, cierre día 20). */
+  month?: string;
+  order?: 'asc' | 'desc';
+}
+
+export function listAllOvertime(
+  filters: OvertimeListFilters,
+): Promise<OvertimeView[]> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.userId) params.set('userId', filters.userId);
+  if (filters.projectId) params.set('projectId', filters.projectId);
+  if (filters.clientId) params.set('clientId', filters.clientId);
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.date) params.set('date', filters.date);
+  if (filters.month) params.set('month', filters.month);
+  if (filters.order) params.set('order', filters.order);
   const query = params.toString();
   return request<OvertimeView[]>(`/overtime${query ? `?${query}` : ''}`);
+}
+
+/**
+ * `GET /overtime/summary` — totales agregados por el servidor (§5.2). Solo gestores
+ * (403 si no). C2 agrega client-side, pero el wrapper queda disponible.
+ */
+export function overtimeSummary(filters: OvertimeListFilters = {}): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  if (filters.userId) params.set('userId', filters.userId);
+  if (filters.projectId) params.set('projectId', filters.projectId);
+  if (filters.clientId) params.set('clientId', filters.clientId);
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  if (filters.date) params.set('date', filters.date);
+  if (filters.month) params.set('month', filters.month);
+  const query = params.toString();
+  return request<unknown>(`/overtime/summary${query ? `?${query}` : ''}`);
+}
+
+/**
+ * `POST /overtime/:id/close` — cierra un BORRADOR agregando la hora de término.
+ * BORRADOR→PENDIENTE; 409 si el estado no lo permite.
+ */
+export function closeOvertime(id: string, endTime: string): Promise<OvertimeView> {
+  return request<OvertimeView>(
+    `/overtime/${encodeURIComponent(id)}/close`,
+    { method: 'POST', body: JSON.stringify({ endTime }) },
+  );
 }
 
 /** `POST /overtime/:id/approve` — aprueba (gestor). PENDIENTE→APROBADO; 409 si no. */

@@ -1,61 +1,42 @@
 import type { ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Clock, Receipt, FileText } from 'lucide-react';
+import { LayoutDashboard, Clock, Receipt } from 'lucide-react';
 import { Tabs, type TabItem } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageContainer } from '@/components/layout/page-container';
-import { useHasPermission } from '@/hooks/use-has-permission';
 import { ReembolsosTab } from './reembolsos';
 import { HorasExtraTab } from './horas-extra';
-import { LiquidacionesTab } from './liquidaciones';
+import { VistaGeneralTab } from './vista-general';
 
 /** Pestaña activa del módulo Finanzas. */
-export type FinanzasTab = 'reembolsos' | 'horas' | 'liquidaciones';
+export type FinanzasTab = 'general' | 'reembolsos' | 'horas';
 
 /** Definición de las pestañas de Finanzas (valor, etiqueta e icono). */
 const FINANZAS_TABS: ReadonlyArray<TabItem<FinanzasTab>> = [
+  { value: 'general', label: 'Vista general', icon: LayoutDashboard },
   { value: 'reembolsos', label: 'Reembolsos', icon: Receipt },
   { value: 'horas', label: 'Horas extra', icon: Clock },
-  { value: 'liquidaciones', label: 'Liquidaciones', icon: FileText },
 ];
 
 /**
- * Página Finanzas (§6-3.1 Reembolsos / §6-3.3 Horas extra / §6-3.4 Liquidaciones).
- *
- * Cáscara del módulo: header + toggle de pestañas. La pestaña activa vive en la
- * URL (`/finanzas/:tab`, mismo patrón que Operaciones) para que los links de las
- * notificaciones (`/finanzas/reembolsos`, `/finanzas/horas`) aterricen en la
- * pestaña correcta. El contenido de cada pestaña (lista propia, formulario de
- * solicitud y, para gestores, la lista global con acciones) vive en su
- * respectivo componente Tab. Reembolsos y Horas extra son visibles para todos y
- * su gestión interna se resuelve con un probe silencioso dentro de los hooks.
- * Liquidaciones, en cambio, es una sección manager-only: su pestaña se gatea por
- * rol aquí (mismo criterio que el guard `can_manage_finance` del backend) y el
- * acceso directo a `/finanzas/liquidaciones` sin permiso redirige.
+ * Página Finanzas (spec §5). Cáscara: header + toggle de pestañas. La pestaña
+ * activa vive en la URL (`/finanzas/:tab`) para que los links de notificaciones
+ * (`/finanzas/reembolsos`, `/finanzas/horas`) aterricen donde corresponde.
+ * Todas las pestañas son visibles para todo usuario autenticado; el gating de
+ * acciones (ver todo / aprobar / pagar / imprimir) se resuelve por permiso
+ * dentro de cada Tab (`useHasPermission`). Liquidaciones fue removida (§5.1) y
+ * cualquier ruta legacy (`/finanzas/liquidaciones`) redirige a la Vista general.
  */
 export default function FinanzasPage(): ReactNode {
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
 
-  // Liquidaciones es gestión (manager-only): sólo visible para quien puede ver
-  // todas las solicitudes de finanzas. Horas extra y Reembolsos siguen visibles
-  // para todos. `useHasPermission` es fail-closed mientras la sesión carga
-  // (devuelve `false`), así la pestaña no parpadea para el rol por defecto (worker).
-  const canManageFinance = useHasPermission('finance:request:view:all');
-
-  // Pestañas visibles según permiso: liquidaciones se filtra si no es gestor.
-  const visibleTabs = FINANZAS_TABS.filter(
-    (item) => item.value !== 'liquidaciones' || canManageFinance,
-  );
-
-  // Valida el segmento de la URL; cualquier otro valor cae a Reembolsos.
   const activeTab: FinanzasTab =
-    tab === 'reembolsos' || tab === 'horas' || tab === 'liquidaciones' ? tab : 'reembolsos';
+    tab === 'reembolsos' || tab === 'horas' || tab === 'general' ? tab : 'general';
 
-  // Acceso directo a `/finanzas/liquidaciones` sin permiso → redirige a la
-  // primera pestaña permitida (Reembolsos, siempre visible).
-  if (activeTab === 'liquidaciones' && !canManageFinance) {
-    return <Navigate to="/finanzas/reembolsos" replace />;
+  // `/finanzas/liquidaciones` (o cualquier tab legacy) redirige a la Vista general.
+  if (tab && tab !== 'reembolsos' && tab !== 'horas' && tab !== 'general') {
+    return <Navigate to="/finanzas/general" replace />;
   }
 
   const handleTabChange = (newTab: FinanzasTab): void => {
@@ -66,18 +47,18 @@ export default function FinanzasPage(): ReactNode {
     <PageContainer maxWidth="7xl">
       <PageHeader
         title="Finanzas"
-        description="Reembolsos, horas extra y liquidaciones de sueldo."
+        description="Vista general, reembolsos y horas extra."
       />
       <Tabs
-        items={visibleTabs}
+        items={FINANZAS_TABS}
         value={activeTab}
         onValueChange={handleTabChange}
         aria-label="Secciones de finanzas"
       />
 
+      {activeTab === 'general' && <VistaGeneralTab />}
       {activeTab === 'reembolsos' && <ReembolsosTab />}
       {activeTab === 'horas' && <HorasExtraTab />}
-      {activeTab === 'liquidaciones' && canManageFinance && <LiquidacionesTab />}
     </PageContainer>
   );
 }
