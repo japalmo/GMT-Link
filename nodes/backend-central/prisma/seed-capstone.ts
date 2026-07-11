@@ -365,6 +365,8 @@ async function main(): Promise<void> {
       update: { firstName: u.firstName, lastName: u.lastName, status: UserStatus.ACTIVE },
       create: {
         email: u.email,
+        username: u.email.split('@')[0]?.toLowerCase() ?? u.email,
+        emailInstitucional: u.email,
         firstName: u.firstName,
         lastName: u.lastName,
         status: UserStatus.ACTIVE,

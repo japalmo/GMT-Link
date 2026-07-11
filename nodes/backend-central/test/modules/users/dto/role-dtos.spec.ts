@@ -15,7 +15,8 @@ describe('CreateUserDto.roleKeys — acepta roles personalizados', () => {
     const dto = plainToInstance(CreateUserDto, {
       firstName: 'Ana',
       lastName: 'Pérez',
-      email: 'ana@gmt.cl',
+      username: 'ana.perez',
+      emailInstitucional: 'ana@gmt.cl',
       roleKeys: ['c_inspector_de_campo'],
     });
     const errors = await validate(dto);
@@ -26,7 +27,8 @@ describe('CreateUserDto.roleKeys — acepta roles personalizados', () => {
     const dto = plainToInstance(CreateUserDto, {
       firstName: 'Ana',
       lastName: 'Pérez',
-      email: 'ana@gmt.cl',
+      username: 'ana.perez',
+      emailInstitucional: 'ana@gmt.cl',
       roleKeys: [42],
     });
     const errors = await validate(dto);
@@ -37,7 +39,8 @@ describe('CreateUserDto.roleKeys — acepta roles personalizados', () => {
     const dto = plainToInstance(CreateUserDto, {
       firstName: 'Ana',
       lastName: 'Pérez',
-      email: 'ana@gmt.cl',
+      username: 'ana.perez',
+      emailInstitucional: 'ana@gmt.cl',
       roleKeys: [''],
     });
     const errors = await validate(dto);

@@ -19,6 +19,7 @@ import { generateProvisionalPassword } from '../src/common/provisional-password'
 export const ORG_ID = 'gmt';
 export const ADMIN = {
   email: 'admin@gmt.cl',
+  username: 'admin',
   firstName: 'Admin',
   lastName: 'GMT',
   roleKey: 'org_admin',
@@ -103,6 +104,8 @@ export async function ensurePostgresUser(
     update: { firstName: ADMIN.firstName, lastName: ADMIN.lastName, status: statusValue, passwordHash },
     create: {
       email: ADMIN.email,
+      username: ADMIN.username,
+      emailInstitucional: ADMIN.email,
       firstName: ADMIN.firstName,
       lastName: ADMIN.lastName,
       status: statusValue,

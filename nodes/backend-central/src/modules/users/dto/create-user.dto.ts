@@ -7,19 +7,23 @@ import {
   IsEmail,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import type { RoleKey } from '../../../common/role-keys';
+import { AtLeastOneEmail } from './at-least-one-email.validator';
 
 /** Tope defensivo de roles por usuario en un solo request (no ligado a ROLE_KEYS). */
 const MAX_ROLE_KEYS_PER_REQUEST = 20;
 
+/** username: 3-30 chars, minúsculas/dígitos/punto/guion/guion bajo (default = prefijo del email institucional). */
+const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
+
 /**
- * Body de `POST /users` (§1.1). El admin provisiona un colaborador o cliente.
- * Validación de forma vía class-validator (solo exige texto no vacío); la
- * validación dura de `roleKeys` contra la tabla `Role` la hace `UsersService`
- * (§4.1, matriz RBAC dinámica §7 — acepta roles personalizados `c_xxx`).
+ * Body de `POST /users` (§1.1, §4.3). El admin provisiona un colaborador o cliente.
+ * Identidad de login = `username` (único). Debe traer ≥1 email (institucional/personal); el `email`
+ * legacy lo deriva `UsersService` (D1). Validación dura de `roleKeys` contra `Role` la hace el service.
  */
 export class CreateUserDto {
   @IsString()
@@ -42,8 +46,20 @@ export class CreateUserDto {
   @MaxLength(80)
   secondLastName?: string;
 
-  @IsEmail({}, { message: 'El correo no es válido.' })
-  email!: string;
+  @IsString()
+  @Matches(USERNAME_RE, {
+    message: 'El usuario debe tener 3-30 caracteres: minúsculas, dígitos, punto, guion o guion bajo.',
+  })
+  @AtLeastOneEmail()
+  username!: string;
+
+  @IsOptional()
+  @IsEmail({}, { message: 'El email institucional no es válido.' })
+  emailInstitucional?: string;
+
+  @IsOptional()
+  @IsEmail({}, { message: 'El email personal no es válido.' })
+  emailPersonal?: string;
 
   @IsArray()
   @ArrayNotEmpty({ message: 'Debe asignar al menos un rol.' })

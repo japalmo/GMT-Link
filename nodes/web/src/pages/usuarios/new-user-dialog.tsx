@@ -13,7 +13,11 @@ interface FormState {
   secondName: string;
   lastName: string;
   secondLastName: string;
-  email: string;
+  username: string;
+  emailInstitucional: string;
+  emailPersonal: string;
+  /** Flag: el admin editó el username a mano → dejar de autosugerirlo. */
+  usernameTouched: boolean;
   roleKeys: RoleKey[];
   isClientUser: boolean;
 }
@@ -23,12 +27,24 @@ const EMPTY: FormState = {
   secondName: '',
   lastName: '',
   secondLastName: '',
-  email: '',
+  username: '',
+  emailInstitucional: '',
+  emailPersonal: '',
+  usernameTouched: false,
   roleKeys: [],
   isClientUser: false,
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
+
+/** Deriva un username sugerido del prefijo del email institucional (minúsculas, chars válidos). */
+function suggestUsername(email: string): string {
+  return (email.split('@')[0] ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '')
+    .slice(0, 30);
+}
 
 /** Convierte el estado del formulario al DTO del backend (omite opcionales vacíos). */
 function toDto(form: FormState): CreateUserDto {
@@ -37,7 +53,9 @@ function toDto(form: FormState): CreateUserDto {
     secondName: form.secondName.trim() || undefined,
     lastName: form.lastName.trim(),
     secondLastName: form.secondLastName.trim() || undefined,
-    email: form.email.trim(),
+    username: form.username.trim(),
+    emailInstitucional: form.emailInstitucional.trim() || undefined,
+    emailPersonal: form.emailPersonal.trim() || undefined,
     roleKeys: form.roleKeys,
     isClientUser: form.isClientUser,
   };
@@ -107,7 +125,10 @@ export function NewUserDialog({
   function localError(): string | null {
     if (form.firstName.trim().length === 0) return 'El nombre es obligatorio.';
     if (form.lastName.trim().length === 0) return 'El apellido es obligatorio.';
-    if (!EMAIL_RE.test(form.email.trim())) return 'Ingresa un correo válido.';
+    if (!USERNAME_RE.test(form.username.trim())) return 'El usuario debe tener 3-30 caracteres (minúsculas, dígitos, . _ -).';
+    if (!form.emailInstitucional.trim() && !form.emailPersonal.trim()) return 'Indica al menos un email (institucional o personal).';
+    if (form.emailInstitucional.trim() && !EMAIL_RE.test(form.emailInstitucional.trim())) return 'Email institucional inválido.';
+    if (form.emailPersonal.trim() && !EMAIL_RE.test(form.emailPersonal.trim())) return 'Email personal inválido.';
     if (form.roleKeys.length === 0) return 'Selecciona al menos un rol.';
     return null;
   }
@@ -206,11 +227,38 @@ export function NewUserDialog({
             </Field>
           </div>
 
-          <Field label="Correo electrónico" required>
+          <Field label="Email institucional">
             <Input
               type="email"
-              value={form.email}
-              onChange={(e) => update('email', e.target.value)}
+              value={form.emailInstitucional}
+              onChange={(e) => {
+                const value = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  emailInstitucional: value,
+                  username: prev.usernameTouched ? prev.username : suggestUsername(value),
+                }));
+              }}
+              autoComplete="off"
+            />
+          </Field>
+
+          <Field label="Usuario (login)" required>
+            <Input
+              value={form.username}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, username: e.target.value, usernameTouched: true }))
+              }
+              autoComplete="off"
+              placeholder="ej: ana.perez"
+            />
+          </Field>
+
+          <Field label="Email personal">
+            <Input
+              type="email"
+              value={form.emailPersonal}
+              onChange={(e) => update('emailPersonal', e.target.value)}
               autoComplete="off"
             />
           </Field>

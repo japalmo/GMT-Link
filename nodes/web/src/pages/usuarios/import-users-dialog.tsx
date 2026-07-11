@@ -10,12 +10,20 @@ const TEMPLATE_COLUMNS: ImportTemplateColumn[] = [
   { key: 'secondName', label: 'Segundo nombre', example: 'María' },
   { key: 'lastName', label: 'Apellido paterno', example: 'Pérez' },
   { key: 'secondLastName', label: 'Apellido materno', example: 'Soto' },
-  { key: 'email', label: 'Correo', example: 'ana.perez@gmt.cl' },
+  { key: 'username', label: 'Usuario (opcional; se autogenera del email institucional)', example: 'ana.perez' },
+  { key: 'emailInstitucional', label: 'Email institucional', example: 'ana.perez@gmt.cl' },
+  { key: 'emailPersonal', label: 'Email personal', example: 'ana@gmail.com' },
   { key: 'roleKeys', label: 'Roles (separados por ;)', example: 'operator;viewer' },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
 const VALID_ROLES = new Set<string>(ROLE_KEYS);
+
+/** Deriva un username sugerido del prefijo del email institucional. */
+function suggestUsername(email: string): string {
+  return (email.split('@')[0] ?? '').toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 30);
+}
 
 /** Parser CSV mínimo con soporte de campos entre comillas (",", comillas escapadas y saltos). */
 function parseCsv(text: string): string[][] {
@@ -105,7 +113,7 @@ export function ImportUsersDialog({
 
     const header = (matrix[0] ?? []).map((h) => h.trim());
     const idx = (key: string): number => header.indexOf(key);
-    const required = ['firstName', 'lastName', 'email', 'roleKeys'];
+    const required = ['firstName', 'lastName', 'roleKeys'];
     const missing = required.filter((k) => idx(k) === -1);
     if (missing.length > 0) {
       return {
@@ -123,13 +131,18 @@ export function ImportUsersDialog({
       const rowNo = i + 1; // 1-indexado, contando la cabecera
       const firstName = cell(raw, 'firstName');
       const lastName = cell(raw, 'lastName');
-      const email = cell(raw, 'email');
+      const emailInstitucional = cell(raw, 'emailInstitucional');
+      const emailPersonal = cell(raw, 'emailPersonal');
+      const username = cell(raw, 'username') || suggestUsername(emailInstitucional);
       const { roles, invalid } = parseRoles(cell(raw, 'roleKeys'));
 
       const problems: string[] = [];
       if (firstName.length === 0) problems.push('falta el primer nombre');
       if (lastName.length === 0) problems.push('falta el apellido paterno');
-      if (!EMAIL_RE.test(email)) problems.push('correo inválido');
+      if (!USERNAME_RE.test(username)) problems.push('usuario inválido (3-30, minúsculas . _ -)');
+      if (!emailInstitucional && !emailPersonal) problems.push('falta al menos un email');
+      if (emailInstitucional && !EMAIL_RE.test(emailInstitucional)) problems.push('email institucional inválido');
+      if (emailPersonal && !EMAIL_RE.test(emailPersonal)) problems.push('email personal inválido');
       if (invalid.length > 0) problems.push(`roles desconocidos: ${invalid.join(', ')}`);
       if (roles.length === 0) problems.push('sin roles válidos');
 
@@ -143,7 +156,9 @@ export function ImportUsersDialog({
       rows.push({
         firstName,
         lastName,
-        email,
+        username,
+        emailInstitucional: emailInstitucional || undefined,
+        emailPersonal: emailPersonal || undefined,
         roleKeys: roles,
         secondName: secondName.length > 0 ? secondName : undefined,
         secondLastName: secondLastName.length > 0 ? secondLastName : undefined,
@@ -172,7 +187,8 @@ export function ImportUsersDialog({
           header: 'Nombre',
           render: (r) => `${r.firstName} ${r.lastName}`,
         },
-        { header: 'Correo', render: (r) => r.email },
+        { header: 'Usuario', render: (r) => r.username },
+        { header: 'Email', render: (r) => r.emailInstitucional ?? r.emailPersonal ?? '—' },
         {
           header: 'Roles',
           render: (r) => r.roleKeys.map((role) => roleLabel(role)).join(', '),

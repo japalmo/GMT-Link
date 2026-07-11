@@ -16,7 +16,7 @@ import { useAuth } from '@/context/auth-context';
 /** Traduce los errores de la API de login a mensajes claros en español. */
 function authErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 401) return 'Correo o contraseña incorrectos.';
+    if (error.status === 401) return 'Usuario o contraseña incorrectos.';
     if (error.status === 0) return 'Sin conexión con el servidor.';
     return error.message;
   }
@@ -30,7 +30,7 @@ function authErrorMessage(error: unknown): string {
  */
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -39,14 +39,14 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
-      setError('Ingresa tu correo y contraseña.');
+    if (!username.trim() || !password) {
+      setError('Ingresa tu usuario y contraseña.');
       return;
     }
 
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
+      await login(username.trim(), password);
       // El observer de auth-context poblará el usuario y el router redirige.
     } catch (err) {
       setError(authErrorMessage(err));
@@ -65,20 +65,19 @@ export default function LoginPage() {
         <Card>
           <CardHeader>
             <CardTitle>Iniciar sesión</CardTitle>
-            <CardDescription>Accede con tu correo corporativo.</CardDescription>
+            <CardDescription>Accede con tu usuario.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="login-email">Correo</Label>
+                <Label htmlFor="login-username">Usuario</Label>
                 <Input
-                  id="login-email"
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  placeholder="tu@gmt.cl"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="login-username"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="tu.usuario"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   aria-invalid={error ? true : undefined}
                   disabled={submitting}
                   autoFocus

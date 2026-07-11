@@ -56,6 +56,9 @@ export type UserStatus = 'PENDING_FIRST_LOGIN' | 'ACTIVE' | 'SUSPENDED';
 export interface ProvisionedUser {
   id: string;
   email: string;
+  username: string;
+  emailInstitucional: string | null;
+  emailPersonal: string | null;
   firstName: string;
   lastName: string;
   status: UserStatus;

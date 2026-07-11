@@ -49,7 +49,7 @@ export default function UsuariosPage(): ReactNode {
     }
     setCredentialsTitle('Credencial provisoria');
     setCredentials([
-      { email: res.user.email, provisionalPassword: res.provisionalPassword },
+      { username: res.user.username, email: res.user.email, provisionalPassword: res.provisionalPassword },
     ]);
     await refetch();
   }
@@ -60,7 +60,7 @@ export default function UsuariosPage(): ReactNode {
     if (result.created.length > 0) {
       setCredentialsTitle(`${result.created.length} usuario(s) importado(s)`);
       setCredentials(
-        result.created.map((c) => ({ email: c.email, provisionalPassword: c.provisionalPassword })),
+        result.created.map((c) => ({ username: c.username, email: c.email, provisionalPassword: c.provisionalPassword })),
       );
     }
     void refetch();
@@ -79,11 +79,22 @@ export default function UsuariosPage(): ReactNode {
       ),
     },
     {
-      id: 'email',
-      header: 'Correo',
+      id: 'usuario',
+      header: 'Usuario',
       sortable: true,
-      accessor: (u) => u.email,
-      render: (u) => <span className="text-muted-foreground">{u.email}</span>,
+      accessor: (u) => u.username,
+      render: (u) => <span className="font-medium">{u.username}</span>,
+    },
+    {
+      id: 'email',
+      header: 'Email',
+      sortable: true,
+      accessor: (u) => u.emailInstitucional ?? u.emailPersonal ?? u.email,
+      render: (u) => (
+        <span className="text-muted-foreground">
+          {u.emailInstitucional ?? u.emailPersonal ?? u.email}
+        </span>
+      ),
     },
     {
       id: 'roles',
@@ -156,7 +167,7 @@ export default function UsuariosPage(): ReactNode {
         columns={columns}
         getRowId={(u) => u.id}
         searchable
-        searchPlaceholder="Buscar por nombre o correo…"
+        searchPlaceholder="Buscar por nombre, usuario o email…"
         loading={loading}
         error={error}
         onRetry={() => void refetch()}

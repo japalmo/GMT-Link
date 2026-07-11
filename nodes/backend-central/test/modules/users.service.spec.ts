@@ -20,6 +20,9 @@ interface FakeUserRow {
   lastName: string;
   secondLastName: string | null;
   email: string;
+  username: string;
+  emailInstitucional: string | null;
+  emailPersonal: string | null;
   passwordHash: string;
   status: string;
   isClientUser: boolean;
@@ -31,6 +34,7 @@ interface FakeUserRow {
 interface PrismaState {
   rolesInCatalog: Set<string>;
   emailExists: boolean;
+  usernameExists: boolean;
   failPersist: boolean;
 }
 
@@ -54,6 +58,9 @@ function buildPrismaMock(state: PrismaState): {
         lastName: string;
         secondLastName: string | null;
         email: string;
+        username: string;
+        emailInstitucional: string | null;
+        emailPersonal: string | null;
         passwordHash: string;
         isClientUser: boolean;
         status: string;
@@ -70,6 +77,9 @@ function buildPrismaMock(state: PrismaState): {
         lastName: args.data.lastName,
         secondLastName: args.data.secondLastName,
         email: args.data.email,
+        username: args.data.username,
+        emailInstitucional: args.data.emailInstitucional ?? null,
+        emailPersonal: args.data.emailPersonal ?? null,
         passwordHash: args.data.passwordHash,
         status: args.data.status,
         isClientUser: args.data.isClientUser,
@@ -97,10 +107,16 @@ function buildPrismaMock(state: PrismaState): {
     },
     user: {
       findUnique: vi.fn(
-        (args: { where: { id?: string; email?: string } }): Promise<{ id: string } | null> => {
+        (args: {
+          where: { id?: string; email?: string; username?: string };
+        }): Promise<{ id: string } | null> => {
           if (args.where.id !== undefined) {
             // assertUserExists (assignRole/removeRole): el usuario del test existe.
             return Promise.resolve({ id: args.where.id });
+          }
+          if (args.where.username !== undefined) {
+            // assertUsernameFree (create): controlado por el estado del test.
+            return Promise.resolve(state.usernameExists ? { id: 'existing' } : null);
           }
           // assertEmailFree (create): controlado por el estado del test.
           return Promise.resolve(state.emailExists ? { id: 'existing' } : null);
@@ -197,7 +213,8 @@ function validDto(overrides: Partial<CreateUserDto> = {}): CreateUserDto {
   return {
     firstName: 'Ana',
     lastName: 'Pérez',
-    email: 'ana@gmt.cl',
+    username: 'ana.perez',
+    emailInstitucional: 'ana@gmt.cl',
     roleKeys: ['operator', 'viewer'],
     ...overrides,
   } as CreateUserDto;
@@ -218,7 +235,7 @@ describe('UsersService.create', () => {
   let state: PrismaState;
 
   beforeEach(() => {
-    state = { rolesInCatalog: new Set(ALL_ROLES), emailExists: false, failPersist: false };
+    state = { rolesInCatalog: new Set(ALL_ROLES), emailExists: false, usernameExists: false, failPersist: false };
   });
 
   it('crea el usuario, persiste el hash bcrypt de la clave provisoria, escribe acceso FGA y retorna la clave', async () => {
@@ -249,6 +266,9 @@ describe('UsersService.create', () => {
     expect(result.user).toEqual({
       id: 'user-generated-id',
       email: 'ana@gmt.cl',
+      username: 'ana.perez',
+      emailInstitucional: 'ana@gmt.cl',
+      emailPersonal: null,
       firstName: 'Ana',
       lastName: 'Pérez',
       status: 'PENDING_FIRST_LOGIN',
@@ -308,6 +328,30 @@ describe('UsersService.create', () => {
     expect(fga.writeTuples).not.toHaveBeenCalled();
   });
 
+  it('rechaza (409) si el username ya existe en Postgres y no persiste el usuario', async () => {
+    state.usernameExists = true;
+    const { prisma, createdRow } = buildPrismaMock(state);
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub());
+
+    await expect(service.create(validDto())).rejects.toBeInstanceOf(ConflictException);
+    expect(createdRow()).toBeNull();
+    expect(fga.writeTuples).not.toHaveBeenCalled();
+  });
+
+  it('mapea P2002 sobre username a 409 (conflicto de nombre de usuario)', async () => {
+    const { prisma } = buildPrismaMock(state);
+    // Fuerza el path del catch: el create de Prisma revienta con P2002 target username.
+    (prisma as unknown as { user: { create: ReturnType<typeof vi.fn> } }).user.create = vi.fn(() =>
+      Promise.reject(Object.assign(new Error('P2002'), { code: 'P2002', meta: { target: ['username'] } })),
+    );
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub());
+
+    await expect(service.create(validDto())).rejects.toBeInstanceOf(ConflictException);
+    expect(fga.writeTuples).not.toHaveBeenCalled();
+  });
+
   it('propaga el error si falla la persistencia en Postgres (sin escribir FGA)', async () => {
     state.failPersist = true;
     const { prisma } = buildPrismaMock(state);
@@ -336,6 +380,7 @@ describe('UsersService.importBatch', () => {
       // 'viewer' NO está en el catálogo: la segunda fila debe fallar.
       rolesInCatalog: new Set(['operator']),
       emailExists: false,
+      usernameExists: false,
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
@@ -343,9 +388,9 @@ describe('UsersService.importBatch', () => {
     const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub());
 
     const result = await service.importBatch([
-      validDto({ email: 'ok@gmt.cl', roleKeys: ['operator'] }),
-      validDto({ email: 'bad@gmt.cl', roleKeys: ['viewer'] }),
-      validDto({ email: 'ok2@gmt.cl', roleKeys: ['operator'] }),
+      validDto({ username: 'ok1', emailInstitucional: 'ok@gmt.cl', roleKeys: ['operator'] }),
+      validDto({ username: 'bad', emailInstitucional: 'bad@gmt.cl', roleKeys: ['viewer'] }),
+      validDto({ username: 'ok2', emailInstitucional: 'ok2@gmt.cl', roleKeys: ['operator'] }),
     ]);
 
     expect(result.created).toHaveLength(2);
@@ -362,6 +407,7 @@ describe('UsersService.importBatch', () => {
     const state: PrismaState = {
       rolesInCatalog: new Set(ALL_ROLES),
       emailExists: false,
+      usernameExists: false,
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
@@ -370,9 +416,9 @@ describe('UsersService.importBatch', () => {
 
     // Filas CRUDAS (como llegan del CSV): la del medio tiene email inválido.
     const result = await service.importBatch([
-      { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gmt.cl', roleKeys: ['operator'] },
-      { firstName: 'Mal', lastName: 'Correo', email: 'no-es-un-email', roleKeys: ['operator'] },
-      { firstName: 'Eva', lastName: 'Soto', email: 'ok2@gmt.cl', roleKeys: ['operator'] },
+      { firstName: 'Ana', lastName: 'Pérez', username: 'ana', emailInstitucional: 'ok@gmt.cl', roleKeys: ['operator'] },
+      { firstName: 'Mal', lastName: 'Correo', username: 'mal', emailInstitucional: 'no-es-un-email', roleKeys: ['operator'] },
+      { firstName: 'Eva', lastName: 'Soto', username: 'eva', emailInstitucional: 'ok2@gmt.cl', roleKeys: ['operator'] },
     ]);
 
     // Las dos filas buenas se importan; la mala no tumba el lote.
@@ -388,6 +434,7 @@ describe('UsersService.importBatch', () => {
     const state: PrismaState = {
       rolesInCatalog: new Set(ALL_ROLES),
       emailExists: false,
+      usernameExists: false,
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
@@ -395,7 +442,7 @@ describe('UsersService.importBatch', () => {
     const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub());
 
     const result = await service.importBatch([
-      { firstName: 'Ana', lastName: 'Pérez', email: 'ok@gmt.cl', roleKeys: ['operator'] },
+      { firstName: 'Ana', lastName: 'Pérez', username: 'ana', emailInstitucional: 'ok@gmt.cl', roleKeys: ['operator'] },
       'fila-corrupta',
     ]);
 
@@ -413,6 +460,7 @@ describe('UsersService — roles dinámicos (§7, matriz RBAC): valida contra Ro
       // El catálogo de la BD incluye un rol personalizado NO sembrado en ROLE_KEYS.
       rolesInCatalog: new Set([...ALL_ROLES, 'c_inspector_de_campo']),
       emailExists: false,
+      usernameExists: false,
       failPersist: false,
     };
   });
@@ -454,7 +502,7 @@ describe('UsersService — roles dinámicos (§7, matriz RBAC): valida contra Ro
 
 describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   it('asigna un rol custom en scope PROJECT: crea Membership, llama fga.syncRoleAssignment y devuelve la respuesta extendida', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve(null)),
@@ -497,7 +545,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('502 FGA_SYNC_FAILED si el sync FGA falla tras crear la Membership: borra la Membership creada (A11)', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     const membershipDelete = vi.fn(() => Promise.resolve(undefined));
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
@@ -526,7 +574,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('400 INVALID_SCOPE_FOR_ROLE si scopeType no está en allowedScopeTypes del rol', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
       Promise.resolve({ id: 'u1' }),
@@ -541,7 +589,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('400 INVALID_SCOPE_ID si scopeType=PROJECT y el proyecto no existe', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
       Promise.resolve({ id: 'u1' }),
@@ -559,7 +607,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('rol isSystem usa fga.syncMembershipToFGA (camino legacy), no syncRoleAssignment', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve(null)),
@@ -595,7 +643,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('idempotencia: 409 si la Membership ya existe para userId+roleKey+scopeType+scopeId', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve({ id: 'existing' })),
@@ -614,7 +662,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('removeRoleScoped borra la Membership, llama al sync de delete y devuelve la respuesta extendida', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     const membershipDelete = vi.fn(() => Promise.resolve(undefined));
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
@@ -647,7 +695,7 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('removeRoleScoped: 404 si la Membership no existe', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve(null)),
@@ -683,6 +731,7 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
   const freshState = (): PrismaState => ({
     rolesInCatalog: new Set(['operator']),
     emailExists: false,
+    usernameExists: false,
     failPersist: false,
   });
 
@@ -821,7 +870,7 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
 
 describe('UsersService — memberships en UserListItem (H13)', () => {
   it('getById expone memberships (roleKey, scopeType, scopeId) para la UI', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, failPersist: false };
+    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
       Promise.resolve({
@@ -831,6 +880,9 @@ describe('UsersService — memberships en UserListItem (H13)', () => {
         lastName: 'Pérez',
         secondLastName: null,
         email: 'ana@gmt.cl',
+        username: 'ana.perez',
+        emailInstitucional: 'ana@gmt.cl',
+        emailPersonal: null,
         status: 'ACTIVE',
         isClientUser: false,
         createdAt: new Date('2026-06-13T00:00:00.000Z'),

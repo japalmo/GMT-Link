@@ -12,8 +12,9 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-/** Una credencial provisoria a mostrar (email + clave generada). */
+/** Una credencial provisoria a mostrar (usuario + clave generada). */
 export interface ProvisionalCredential {
+  username: string;
   email: string;
   provisionalPassword: string;
 }
@@ -82,11 +83,12 @@ export function CredentialDialog({
         <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
           {credentials.map((cred) => (
             <li
-              key={cred.email}
+              key={cred.username}
               className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{cred.email}</p>
+                <p className="truncate text-sm font-medium">{cred.username}</p>
+                <p className="truncate text-xs text-muted-foreground">{cred.email}</p>
                 <p className="flex items-center gap-1.5 font-mono text-sm text-muted-foreground">
                   <KeyRound className="size-3.5 shrink-0" aria-hidden />
                   <span className="truncate">{cred.provisionalPassword}</span>
@@ -94,7 +96,7 @@ export function CredentialDialog({
               </div>
               <CopyButton
                 value={cred.provisionalPassword}
-                label={`Copiar la clave de ${cred.email}`}
+                label={`Copiar la clave de ${cred.username}`}
               />
             </li>
           ))}

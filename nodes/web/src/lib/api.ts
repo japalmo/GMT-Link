@@ -220,11 +220,11 @@ export async function getMe(): Promise<AuthedUser> {
   };
 }
 
-/** `POST /auth/login` — valida credenciales y devuelve nuestro JWT. */
-export function login(email: string, password: string): Promise<{ token: string }> {
+/** `POST /auth/login` — valida credenciales (username) y devuelve nuestro JWT. */
+export function login(username: string, password: string): Promise<{ token: string }> {
   return request<{ token: string }>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ username, password }),
   });
 }
 
@@ -254,7 +254,9 @@ export interface CreateUserDto {
   secondName?: string;
   lastName: string;
   secondLastName?: string;
-  email: string;
+  username: string;
+  emailInstitucional?: string;
+  emailPersonal?: string;
   roleKeys: RoleKey[];
   isClientUser?: boolean;
 }
@@ -267,6 +269,9 @@ export interface UserListItem {
   lastName: string;
   secondLastName: string | null;
   email: string;
+  username: string;
+  emailInstitucional: string | null;
+  emailPersonal: string | null;
   status: UserStatus;
   isClientUser: boolean;
   roleKeys: RoleKey[];
@@ -280,6 +285,9 @@ export interface CreateUserResponse {
   user: {
     id: string;
     email: string;
+    username: string;
+    emailInstitucional: string | null;
+    emailPersonal: string | null;
     firstName: string;
     lastName: string;
     status: UserStatus;
@@ -292,6 +300,7 @@ export interface CreateUserResponse {
 export interface ImportedUser {
   id: string;
   email: string;
+  username: string;
   provisionalPassword: string;
 }
 

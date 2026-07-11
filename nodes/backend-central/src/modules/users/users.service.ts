@@ -73,17 +73,20 @@ export class UsersService {
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
   async create(dto: CreateUserDto): Promise<CreateUserResponse> {
     const roleKeys = await this.validateRoleKeys(dto.roleKeys);
-    await this.assertEmailFree(dto.email);
+    const email = (dto.emailInstitucional ?? dto.emailPersonal ?? '').trim();
+    await this.assertUsernameFree(dto.username);
+    await this.assertEmailFree(email);
 
     const provisionalPassword = generateProvisionalPassword();
     const passwordHash = await hashPassword(provisionalPassword);
 
     let user: UserWithMemberships;
     try {
-      user = await this.persistUserWithMemberships(dto, roleKeys, passwordHash);
+      user = await this.persistUserWithMemberships(dto, roleKeys, passwordHash, email);
     } catch (error: unknown) {
-      if (this.isUniqueEmailViolation(error)) {
-        throw new ConflictException(`Ya existe un usuario con el email "${dto.email}".`);
+      const conflict = this.uniqueConflictField(error);
+      if (conflict) {
+        throw new ConflictException(conflict);
       }
       throw error;
     }
@@ -125,10 +128,13 @@ export class UsersService {
         created.push({
           id: result.user.id,
           email: result.user.email,
+          username: result.user.username,
           provisionalPassword: result.provisionalPassword,
         });
       } catch (error: unknown) {
-        errors.push({ index, email: validation.dto.email, message: this.errorMessage(error) });
+        const label =
+          validation.dto.emailInstitucional ?? validation.dto.emailPersonal ?? validation.dto.username;
+        errors.push({ index, email: label, message: this.errorMessage(error) });
       }
     }
 
@@ -170,6 +176,7 @@ export class UsersService {
               { secondName: { contains: trimmed, mode: 'insensitive' } },
               { secondLastName: { contains: trimmed, mode: 'insensitive' } },
               { email: { contains: trimmed, mode: 'insensitive' } },
+              { username: { contains: trimmed, mode: 'insensitive' } },
             ],
           }
         : undefined;
@@ -491,6 +498,14 @@ export class UsersService {
     }
   }
 
+  /** 409 si el username ya está en Postgres (pre-chequeo; el @unique cubre la carrera). */
+  private async assertUsernameFree(username: string): Promise<void> {
+    const existing = await this.prisma.user.findUnique({ where: { username } });
+    if (existing) {
+      throw new ConflictException(`Ya existe un usuario con el usuario "${username}".`);
+    }
+  }
+
   private async assertUserExists(id: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!user) {
@@ -503,6 +518,7 @@ export class UsersService {
     dto: CreateUserDto,
     roleKeys: RoleKey[],
     passwordHash: string,
+    email: string,
   ): Promise<UserWithMemberships> {
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -511,7 +527,10 @@ export class UsersService {
           secondName: dto.secondName ?? null,
           lastName: dto.lastName,
           secondLastName: dto.secondLastName ?? null,
-          email: dto.email,
+          email, // compat (D1): = emailInstitucional ?? emailPersonal
+          username: dto.username,
+          emailInstitucional: dto.emailInstitucional ?? null,
+          emailPersonal: dto.emailPersonal ?? null,
           passwordHash,
           isClientUser: dto.isClientUser ?? false,
           status: 'PENDING_FIRST_LOGIN',
@@ -597,6 +616,9 @@ export class UsersService {
     return {
       id: user.id,
       email: user.email,
+      username: user.username,
+      emailInstitucional: user.emailInstitucional,
+      emailPersonal: user.emailPersonal,
       firstName: user.firstName,
       lastName: user.lastName,
       status: user.status,
@@ -612,6 +634,9 @@ export class UsersService {
       lastName: user.lastName,
       secondLastName: user.secondLastName,
       email: user.email,
+      username: user.username,
+      emailInstitucional: user.emailInstitucional,
+      emailPersonal: user.emailPersonal,
       status: user.status,
       isClientUser: user.isClientUser,
       roleKeys: this.collectRoleKeys(user.memberships.map((m) => m.roleKey)),
@@ -620,14 +645,21 @@ export class UsersService {
     };
   }
 
-  /** ¿El error es la violación de unicidad de email de Prisma (P2002 sobre email)? */
-  private isUniqueEmailViolation(error: unknown): boolean {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code?: unknown }).code === 'P2002'
-    );
+  /** Si el error es P2002 (unicidad), devuelve un mensaje por campo; si no, null. */
+  private uniqueConflictField(error: unknown): string | null {
+    if (
+      typeof error !== 'object' ||
+      error === null ||
+      !('code' in error) ||
+      (error as { code?: unknown }).code !== 'P2002'
+    ) {
+      return null;
+    }
+    const target = (error as { meta?: { target?: unknown } }).meta?.target;
+    const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
+    if (fields.some((f) => f.includes('username'))) return 'Ya existe un usuario con ese nombre de usuario.';
+    if (fields.some((f) => f.includes('emailInstitucional'))) return 'Ya existe un usuario con ese email institucional.';
+    return 'Ya existe un usuario con ese email.';
   }
 
   private errorMessage(error: unknown): string {
@@ -675,11 +707,14 @@ export class UsersService {
   }
 }
 
-/** Extrae el email de una fila cruda para etiquetar errores de importación (`''` si no aplica). */
+/** Etiqueta para errores de import: email institucional/personal/legacy o username (`''` si nada). */
 function extractEmail(row: unknown): string {
-  if (typeof row === 'object' && row !== null && 'email' in row) {
-    const value = (row as { email?: unknown }).email;
-    if (typeof value === 'string') return value;
+  if (typeof row === 'object' && row !== null) {
+    const r = row as Record<string, unknown>;
+    for (const key of ['emailInstitucional', 'emailPersonal', 'email', 'username']) {
+      const value = r[key];
+      if (typeof value === 'string' && value.length > 0) return value;
+    }
   }
   return '';
 }

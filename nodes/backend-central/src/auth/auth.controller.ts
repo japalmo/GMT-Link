@@ -90,18 +90,18 @@ export class AuthController {
     private readonly permissions: PermissionService,
   ) {}
 
-  /** Login propio: valida email+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
+  /** Login propio: valida username+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
   @Throttle({ default: { limit: 5, ttl: 60_000 } }) // 5/min por IP: mitiga fuerza bruta de credenciales
   @Post('login')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
   async login(@Body() body: LoginDto): Promise<{ token: string }> {
     const user = await this.prisma.user.findUnique({
-      where: { email: body.email },
+      where: { username: body.username },
       select: { id: true, passwordHash: true },
     });
     const ok = user?.passwordHash ? await verifyPassword(body.password, user.passwordHash) : false;
     if (!user || !ok) {
-      throw new UnauthorizedException('Correo o contraseña incorrectos.');
+      throw new UnauthorizedException('Usuario o contraseña incorrectos.');
     }
     return { token: signToken(user.id) };
   }

@@ -18,6 +18,8 @@ const prisma = new PrismaClient();
 
 const TEST_USER = {
   email: 'colaborador@gmt.cl',
+  username: 'colaborador',
+  emailInstitucional: 'colaborador@gmt.cl',
   firstName: 'Colaborador',
   lastName: 'Prueba',
   status: UserStatus.PENDING_FIRST_LOGIN,

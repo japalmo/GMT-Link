@@ -16,6 +16,7 @@ export interface CreateUserResponse {
 export interface ImportCreatedRow {
   id: string;
   email: string;
+  username: string;
   provisionalPassword: string;
 }
 
@@ -40,6 +41,9 @@ export interface UserListItem {
   lastName: string;
   secondLastName: string | null;
   email: string;
+  username: string;
+  emailInstitucional: string | null;
+  emailPersonal: string | null;
   status: string;
   isClientUser: boolean;
   roleKeys: RoleKey[];
