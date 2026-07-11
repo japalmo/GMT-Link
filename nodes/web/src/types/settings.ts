@@ -4,7 +4,7 @@
  * (`/permission-requests`). Las fechas viajan como string ISO-8601.
  */
 
-import type { RoleKey, ScopeType } from '@gmt-platform/contracts';
+import type { EmailKind, RoleKey, ScopeType } from '@gmt-platform/contracts';
 
 /** Preferencia de tema del usuario. `system` sigue al sistema operativo. */
 export type ThemePreference = 'system' | 'light' | 'dark';
@@ -16,6 +16,11 @@ export interface UserSettings {
   notifyInApp: boolean;
   /** Recibir notificaciones por correo (aún no envía correos, decisión §9). */
   notifyEmail: boolean;
+  /**
+   * A qué correo se envían las notificaciones por email (INSTITUCIONAL | PERSONAL).
+   * Solo se acepta apuntando a un correo VERIFICADO. null = sin destino elegido.
+   */
+  notifyEmailTarget: EmailKind | null;
 }
 
 /** Cambios parciales a los ajustes propios (`PATCH /settings/me`). */
@@ -23,6 +28,7 @@ export interface UpdateSettingsInput {
   theme?: ThemePreference;
   notifyInApp?: boolean;
   notifyEmail?: boolean;
+  notifyEmailTarget?: EmailKind;
 }
 
 /** Estado de una solicitud de acceso a un rol. */

@@ -52,6 +52,13 @@ export type RoleKey = string;
 /** Estados de usuario (§4.2 — enum UserStatus). */
 export type UserStatus = 'PENDING_FIRST_LOGIN' | 'ACTIVE' | 'SUSPENDED';
 
+/**
+ * A qué correo del usuario aplica una operación (espejo del enum Prisma
+ * `EmailKind`): institucional o personal. Se usa para el cambio de correo
+ * verificado y para el destino de notificaciones por email.
+ */
+export type EmailKind = 'INSTITUCIONAL' | 'PERSONAL';
+
 /** Vista pública de un usuario provisionado (respuesta de creación, §1.1). */
 export interface ProvisionedUser {
   id: string;
@@ -78,6 +85,18 @@ export interface ProfileMe {
   lastName: string;
   secondLastName: string | null;
   email: string;
+  /** Correo institucional (§4.1). null si el usuario solo tiene personal. */
+  emailInstitucional: string | null;
+  /** Correo personal (§4.1). null si el usuario solo tiene institucional. */
+  emailPersonal: string | null;
+  /** ¿El institucional está verificado por OTP? (timestamp != null en la BD). */
+  emailInstitucionalVerified: boolean;
+  /** ¿El personal está verificado por OTP? (timestamp != null en la BD). */
+  emailPersonalVerified: boolean;
+  /** Correo propuesto en un cambio pendiente de confirmar por OTP; null si no hay. */
+  pendingEmail: string | null;
+  /** A qué campo aplica el cambio pendiente; null si no hay cambio en curso. */
+  pendingEmailKind: EmailKind | null;
   avatarUrl: string | null;
   status: UserStatus;
   isClientUser: boolean;
@@ -96,6 +115,40 @@ export interface UpdateProfileInput {
 /** Respuesta de POST /profile/change-password. */
 export interface ChangePasswordResponse {
   ok: true;
+}
+
+/**
+ * Respuesta genérica de acuse (endpoints de solicitud que NO revelan el código):
+ * POST /profile/email/change-request y POST /profile/password/change-request.
+ */
+export interface OkResponse {
+  ok: true;
+}
+
+/**
+ * Body de POST /profile/email/change-request. Pide un OTP al `newEmail` para
+ * verificarlo antes de aplicarlo al campo `kind`. El código NO se retorna: viaja
+ * solo por correo (EmailService).
+ */
+export interface ChangeEmailRequestInput {
+  newEmail: string;
+  kind: EmailKind;
+}
+
+/** Body de POST /profile/email/change-confirm. Confirma el cambio con el OTP recibido. */
+export interface ChangeEmailConfirmInput {
+  code: string;
+}
+
+/**
+ * Body de POST /profile/change-password (endurecido): exige la contraseña actual
+ * y el OTP enviado por POST /profile/password/change-request, además de la nueva
+ * contraseña (mínimo 8 caracteres).
+ */
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+  code: string;
 }
 
 /**

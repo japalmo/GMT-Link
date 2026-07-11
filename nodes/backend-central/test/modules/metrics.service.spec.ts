@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { MetricsService } from '../../src/modules/metrics/metrics.service';
+import { OtpService } from '../../src/common/otp.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { EmailService } from '../../src/common/email.service';
 import type { FgaService } from '../../src/fga/fga.service';
@@ -89,11 +90,17 @@ describe('MetricsService', () => {
       delete: vi.fn(() => Promise.resolve()),
     };
 
+    // El flujo OTP delega en OtpService (general, aislado por `purpose`). Se le pasa
+    // el MISMO prismaMock, así las aserciones sobre otpCode.* siguen aplicando y se
+    // verifica que la delegación preserva el comportamiento del flujo de métricas.
+    const otpService = new OtpService(prismaMock as unknown as PrismaService);
+
     service = new MetricsService(
       prismaMock as unknown as PrismaService,
       emailServiceMock as unknown as EmailService,
       fgaServiceMock as unknown as FgaService,
       storageServiceMock as unknown as StorageService,
+      otpService,
     );
   });
 
@@ -134,12 +141,13 @@ describe('MetricsService', () => {
       const res = await service.generateOtp('user@gmt.cl');
       expect(res.success).toBe(true);
       expect(prismaMock.otpCode.updateMany).toHaveBeenCalledWith({
-        where: { email: 'user@gmt.cl', consumedAt: null },
+        where: { email: 'user@gmt.cl', purpose: 'METRICS_NONREPUDIATION', consumedAt: null },
         data: expect.objectContaining({ consumedAt: expect.any(Date) }),
       });
       expect(prismaMock.otpCode.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           email: 'user@gmt.cl',
+          purpose: 'METRICS_NONREPUDIATION',
           codeHash: expect.any(String),
           expiresAt: expect.any(Date),
         }),

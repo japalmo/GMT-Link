@@ -1,3 +1,3 @@
-import type { ChangePasswordResponse, ProfileMe } from '@gmt-platform/contracts';
+import type { ChangePasswordResponse, OkResponse, ProfileMe } from '@gmt-platform/contracts';
 
-export type { ChangePasswordResponse, ProfileMe };
+export type { ChangePasswordResponse, OkResponse, ProfileMe };

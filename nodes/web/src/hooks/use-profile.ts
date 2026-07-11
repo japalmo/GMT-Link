@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ProfileMe, UpdateProfileInput } from '@gmt-platform/contracts';
+import type { EmailKind, ProfileMe, UpdateProfileInput } from '@gmt-platform/contracts';
 import {
   ApiError,
   changePassword as apiChangePassword,
+  confirmEmailChange as apiConfirmEmailChange,
+  requestEmailChange as apiRequestEmailChange,
+  requestPasswordChange as apiRequestPasswordChange,
   getProfile,
   updateProfile,
 } from '@/lib/api';
@@ -26,8 +29,24 @@ export interface UseProfileResult {
   refetch: () => Promise<void>;
   /** Persiste cambios del perfil y refresca el estado local con la respuesta. */
   save: (input: UpdateProfileInput) => Promise<ProfileMe>;
-  /** Cambia la contraseña (mín. 8). La clave nunca se registra. */
-  changePassword: (newPassword: string) => Promise<void>;
+  /**
+   * Cambia la contraseña (endurecido): exige la contraseña actual, la nueva
+   * (mín. 8) y el OTP enviado por {@link requestPasswordChange}. Nunca se registra.
+   */
+  changePassword: (
+    currentPassword: string,
+    newPassword: string,
+    code: string,
+  ) => Promise<void>;
+  /** Envía un OTP al correo verificado del usuario (paso previo a cambiar la clave). */
+  requestPasswordChange: () => Promise<void>;
+  /** Envía un OTP al `newEmail` para verificarlo antes de aplicarlo al campo `kind`. */
+  requestEmailChange: (newEmail: string, kind: EmailKind) => Promise<void>;
+  /**
+   * Confirma el cambio de correo con el OTP y refresca el estado local con el
+   * perfil ya actualizado que devuelve el backend.
+   */
+  confirmEmailChange: (code: string) => Promise<ProfileMe>;
 }
 
 /**
@@ -79,9 +98,40 @@ export function useProfile(): UseProfileResult {
   }, []);
 
   const changePassword = useCallback(
-    (newPassword: string): Promise<void> => apiChangePassword(newPassword),
+    (currentPassword: string, newPassword: string, code: string): Promise<void> =>
+      apiChangePassword(currentPassword, newPassword, code),
     [],
   );
 
-  return { profile, loading, error, refetch: load, save, changePassword };
+  const requestPasswordChange = useCallback(
+    (): Promise<void> => apiRequestPasswordChange(),
+    [],
+  );
+
+  const requestEmailChange = useCallback(
+    (newEmail: string, kind: EmailKind): Promise<void> =>
+      apiRequestEmailChange(newEmail, kind),
+    [],
+  );
+
+  const confirmEmailChange = useCallback(
+    async (code: string): Promise<ProfileMe> => {
+      const updated = await apiConfirmEmailChange(code);
+      if (mountedRef.current) setProfile(updated);
+      return updated;
+    },
+    [],
+  );
+
+  return {
+    profile,
+    loading,
+    error,
+    refetch: load,
+    save,
+    changePassword,
+    requestPasswordChange,
+    requestEmailChange,
+    confirmEmailChange,
+  };
 }

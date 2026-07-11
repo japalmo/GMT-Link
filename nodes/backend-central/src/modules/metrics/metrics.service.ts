@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, UnauthorizedException, BadRequestExcepti
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email.service';
+import { OtpService, OTP_PURPOSES } from '../../common/otp.service';
 import { FgaService } from '../../fga/fga.service';
 import { sanitizeFilename } from '../../common/storage/local-storage.service';
 import { StorageService } from '../../common/storage/storage.service';
@@ -14,14 +15,7 @@ import {
   SaveReservorioMetadataDto,
   SetPhaseDataSpecDto,
 } from './dto/metrics.dto';
-import { randomUUID, randomInt, createHash } from 'crypto';
-
-const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutos de validez
-const OTP_MAX_ATTEMPTS = 5;
-
-function hashOtp(otp: string): string {
-  return createHash('sha256').update(otp).digest('hex');
-}
+import { randomUUID } from 'crypto';
 
 /** Bolsa JSON dinámica validada solo como "objeto" → cruce explícito al tipo Json de Prisma. */
 function toInputJson(value: Record<string, unknown> | undefined): Prisma.InputJsonValue {
@@ -38,6 +32,7 @@ export class MetricsService {
     private readonly emailService: EmailService,
     private readonly fga: FgaService,
     private readonly storage: StorageService,
+    private readonly otp: OtpService,
   ) {}
 
   /**
@@ -395,22 +390,14 @@ export class MetricsService {
   }
 
   // ── OTP Seguridad (No Repudio) ───────────────────────────────────────────────
+  //
+  // La generación/verificación vive ahora en `OtpService` (general, aislado por
+  // `purpose`). Aquí se delega con `purpose='METRICS_NONREPUDIATION'` conservando
+  // el comportamiento externo del flujo de cubicaciones: mismo envío de correo,
+  // mismo log `[DEV OTP]`, misma forma de respuesta.
 
   async generateOtp(email: string): Promise<{ success: boolean; message: string }> {
-    const otp = randomInt(100000, 1000000).toString();
-    const codeHash = hashOtp(otp);
-    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
-
-    await this.prisma.$transaction([
-      // Un solo OTP activo por email: invalida cualquier código previo sin consumir.
-      this.prisma.otpCode.updateMany({
-        where: { email, consumedAt: null },
-        data: { consumedAt: new Date() },
-      }),
-      this.prisma.otpCode.create({
-        data: { email, codeHash, expiresAt },
-      }),
-    ]);
+    const otp = await this.otp.generate(email, OTP_PURPOSES.METRICS_NONREPUDIATION);
 
     await this.emailService.send({
       to: email,
@@ -429,39 +416,7 @@ export class MetricsService {
   }
 
   async verifyOtp(email: string, otp: string): Promise<boolean> {
-    const record = await this.prisma.otpCode.findFirst({
-      where: { email, consumedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (!record) {
-      throw new BadRequestException('No se ha generado ningún código OTP para este correo.');
-    }
-
-    if (record.expiresAt.getTime() < Date.now()) {
-      await this.prisma.otpCode.update({
-        where: { id: record.id },
-        data: { consumedAt: new Date() },
-      });
-      throw new BadRequestException('El código OTP ha expirado.');
-    }
-
-    if (record.attempts >= OTP_MAX_ATTEMPTS) {
-      throw new BadRequestException('Demasiados intentos fallidos. Solicita un nuevo código.');
-    }
-
-    if (record.codeHash !== hashOtp(otp)) {
-      await this.prisma.otpCode.update({
-        where: { id: record.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new BadRequestException('Código OTP incorrecto.');
-    }
-
-    await this.prisma.otpCode.update({
-      where: { id: record.id },
-      data: { consumedAt: new Date() },
-    });
-    return true;
+    return this.otp.verify(email, OTP_PURPOSES.METRICS_NONREPUDIATION, otp);
   }
 
   // ── Cloud Functions Mock para Cliente PyQt ──────────────────────────────────

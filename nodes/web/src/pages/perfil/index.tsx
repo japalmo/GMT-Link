@@ -42,7 +42,17 @@ function ProfileSkeleton(): ReactNode {
  * contraseña. Estados de carga / error siempre presentes. Mobile-first.
  */
 export default function PerfilPage(): ReactNode {
-  const { profile, loading, error, refetch, save, changePassword } = useProfile();
+  const {
+    profile,
+    loading,
+    error,
+    refetch,
+    save,
+    changePassword,
+    requestPasswordChange,
+    requestEmailChange,
+    confirmEmailChange,
+  } = useProfile();
 
   return (
     <PageContainer maxWidth="3xl">
@@ -86,11 +96,17 @@ export default function PerfilPage(): ReactNode {
             <CardHeader>
               <CardTitle>Información personal</CardTitle>
               <CardDescription>
-                Tu nombre y avatar. El correo no se puede modificar.
+                Tus correos, nombre y avatar. Cambiar un correo requiere verificarlo
+                con un código.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ProfileForm profile={profile} onSave={save} />
+              <ProfileForm
+                profile={profile}
+                onSave={save}
+                onRequestEmailChange={requestEmailChange}
+                onConfirmEmailChange={confirmEmailChange}
+              />
             </CardContent>
           </Card>
 
@@ -102,7 +118,10 @@ export default function PerfilPage(): ReactNode {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ChangePasswordForm onChangePassword={changePassword} />
+              <ChangePasswordForm
+                onChangePassword={changePassword}
+                onRequestCode={requestPasswordChange}
+              />
             </CardContent>
           </Card>
         </>

@@ -21,6 +21,15 @@ model User {
   username               String                    @unique // login por username (default = prefijo del email institucional)
   emailInstitucional     String?                   @unique // uno de {emailInstitucional, emailPersonal} obligatorio
   emailPersonal          String?
+  // Verificación de correo (feature verificación de correo/contraseña):
+  // timestamp de la verificación por OTP de cada correo; null = sin verificar.
+  emailInstitucionalVerified DateTime?
+  emailPersonalVerified      DateTime?
+  // Cambio de correo pendiente de confirmación por OTP: correo propuesto + a qué
+  // campo aplica al confirmar. Se limpian tras confirmar (o quedan huérfanos si
+  // se abandona el flujo, sin efecto: el correo real no cambia hasta confirmar).
+  pendingEmail               String?
+  pendingEmailKind           EmailKind?
   avatarUrl              String?
   passwordHash           String? // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
   status                 UserStatus                @default(PENDING_FIRST_LOGIN)
@@ -73,6 +82,13 @@ enum UserStatus {
   PENDING_FIRST_LOGIN
   ACTIVE
   SUSPENDED
+}
+
+// A qué correo del usuario aplica una operación (verificación / cambio pendiente /
+// destino de notificaciones): institucional o personal.
+enum EmailKind {
+  INSTITUCIONAL
+  PERSONAL
 }
 
 // ============ ORGANIZACIÓN ============
@@ -366,6 +382,10 @@ model UserPreferences {
   theme       String   @default("system") // system | light | dark
   notifyInApp Boolean  @default(true)
   notifyEmail Boolean  @default(false)
+  // Correo destino de las notificaciones por email: 'INSTITUCIONAL' | 'PERSONAL'
+  // (string, no enum, por retrocompat de la columna). Solo se acepta apuntando a
+  // un correo VERIFICADO; null = sin destino elegido.
+  notifyEmailTarget String?
   updatedAt   DateTime @updatedAt
 
   @@map("user_preferences")
@@ -979,9 +999,14 @@ model OtpCode {
   expiresAt  DateTime
   attempts   Int       @default(0)
   consumedAt DateTime?
+  // Propósito del OTP: aísla flujos que comparten esta tabla (no-repudio de
+  // cubicaciones, cambio de correo, cambio de contraseña). El default preserva el
+  // flujo de métricas existente para filas ya creadas y llamadas legacy.
+  purpose    String    @default("METRICS_NONREPUDIATION")
   createdAt  DateTime  @default(now())
 
   @@index([email])
+  @@index([email, purpose])
   @@map("otp_codes")
 }
 

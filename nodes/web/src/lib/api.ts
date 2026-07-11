@@ -36,6 +36,7 @@ import type {
   CreateRoleInput,
   DirectoryEntry,
   DirectoryEntryExtended,
+  EmailKind,
   PermissionCatalogGroup,
   ProfileMe,
   RoleDetail,
@@ -461,13 +462,59 @@ export function updateProfile(input: UpdateProfileInput): Promise<ProfileMe> {
 }
 
 /**
- * `POST /profile/change-password` — fija una nueva contraseña (mín. 8). No
- * devuelve datos de interés más allá del éxito. La clave nunca se registra.
+ * `POST /profile/change-password` — cambia la contraseña (endurecido). Exige la
+ * contraseña actual (401 si es incorrecta), la nueva (mín. 8) y el OTP enviado a
+ * su correo verificado (400 si es inválido/expirado). No devuelve datos de
+ * interés más allá del éxito. Las claves nunca se registran.
  */
-export async function changePassword(newPassword: string): Promise<void> {
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  code: string,
+): Promise<void> {
   await request<{ ok: true }>('/profile/change-password', {
     method: 'POST',
-    body: JSON.stringify({ newPassword }),
+    body: JSON.stringify({ currentPassword, newPassword, code }),
+  });
+}
+
+/**
+ * `POST /profile/password/change-request` — dispara el envío de un OTP de 6
+ * dígitos al correo verificado del usuario. El código NO vuelve en la respuesta
+ * (viaja solo por correo). Requisito previo de {@link changePassword}.
+ */
+export async function requestPasswordChange(): Promise<void> {
+  await request<{ ok: true }>('/profile/password/change-request', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+/**
+ * `POST /profile/email/change-request` — pide un OTP de 6 dígitos al `newEmail`
+ * para verificarlo antes de aplicarlo al campo `kind` (INSTITUCIONAL | PERSONAL).
+ * El código NO vuelve en la respuesta (viaja solo por correo). 409 si el correo
+ * ya está en uso por otra cuenta.
+ */
+export async function requestEmailChange(
+  newEmail: string,
+  kind: EmailKind,
+): Promise<void> {
+  await request<{ ok: true }>('/profile/email/change-request', {
+    method: 'POST',
+    body: JSON.stringify({ newEmail, kind }),
+  });
+}
+
+/**
+ * `POST /profile/email/change-confirm` — confirma el cambio de correo con el OTP
+ * recibido. 400 si el código es inválido/expirado. Devuelve el {@link ProfileMe}
+ * ya actualizado (correo aplicado y marcado como verificado).
+ */
+export function confirmEmailChange(code: string): Promise<ProfileMe> {
+  return request<ProfileMe>('/profile/email/change-confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
   });
 }
 
