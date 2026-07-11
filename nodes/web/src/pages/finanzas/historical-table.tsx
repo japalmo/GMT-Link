@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -29,6 +29,8 @@ export interface HistoricalTableProps {
   workers: Array<{ id: string; name: string }>;
   /** Proyectos para el filtro. */
   projects: Array<{ id: string; name: string }>;
+  /** Clientes para el filtro (sólo HE). Derivados de las filas SIN filtrar por el caller. */
+  clients: Array<{ id: string; name: string }>;
   /** Muestra el filtro por trabajador (gateado por permiso por el caller). */
   showWorkerFilter: boolean;
   /** Clic en una fila (abre detalle). */
@@ -41,6 +43,7 @@ export function HistoricalTable({
   onFiltersChange,
   workers,
   projects,
+  clients,
   showWorkerFilter,
   onRowClick,
 }: HistoricalTableProps): ReactNode {
@@ -51,17 +54,6 @@ export function HistoricalTable({
     setPage(0);
     onFiltersChange({ ...filters, ...patch });
   };
-
-  /** Clientes derivados de las filas (id → nombre), para el filtro (solo HE). */
-  const clients = useMemo(() => {
-    const map = new Map<string, string>();
-    rows.forEach((r) => {
-      if (r.clientId && r.clientName) map.set(r.clientId, r.clientName);
-    });
-    return [...map.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows]);
 
   const total = rows.length;
   const size = pageSize === 0 ? total || 1 : pageSize;

@@ -100,7 +100,7 @@ export function HorasExtraTab(): ReactNode {
             }
           />
         ) : (
-          <div className="rounded-md border border-border bg-card">
+          <div className="overflow-x-auto rounded-md border border-border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -148,7 +148,7 @@ export function HorasExtraTab(): ReactNode {
           {managerItems.length === 0 ? (
             <EmptyState message="No hay solicitudes de horas extra pendientes ni registradas en el sistema." />
           ) : (
-            <div className="rounded-md border border-border bg-card">
+            <div className="overflow-x-auto rounded-md border border-border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>

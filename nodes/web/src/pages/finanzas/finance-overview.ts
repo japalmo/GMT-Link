@@ -194,6 +194,8 @@ function rank(
   for (const r of rows) {
     if (metric === 'reimbursement' && r.kind !== 'REEMBOLSO') continue;
     if (metric === 'overtime' && r.kind !== 'HORA_EXTRA') continue;
+    // Un gasto/HE rechazado no representa consumo real: fuera del ranking (§5.2).
+    if (r.status === 'RECHAZADO') continue;
     const k = keyFn(r);
     if (!k) continue;
     const inc = metric === 'reimbursement' ? r.amount ?? 0 : r.hours ?? 0;

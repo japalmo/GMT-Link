@@ -12,6 +12,15 @@ import { FgaService } from '../fga/fga.service';
 export const SUPER_ADMIN_IDS = Symbol('SUPER_ADMIN_IDS');
 
 /**
+ * Permiso "meta": acceso completo (como admin) con banner beta en el front.
+ * Lo llevan las gerencias (gerencia_general / gerencia_rh) durante la beta. Concede
+ * GLOBAL sobre todo el catálogo funcional (equivalente a SuperAdmin salvo que el front
+ * muestra el banner). El enforcement fino STRUCTURAL/FGA de proyectos (Fase 2) se
+ * cortocircuita igual que para SuperAdmin: acceso total mientras dure la beta.
+ */
+const BETA_FULL_KEY = 'system:beta:full';
+
+/**
  * Fachada única de autorización del Módulo 4 (ADR-0001) — el ÚNICO punto de decisión.
  *
  * Resuelve "¿puede el usuario X ejercer el permiso K (sobre el recurso R)?" a partir
@@ -35,6 +44,9 @@ export class PermissionService {
 
     const memberships = await this.prisma.membership.findMany({ where: { userId } });
     if (memberships.length === 0) return null;
+
+    // `system:beta:full` = acceso completo con banner: GLOBAL sobre todo el catálogo.
+    if (await this.hasBetaFull(memberships)) return { kind: 'none' };
 
     const roleKeys = [...new Set(memberships.map((m) => m.roleKey))];
     const grants = await this.prisma.rolePermission.findMany({
@@ -103,12 +115,28 @@ export class PermissionService {
     }
     const memberships = await this.prisma.membership.findMany({ where: { userId } });
     if (memberships.length === 0) return [];
+    // `system:beta:full` (gerencias): acceso completo → todo el catálogo (con banner en el front).
+    if (await this.hasBetaFull(memberships)) {
+      const all = await this.prisma.permission.findMany({ select: { key: true } });
+      return all.map((p) => p.key);
+    }
     const roleKeys = [...new Set(memberships.map((m) => m.roleKey))];
     const grants = await this.prisma.rolePermission.findMany({
       where: { role: { key: { in: roleKeys } } },
       include: { permission: { select: { key: true } } },
     });
     return [...new Set(grants.map((row) => row.permission.key))];
+  }
+
+  /** ¿Alguno de los roles del usuario otorga `system:beta:full` (acceso completo con banner)? */
+  private async hasBetaFull(memberships: Membership[]): Promise<boolean> {
+    if (memberships.length === 0) return false;
+    const roleKeys = [...new Set(memberships.map((m) => m.roleKey))];
+    const grant = await this.prisma.rolePermission.findFirst({
+      where: { role: { key: { in: roleKeys } }, permission: { key: BETA_FULL_KEY } },
+      select: { roleId: true },
+    });
+    return grant != null;
   }
 
   /** Proyectos "asociados" al usuario: membresías PROJECT directas + expansión de DEPARTMENT. */

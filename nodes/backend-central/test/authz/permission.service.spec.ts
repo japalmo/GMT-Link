@@ -6,7 +6,7 @@ import { PermissionService } from '../../src/authz/permission.service';
 
 interface PrismaMock {
   membership: { findMany: ReturnType<typeof vi.fn> };
-  rolePermission: { findMany: ReturnType<typeof vi.fn> };
+  rolePermission: { findMany: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn> };
   permission: { findUnique: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   project: { findMany: ReturnType<typeof vi.fn> };
 }
@@ -15,6 +15,8 @@ function buildPrisma(
   over: {
     memberships?: unknown[];
     grants?: unknown[];
+    /** Grant de `system:beta:full` que devuelve `rolePermission.findFirst` (null = sin beta). */
+    betaGrant?: unknown;
     permission?: unknown;
     allPermissions?: unknown[];
     deptProjects?: unknown[];
@@ -22,7 +24,10 @@ function buildPrisma(
 ): { prisma: PrismaService; mock: PrismaMock } {
   const mock: PrismaMock = {
     membership: { findMany: vi.fn(() => Promise.resolve(over.memberships ?? [])) },
-    rolePermission: { findMany: vi.fn(() => Promise.resolve(over.grants ?? [])) },
+    rolePermission: {
+      findMany: vi.fn(() => Promise.resolve(over.grants ?? [])),
+      findFirst: vi.fn(() => Promise.resolve(over.betaGrant ?? null)),
+    },
     permission: {
       findUnique: vi.fn(() => Promise.resolve(over.permission ?? null)),
       findMany: vi.fn(() => Promise.resolve(over.allPermissions ?? [])),
@@ -146,6 +151,45 @@ describe('PermissionService', () => {
       const svc = new PermissionService(prisma, buildFga().fga, []);
       const keys = await svc.permissionKeysForUser('u1');
       expect(new Set(keys)).toEqual(new Set(['finance:request:create', 'project:manage']));
+    });
+
+    it('system:beta:full → todo el catálogo (acceso completo con banner)', async () => {
+      const { prisma } = buildPrisma({
+        memberships: [orgMember],
+        betaGrant: { roleId: 'r' },
+        allPermissions: [{ key: 'a' }, { key: 'b' }, { key: 'c' }],
+        // grants propios acotados: beta debe expandir por encima de ellos.
+        grants: [{ permission: { key: 'finance:request:create' } }],
+      });
+      const svc = new PermissionService(prisma, buildFga().fga, []);
+      expect(await svc.permissionKeysForUser('u1')).toEqual(['a', 'b', 'c']);
+    });
+  });
+
+  describe('system:beta:full (gerencias) — acceso completo con banner', () => {
+    it('scopeFilter → GLOBAL (none) para cualquier permiso, aunque el rol no lo tenga', async () => {
+      const { prisma } = buildPrisma({
+        memberships: [orgMember],
+        betaGrant: { roleId: 'r' },
+        grants: [], // sin grant propio del permiso pedido
+      });
+      const svc = new PermissionService(prisma, buildFga().fga, []);
+      expect(await svc.scopeFilter('u1', 'finance:request:approve')).toEqual({ kind: 'none' });
+    });
+
+    it('can → allow (filtro none) sin tocar FGA para permiso estructural de proyecto', async () => {
+      const { prisma } = buildPrisma({
+        memberships: [orgMember],
+        betaGrant: { roleId: 'r' },
+        permission: { kind: 'STRUCTURAL', fgaRelation: 'can_submit_measurements' },
+      });
+      const { fga, check } = buildFga(false);
+      const svc = new PermissionService(prisma, fga, []);
+      expect(await svc.can('u1', 'measurement.submit', { projectId: 'p1' })).toEqual({
+        effect: 'allow',
+        filter: { kind: 'none' },
+      });
+      expect(check).not.toHaveBeenCalled();
     });
   });
 });

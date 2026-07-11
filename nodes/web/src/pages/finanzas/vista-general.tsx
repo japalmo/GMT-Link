@@ -75,6 +75,17 @@ export function VistaGeneralTab(): ReactNode {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [allRows]);
 
+  // Clientes derivados de las filas SIN filtrar → el filtro no se colapsa al elegir uno.
+  const clients = useMemo(() => {
+    const map = new Map<string, string>();
+    allRows.forEach((r) => {
+      if (r.clientId && r.clientName) map.set(r.clientId, r.clientName);
+    });
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allRows]);
+
   const loading = reimb.loading || ot.loading;
   const error = reimb.error ?? ot.error;
 
@@ -147,6 +158,7 @@ export function VistaGeneralTab(): ReactNode {
         onFiltersChange={setFilters}
         workers={workers}
         projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        clients={clients}
         showWorkerFilter={hasAllAccess}
         onRowClick={(r) => setDetail(r)}
       />

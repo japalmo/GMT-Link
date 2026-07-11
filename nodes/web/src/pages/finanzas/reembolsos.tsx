@@ -157,7 +157,7 @@ export function ReembolsosTab(): ReactNode {
             }
           />
         ) : (
-          <div className="rounded-md border border-border bg-card">
+          <div className="overflow-x-auto rounded-md border border-border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -250,7 +250,7 @@ export function ReembolsosTab(): ReactNode {
           {managerItems.length === 0 ? (
             <EmptyState message="No hay reembolsos pendientes ni registrados en el sistema." />
           ) : (
-            <div className="rounded-md border border-border bg-card">
+            <div className="overflow-x-auto rounded-md border border-border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>

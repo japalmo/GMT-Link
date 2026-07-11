@@ -106,7 +106,13 @@ export class ListReimbursementsQueryDto {
 
   /** Selector "pendientes de impresión" (`printed=false`). */
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }: { value: unknown }) =>
+    value === true || value === 'true'
+      ? true
+      : value === false || value === 'false'
+        ? false
+        : value,
+  )
   @IsBoolean()
   printed?: boolean;
 }
