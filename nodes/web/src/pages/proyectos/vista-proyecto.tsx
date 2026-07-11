@@ -42,7 +42,7 @@ import {
   ModalTitle,
 } from '@/components/ui/modal';
 import { useProject, useAssignments } from '@/hooks/use-project-hierarchy';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { roleLabel } from '@/lib/role-labels';
 import {
   errorToMessage,
@@ -89,19 +89,6 @@ import type {
 /* ==========================================================================
    Constantes de presentación
    ========================================================================== */
-
-/** Roles que pueden gestionar el equipo del proyecto (gate demo del tab Trabajadores). */
-const TEAM_MANAGER_ROLES = ['org_admin', 'department_admin', 'project_creator'];
-
-/**
- * Roles que habilitan la creación de servicios en el proyecto (gate demo del
- * permiso especial `service:create`). El backend lo aplica de verdad con
- * OpenFGA (`can_create_service = [user] or project_creator`, ver `fga/model.fga`
- * y `@RequirePermission('can_create_service')` en `projects.controller`);
- * este arreglo solo decide si mostrar el botón en la UI, igual que los demás
- * gates de creación de esta sección.
- */
-const SERVICE_CREATE_ROLES = ['org_admin', 'department_admin', 'project_creator'];
 
 /** Roles asignables a un trabajador dentro del proyecto (selector del diálogo). */
 const ASSIGNABLE_ROLE_KEYS: string[] = [
@@ -193,8 +180,8 @@ export default function VistaProyectoPage(): ReactNode {
   const { projectId } = useParams<{ projectId: string }>();
   const { project, loading, error, refetch } = useProject(projectId);
 
-  const canManageTeam = useHasRole(TEAM_MANAGER_ROLES);
-  const canCreateService = useHasRole(SERVICE_CREATE_ROLES);
+  const canManageTeam = useHasPermission('project:manage');
+  const canCreateService = useHasPermission('project:manage');
 
   const detail = project as ProjectDetail | null;
   const projectType = detail?.projectType ?? null;

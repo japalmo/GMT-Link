@@ -13,7 +13,7 @@ import {
 import { useFaenaProjects, useEligibleAdmins } from '@/hooks/use-project-hierarchy';
 import { useClients } from '@/hooks/use-clients';
 import { useFaenas } from '@/hooks/use-faenas';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { listDepartments } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,9 +44,6 @@ import {
 } from '@/components/ui/modal';
 import type { ProjectType, CreateProjectInput } from '@/types/projects';
 import type { ProjectView } from '@/types/operations';
-
-/** Roles que habilitan la creación de proyectos (gate `project:create`, demo). */
-const PROJECT_CREATE_ROLES = ['org_admin', 'department_admin'];
 
 /** Tipos de proyecto disponibles con su etiqueta legible. */
 const PROJECT_TYPES: Array<{ value: ProjectType; label: string }> = [
@@ -116,7 +113,7 @@ export default function FaenaProyectosPage() {
   const { clients } = useClients();
   const { faenas } = useFaenas(clientId);
   const { admins } = useEligibleAdmins();
-  const canCreate = useHasRole(PROJECT_CREATE_ROLES);
+  const canCreate = useHasPermission('project:manage');
 
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);

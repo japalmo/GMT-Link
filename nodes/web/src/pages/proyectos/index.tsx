@@ -11,7 +11,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useClients } from '@/hooks/use-clients';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,9 +39,6 @@ import {
 } from '@/components/ui/modal';
 import type { ClientView } from '@/types/projects';
 
-/** Roles que habilitan la creación de clientes (gate demo `client:create`). */
-const CLIENT_CREATE_ROLES = ['org_admin', 'department_admin'];
-
 /** Filtros del catálogo por estado de actividad del cliente. */
 type ActivityFilter = 'todos' | 'activos' | 'sin-actividad';
 
@@ -60,7 +57,7 @@ const ACTIVITY_FILTERS: Array<{ value: ActivityFilter; label: string }> = [
 export default function ProyectosClientesPage() {
   const navigate = useNavigate();
   const { clients, loading, error, create } = useClients();
-  const canCreate = useHasRole(CLIENT_CREATE_ROLES);
+  const canCreate = useHasPermission('project:manage');
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ActivityFilter>('todos');

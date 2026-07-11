@@ -30,8 +30,9 @@ describe('api — request() vía getMe (núcleo del cliente)', () => {
 
     const me = await getMe();
 
-    // getMe normaliza canManageRoles a false si el backend no lo envía (fail-closed).
-    expect(me).toEqual({ id: 'u1', email: 'a@b.cl', canManageRoles: false });
+    // getMe normaliza canManageRoles a false y permissions a [] si el backend no
+    // los envía (fail-closed).
+    expect(me).toEqual({ id: 'u1', email: 'a@b.cl', canManageRoles: false, permissions: [] });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('http://localhost:3001/auth/me');
     expect((init.headers as Headers).get('Authorization')).toBe('Bearer tok-123');

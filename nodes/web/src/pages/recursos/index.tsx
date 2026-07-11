@@ -4,7 +4,7 @@ import { useAssets } from '@/hooks/use-assets';
 import { useProjects } from '@/hooks/use-operations';
 import { listUsers } from '@/lib/api';
 import { useProfile } from '@/hooks/use-profile';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import InsumosPage from '@/pages/insumos';
 import ProveedoresPage from '@/pages/proveedores';
 import BodegasPage from '@/pages/bodegas';
@@ -86,7 +86,7 @@ type RecursosTab = 'equipos' | 'vehiculos' | 'insumos' | 'proveedores' | 'bodega
 export default function RecursosPage(): ReactNode {
   // Proveedores y Bodegas solo son visibles para roles de gestión (§ gating de
   // demo). Equipos, Vehículos e Insumos son visibles para cualquier usuario.
-  const canManageSupplyChain = useHasRole(['org_admin', 'department_admin']);
+  const canManageSupplyChain = useHasPermission('warehouse:access');
 
   const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -176,9 +176,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const [users, setUsers] = useState<UserOption[]>([]);
   const isVehicles = subsection === 'vehiculos';
 
-  // Botón "Nuevo" gateado por rol de gestión (useHasRole); el tipo del alta se
-  // fija según la subsección activa.
-  const canCreate = useHasRole(['org_admin', 'department_admin', 'project_creator']);
+  // Botón "Nuevo" gateado por permiso de gestión de activos (useHasPermission);
+  // el tipo del alta se fija según la subsección activa.
+  const canCreate = useHasPermission('asset:manage');
 
   // Search & Filter state
   const [search, setSearch] = useState('');

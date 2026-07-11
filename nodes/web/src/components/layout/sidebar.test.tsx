@@ -20,6 +20,7 @@ function baseUser(overrides: Partial<{ modules: string[]; canManageRoles: boolea
     lastName: 'Lovelace',
     status: 'ACTIVE' as const,
     modules: ['dashboard', 'usuarios'],
+    permissions: [] as string[],
     canManageRoles: false,
     ...overrides,
   };

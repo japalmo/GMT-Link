@@ -90,6 +90,27 @@ export class PermissionService {
     return [...new Set(memberships.map((m) => m.userId))];
   }
 
+  /**
+   * Claves de permiso EFECTIVAS del usuario (union de los grants de todos sus
+   * roles, cualquier scope). Lectura coarse para el gating de UI (`GET /auth/me`)
+   * — el enforcement fino (OWN/PROJECT/STRUCTURAL→FGA) sigue en `can`/`scopeFilter`.
+   * SuperAdmin (env) recibe TODO el catálogo. Sin memberships → `[]`.
+   */
+  async permissionKeysForUser(userId: string): Promise<string[]> {
+    if (this.superAdminIds.includes(userId)) {
+      const all = await this.prisma.permission.findMany({ select: { key: true } });
+      return all.map((p) => p.key);
+    }
+    const memberships = await this.prisma.membership.findMany({ where: { userId } });
+    if (memberships.length === 0) return [];
+    const roleKeys = [...new Set(memberships.map((m) => m.roleKey))];
+    const grants = await this.prisma.rolePermission.findMany({
+      where: { role: { key: { in: roleKeys } } },
+      include: { permission: { select: { key: true } } },
+    });
+    return [...new Set(grants.map((row) => row.permission.key))];
+  }
+
   /** Proyectos "asociados" al usuario: membresías PROJECT directas + expansión de DEPARTMENT. */
   private async projectIdsForUser(memberships: Membership[]): Promise<string[]> {
     const direct = memberships.filter((m) => m.scopeType === 'PROJECT').map((m) => m.scopeId);

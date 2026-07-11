@@ -17,8 +17,10 @@ export interface AuthedUser {
   firstName: string;
   lastName: string;
   status: UserStatus;
-  /** Módulos del sidebar visibles para este usuario (derivados de su cliente). */
+  /** Módulos del sidebar visibles para este usuario (derivados de sus permisos). */
   modules: string[];
+  /** Permisos efectivos del usuario (gating por permiso en el front). */
+  permissions: string[];
   /** `true` si el usuario tiene la relación FGA `can_manage_roles` (org_admin). Gatea `/roles` en el nav. */
   canManageRoles: boolean;
 }

@@ -5,6 +5,7 @@ import { AuthProvider } from '@/context/auth-context';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { ProtectedRoute } from '@/routes/protected-route';
 import { PublicRoute } from '@/routes/public-route';
+import { RequireModule } from '@/routes/require-access';
 import { AppShell } from '@/components/layout/app-shell';
 // Páginas críticas (eager): login, first-login, dashboard y estados de sesión.
 import LoginPage from '@/pages/login';
@@ -89,30 +90,32 @@ const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: '/', element: <DashboardPage /> },
-          { path: '/usuarios', element: lazyRoute(<UsuariosPage />) },
+          // Inicio, Perfil, Config, Notificaciones y Roles no se gatean por módulo:
+          // son siempre visibles (`/roles` ya se gatea por `canManageRoles` en el nav).
+          { path: '/usuarios', element: <RequireModule module="usuarios">{lazyRoute(<UsuariosPage />)}</RequireModule> },
           { path: '/roles', element: lazyRoute(<RolesPage />) },
           { path: '/perfil', element: lazyRoute(<PerfilPage />) },
           { path: '/perfil/cv', element: lazyRoute(<CvPage />) },
           { path: '/perfil/documentos', element: lazyRoute(<DocumentsPage />) },
-          { path: '/directorio', element: lazyRoute(<DirectorioPage />) },
+          { path: '/directorio', element: <RequireModule module="directorio">{lazyRoute(<DirectorioPage />)}</RequireModule> },
           { path: '/notificaciones', element: lazyRoute(<NotificacionesPage />) },
           { path: '/configuracion', element: lazyRoute(<ConfiguracionPage />) },
-          { path: '/finanzas', element: lazyRoute(<FinanzasPage />) },
-          { path: '/finanzas/:tab', element: lazyRoute(<FinanzasPage />) },
-          { path: '/operaciones', element: lazyRoute(<OperacionesPage />) },
-          { path: '/operaciones/:tab', element: lazyRoute(<OperacionesPage />) },
+          { path: '/finanzas', element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule> },
+          { path: '/finanzas/:tab', element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule> },
+          { path: '/operaciones', element: <RequireModule module="operaciones">{lazyRoute(<OperacionesPage />)}</RequireModule> },
+          { path: '/operaciones/:tab', element: <RequireModule module="operaciones">{lazyRoute(<OperacionesPage />)}</RequireModule> },
           // Proyectos: jerarquía A0 (rutas exactas que consumen las páginas reales
           // de la fase siguiente). :clientId / :faenaId / :projectId via useParams.
-          { path: '/proyectos', element: lazyRoute(<ProyectosClientesPage />) },
-          { path: '/proyectos/cliente/:clientId', element: lazyRoute(<ProyectosFaenasPage />) },
+          { path: '/proyectos', element: <RequireModule module="proyectos">{lazyRoute(<ProyectosClientesPage />)}</RequireModule> },
+          { path: '/proyectos/cliente/:clientId', element: <RequireModule module="proyectos">{lazyRoute(<ProyectosFaenasPage />)}</RequireModule> },
           {
             path: '/proyectos/cliente/:clientId/faena/:faenaId',
-            element: lazyRoute(<ProyectosListaPage />),
+            element: <RequireModule module="proyectos">{lazyRoute(<ProyectosListaPage />)}</RequireModule>,
           },
-          { path: '/proyectos/proyecto/:projectId', element: lazyRoute(<ProyectoDetallePage />) },
-          { path: '/recursos', element: lazyRoute(<RecursosPage />) },
-          { path: '/herramientas', element: lazyRoute(<GisToolsPage />) },
-          { path: '/v-metric', element: lazyRoute(<MetricsDashboard />) },
+          { path: '/proyectos/proyecto/:projectId', element: <RequireModule module="proyectos">{lazyRoute(<ProyectoDetallePage />)}</RequireModule> },
+          { path: '/recursos', element: <RequireModule module="recursos">{lazyRoute(<RecursosPage />)}</RequireModule> },
+          { path: '/herramientas', element: <RequireModule module="herramientas">{lazyRoute(<GisToolsPage />)}</RequireModule> },
+          { path: '/v-metric', element: <RequireModule module="v-metric">{lazyRoute(<MetricsDashboard />)}</RequireModule> },
           // QA del design system.
           { path: '/design', element: lazyRoute(<DesignDemo />) },
           // Demos aisladas de las primitivas §5 (Etapa 0.8, QA).

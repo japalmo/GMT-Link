@@ -212,7 +212,12 @@ export async function getMe(): Promise<AuthedUser> {
   const me = await request<AuthedUser>('/auth/me');
   // Defensa: un backend previo a la Fase 4 (RBAC) podría no enviar el campo.
   // Normalizamos a `false` (fail-closed) para que el tipo `boolean` no mienta.
-  return { ...me, canManageRoles: me.canManageRoles ?? false };
+  // `permissions` se normaliza a `[]` (fail-closed) por el mismo motivo.
+  return {
+    ...me,
+    canManageRoles: me.canManageRoles ?? false,
+    permissions: me.permissions ?? [],
+  };
 }
 
 /** `POST /auth/login` — valida credenciales y devuelve nuestro JWT. */
@@ -1873,7 +1878,7 @@ export function deleteMetricElement(id: string): Promise<void> {
  * Capa 1 (Clientes), Capa 2 (Faenas), Capa 3 (Proyectos por faena) y Capa 4
  * (asignación de trabajadores). Los gates (`client:create`, `faena:create`,
  * `project:team:manage`) los resuelve el backend con OpenFGA; el front oculta
- * los botones de creación con `useHasRole` (gating de demo). La LECTURA de
+ * los botones de creación con `useHasPermission` (gating de UI). La LECTURA de
  * faenas es abierta; las mutaciones devuelven 403 si falta el gate.
  */
 

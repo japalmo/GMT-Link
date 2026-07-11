@@ -4,20 +4,13 @@ import { Clock, Receipt, FileText } from 'lucide-react';
 import { Tabs, type TabItem } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageContainer } from '@/components/layout/page-container';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { ReembolsosTab } from './reembolsos';
 import { HorasExtraTab } from './horas-extra';
 import { LiquidacionesTab } from './liquidaciones';
 
 /** Pestaña activa del módulo Finanzas. */
 export type FinanzasTab = 'reembolsos' | 'horas' | 'liquidaciones';
-
-/**
- * Roles que habilitan la gestión de finanzas (manager de finanzas). Mismo
- * criterio con que el backend protege `liquidations.controller`
- * (`can_manage_finance`): rol funcional `finance` o los admin de org/depto.
- */
-const FINANCE_MANAGER_ROLES = ['finance', 'org_admin', 'department_admin'];
 
 /** Definición de las pestañas de Finanzas (valor, etiqueta e icono). */
 const FINANZAS_TABS: ReadonlyArray<TabItem<FinanzasTab>> = [
@@ -44,11 +37,11 @@ export default function FinanzasPage(): ReactNode {
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
 
-  // Liquidaciones es gestión (manager-only): sólo visible para manager de
-  // finanzas. Horas extra y Reembolsos siguen visibles para todos. `useHasRole`
-  // es fail-closed mientras el perfil carga (devuelve `false`), así la pestaña
-  // no parpadea para el rol por defecto (worker).
-  const canManageFinance = useHasRole(FINANCE_MANAGER_ROLES);
+  // Liquidaciones es gestión (manager-only): sólo visible para quien puede ver
+  // todas las solicitudes de finanzas. Horas extra y Reembolsos siguen visibles
+  // para todos. `useHasPermission` es fail-closed mientras la sesión carga
+  // (devuelve `false`), así la pestaña no parpadea para el rol por defecto (worker).
+  const canManageFinance = useHasPermission('finance:request:view:all');
 
   // Pestañas visibles según permiso: liquidaciones se filtra si no es gestor.
   const visibleTabs = FINANZAS_TABS.filter(

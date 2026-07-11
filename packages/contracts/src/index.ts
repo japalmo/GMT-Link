@@ -19,6 +19,7 @@ export type ScopeType = 'ORGANIZATION' | 'DEPARTMENT' | 'PROJECT' | 'SERVICE';
  * compartido back↔front para validar y pintar selects de roles.
  */
 export const ROLE_KEYS = [
+  // Roles funcionales/estructurales heredados (siguen sembrados en seed.ts).
   'org_admin',
   'department_admin',
   'project_creator',
@@ -27,10 +28,17 @@ export const ROLE_KEYS = [
   'finance',
   'viewer',
   'client_ito',
-  'supervisor',
-  'operador',
-  'ito',
-  'adm_contrato',
+  // Roles de sistema Fase 1 (spec §2.3).
+  'trabajador',
+  'admin_contrato',
+  'admin_finanzas',
+  'analista_rh',
+  'analista_finanzas',
+  'asesor_hse',
+  'gerencia_proyectos',
+  'gerencia_rh',
+  'gerencia_general',
+  'admin_ti',
 ] as const;
 
 /**

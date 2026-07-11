@@ -16,7 +16,7 @@ import { Metric } from './index';
 import { useClients } from '@/hooks/use-clients';
 import { useFaenas } from '@/hooks/use-faenas';
 import { useEligibleAdmins } from '@/hooks/use-project-hierarchy';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,9 +43,6 @@ import {
   ModalTitle,
 } from '@/components/ui/modal';
 import type { FaenaStatus, FaenaView } from '@/types/projects';
-
-/** Roles que habilitan la creación de faenas (gate demo `faena:create`). */
-const FAENA_CREATE_ROLES = ['org_admin', 'department_admin'];
 
 /** Metadatos de presentación por estado de faena. */
 const STATUS_META: Record<
@@ -81,7 +78,7 @@ export default function ProyectosFaenasPage() {
   const { clients } = useClients();
   const { faenas, loading, error, create } = useFaenas(clientId);
   const { admins } = useEligibleAdmins();
-  const canCreate = useHasRole(FAENA_CREATE_ROLES);
+  const canCreate = useHasPermission('project:manage');
 
   const client = useMemo(
     () => clients.find((c) => c.id === clientId) ?? null,

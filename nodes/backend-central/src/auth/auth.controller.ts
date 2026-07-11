@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { GamificationService } from '../modules/gamification/gamification.service';
 import { FgaService } from '../fga/fga.service';
+import { PermissionService } from '../authz/permission.service';
 import { ORG_ID, ORG_OBJECT_TYPE } from '../common/org.constant';
 import type { AuthUser } from '../authz/auth-user.types';
 import { CurrentUser } from './current-user.decorator';
@@ -29,8 +30,10 @@ interface MeResponse {
   firstName: string;
   lastName: string;
   status: string;
-  /** Módulos del sidebar visibles para este usuario (derivados de su cliente). */
+  /** Módulos del sidebar visibles para este usuario (derivados de sus permisos). */
   modules: string[];
+  /** Permisos efectivos del usuario (para gating por permiso en el front). */
+  permissions: string[];
   /** true si el usuario tiene `can_manage_roles` sobre `organization:gmt` (§8, Fase 4 RBAC). */
   canManageRoles: boolean;
 }
@@ -48,14 +51,22 @@ const ALL_MODULES = [
   'v-metric',
 ] as const;
 
-/**
- * Módulos visibles por código de cliente (Módulo 5 — "limitar acceso estricto").
- * Reemplaza el filtro por dominio de email del sidebar. Un usuario sin cliente
- * conocido (p. ej. org_admin) ve TODOS los módulos.
- */
-const CLIENT_MODULES: Record<string, readonly string[]> = {
-  CAP: ['dashboard', 'operaciones'], // Capstone / Mantos Blancos
-  ALB: ['dashboard', 'v-metric'], // Albemarle / Salar de Atacama
+/** Módulos visibles para TODO usuario autenticado (Inicio + Finanzas; Config/Perfil son footer). */
+const DEFAULT_MODULES: readonly string[] = ['dashboard', 'finanzas'];
+
+/** Mapa permiso→módulo: tener el permiso enciende el módulo (spec §3.1). */
+const PERMISSION_MODULE: Readonly<Record<string, string>> = {
+  'project:view:all': 'proyectos',
+  'project:manage': 'proyectos',
+  'user:read': 'usuarios',
+  'user:create': 'usuarios',
+  'user:update': 'usuarios',
+  'directory:view:extended': 'directorio',
+  'task:read': 'operaciones',
+  'task:create': 'operaciones',
+  'asset:manage': 'recursos',
+  'asset:fields:edit': 'recursos',
+  'vmetric:view': 'v-metric',
 };
 
 /** Respuesta de completar el primer login. */
@@ -76,6 +87,7 @@ export class AuthController {
     private readonly prisma: PrismaService,
     private readonly gamification: GamificationService,
     private readonly fga: FgaService,
+    private readonly permissions: PermissionService,
   ) {}
 
   /** Login propio: valida email+contraseña y emite nuestro JWT. 401 genérico si no matchea. */
@@ -115,12 +127,14 @@ export class AuthController {
       throw new UnauthorizedException('El usuario de la sesión ya no existe.');
     }
 
-    // En paralelo: módulos (Postgres) + gate de roles (FGA) — /me es el endpoint
-    // más caliente de la web y ambos resuelven independientes.
-    const [modules, canManageRoles] = await Promise.all([
-      this.resolveModules(user.id),
+    // En paralelo: permisos efectivos (Postgres) + gate de roles (FGA) — /me es el
+    // endpoint más caliente de la web y ambos resuelven independientes. Los módulos
+    // se derivan de los permisos (+ una lectura de memberships para el gate org_admin).
+    const [permissions, canManageRoles] = await Promise.all([
+      this.permissions.permissionKeysForUser(user.id),
       this.resolveCanManageRoles(authUser.id),
     ]);
+    const modules = await this.resolveModules(user.id, permissions);
 
     return {
       id: user.id,
@@ -129,6 +143,7 @@ export class AuthController {
       lastName: user.lastName,
       status: user.status,
       modules,
+      permissions,
       canManageRoles,
     };
   }
@@ -157,33 +172,21 @@ export class AuthController {
   }
 
   /**
-   * Deriva los módulos visibles del usuario a partir de su(s) cliente(s) reales
-   * (vía Membership PROJECT → Project → Client). org_admin o cliente desconocido
-   * → todos los módulos (no se restringe).
+   * Módulos visibles del usuario, DERIVADOS de sus permisos (spec §3.1).
+   * - org_admin (membresía) o `system:beta:full` → todos los módulos.
+   * - resto → DEFAULT_MODULES (Inicio + Finanzas) + los que encienda PERMISSION_MODULE.
+   * Config y Perfil no son módulos (links de footer, siempre visibles).
    */
-  private async resolveModules(userId: string): Promise<string[]> {
+  private async resolveModules(userId: string, permissions: string[]): Promise<string[]> {
     const memberships = await this.prisma.membership.findMany({ where: { userId } });
-    if (memberships.length === 0 || memberships.some((m) => m.roleKey === 'org_admin')) {
+    const isOrgAdmin = memberships.some((m) => m.roleKey === 'org_admin');
+    if (isOrgAdmin || permissions.includes('system:beta:full')) {
       return [...ALL_MODULES];
     }
-    const projectIds = memberships
-      .filter((m) => m.scopeType === 'PROJECT')
-      .map((m) => m.scopeId);
-    const projects = projectIds.length
-      ? await this.prisma.project.findMany({
-          where: { id: { in: projectIds } },
-          select: { client: { select: { code: true } } },
-        })
-      : [];
-    const knownCodes = [...new Set(projects.map((p) => p.client.code))].filter(
-      (code) => CLIENT_MODULES[code] !== undefined,
-    );
-    if (knownCodes.length === 0) {
-      return [...ALL_MODULES];
-    }
-    const set = new Set<string>();
-    for (const code of knownCodes) {
-      for (const mod of CLIENT_MODULES[code] ?? []) set.add(mod);
+    const set = new Set<string>(DEFAULT_MODULES);
+    for (const perm of permissions) {
+      const mod = PERMISSION_MODULE[perm];
+      if (mod !== undefined) set.add(mod);
     }
     return [...set];
   }

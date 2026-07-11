@@ -7,7 +7,7 @@ import { PermissionService } from '../../src/authz/permission.service';
 interface PrismaMock {
   membership: { findMany: ReturnType<typeof vi.fn> };
   rolePermission: { findMany: ReturnType<typeof vi.fn> };
-  permission: { findUnique: ReturnType<typeof vi.fn> };
+  permission: { findUnique: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   project: { findMany: ReturnType<typeof vi.fn> };
 }
 
@@ -16,13 +16,17 @@ function buildPrisma(
     memberships?: unknown[];
     grants?: unknown[];
     permission?: unknown;
+    allPermissions?: unknown[];
     deptProjects?: unknown[];
   } = {},
 ): { prisma: PrismaService; mock: PrismaMock } {
   const mock: PrismaMock = {
     membership: { findMany: vi.fn(() => Promise.resolve(over.memberships ?? [])) },
     rolePermission: { findMany: vi.fn(() => Promise.resolve(over.grants ?? [])) },
-    permission: { findUnique: vi.fn(() => Promise.resolve(over.permission ?? null)) },
+    permission: {
+      findUnique: vi.fn(() => Promise.resolve(over.permission ?? null)),
+      findMany: vi.fn(() => Promise.resolve(over.allPermissions ?? [])),
+    },
     project: { findMany: vi.fn(() => Promise.resolve(over.deptProjects ?? [])) },
   };
   return { prisma: mock as unknown as PrismaService, mock };
@@ -115,6 +119,34 @@ describe('PermissionService', () => {
     mock.membership.findMany.mockResolvedValue([{ userId: 'a' }, { userId: 'b' }, { userId: 'a' }]);
     const svc = new PermissionService(prisma, buildFga().fga, []);
     expect(await svc.usersWithPermissionOnProject('document.sign.qa', 'p1')).toEqual(['a', 'b']);
+  });
+
+  describe('permissionKeysForUser', () => {
+    it('SuperAdmin → todo el catálogo', async () => {
+      const { prisma } = buildPrisma({ allPermissions: [{ key: 'a' }, { key: 'b' }] });
+      const svc = new PermissionService(prisma, buildFga().fga, ['super']);
+      expect(await svc.permissionKeysForUser('super')).toEqual(['a', 'b']);
+    });
+
+    it('sin memberships → []', async () => {
+      const { prisma } = buildPrisma({ memberships: [] });
+      const svc = new PermissionService(prisma, buildFga().fga, []);
+      expect(await svc.permissionKeysForUser('u1')).toEqual([]);
+    });
+
+    it('union deduplicada de los grants de sus roles', async () => {
+      const { prisma } = buildPrisma({
+        memberships: [orgMember],
+        grants: [
+          { permission: { key: 'finance:request:create' } },
+          { permission: { key: 'project:manage' } },
+          { permission: { key: 'finance:request:create' } },
+        ],
+      });
+      const svc = new PermissionService(prisma, buildFga().fga, []);
+      const keys = await svc.permissionKeysForUser('u1');
+      expect(new Set(keys)).toEqual(new Set(['finance:request:create', 'project:manage']));
+    });
   });
 });
 

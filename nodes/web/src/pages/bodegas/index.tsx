@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useHasRole } from '@/hooks/use-has-role';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import {
   listWarehouses,
   getWarehouseById,
@@ -51,14 +51,13 @@ interface WarehouseDetail {
  * Recursos. Lista las bodegas de la organización y, al seleccionar una, muestra
  * su stock actual (insumo / cantidad / unidad) y sus movimientos recientes.
  *
- * El botón "Nueva bodega" se gatea en la UI por el MISMO criterio de rol de
- * gestión que usa la pestaña padre (`canManageSupplyChain`, ver
- * `pages/recursos/index.tsx`): `org_admin` / `department_admin`. La
- * autorización real la aplica el backend (`warehouse:access`, ver
- * `warehouses.controller.ts`); este gating solo decide si se muestra la acción.
+ * El botón "Nueva bodega" se gatea en la UI por el MISMO permiso que usa la
+ * pestaña padre (`canManageSupplyChain`, ver `pages/recursos/index.tsx`):
+ * `warehouse:access`. La autorización real la aplica el backend (`warehouse:access`,
+ * ver `warehouses.controller.ts`); este gating solo decide si se muestra la acción.
  */
 export default function BodegasPage(): ReactNode {
-  const canManageSupplyChain = useHasRole(['org_admin', 'department_admin']);
+  const canManageSupplyChain = useHasPermission('warehouse:access');
 
   const mountedRef = useRef(true);
   useEffect(() => {

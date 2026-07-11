@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { SidebarProvider, useSidebar } from '@/components/layout/use-sidebar';
 import { SidebarContent } from '@/components/layout/sidebar';
+import { BetaBanner } from '@/components/layout/beta-banner';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import logoMid from '@/assets/branding/logo-mid.png';
 
@@ -91,6 +92,7 @@ function ShellLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
         <main id="main" className="flex-1 overflow-x-hidden">
+          <BetaBanner />
           <Outlet />
         </main>
       </div>

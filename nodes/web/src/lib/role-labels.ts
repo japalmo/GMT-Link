@@ -15,6 +15,18 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   finance: 'Finanzas',
   viewer: 'Visor',
   client_ito: 'Cliente ITO',
+  // Roles de sistema Fase 1 (spec §2.3).
+  trabajador: 'Trabajador',
+  admin_contrato: 'Administrador de Contrato',
+  admin_finanzas: 'Administrador de Finanzas',
+  analista_rh: 'Analista de RH',
+  analista_finanzas: 'Analista de Finanzas',
+  asesor_hse: 'Asesor HSE',
+  gerencia_proyectos: 'Gerencia de Proyectos',
+  gerencia_rh: 'Gerencia de RH',
+  gerencia_general: 'Gerencia General',
+  admin_ti: 'Administrador TI',
+  // Legacy: etiquetas de rol de trabajador a nivel PROYECTO (no bundles de org).
   supervisor: 'Supervisor',
   operador: 'Operador',
   ito: 'Inspector Técnico (ITO)',

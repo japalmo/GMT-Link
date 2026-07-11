@@ -24,16 +24,19 @@ interface Mocks {
   update: ReturnType<typeof vi.fn>;
   awardPoints: ReturnType<typeof vi.fn>;
   fgaCheck: ReturnType<typeof vi.fn>;
+  permissionKeys: ReturnType<typeof vi.fn>;
 }
 
 function buildController(options: {
   user?: UserRow | { status: string; passwordHash?: string | null } | null;
   canManageRoles?: boolean;
+  permissions?: string[];
 }): Mocks {
   const findUnique = vi.fn(() => Promise.resolve(options.user ?? null));
   const update = vi.fn(() => Promise.resolve({}));
   const awardPoints = vi.fn(() => Promise.resolve());
   const fgaCheck = vi.fn(() => Promise.resolve(options.canManageRoles ?? false));
+  const permissionKeys = vi.fn(() => Promise.resolve(options.permissions ?? []));
 
   const prisma = {
     user: { findUnique, update },
@@ -42,13 +45,17 @@ function buildController(options: {
   } as unknown as PrismaService;
   const gamification = { awardPoints } as unknown as GamificationService;
   const fga = { check: fgaCheck } as unknown as FgaService;
+  const permissionService = {
+    permissionKeysForUser: permissionKeys,
+  } as unknown as import('../../src/authz/permission.service').PermissionService;
 
   return {
-    controller: new AuthController(prisma, gamification, fga),
+    controller: new AuthController(prisma, gamification, fga, permissionService),
     findUnique,
     update,
     awardPoints,
     fgaCheck,
+    permissionKeys,
   };
 }
 
@@ -91,10 +98,33 @@ describe('AuthController · GET /auth/me', () => {
       firstName: 'Colaborador',
       lastName: 'Prueba',
       status: 'ACTIVE',
-      // sin memberships → todos los módulos (no se restringe el acceso)
-      modules: ['dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'proyectos', 'recursos', 'herramientas', 'v-metric'],
+      // sin memberships ni permisos → solo los módulos por defecto (Inicio + Finanzas)
+      modules: ['dashboard', 'finanzas'],
+      permissions: [],
       canManageRoles: false,
     });
+  });
+
+  it('deriva el módulo "proyectos" cuando el usuario tiene project:manage', async () => {
+    const { controller } = buildController({
+      user: { id: 'u1', email: 'x@gmt.cl', firstName: 'X', lastName: 'Y', status: 'ACTIVE' },
+      permissions: ['project:manage'],
+    });
+    const result = await controller.me(ACTIVE_USER);
+    expect(result.permissions).toEqual(['project:manage']);
+    expect(result.modules).toEqual(expect.arrayContaining(['dashboard', 'finanzas', 'proyectos']));
+    expect(result.modules).not.toContain('usuarios');
+  });
+
+  it('system:beta:full → todos los módulos', async () => {
+    const { controller } = buildController({
+      user: { id: 'u1', email: 'x@gmt.cl', firstName: 'X', lastName: 'Y', status: 'ACTIVE' },
+      permissions: ['system:beta:full'],
+    });
+    const result = await controller.me(ACTIVE_USER);
+    expect(result.modules).toEqual([
+      'dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'proyectos', 'recursos', 'herramientas', 'v-metric',
+    ]);
   });
 
   it('incluye canManageRoles=true consultando FGA (can_manage_roles sobre organization:gmt)', async () => {
