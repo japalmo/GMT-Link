@@ -14,8 +14,16 @@ function buildRow(overrides: Partial<OvertimeRequest> = {}): OvertimeRequest {
     id: 'o-1',
     userId: 'u1',
     date: now,
+    startTime: '09:00',
+    endTime: '11:30',
     hours: 2.5,
+    isDraft: false,
     reason: 'Cierre de informe',
+    projectId: null,
+    projectOther: null,
+    authorizedById: null,
+    onBehalfOfUserId: null,
+    rejectionReason: null,
     status: FinanceStatus.PENDIENTE,
     decidedById: null,
     decidedAt: null,
@@ -38,6 +46,7 @@ function buildRowWithRequester(
 interface PrismaParts {
   create: ReturnType<typeof vi.fn>;
   findMany: ReturnType<typeof vi.fn>;
+  findFirst: ReturnType<typeof vi.fn>;
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
 }
@@ -46,6 +55,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
   const resolved: PrismaParts = {
     create: parts.create ?? vi.fn(),
     findMany: parts.findMany ?? vi.fn(() => Promise.resolve([])),
+    findFirst: parts.findFirst ?? vi.fn(() => Promise.resolve(null)),
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
   };
@@ -79,11 +89,11 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ create });
     const service = makeService(prisma);
 
-    const view = await service.create('u1', {
-      date: '2026-06-10T00:00:00.000Z',
-      hours: 3,
-      reason: 'Terreno',
-    });
+    const view = await service.create(
+      'u1',
+      { date: '2026-06-10T00:00:00.000Z', startTime: '09:00', endTime: '12:00' },
+      true,
+    );
 
     const data = create.mock.calls[0]?.[0]?.data as {
       userId: string;
@@ -94,6 +104,124 @@ describe('OvertimeService', () => {
     expect(data.status).toBe(FinanceStatus.PENDIENTE);
     expect(data.hours).toBe(3);
     expect(view.status).toBe(FinanceStatus.PENDIENTE);
+  });
+
+  it('create sin permiso onBehalf: FUERZA la fecha al día de hoy', async () => {
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    await service.create(
+      'u1',
+      { date: '2020-01-01T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
+      false,
+    );
+
+    const savedDate = (create.mock.calls[0]?.[0]?.data as { date: Date }).date;
+    const today = new Date();
+    expect(savedDate.getUTCFullYear()).toBe(today.getUTCFullYear());
+    expect(savedDate.getUTCMonth()).toBe(today.getUTCMonth());
+    expect(savedDate.getUTCDate()).toBe(today.getUTCDate());
+  });
+
+  it('create con permiso onBehalf y trabajador objetivo: userId=objetivo, onBehalfOfUserId=creador, respeta fecha', async () => {
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    await service.create(
+      'admin-1',
+      { date: '2026-05-03T00:00:00.000Z', startTime: '08:00', endTime: '10:00', onBehalfOfUserId: 'worker-9' },
+      true,
+    );
+
+    const data = create.mock.calls[0]?.[0]?.data as {
+      userId: string;
+      onBehalfOfUserId: string | null;
+      date: Date;
+    };
+    expect(data.userId).toBe('worker-9');
+    expect(data.onBehalfOfUserId).toBe('admin-1');
+    expect(data.date.toISOString()).toBe('2026-05-03T00:00:00.000Z');
+  });
+
+  it('create sin endTime => borrador (isDraft, hours null)', async () => {
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    await service.create('u1', { date: '2026-07-10T00:00:00.000Z', startTime: '09:00' }, false);
+
+    const data = create.mock.calls[0]?.[0]?.data as { isDraft: boolean; hours: number | null };
+    expect(data.isDraft).toBe(true);
+    expect(data.hours).toBeNull();
+  });
+
+  it('approve sobre borrador => 409', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ isDraft: true, endTime: null, hours: null })));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(service.approve('mgr', 'o-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('close: fija endTime, computa horas y limpia el borrador', async () => {
+    const findFirst = vi.fn(() =>
+      Promise.resolve(buildRow({ isDraft: true, endTime: null, hours: null, startTime: '09:00' })),
+    );
+    const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    const view = await service.close('u1', 'o-1', '12:30');
+
+    const data = update.mock.calls[0]?.[0]?.data as { endTime: string; hours: number; isDraft: boolean };
+    expect(data.endTime).toBe('12:30');
+    expect(data.hours).toBe(3.5);
+    expect(data.isDraft).toBe(false);
+    expect(view).toBeDefined();
+  });
+
+  it('reject persiste rejectionReason en la fila', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await service.reject('mgr', 'o-1', 'Fuera de horario permitido.');
+
+    const data = update.mock.calls[0]?.[0]?.data as { rejectionReason?: string };
+    expect(data.rejectionReason).toBe('Fuera de horario permitido.');
+  });
+
+  it('listAll aplica filtro de mes contable y orden por fecha', async () => {
+    const findMany = vi.fn<
+      (args: {
+        where: { date?: { gte: Date; lt: Date }; projectId?: string };
+        orderBy: { date: string };
+      }) => Promise<never[]>
+    >(() => Promise.resolve([]));
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    await service.listAll({ month: '2026-07', order: 'asc', projectId: 'p1' });
+
+    const call = findMany.mock.calls[0]?.[0];
+    expect(call?.where.projectId).toBe('p1');
+    expect(call?.where.date?.gte.toISOString()).toBe('2026-06-21T00:00:00.000Z');
+    expect(call?.orderBy.date).toBe('asc');
   });
 
   it('listMine filtra SOLO por el propio userId (más status opcional)', async () => {

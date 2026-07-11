@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -10,51 +11,54 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ORG_ID, ORG_OBJECT_TYPE } from '../../common/org.constant';
-import { RequirePermission } from '../../authz/require-permission.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { CurrentUser } from '../../auth/current-user.decorator';
-import { FgaService } from '../../fga/fga.service';
+import { PermissionService } from '../../authz/permission.service';
 import { OvertimeService } from './overtime.service';
 import {
+  CloseOvertimeDto,
   CreateOvertimeDto,
   ListOvertimeQueryDto,
   RejectOvertimeDto,
 } from './dto/overtime.dto';
 import type { OvertimeView } from './overtime.types';
+import type { OvertimeSummary } from './overtime-summary.util';
 
-/** Permiso FGA de gestión de finanzas (§6-3.3). */
-const FINANCE_RELATION = 'can_manage_finance';
+/** Permisos funcionales de finanzas (spec §2.2). */
+const P_CREATE = 'finance:request:create';
+const P_ONBEHALF = 'finance:overtime:create:onbehalf';
+const P_VIEW_ALL = 'finance:request:view:all';
+const P_VIEW_OT = 'finance:overtime:view:all';
+const P_APPROVE = 'finance:request:approve';
+const P_PAY = 'finance:payment:register';
 
 /**
- * Horas extra (§6-3.3 — mismo patrón que reembolsos, sin boleta).
- *
- * Rutas propias (`/me`, crear): AUTENTICADAS, "solo el dueño" como lógica de
- * service. Rutas de GESTIÓN (lista global, approve/reject/pay): protegidas por
- * `@RequirePermission('can_manage_finance', organization:gmt)`. `GET
- * /overtime/:id` es autenticada y admite dueño O gestor: el controller resuelve
- * `isManager` con un check FGA.
- *
- * `/me` se declara ANTES que `:id`.
+ * Horas extra (spec §5.6). Gating por PERMISO FUNCIONAL vía `PermissionService.can`
+ * inline (patrón ClientsController), no por FGA. Crear requiere
+ * `finance:request:create`; crear a nombre de otro / con fecha libre requiere
+ * además `finance:overtime:create:onbehalf`. Ver todo requiere
+ * `finance:request:view:all` O `finance:overtime:view:all` (subconjunto RH).
+ * `/me`, `/summary` se declaran ANTES de `:id`.
  */
 @Controller('overtime')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 export class OvertimeController {
   constructor(
     private readonly overtime: OvertimeService,
-    private readonly fga: FgaService,
+    private readonly permissions: PermissionService,
   ) {}
 
-  /** Crea una solicitud de horas extra propia (PENDIENTE). */
   @Post()
-  create(
+  async create(
     @CurrentUser() authUser: AuthUser | undefined,
     @Body() dto: CreateOvertimeDto,
   ): Promise<OvertimeView> {
-    return this.overtime.create(this.requireUserId(authUser), dto);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
+    const canOnBehalf = (await this.permissions.can(userId, P_ONBEHALF)).effect === 'allow';
+    return this.overtime.create(userId, dto, canOnBehalf);
   }
 
-  /** Lista las solicitudes propias. Filtro opcional `?status=`. */
   @Get('me')
   listMine(
     @CurrentUser() authUser: AuthUser | undefined,
@@ -63,74 +67,121 @@ export class OvertimeController {
     return this.overtime.listMine(this.requireUserId(authUser), query.status);
   }
 
-  /**
-   * Lista TODAS las solicitudes (gestor — RoleScopedList). Filtros opcionales
-   * `?status=&userId=`. Requiere `can_manage_finance` sobre `organization:gmt`.
-   */
-  @Get()
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  listAll(@Query() query: ListOvertimeQueryDto): Promise<OvertimeView[]> {
-    return this.overtime.listAll({ status: query.status, userId: query.userId });
+  @Get('summary')
+  async summary(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query() query: ListOvertimeQueryDto,
+  ): Promise<OvertimeSummary> {
+    await this.requireViewAll(this.requireUserId(authUser));
+    return this.overtime.summary(this.toFilters(query));
   }
 
-  /**
-   * Detalle de una solicitud. Autenticada: la ve el DUEÑO o un GESTOR. El
-   * controller resuelve `isManager` con un check FGA; el service decide el 404.
-   */
+  @Get()
+  async listAll(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query() query: ListOvertimeQueryDto,
+  ): Promise<OvertimeView[]> {
+    await this.requireViewAll(this.requireUserId(authUser));
+    return this.overtime.listAll(this.toFilters(query));
+  }
+
   @Get(':id')
   async getById(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<OvertimeView> {
     const userId = this.requireUserId(authUser);
-    const isManager = await this.isFinanceManager(userId);
+    const isManager = await this.hasViewAll(userId);
     return this.overtime.getById(id, userId, isManager);
   }
 
-  /** Aprueba (gestor). PENDIENTE→APROBADO. 409 si estado inválido. */
+  /** Cierra un borrador propio con la hora de término. */
+  @Post(':id/close')
+  @HttpCode(200)
+  close(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: CloseOvertimeDto,
+  ): Promise<OvertimeView> {
+    return this.overtime.close(this.requireUserId(authUser), id, dto.endTime);
+  }
+
   @Post(':id/approve')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  approve(
+  async approve(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<OvertimeView> {
-    return this.overtime.approve(this.requireUserId(authUser), id);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_APPROVE);
+    return this.overtime.approve(userId, id);
   }
 
-  /** Rechaza (gestor). PENDIENTE→RECHAZADO. `reason` opcional (log). */
   @Post(':id/reject')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  reject(
+  async reject(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
     @Body() dto: RejectOvertimeDto,
   ): Promise<OvertimeView> {
-    return this.overtime.reject(this.requireUserId(authUser), id, dto.reason);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_APPROVE);
+    return this.overtime.reject(userId, id, dto.reason);
   }
 
-  /** Marca pagada (gestor). Solo desde APROBADO→PAGADO. 409 si no. */
   @Post(':id/pay')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  pay(
+  async pay(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<OvertimeView> {
-    return this.overtime.pay(this.requireUserId(authUser), id);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_PAY);
+    return this.overtime.pay(userId, id);
   }
 
-  /** ¿El usuario es gestor de finanzas (FGA `can_manage_finance` sobre la org)? */
-  private isFinanceManager(userId: string): Promise<boolean> {
-    return this.fga.check({
-      user: `user:${userId}`,
-      relation: FINANCE_RELATION,
-      object: `${ORG_OBJECT_TYPE}:${ORG_ID}`,
-    });
+  private toFilters(q: ListOvertimeQueryDto): {
+    status?: (typeof q)['status'];
+    userId?: string;
+    projectId?: string;
+    clientId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    date?: string;
+    month?: string;
+    order?: 'asc' | 'desc';
+  } {
+    return {
+      status: q.status,
+      userId: q.userId,
+      projectId: q.projectId,
+      clientId: q.clientId,
+      dateFrom: q.dateFrom,
+      dateTo: q.dateTo,
+      date: q.date,
+      month: q.month,
+      order: q.order,
+    };
   }
 
-  /** Exige sesión: devuelve el id del usuario autenticado o lanza 401. */
+  /** "Ver todo" = tiene view:all O el subconjunto overtime:view:all (RH). */
+  private async hasViewAll(userId: string): Promise<boolean> {
+    if ((await this.permissions.can(userId, P_VIEW_ALL)).effect === 'allow') return true;
+    return (await this.permissions.can(userId, P_VIEW_OT)).effect === 'allow';
+  }
+
+  private async requireViewAll(userId: string): Promise<void> {
+    if (!(await this.hasViewAll(userId))) {
+      throw new ForbiddenException('No tienes permiso para ver todas las horas extra.');
+    }
+  }
+
+  private async require(userId: string, permissionKey: string): Promise<void> {
+    if ((await this.permissions.can(userId, permissionKey)).effect !== 'allow') {
+      throw new ForbiddenException('No tienes permiso para esta acción de finanzas.');
+    }
+  }
+
   private requireUserId(authUser: AuthUser | undefined): string {
     if (!authUser) {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');

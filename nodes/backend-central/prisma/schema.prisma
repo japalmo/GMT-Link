@@ -41,6 +41,8 @@ model User {
   approvedReimbursements Reimbursement[]           @relation("ReimbursementApprover")
   overtimeRequests       OvertimeRequest[]         @relation("OvertimeRequester")
   approvedOvertime       OvertimeRequest[]         @relation("OvertimeApprover")
+  overtimeOnBehalf       OvertimeRequest[]         @relation("OvertimeOnBehalf")
+  overtimeAuthorized     OvertimeRequest[]         @relation("OvertimeAuthorizer")
   liquidations           Liquidation[]             @relation("UserLiquidations")
   tasksAssigned          Task[]                    @relation("TaskAssignee")
   tasksCreated           Task[]                    @relation("TaskCreator")
@@ -132,6 +134,7 @@ model Project {
   documents      ProjectDocument[]
   assets         Asset[]                   @relation("ProjectAssets")
   elements       Element[]                 @relation("ProjectElements")
+  overtimeRequests OvertimeRequest[]       @relation("OvertimeProject")
   createdAt      DateTime                  @default(now())
 
   @@unique([departmentId, code])
@@ -404,20 +407,27 @@ enum FinanceStatus {
 
 // Reembolso (§6-3.1/3.2). monto en CLP entero (sin decimales).
 model Reimbursement {
-  id          String        @id @default(cuid())
-  userId      String
-  user        User          @relation("ReimbursementRequester", fields: [userId], references: [id], onDelete: Cascade)
-  amount      Int
-  date        DateTime
-  concept     String
-  category    String?
-  receiptUrl  String? // boleta/comprobante (StorageService)
-  status      FinanceStatus @default(PENDIENTE)
-  decidedById String?
-  decidedBy   User?         @relation("ReimbursementApprover", fields: [decidedById], references: [id])
-  decidedAt   DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation("ReimbursementRequester", fields: [userId], references: [id], onDelete: Cascade)
+  amount          Int
+  date            DateTime
+  concept         String
+  category        String? // Alimentación | Transporte | Vehículos | Otro(s)
+  subcategory     String? // solo Vehículos: Combustible | Mantención-Limpieza | Repuesto | Otro
+  vehicle         String? // id/etiqueta de vehículo cuando category = Vehículos
+  observations    String? // observaciones opcionales del solicitante
+  receiptUrl      String? // URL de descarga de la boleta (en R2, firmada y efímera)
+  receiptKey      String? // clave ESTABLE del storage para leer la boleta (impresión en lote)
+  status          FinanceStatus @default(PENDIENTE)
+  rejectionReason String? // motivo persistido cuando status = RECHAZADO
+  printed         Boolean       @default(false) // marcada como impresa en un lote
+  printedAt       DateTime? // cuándo se marcó impresa
+  decidedById     String?
+  decidedBy       User?         @relation("ReimbursementApprover", fields: [decidedById], references: [id])
+  decidedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   @@index([userId, status])
   @@map("reimbursements")
@@ -425,18 +435,29 @@ model Reimbursement {
 
 // Horas extra (§6-3.3). Reusa el patron de reembolsos.
 model OvertimeRequest {
-  id          String        @id @default(cuid())
-  userId      String
-  user        User          @relation("OvertimeRequester", fields: [userId], references: [id], onDelete: Cascade)
-  date        DateTime
-  hours       Float
-  reason      String
-  status      FinanceStatus @default(PENDIENTE)
-  decidedById String?
-  decidedBy   User?         @relation("OvertimeApprover", fields: [decidedById], references: [id])
-  decidedAt   DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  userId           String // DUEÑO: el trabajador cuyas horas son
+  user             User          @relation("OvertimeRequester", fields: [userId], references: [id], onDelete: Cascade)
+  date             DateTime
+  startTime        String? // "HH:mm" hora inicio (obligatoria al crear; nullable por filas legacy)
+  endTime          String? // "HH:mm" hora término; null => borrador
+  hours            Float? // computada de start/end; null mientras es borrador
+  isDraft          Boolean       @default(false)
+  reason           String? // opcional (el nuevo form no lo pide; legacy)
+  projectId        String?
+  project          Project?      @relation("OvertimeProject", fields: [projectId], references: [id])
+  projectOther     String? // texto libre cuando se elige "Otro"
+  authorizedById   String? // "Autorizado por" (admin_contrato / gerencias)
+  authorizedBy     User?         @relation("OvertimeAuthorizer", fields: [authorizedById], references: [id])
+  onBehalfOfUserId String? // quién la registró a nombre del dueño; null si la creó el propio trabajador
+  onBehalfOfUser   User?         @relation("OvertimeOnBehalf", fields: [onBehalfOfUserId], references: [id])
+  status           FinanceStatus @default(PENDIENTE)
+  rejectionReason  String? // motivo persistido cuando status = RECHAZADO
+  decidedById      String?
+  decidedBy        User?         @relation("OvertimeApprover", fields: [decidedById], references: [id])
+  decidedAt        DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([userId, status])
   @@map("overtime_requests")

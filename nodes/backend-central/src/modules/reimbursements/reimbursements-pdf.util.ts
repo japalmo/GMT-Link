@@ -7,18 +7,35 @@ export type ReceiptsPerPage = 2 | 4 | 6;
 /** Tipo de archivo de la boleta, deducido por los bytes mágicos. */
 export type ReceiptKind = 'pdf' | 'jpg' | 'png' | 'other';
 
+/** Orientación de la hoja. */
+export type PageOrientation = 'portrait' | 'landscape';
+
+/** Tamaño de hoja soportado. */
+export type PageSize = 'A4' | 'letter';
+
+/** Opciones de composición del lote (spec §5.7). */
+export interface ComposeOptions {
+  perPage: ReceiptsPerPage;
+  orientation?: PageOrientation;
+  size?: PageSize;
+}
+
 /** Una boleta lista para componer en el PDF (texto ya formateado). */
 export interface ReceiptForPdf {
   concept: string;
   amountLabel: string;
+  categoryLabel: string;
   requesterName: string;
   dateLabel: string;
   bytes: Buffer;
   kind: ReceiptKind;
 }
 
-/** Dimensiones A4 vertical en puntos. */
-const A4 = { width: 595.28, height: 841.89 } as const;
+/** Dimensiones base por tamaño (puntos), en vertical. */
+const PAGE_SIZES: Readonly<Record<PageSize, { width: number; height: number }>> = {
+  A4: { width: 595.28, height: 841.89 },
+  letter: { width: 612, height: 792 },
+};
 const MARGIN = 28;
 const GAP = 14;
 const CAPTION_H = 30;
@@ -54,30 +71,36 @@ export function sniffReceiptKind(bytes: Buffer): ReceiptKind {
  */
 export async function composeReceiptsPdf(
   receipts: readonly ReceiptForPdf[],
-  perPage: ReceiptsPerPage,
+  options: ComposeOptions,
 ): Promise<Uint8Array> {
+  const { perPage } = options;
+  const base = PAGE_SIZES[options.size ?? 'A4'];
+  const page =
+    (options.orientation ?? 'portrait') === 'landscape'
+      ? { width: base.height, height: base.width }
+      : base;
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
 
   const { cols, rows } = GRID[perPage];
-  const usableW = A4.width - MARGIN * 2;
-  const usableH = A4.height - MARGIN * 2;
+  const usableW = page.width - MARGIN * 2;
+  const usableH = page.height - MARGIN * 2;
   const cellW = (usableW - (cols - 1) * GAP) / cols;
   const cellH = (usableH - (rows - 1) * GAP) / rows;
 
-  let page: PDFPage | null = null;
+  let pdfPage: PDFPage | null = null;
   for (let i = 0; i < receipts.length; i += 1) {
     const slot = i % perPage;
     if (slot === 0) {
-      page = doc.addPage([A4.width, A4.height]);
+      pdfPage = doc.addPage([page.width, page.height]);
     }
     const col = slot % cols;
     const row = Math.floor(slot / cols);
     const x = MARGIN + col * (cellW + GAP);
-    const yBottom = A4.height - MARGIN - row * (cellH + GAP) - cellH;
-    // `page` siempre existe aquí (se crea en slot === 0).
-    await drawCell(doc, page as PDFPage, font, fontBold, receipts[i] as ReceiptForPdf, x, yBottom, cellW, cellH);
+    const yBottom = page.height - MARGIN - row * (cellH + GAP) - cellH;
+    // `pdfPage` siempre existe aquí (se crea en slot === 0).
+    await drawCell(doc, pdfPage as PDFPage, font, fontBold, receipts[i] as ReceiptForPdf, x, yBottom, cellW, cellH);
   }
 
   return doc.save();
@@ -109,7 +132,7 @@ async function drawCell(
   const concept = truncate(receipt.concept, fontBold, 9, w - CELL_PAD * 2);
   page.drawText(concept, { x: textX, y: topY - 9, size: 9, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
   const meta = truncate(
-    `${receipt.requesterName}  -  ${receipt.dateLabel}  -  ${receipt.amountLabel}`,
+    `${receipt.requesterName}  -  ${receipt.dateLabel}  -  ${receipt.amountLabel}  -  ${receipt.categoryLabel}`,
     font,
     7.5,
     w - CELL_PAD * 2,

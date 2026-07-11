@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   Param,
@@ -17,23 +18,27 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { ORG_ID, ORG_OBJECT_TYPE } from '../../common/org.constant';
-import { RequirePermission } from '../../authz/require-permission.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { CurrentUser } from '../../auth/current-user.decorator';
-import { FgaService } from '../../fga/fga.service';
+import { PermissionService } from '../../authz/permission.service';
 import { ReimbursementsService } from './reimbursements.service';
 import {
   CreateReimbursementDto,
   ImportReimbursementsDto,
   ListReimbursementsQueryDto,
+  MarkPrintedDto,
   PrintReimbursementsDto,
   RejectReimbursementDto,
 } from './dto/reimbursements.dto';
-import type { ReimbursementView } from './reimbursements.types';
+import type { ReceiptScanResult, ReimbursementView } from './reimbursements.types';
+import type { ReimbursementSummary } from './reimbursements-summary.util';
 
-/** Permiso FGA de gestión de finanzas (§6-3.1). */
-const FINANCE_RELATION = 'can_manage_finance';
+/** Permisos funcionales de finanzas (spec §2.2). */
+const P_CREATE = 'finance:request:create';
+const P_VIEW_ALL = 'finance:request:view:all';
+const P_APPROVE = 'finance:request:approve';
+const P_PAY = 'finance:payment:register';
+const P_PRINT = 'finance:print:batch';
 
 /** Tamaño máximo de la boleta (10 MB) — alineado con el storage. */
 const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
@@ -48,59 +53,82 @@ const ALLOWED_MIME_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Reembolsos (§6-3.1 — `RoleScopedList` + `RequestForm`).
- *
- * Rutas propias (`/me`, crear, boleta): AUTENTICADAS, "solo el dueño" como lógica
- * de service (userId de la sesión). Rutas de GESTIÓN (lista global, approve/
- * reject/pay): protegidas por `@RequirePermission('can_manage_finance',
- * organization:gmt)` → 403 si no es gestor. `GET /reimbursements/:id` es
- * autenticada y admite dueño O gestor: el controller resuelve `isManager` con un
- * check FGA y el service decide el 404.
- *
- * `/me` se declara ANTES que `:id` para que el literal no sea capturado por el
- * parámetro de ruta.
+ * Reembolsos (spec §5). Gating por PERMISO FUNCIONAL vía `PermissionService.can`
+ * inline (patrón ClientsController), no por FGA. Rutas propias (`/me`, crear,
+ * boleta, scan) requieren `finance:request:create`; la gestión requiere el permiso
+ * específico. `/me`, `/summary`, `/scan-receipt`, `/print` se declaran ANTES de `:id`.
  */
 @Controller('reimbursements')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 export class ReimbursementsController {
   constructor(
     private readonly reimbursements: ReimbursementsService,
-    private readonly fga: FgaService,
+    private readonly permissions: PermissionService,
   ) {}
 
-  /** Crea un reembolso propio (PENDIENTE). */
   @Post()
-  create(
+  async create(
     @CurrentUser() authUser: AuthUser | undefined,
     @Body() dto: CreateReimbursementDto,
   ): Promise<ReimbursementView> {
-    return this.reimbursements.create(this.requireUserId(authUser), dto);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
+    return this.reimbursements.create(userId, dto);
   }
 
-  /** Importa un lote de reembolsos propios (PENDIENTE). */
   @Post('import')
-  importBatch(
+  async importBatch(
     @CurrentUser() authUser: AuthUser | undefined,
     @Body() dto: ImportReimbursementsDto,
   ): Promise<ReimbursementView[]> {
-    return this.reimbursements.importBatch(this.requireUserId(authUser), dto);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
+    return this.reimbursements.importBatch(userId, dto);
   }
 
-  /**
-   * Genera un PDF en el servidor con las boletas seleccionadas en grilla (2/4/6
-   * por página). Gestor (requiere `can_manage_finance`). Responde `application/pdf`.
-   */
+  /** OCR de boleta: imagen multipart → campos sugeridos (spec §5.5). */
+  @Post('scan-receipt')
+  @HttpCode(200)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES } }))
+  async scanReceipt(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<ReceiptScanResult> {
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
+    const checked = this.requireValidFile(file);
+    const dataUrl = `data:${checked.mimetype};base64,${checked.buffer.toString('base64')}`;
+    return this.reimbursements.scanReceipt(dataUrl);
+  }
+
   @Post('print')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  async print(@Body() dto: PrintReimbursementsDto, @Res() res: Response): Promise<void> {
-    const pdf = await this.reimbursements.generateBatchPdf(dto.ids, dto.perPage);
+  async print(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Body() dto: PrintReimbursementsDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.require(this.requireUserId(authUser), P_PRINT);
+    const pdf = await this.reimbursements.generateBatchPdf(dto.ids, {
+      perPage: dto.perPage,
+      orientation: dto.orientation,
+      size: dto.size,
+    });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="boletas-reembolsos.pdf"');
     res.end(Buffer.from(pdf));
   }
 
-  /** Lista los reembolsos propios. Filtro opcional `?status=`. */
+  @Post('print/mark')
+  @HttpCode(200)
+  async markPrinted(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Body() dto: MarkPrintedDto,
+  ): Promise<{ marked: number }> {
+    await this.require(this.requireUserId(authUser), P_PRINT);
+    return this.reimbursements.markPrinted(dto.ids);
+  }
+
   @Get('me')
   listMine(
     @CurrentUser() authUser: AuthUser | undefined,
@@ -109,90 +137,110 @@ export class ReimbursementsController {
     return this.reimbursements.listMine(this.requireUserId(authUser), query.status);
   }
 
-  /**
-   * Lista TODOS los reembolsos (gestor — RoleScopedList). Filtros opcionales
-   * `?status=&userId=`. Requiere `can_manage_finance` sobre `organization:gmt`.
-   */
-  @Get()
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  listAll(@Query() query: ListReimbursementsQueryDto): Promise<ReimbursementView[]> {
-    return this.reimbursements.listAll({ status: query.status, userId: query.userId });
+  @Get('summary')
+  async summary(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query() query: ListReimbursementsQueryDto,
+  ): Promise<ReimbursementSummary> {
+    await this.require(this.requireUserId(authUser), P_VIEW_ALL);
+    return this.reimbursements.summary(this.toFilters(query));
   }
 
-  /**
-   * Detalle de un reembolso. Autenticada: lo ve el DUEÑO o un GESTOR. El
-   * controller resuelve `isManager` con un check FGA; el service decide el 404.
-   */
+  @Get()
+  async listAll(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query() query: ListReimbursementsQueryDto,
+  ): Promise<ReimbursementView[]> {
+    await this.require(this.requireUserId(authUser), P_VIEW_ALL);
+    return this.reimbursements.listAll(this.toFilters(query));
+  }
+
   @Get(':id')
   async getById(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<ReimbursementView> {
     const userId = this.requireUserId(authUser);
-    const isManager = await this.isFinanceManager(userId);
+    const isManager = (await this.permissions.can(userId, P_VIEW_ALL)).effect === 'allow';
     return this.reimbursements.getById(id, userId, isManager);
   }
 
-  /**
-   * Sube/actualiza la boleta (multipart, campo `file` PDF/imagen). SOLO el dueño
-   * y solo si está PENDIENTE.
-   */
   @Post(':id/receipt')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES } }))
-  attachReceipt(
+  async attachReceipt(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
   ): Promise<ReimbursementView> {
     const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
     const checked = this.requireValidFile(file);
     return this.reimbursements.attachReceipt(userId, id, checked);
   }
 
-  /** Aprueba un reembolso (gestor). PENDIENTE→APROBADO. 409 si estado inválido. */
   @Post(':id/approve')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  approve(
+  async approve(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<ReimbursementView> {
-    return this.reimbursements.approve(this.requireUserId(authUser), id);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_APPROVE);
+    return this.reimbursements.approve(userId, id);
   }
 
-  /** Rechaza un reembolso (gestor). PENDIENTE→RECHAZADO. `reason` opcional (log). */
   @Post(':id/reject')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  reject(
+  async reject(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
     @Body() dto: RejectReimbursementDto,
   ): Promise<ReimbursementView> {
-    return this.reimbursements.reject(this.requireUserId(authUser), id, dto.reason);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_APPROVE);
+    return this.reimbursements.reject(userId, id, dto.reason);
   }
 
-  /** Marca pagado un reembolso (gestor). Solo desde APROBADO→PAGADO. 409 si no. */
   @Post(':id/pay')
   @HttpCode(200)
-  @RequirePermission(FINANCE_RELATION, { type: ORG_OBJECT_TYPE, id: ORG_ID })
-  pay(
+  async pay(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<ReimbursementView> {
-    return this.reimbursements.pay(this.requireUserId(authUser), id);
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_PAY);
+    return this.reimbursements.pay(userId, id);
   }
 
-  /** ¿El usuario es gestor de finanzas (FGA `can_manage_finance` sobre la org)? */
-  private isFinanceManager(userId: string): Promise<boolean> {
-    return this.fga.check({
-      user: `user:${userId}`,
-      relation: FINANCE_RELATION,
-      object: `${ORG_OBJECT_TYPE}:${ORG_ID}`,
-    });
+  private toFilters(q: ListReimbursementsQueryDto): {
+    status?: (typeof q)['status'];
+    userId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    date?: string;
+    month?: string;
+    order?: 'asc' | 'desc';
+    printed?: boolean;
+  } {
+    return {
+      status: q.status,
+      userId: q.userId,
+      dateFrom: q.dateFrom,
+      dateTo: q.dateTo,
+      date: q.date,
+      month: q.month,
+      order: q.order,
+      printed: q.printed,
+    };
   }
 
-  /** Valida presencia y MIME del archivo subido; retorna su forma mínima. */
+  private async require(userId: string, permissionKey: string): Promise<void> {
+    const decision = await this.permissions.can(userId, permissionKey);
+    if (decision.effect !== 'allow') {
+      throw new ForbiddenException('No tienes permiso para esta acción de finanzas.');
+    }
+  }
+
   private requireValidFile(file: Express.Multer.File | undefined): {
     buffer: Buffer;
     originalname: string;
@@ -202,14 +250,11 @@ export class ReimbursementsController {
       throw new BadRequestException('Falta el archivo (campo "file").');
     }
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      throw new UnsupportedMediaTypeException(
-        'El archivo debe ser PDF o imagen (PNG/JPEG/WebP/HEIC).',
-      );
+      throw new UnsupportedMediaTypeException('El archivo debe ser PDF o imagen (PNG/JPEG/WebP/HEIC).');
     }
     return { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype };
   }
 
-  /** Exige sesión: devuelve el id del usuario autenticado o lanza 401. */
   private requireUserId(authUser: AuthUser | undefined): string {
     if (!authUser) {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');

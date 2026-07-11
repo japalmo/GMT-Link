@@ -21,7 +21,14 @@ function buildRow(overrides: Partial<Reimbursement> = {}): Reimbursement {
     date: now,
     concept: 'Taxi al puerto',
     category: 'transporte',
+    subcategory: null,
+    vehicle: null,
+    observations: null,
     receiptUrl: null,
+    receiptKey: null,
+    rejectionReason: null,
+    printed: false,
+    printedAt: null,
     status: FinanceStatus.PENDIENTE,
     decidedById: null,
     decidedAt: null,
@@ -47,6 +54,7 @@ interface PrismaParts {
   findFirst: ReturnType<typeof vi.fn>;
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  updateMany: ReturnType<typeof vi.fn>;
 }
 
 function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
@@ -56,6 +64,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     findFirst: parts.findFirst ?? vi.fn(() => Promise.resolve(null)),
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
+    updateMany: parts.updateMany ?? vi.fn(() => Promise.resolve({ count: 0 })),
   };
   const prisma = { reimbursement: resolved } as unknown as PrismaService;
   return { prisma, parts: resolved };
@@ -99,7 +108,8 @@ describe('ReimbursementsService', () => {
   });
 
   function makeService(prisma: PrismaService): ReimbursementsService {
-    return new ReimbursementsService(prisma, storageBits.storage, notifBits.notifications);
+    const config = { get: vi.fn(() => undefined) } as unknown as import('@nestjs/config').ConfigService;
+    return new ReimbursementsService(prisma, storageBits.storage, notifBits.notifications, config);
   }
 
   it('create crea un reembolso propio en estado PENDIENTE (userId de sesión)', async () => {
@@ -209,8 +219,9 @@ describe('ReimbursementsService', () => {
 
     expect(storageBits.save).toHaveBeenCalledTimes(1);
     expect(storageBits.save.mock.calls[0]?.[0]).toMatchObject({ folder: 'reimbursements' });
-    const data = update.mock.calls[0]?.[0]?.data as { receiptUrl: string };
+    const data = update.mock.calls[0]?.[0]?.data as { receiptUrl: string; receiptKey: string };
     expect(data.receiptUrl).toBe('http://localhost:3001/files/reimbursements/new.pdf');
+    expect(data.receiptKey).toBe('reimbursements/new.pdf');
     expect(view.receiptUrl).toBe('http://localhost:3001/files/reimbursements/new.pdf');
   });
 
@@ -345,5 +356,76 @@ describe('ReimbursementsService', () => {
 
     const [, payload] = notifBits.create.mock.calls[0] as [string, { body?: string }];
     expect(payload.body).toBeUndefined();
+  });
+
+  it('reject persiste rejectionReason en la fila', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await service.reject('mgr', 'r-1', 'Boleta ilegible.');
+
+    const data = update.mock.calls[0]?.[0]?.data as { rejectionReason?: string };
+    expect(data.rejectionReason).toBe('Boleta ilegible.');
+  });
+
+  it('listAll aplica filtro de mes contable y orden por fecha asc', async () => {
+    const findMany = vi.fn<
+      (args: { where: { date?: { gte: Date; lt: Date } }; orderBy: { date: string } }) => Promise<never[]>
+    >(() => Promise.resolve([]));
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    await service.listAll({ month: '2026-07', order: 'asc' });
+
+    const call = findMany.mock.calls[0]?.[0];
+    expect(call?.where.date?.gte.toISOString()).toBe('2026-06-21T00:00:00.000Z');
+    expect(call?.orderBy.date).toBe('asc');
+  });
+
+  it('scanReceipt sin clave NVIDIA => objeto vacío', async () => {
+    const { prisma } = buildPrisma();
+    const service = makeService(prisma);
+    await expect(service.scanReceipt('data:image/jpeg;base64,AAAA')).resolves.toEqual({});
+  });
+
+  it('generateBatchPdf usa receiptKey y arma el PDF', async () => {
+    const findMany = vi.fn(() =>
+      Promise.resolve([
+        buildRowWithRequester({ receiptKey: 'reimbursements/a.png', receiptUrl: 'https://r2/x?sig=1' }),
+      ]),
+    );
+    const read = vi.fn(() =>
+      Promise.resolve(
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+          'base64',
+        ),
+      ),
+    );
+    const prisma = { reimbursement: { findMany } } as unknown as PrismaService;
+    const storage = { save: vi.fn(), delete: vi.fn(), read } as unknown as StorageService;
+    const config = { get: vi.fn(() => undefined) } as unknown as import('@nestjs/config').ConfigService;
+    const service = new ReimbursementsService(prisma, storage, notifBits.notifications, config);
+
+    const pdf = await service.generateBatchPdf(['r-1'], { perPage: 2 });
+    expect(read).toHaveBeenCalledWith('reimbursements/a.png');
+    expect(Buffer.from(pdf.slice(0, 4)).toString('ascii')).toBe('%PDF');
+  });
+
+  it('markPrinted marca impresas por id', async () => {
+    const updateMany = vi.fn<
+      (args: { where: { id: { in: string[] } }; data: { printed: boolean; printedAt: Date } }) => Promise<{ count: number }>
+    >(() => Promise.resolve({ count: 2 }));
+    const { prisma } = buildPrisma({ updateMany });
+    const service = makeService(prisma);
+
+    const res = await service.markPrinted(['a', 'b']);
+    const call = updateMany.mock.calls[0]?.[0];
+    expect(call?.data.printed).toBe(true);
+    expect(res.marked).toBe(2);
   });
 });

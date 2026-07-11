@@ -1,10 +1,12 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   MinLength,
@@ -51,6 +53,24 @@ export class CreateReimbursementDto {
   @IsString()
   @MaxLength(80)
   category?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(80)
+  subcategory?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(120)
+  vehicle?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(1000)
+  observations?: string;
 }
 
 /** Filtros opcionales de `GET /reimbursements/me` y `GET /reimbursements`. */
@@ -63,6 +83,32 @@ export class ListReimbursementsQueryDto {
   @IsOptional()
   @IsString()
   userId?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  dateTo?: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  date?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}$/, { message: 'month debe ser "YYYY-MM".' })
+  month?: string;
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'], { message: 'order debe ser asc o desc.' })
+  order?: 'asc' | 'desc';
+
+  /** Selector "pendientes de impresión" (`printed=false`). */
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  printed?: boolean;
 }
 
 /** Body opcional de `POST /reimbursements/:id/reject`. */
@@ -98,5 +144,22 @@ export class PrintReimbursementsDto {
   @Type(() => Number)
   @IsIn([2, 4, 6], { message: 'perPage debe ser 2, 4 o 6.' })
   perPage!: 2 | 4 | 6;
+
+  @IsOptional()
+  @IsIn(['portrait', 'landscape'], { message: 'orientation inválida.' })
+  orientation?: 'portrait' | 'landscape';
+
+  @IsOptional()
+  @IsIn(['A4', 'letter'], { message: 'size inválido.' })
+  size?: 'A4' | 'letter';
+}
+
+/** Body de `POST /reimbursements/print/mark` — marca impresas tras confirmar descarga. */
+export class MarkPrintedDto {
+  @IsArray()
+  @ArrayNotEmpty({ message: 'Selecciona al menos un reembolso.' })
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  ids!: string[];
 }
 

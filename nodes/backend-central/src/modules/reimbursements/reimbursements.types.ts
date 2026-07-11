@@ -14,8 +14,20 @@ export interface ReimbursementView {
   date: string;
   concept: string;
   category: string | null;
+  /** Solo Vehículos: Combustible | Mantención-Limpieza | Repuesto | Otro. */
+  subcategory: string | null;
+  /** id/etiqueta de vehículo cuando category = Vehículos. */
+  vehicle: string | null;
+  /** Observaciones opcionales del solicitante. */
+  observations: string | null;
   /** URL de la boleta/comprobante; null mientras no se suba. */
   receiptUrl: string | null;
+  /** Motivo persistido cuando status = RECHAZADO. */
+  rejectionReason: string | null;
+  /** Marcada como impresa en un lote (post-descarga). */
+  printed: boolean;
+  /** ISO-8601 cuando se marcó impresa; null si no. */
+  printedAt: string | null;
   status: FinanceStatus;
   decidedById: string | null;
   /** ISO-8601 cuando se resolvió (aprobó/rechazó/pagó); null si sigue pendiente. */
@@ -35,3 +47,6 @@ export interface ReimbursementRequester {
   lastName: string;
   email: string;
 }
+
+/** Resultado del OCR de boleta re-exportado para el controller. */
+export type { ReceiptScanResult } from './receipt-ocr.util';

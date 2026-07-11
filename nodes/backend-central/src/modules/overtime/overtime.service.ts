@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,6 +11,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
+import { computeHours } from './overtime-hours.util';
+import { monthRange } from '../finance/finance-month.util';
+import { summarizeOvertime } from './overtime-summary.util';
+import type { OvertimeSummary } from './overtime-summary.util';
 import type { CreateOvertimeDto } from './dto/overtime.dto';
 import type { OvertimeView } from './overtime.types';
 
@@ -24,16 +29,22 @@ const REQUESTER_SELECT = {
   select: { id: true, firstName: true, lastName: true, email: true },
 } as const;
 
-/** Fila con el solicitante incluido (vistas de gestión). */
+/** Fila con el solicitante (y proyecto) incluidos (vistas de gestión). */
 type OvertimeWithRequester = Prisma.OvertimeRequestGetPayload<{
-  include: { user: typeof REQUESTER_SELECT };
+  include: { user: typeof REQUESTER_SELECT; project: { select: { name: true } } };
 }>;
 
 /** Filtros de listado (ya parseados desde el query). */
 export interface ListOvertimeFilters {
   status?: FinanceStatus;
-  /** Solo aplica a la vista del gestor (lista global). */
   userId?: string;
+  projectId?: string;
+  clientId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  date?: string;
+  month?: string;
+  order?: 'asc' | 'desc';
 }
 
 /**
@@ -54,16 +65,58 @@ export class OvertimeService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  /** Crea una solicitud de horas extra del propio usuario en estado PENDIENTE. */
-  async create(userId: string, dto: CreateOvertimeDto): Promise<OvertimeView> {
+  /**
+   * Crea una HE. `canOnBehalf` lo resuelve el controller (permiso
+   * `finance:overtime:create:onbehalf`):
+   *  - sin permiso: la fecha se FUERZA al día en curso y no puede crear a nombre de otro.
+   *  - con permiso: puede fijar cualquier fecha y `onBehalfOfUserId` (trabajador objetivo).
+   * `endTime` ausente => borrador (isDraft=true, hours=null).
+   */
+  async create(
+    creatorId: string,
+    dto: CreateOvertimeDto,
+    canOnBehalf: boolean,
+  ): Promise<OvertimeView> {
+    const targetWorkerId = canOnBehalf && dto.onBehalfOfUserId ? dto.onBehalfOfUserId : creatorId;
+    const filedBy = targetWorkerId !== creatorId ? creatorId : null;
+    const date = canOnBehalf ? parseDate(dto.date) : startOfTodayUtc();
+    const isDraft = dto.endTime === undefined;
+    const hours = isDraft ? null : computeHours(dto.startTime, dto.endTime as string);
+
     const row = await this.prisma.overtimeRequest.create({
       data: {
-        userId,
-        date: parseDate(dto.date),
-        hours: dto.hours,
-        reason: dto.reason,
+        userId: targetWorkerId,
+        date,
+        startTime: dto.startTime,
+        endTime: dto.endTime ?? null,
+        hours,
+        isDraft,
+        reason: dto.reason ?? null,
+        projectId: dto.projectId ?? null,
+        projectOther: dto.projectOther ?? null,
+        authorizedById: dto.authorizedById ?? null,
+        onBehalfOfUserId: filedBy,
         status: FinanceStatus.PENDIENTE,
       },
+    });
+    return toView(row);
+  }
+
+  /** Cierra un borrador propio con la hora de término (calcula horas, isDraft=false). */
+  async close(userId: string, id: string, endTime: string): Promise<OvertimeView> {
+    const current = await this.prisma.overtimeRequest.findFirst({ where: { id, userId } });
+    if (!current) {
+      throw new NotFoundException('La solicitud de horas extra no existe o no te pertenece.');
+    }
+    if (!current.isDraft) {
+      throw new ConflictException('La solicitud ya fue cerrada.');
+    }
+    if (!current.startTime) {
+      throw new BadRequestException('La solicitud no tiene hora de inicio.');
+    }
+    const row = await this.prisma.overtimeRequest.update({
+      where: { id },
+      data: { endTime, hours: computeHours(current.startTime, endTime), isDraft: false },
     });
     return toView(row);
   }
@@ -87,19 +140,31 @@ export class OvertimeService {
    * del solicitante.
    */
   async listAll(filters: ListOvertimeFilters): Promise<OvertimeView[]> {
-    const where: Prisma.OvertimeRequestWhereInput = {};
-    if (filters.status !== undefined) {
-      where.status = filters.status;
-    }
-    if (filters.userId !== undefined) {
-      where.userId = filters.userId;
-    }
     const rows = await this.prisma.overtimeRequest.findMany({
-      where,
-      include: { user: REQUESTER_SELECT },
-      orderBy: { createdAt: 'desc' },
+      where: buildOvertimeWhere(filters),
+      include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
+      orderBy: { date: filters.order ?? 'desc' },
     });
     return rows.map(toViewWithRequester);
+  }
+
+  /** Agregaciones para las cards (spec §5.2), sobre el MISMO filtro que la tabla. */
+  async summary(filters: ListOvertimeFilters): Promise<OvertimeSummary> {
+    const rows = await this.prisma.overtimeRequest.findMany({
+      where: buildOvertimeWhere(filters),
+      include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
+    });
+    return summarizeOvertime(
+      rows.map((r) => ({
+        userId: r.userId,
+        requesterName: `${r.user.firstName} ${r.user.lastName}`,
+        hours: r.hours,
+        status: r.status,
+        isDraft: r.isDraft,
+        projectId: r.projectId,
+        projectName: r.project?.name ?? null,
+      })),
+    );
   }
 
   /**
@@ -114,7 +179,7 @@ export class OvertimeService {
   ): Promise<OvertimeView> {
     const row = await this.prisma.overtimeRequest.findUnique({
       where: { id },
-      include: { user: REQUESTER_SELECT },
+      include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
     });
     if (!row || (!isManager && row.userId !== requesterId)) {
       throw new NotFoundException('La solicitud de horas extra no existe.');
@@ -161,11 +226,19 @@ export class OvertimeService {
     if (!current) {
       throw new NotFoundException('La solicitud de horas extra no existe.');
     }
+    if (current.isDraft && transition !== 'reject') {
+      throw new ConflictException('No se puede aprobar/pagar una solicitud en borrador.');
+    }
     const status = nextFinanceStatus(current.status, transition);
 
     const row = await this.prisma.overtimeRequest.update({
       where: { id },
-      data: { status, decidedById: managerId, decidedAt: new Date() },
+      data: {
+        status,
+        decidedById: managerId,
+        decidedAt: new Date(),
+        ...(transition === 'reject' && reason ? { rejectionReason: reason } : {}),
+      },
     });
 
     await this.notifyRequester(row, status, reason);
@@ -209,6 +282,14 @@ function toView(row: OvertimeRequest): OvertimeView {
     date: row.date.toISOString(),
     hours: row.hours,
     reason: row.reason,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    isDraft: row.isDraft,
+    projectId: row.projectId,
+    projectOther: row.projectOther,
+    authorizedById: row.authorizedById,
+    onBehalfOfUserId: row.onBehalfOfUserId,
+    rejectionReason: row.rejectionReason,
     status: row.status,
     decidedById: row.decidedById,
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
@@ -237,4 +318,39 @@ function parseDate(value: string): Date {
     throw new BadRequestException('Fecha inválida.');
   }
   return date;
+}
+
+/** Medianoche UTC del día en curso (para forzar la fecha de HE sin permiso onBehalf). */
+function startOfTodayUtc(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+}
+
+/** Construye el `where` de HE desde los filtros (fecha/mes/proyecto/cliente/trabajador). */
+function buildOvertimeWhere(f: ListOvertimeFilters): Prisma.OvertimeRequestWhereInput {
+  const where: Prisma.OvertimeRequestWhereInput = {};
+  if (f.status !== undefined) where.status = f.status;
+  if (f.userId !== undefined) where.userId = f.userId;
+  if (f.projectId !== undefined) where.projectId = f.projectId;
+  if (f.clientId !== undefined) where.project = { clientId: f.clientId };
+
+  const dateWhere: Prisma.DateTimeFilter = {};
+  if (f.month) {
+    const { gte, lt } = monthRange(f.month);
+    dateWhere.gte = gte;
+    dateWhere.lt = lt;
+  }
+  if (f.date) {
+    const day = new Date(f.date);
+    const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    dateWhere.gte = start;
+    dateWhere.lt = end;
+  }
+  if (f.dateFrom) dateWhere.gte = new Date(f.dateFrom);
+  if (f.dateTo) dateWhere.lte = new Date(f.dateTo);
+  if (Object.keys(dateWhere).length > 0) where.date = dateWhere;
+
+  return where;
 }

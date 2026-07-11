@@ -5,17 +5,24 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FinanceStatus } from '@prisma/client';
 import type { Prisma, Reimbursement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
+import { monthRange } from '../finance/finance-month.util';
 import { CreateReimbursementDto, ImportReimbursementsDto } from './dto/reimbursements.dto';
 import type { ReimbursementView } from './reimbursements.types';
 import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
-import type { ReceiptForPdf, ReceiptsPerPage } from './reimbursements-pdf.util';
+import type { ReceiptForPdf, ComposeOptions } from './reimbursements-pdf.util';
+import { buildReceiptOcrMessages, parseReceiptOcr } from './receipt-ocr.util';
+import type { ReceiptScanResult } from './receipt-ocr.util';
+import { summarizeReimbursements } from './reimbursements-summary.util';
+import type { ReimbursementSummary } from './reimbursements-summary.util';
 
 /** Carpeta lógica del storage para boletas de reembolso (§6-3.1). */
 const RECEIPTS_FOLDER = 'reimbursements';
@@ -46,8 +53,13 @@ export interface UploadedReceiptFile {
 /** Filtros de listado (ya parseados desde el query). */
 export interface ListReimbursementsFilters {
   status?: FinanceStatus;
-  /** Solo aplica a la vista del gestor (lista global). */
   userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  date?: string;
+  month?: string;
+  order?: 'asc' | 'desc';
+  printed?: boolean;
 }
 
 /**
@@ -69,6 +81,7 @@ export class ReimbursementsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -83,6 +96,9 @@ export class ReimbursementsService {
         date: parseDate(dto.date),
         concept: dto.concept,
         category: dto.category ?? null,
+        subcategory: dto.subcategory ?? null,
+        vehicle: dto.vehicle ?? null,
+        observations: dto.observations ?? null,
         status: FinanceStatus.PENDIENTE,
       },
     });
@@ -115,7 +131,7 @@ export class ReimbursementsService {
    * en grilla de `perPage` por página. Gating FGA en el controller. Solo incluye
    * los que tienen boleta adjunta y cuyo archivo se puede leer; 400 si ninguno.
    */
-  async generateBatchPdf(ids: string[], perPage: ReceiptsPerPage): Promise<Uint8Array> {
+  async generateBatchPdf(ids: string[], options: ComposeOptions): Promise<Uint8Array> {
     if (ids.length === 0) {
       throw new BadRequestException('Selecciona al menos un reembolso.');
     }
@@ -127,8 +143,9 @@ export class ReimbursementsService {
 
     const receipts: ReceiptForPdf[] = [];
     for (const row of rows) {
-      if (!row.receiptUrl) continue;
-      const key = extractStorageKey(row.receiptUrl);
+      // Con R2 la `key` estable vive en `receiptKey`; para filas viejas (o local)
+      // se deriva de la URL pública `/files/<key>` como fallback.
+      const key = row.receiptKey ?? (row.receiptUrl ? extractStorageKey(row.receiptUrl) : null);
       if (!key) continue;
       let bytes: Buffer;
       try {
@@ -139,6 +156,7 @@ export class ReimbursementsService {
       receipts.push({
         concept: row.concept,
         amountLabel: formatClp(row.amount),
+        categoryLabel: row.category ?? 'Sin categoría',
         requesterName: `${row.user.firstName} ${row.user.lastName}`,
         dateLabel: row.date.toISOString().slice(0, 10),
         bytes,
@@ -151,7 +169,17 @@ export class ReimbursementsService {
         'Ninguno de los reembolsos seleccionados tiene una boleta adjunta legible.',
       );
     }
-    return composeReceiptsPdf(receipts, perPage);
+    return composeReceiptsPdf(receipts, options);
+  }
+
+  /** Marca como impresas las boletas indicadas (post-descarga, spec §5.7). */
+  async markPrinted(ids: string[]): Promise<{ marked: number }> {
+    if (ids.length === 0) return { marked: 0 };
+    const res = await this.prisma.reimbursement.updateMany({
+      where: { id: { in: ids } },
+      data: { printed: true, printedAt: new Date() },
+    });
+    return { marked: res.count };
   }
 
   /**
@@ -176,19 +204,54 @@ export class ReimbursementsService {
    * Incluye datos del solicitante (nombre/email).
    */
   async listAll(filters: ListReimbursementsFilters): Promise<ReimbursementView[]> {
-    const where: Prisma.ReimbursementWhereInput = {};
-    if (filters.status !== undefined) {
-      where.status = filters.status;
-    }
-    if (filters.userId !== undefined) {
-      where.userId = filters.userId;
-    }
     const rows = await this.prisma.reimbursement.findMany({
-      where,
+      where: buildReimbursementWhere(filters),
       include: { user: REQUESTER_SELECT },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { date: filters.order ?? 'desc' },
     });
     return rows.map(toViewWithRequester);
+  }
+
+  /** Agregaciones para las cards (spec §5.2), sobre el MISMO filtro que la tabla. */
+  async summary(filters: ListReimbursementsFilters): Promise<ReimbursementSummary> {
+    const rows = await this.prisma.reimbursement.findMany({
+      where: buildReimbursementWhere(filters),
+      include: { user: REQUESTER_SELECT },
+    });
+    return summarizeReimbursements(
+      rows.map((r) => ({
+        userId: r.userId,
+        requesterName: `${r.user.firstName} ${r.user.lastName}`,
+        amount: r.amount,
+        status: r.status,
+      })),
+    );
+  }
+
+  /**
+   * OCR de boleta (spec §5.5): imagen (data URL base64) → NVIDIA visión → campos
+   * sugeridos. Sin cuota diaria (a diferencia de detectShoreline). Si no hay clave
+   * NVIDIA, devuelve objeto vacío (el usuario llena a mano).
+   */
+  async scanReceipt(imageDataUrl: string): Promise<ReceiptScanResult> {
+    const apiKey =
+      this.config.get<string>('NVIDIA_API_KEY_VISION') ?? this.config.get<string>('NVIDIA_API_KEY');
+    if (!apiKey) return {};
+    const model =
+      this.config.get<string>('NVIDIA_VISION_MODEL') ?? 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
+    try {
+      const content = await callNvidiaChat({
+        apiKey,
+        model,
+        maxTokens: 1024,
+        temperature: 0,
+        messages: buildReceiptOcrMessages(imageDataUrl),
+      });
+      return parseReceiptOcr(content);
+    } catch (err) {
+      this.logger.warn(`OCR de boleta falló: ${String(err)}`);
+      return {}; // degradación suave: el usuario completa manualmente
+    }
   }
 
   /**
@@ -239,7 +302,9 @@ export class ReimbursementsService {
 
     const row = await this.prisma.reimbursement.update({
       where: { id },
-      data: { receiptUrl: saved.url },
+      // Persistimos la `key` ESTABLE del storage (fix R2 §5.5/5.7): la `url` de R2
+      // es firmada/efímera y no sirve para leer la boleta al imprimir en lote.
+      data: { receiptUrl: saved.url, receiptKey: saved.key },
     });
     return toView(row);
   }
@@ -287,7 +352,12 @@ export class ReimbursementsService {
 
     const row = await this.prisma.reimbursement.update({
       where: { id },
-      data: { status, decidedById: managerId, decidedAt: new Date() },
+      data: {
+        status,
+        decidedById: managerId,
+        decidedAt: new Date(),
+        ...(transition === 'reject' && reason ? { rejectionReason: reason } : {}),
+      },
     });
 
     await this.notifyRequester(row, status, reason);
@@ -332,7 +402,13 @@ function toView(row: Reimbursement): ReimbursementView {
     date: row.date.toISOString(),
     concept: row.concept,
     category: row.category,
+    subcategory: row.subcategory,
+    vehicle: row.vehicle,
+    observations: row.observations,
     receiptUrl: row.receiptUrl,
+    rejectionReason: row.rejectionReason,
+    printed: row.printed,
+    printedAt: row.printedAt ? row.printedAt.toISOString() : null,
     status: row.status,
     decidedById: row.decidedById,
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
@@ -375,14 +451,44 @@ function formatClp(amount: number): string {
   return CLP_FORMAT.format(amount);
 }
 
+/** Construye el `where` de reembolsos desde los filtros (trabajador/fecha/mes/orden/impresa). */
+function buildReimbursementWhere(f: ListReimbursementsFilters): Prisma.ReimbursementWhereInput {
+  const where: Prisma.ReimbursementWhereInput = {};
+  if (f.status !== undefined) where.status = f.status;
+  if (f.userId !== undefined) where.userId = f.userId;
+  if (f.printed !== undefined) where.printed = f.printed;
+
+  const dateWhere: Prisma.DateTimeFilter = {};
+  if (f.month) {
+    const { gte, lt } = monthRange(f.month);
+    dateWhere.gte = gte;
+    dateWhere.lt = lt;
+  }
+  if (f.date) {
+    const day = new Date(f.date);
+    const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    dateWhere.gte = start;
+    dateWhere.lt = end;
+  }
+  if (f.dateFrom) dateWhere.gte = new Date(f.dateFrom);
+  if (f.dateTo) dateWhere.lte = new Date(f.dateTo);
+  if (Object.keys(dateWhere).length > 0) where.date = dateWhere;
+
+  return where;
+}
+
 /**
- * Extrae la `key` del storage desde una `receiptUrl` pública (`.../files/<key>`).
- * Devuelve `null` si la URL no tiene el prefijo esperado.
+ * Extrae la `key` del storage desde una `receiptUrl` pública LOCAL (`.../files/<key>`).
+ * Solo aplica al backend local; con R2 la `key` se lee de `receiptKey` (columna).
+ * Tolera querystring. Devuelve `null` si no matchea el patrón local.
  */
-function extractStorageKey(url: string): string | null {
+export function extractStorageKey(url: string): string | null {
   const marker = '/files/';
   const index = url.indexOf(marker);
   if (index === -1) return null;
-  const key = url.slice(index + marker.length);
+  const afterMarker = url.slice(index + marker.length);
+  const key = afterMarker.split('?')[0] ?? ''; // descarta querystring (URLs firmadas)
   return key.length > 0 ? decodeURIComponent(key) : null;
 }

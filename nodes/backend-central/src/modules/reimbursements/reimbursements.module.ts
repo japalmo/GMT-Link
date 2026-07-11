@@ -5,11 +5,9 @@ import { ReimbursementsController } from './reimbursements.controller';
 import { ReimbursementsService } from './reimbursements.service';
 
 /**
- * Módulo de reembolsos (§6-3.1, primitivas `RoleScopedList` + `RequestForm`).
- * Consume `PrismaService`, `StorageService` y `FgaService` (todos globales).
- * Importa `NotificationsModule` para avisar al solicitante en cada transición
- * (§6-2.2). El gating de gestión usa `FgaService` vía el guard + `@RequirePermission`;
- * `getById` también inyecta `FgaService` para resolver dueño-vs-gestor.
+ * Módulo de reembolsos (spec §5). Consume `PrismaService`, `StorageService`,
+ * `ConfigService` (OCR) y `PermissionService` (gating por permiso funcional) —
+ * todos globales. Importa `NotificationsModule` para avisar al solicitante.
  */
 @Module({
   imports: [PrismaModule, NotificationsModule],
