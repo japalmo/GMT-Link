@@ -316,6 +316,19 @@ describe('ReimbursementsService', () => {
     expect(notifBits.create).not.toHaveBeenCalled();
   });
 
+  it('pay: rechaza registrar el pago del PROPIO reembolso (maker-checker), sin update ni notificación', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ userId: 'mgr', status: FinanceStatus.APROBADO })),
+    );
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(service.pay('mgr', 'r-1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+    expect(notifBits.create).not.toHaveBeenCalled();
+  });
+
   it('reject: PENDIENTE→RECHAZADO y notifica', async () => {
     const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn((args: { data: Partial<Reimbursement> }) =>

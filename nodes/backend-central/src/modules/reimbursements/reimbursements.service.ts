@@ -396,9 +396,12 @@ export class ReimbursementsService {
     if (!current) {
       throw new NotFoundException('El reembolso no existe.');
     }
-    // Maker-checker (control interno): nadie aprueba su propio reembolso.
+    // Maker-checker (control interno): nadie aprueba ni paga su propio reembolso.
     if (transition === 'approve' && current.userId === managerId) {
       throw new ForbiddenException('No puedes aprobar tu propio reembolso.');
+    }
+    if (transition === 'pay' && current.userId === managerId) {
+      throw new ForbiddenException('No puedes registrar el pago de tu propio reembolso.');
     }
     const status = nextFinanceStatus(current.status, transition);
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -274,6 +275,13 @@ export class OvertimeService {
     const current = await this.prisma.overtimeRequest.findUnique({ where: { id } });
     if (!current) {
       throw new NotFoundException('La solicitud de horas extra no existe.');
+    }
+    // Maker-checker (control interno): nadie aprueba ni paga sus propias horas extra.
+    if (transition === 'approve' && current.userId === managerId) {
+      throw new ForbiddenException('No puedes aprobar tus propias horas extra.');
+    }
+    if (transition === 'pay' && current.userId === managerId) {
+      throw new ForbiddenException('No puedes registrar el pago de tus propias horas extra.');
     }
     if (current.isDraft && transition !== 'reject') {
       throw new ConflictException('No se puede aprobar/pagar una solicitud en borrador.');

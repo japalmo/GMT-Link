@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FinanceStatus } from '@prisma/client';
 import type { OvertimeRequest } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -318,6 +318,32 @@ describe('OvertimeService', () => {
     // La ruta usa la clave real de la pestaña ('horas'), servida por /finanzas/:tab.
     expect(payload.link).toBe('/finanzas/horas');
     expect(payload.title).toContain('aprobado');
+  });
+
+  it('approve: rechaza aprobar las PROPIAS horas extra (maker-checker), sin update ni notificación', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ userId: 'mgr', status: FinanceStatus.PENDIENTE })),
+    );
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(service.approve('mgr', 'o-1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+    expect(notifBits.create).not.toHaveBeenCalled();
+  });
+
+  it('pay: rechaza registrar el pago de las PROPIAS horas extra (maker-checker), sin update ni notificación', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ userId: 'mgr', status: FinanceStatus.APROBADO })),
+    );
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(service.pay('mgr', 'o-1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+    expect(notifBits.create).not.toHaveBeenCalled();
   });
 
   it('reject: PENDIENTE→RECHAZADO y notifica', async () => {
