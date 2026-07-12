@@ -29,7 +29,7 @@ const INITIAL_ITEM: ApprovalItem<DemoDoc> = {
   id: 'doc-demo-001',
   status: 'PENDIENTE',
   current: {
-    titulo: 'Procedimiento de izaje — Rev. A',
+    titulo: 'Procedimiento de izaje (Rev. A)',
     contenido: 'Borrador inicial enviado a revisión del jefe de QA.',
   },
   submittedBy: 'ana.reyes',
@@ -52,7 +52,7 @@ export default function ApprovalWorkflowDemo() {
   const [error, setError] = useState<string | null>(null);
 
   // Campos para "enviar nueva versión".
-  const [titulo, setTitulo] = useState('Procedimiento de izaje — Rev. B');
+  const [titulo, setTitulo] = useState('Procedimiento de izaje (Rev. B)');
   const [contenido, setContenido] = useState(
     'Se incorporan firmas de página 2 y check de carga máxima.',
   );

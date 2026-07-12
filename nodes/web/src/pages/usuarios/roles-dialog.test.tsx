@@ -73,9 +73,9 @@ describe('RolesDialog — chips por membership + asignación con alcance', () =>
     // proyecto cuando listProjects resuelve.
     expect(await screen.findByText('Administrador de organización')).toBeInTheDocument();
     expect(screen.getByText('Organización')).toBeInTheDocument();
-    expect(await screen.findByText('P-001 — Proyecto Uno')).toBeInTheDocument();
+    expect(await screen.findByText('P-001: Proyecto Uno')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Quitar rol Inspector \(P-001 — Proyecto Uno\)/i }),
+      screen.getByRole('button', { name: /Quitar rol Inspector \(P-001: Proyecto Uno\)/i }),
     ).toBeInTheDocument();
   });
 

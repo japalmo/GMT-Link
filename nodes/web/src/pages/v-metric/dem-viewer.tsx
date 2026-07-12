@@ -196,7 +196,7 @@ export function DemViewer({ code = 'R2' }: { code?: string }): ReactNode {
             </div>
           </div>
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            Arrastra con clic izquierdo para orbitar · clic derecho para desplazar · rueda para zoom. Escala real por defecto (1.0x). Rango de cotas: {grid.minZ.toFixed(1)}–{grid.maxZ.toFixed(1)} m s.n.m.
+            Arrastra con clic izquierdo para orbitar · clic derecho para desplazar · rueda para zoom. Escala real por defecto (1.0x). Rango de cotas: {grid.minZ.toFixed(1)}-{grid.maxZ.toFixed(1)} m s.n.m.
           </p>
         </div>
       </CardContent>

@@ -1103,7 +1103,7 @@ export function BacklogTab(): ReactNode {
             <ModalHeader>
               <ModalTitle>Nueva Tarea de Backlog</ModalTitle>
               <ModalDescription>
-                Paso {wizardStep} de 4 — {wizardStep === 1 ? 'Detalles Básicos' : wizardStep === 2 ? 'Proyecto & Estimación' : wizardStep === 3 ? 'Producto / Entregable' : 'Asignación & Mandante'}
+                Paso {wizardStep} de 4: {wizardStep === 1 ? 'Detalles Básicos' : wizardStep === 2 ? 'Proyecto & Estimación' : wizardStep === 3 ? 'Producto / Entregable' : 'Asignación & Mandante'}
               </ModalDescription>
             </ModalHeader>
             <div className="flex flex-col gap-4 py-4 min-h-[250px]">

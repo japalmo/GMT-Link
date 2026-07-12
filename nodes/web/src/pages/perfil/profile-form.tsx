@@ -171,7 +171,7 @@ function EmailVerifyDialog({
     event.preventDefault();
     const trimmed = email.trim();
     if (!isValidEmail(trimmed)) {
-      setError('Ingresá un correo electrónico válido.');
+      setError('Ingresa un correo electrónico válido.');
       return;
     }
     setSubmitting(true);
@@ -222,7 +222,7 @@ function EmailVerifyDialog({
           <ModalDescription>
             {step === 'email'
               ? `Te enviaremos un código de 6 dígitos al correo ${kindLabel(kind)} nuevo para verificarlo.`
-              : `Ingresá el código de 6 dígitos que enviamos a ${sentTo}.`}
+              : `Ingresa el código de 6 dígitos que enviamos a ${sentTo}.`}
           </ModalDescription>
         </ModalHeader>
 
@@ -403,14 +403,14 @@ export function ProfileForm({
         <div>
           <h3 className="text-sm font-medium text-foreground">Correos</h3>
           <p className="text-xs text-muted-foreground">
-            Necesitás al menos un correo verificado. Cambiar o agregar un correo
+            Necesitas al menos un correo verificado. Cambiar o agregar un correo
             requiere confirmarlo con un código que enviamos al correo nuevo.
           </p>
         </div>
 
         {!hasAnyVerified && (
           <Alert variant="warning" icon={TriangleAlert}>
-            No tenés ningún correo verificado. Verificá al menos uno para asegurar
+            No tienes ningún correo verificado. Verifica al menos uno para asegurar
             el acceso y recibir notificaciones.
           </Alert>
         )}

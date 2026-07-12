@@ -118,7 +118,7 @@ function EmailTargetSelector({
   if (!institucionalVerified && !personalVerified) {
     return (
       <Alert variant="info" icon={Info} className="mt-3">
-        Verificá un correo en tu perfil para recibir notificaciones por correo.
+        Verifica un correo en tu perfil para recibir notificaciones por correo.
       </Alert>
     );
   }
@@ -138,17 +138,17 @@ function EmailTargetSelector({
         }}
       >
         <option value="" disabled>
-          Elegí un correo
+          Elige un correo
         </option>
         <option value="INSTITUCIONAL" disabled={!institucionalVerified}>
-          Institucional{!institucionalVerified ? ' — verificá este correo primero' : ''}
+          Institucional{!institucionalVerified ? ' (verifica este correo primero)' : ''}
         </option>
         <option value="PERSONAL" disabled={!personalVerified}>
-          Personal{!personalVerified ? ' — verificá este correo primero' : ''}
+          Personal{!personalVerified ? ' (verifica este correo primero)' : ''}
         </option>
       </Select>
       <p className="text-xs text-muted-foreground">
-        Solo podés elegir un correo verificado. Verificá el otro en tu perfil para
+        Solo puedes elegir un correo verificado. Verifica el otro en tu perfil para
         habilitarlo.
       </p>
     </div>
@@ -240,7 +240,7 @@ export function NotificationsSection(): ReactNode {
                     />
                   ) : (
                     <Alert variant="info" icon={Info} className="mt-3">
-                      No pudimos cargar tus correos. Verificá un correo en tu perfil
+                      No pudimos cargar tus correos. Verifica un correo en tu perfil
                       para recibir notificaciones por correo.
                     </Alert>
                   ))}

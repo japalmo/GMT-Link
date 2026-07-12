@@ -156,7 +156,7 @@ export function UploadProjectDocumentDialog({
               {services.length === 0 && <option value="">Sin servicios disponibles</option>}
               {services.map((srv) => (
                 <option key={srv.id} value={srv.id}>
-                  {srv.code} — {srv.name}
+                  {srv.code}: {srv.name}
                 </option>
               ))}
             </Select>

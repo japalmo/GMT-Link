@@ -72,7 +72,7 @@ export function ChangePasswordForm({
 
     if (currentPassword.length === 0) {
       setSuccess(false);
-      setError('Ingresá tu contraseña actual.');
+      setError('Ingresa tu contraseña actual.');
       return;
     }
     if (password.length < MIN_LENGTH) {
@@ -87,7 +87,7 @@ export function ChangePasswordForm({
     }
     if (!/^\d{6}$/.test(code.trim())) {
       setSuccess(false);
-      setError('Ingresá el código de 6 dígitos que enviamos a tu correo.');
+      setError('Ingresa el código de 6 dígitos que enviamos a tu correo.');
       return;
     }
 
@@ -204,7 +204,7 @@ export function ChangePasswordForm({
         </div>
         <p className="text-xs text-muted-foreground">
           {codeSent
-            ? 'Revisá tu correo verificado e ingresá el código de 6 dígitos.'
+            ? 'Revisa tu correo verificado e ingresa el código de 6 dígitos.'
             : 'Enviamos un código de 6 dígitos a tu correo verificado para confirmar el cambio.'}
         </p>
       </div>

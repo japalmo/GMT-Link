@@ -34,7 +34,7 @@ export function formatDateRange(
   const endText = end ? formatDate(end) : present;
   if (!startText && !end) return present === 'Actual' ? '' : endText;
   if (!startText) return endText;
-  return `${startText} – ${endText}`;
+  return `${startText} - ${endText}`;
 }
 
 /**

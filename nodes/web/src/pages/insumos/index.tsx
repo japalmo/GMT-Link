@@ -1060,7 +1060,7 @@ export default function InsumosPage(): ReactNode {
       <ImportWizard<CsvRow>
         open={importOpen}
         onOpenChange={setImportOpen}
-        title={`Importar Insumos — ${warehouseDetail?.warehouse.name}`}
+        title={`Importar Insumos: ${warehouseDetail?.warehouse.name}`}
         description="Descarga el formato patrón, ingresa el listado de insumos y define el stock inicial. Los insumos se vincularán a la bodega activa."
         templateFileName={`plantilla-insumos-${warehouseDetail?.warehouse.code}`}
         templateColumns={TEMPLATE_COLUMNS}

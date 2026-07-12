@@ -60,7 +60,7 @@ export function RequestDetailDialog({
         <ModalContent>
           <ModalHeader>
             <ModalTitle>
-              {isReimb ? 'Reembolso' : 'Horas extra'} — {row.requesterName}
+              {isReimb ? 'Reembolso' : 'Horas extra'}: {row.requesterName}
             </ModalTitle>
             <ModalDescription>{formatDate(row.date)}</ModalDescription>
           </ModalHeader>

@@ -1129,7 +1129,7 @@ export default function MetricsDashboard(): ReactNode {
             <Layers className="size-6 animate-pulse" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">V-Metric — Salar de Atacama</h1>
+            <h1 className="text-2xl font-bold tracking-tight">V-Metric: Salar de Atacama</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
               Cubicación y monitoreo volumétrico de Pozas de Salmuera en Atacama
             </p>

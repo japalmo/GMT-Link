@@ -89,7 +89,7 @@ export function RolesDialog({
   function scopeLabelFor(m: UserMembership): string {
     if (m.scopeType === 'ORGANIZATION') return 'Organización';
     const project = projects.find((p) => p.id === m.scopeId);
-    return project ? `${project.code} — ${project.name}` : `Proyecto ${m.scopeId}`;
+    return project ? `${project.code}: ${project.name}` : `Proyecto ${m.scopeId}`;
   }
 
   function handleSelectRole(key: string): void {
@@ -239,7 +239,7 @@ export function RolesDialog({
                     <option value="">Selecciona un proyecto…</option>
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.code} — {p.name}
+                        {p.code}: {p.name}
                       </option>
                     ))}
                   </Select>

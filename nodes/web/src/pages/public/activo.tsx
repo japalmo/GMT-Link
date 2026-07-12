@@ -147,7 +147,7 @@ export default function PublicAssetPage(): ReactNode {
 
             <CardFooter className="bg-muted/30 border-t py-4 text-center justify-center">
               <p className="text-[10px] text-muted-foreground">
-                GMT Link © 2026 — Plataforma de Gestión Interna de GMT.
+                GMT Link © 2026. Plataforma de Gestión Interna de GMT.
               </p>
             </CardFooter>
           </Card>

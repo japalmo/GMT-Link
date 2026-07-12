@@ -494,7 +494,7 @@ function Pagination({
       aria-label="Paginación"
     >
       <p className="text-sm text-muted-foreground" aria-live="polite">
-        Mostrando {from}–{to} de {total}
+        Mostrando {from}-{to} de {total}
       </p>
       <div className="flex items-center justify-end gap-2">
         <Button

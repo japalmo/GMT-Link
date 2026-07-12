@@ -143,7 +143,7 @@ export default function DesignDemo() {
           <p className="text-sm font-medium text-muted-foreground">GMT Link</p>
           <h1 className="text-3xl font-bold tracking-tight">Design system</h1>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Etapa 0.6 — tokens neutros re-tematizables y primitivos visuales.
+            Etapa 0.6: tokens neutros re-tematizables y primitivos visuales.
           </p>
         </div>
         <HealthChip status={apiStatus} />
@@ -342,7 +342,7 @@ export default function DesignDemo() {
           <Card>
             <CardContent className="pt-6">
               <Table>
-                <TableCaption>Directorio de ejemplo — datos ficticios.</TableCaption>
+                <TableCaption>Directorio de ejemplo (datos ficticios).</TableCaption>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
@@ -418,7 +418,7 @@ export default function DesignDemo() {
         </Section>
 
         {/* BADGES DE ESTADO */}
-        <Section title="Badge — variantes de estado">
+        <Section title="Badge: variantes de estado">
           <Card>
             <CardContent className="flex flex-wrap gap-2 pt-6">
               <Badge variant="success">success</Badge>
@@ -475,7 +475,7 @@ export default function DesignDemo() {
             <Alert variant="info">Variante info (acento primario).</Alert>
             <Alert variant="warning">Variante warning (ámbar).</Alert>
             <Alert variant="destructive" live>
-              Variante destructive con role=&quot;alert&quot; — errores de formulario.
+              Variante destructive con role=&quot;alert&quot;: errores de formulario.
             </Alert>
             <Alert variant="default" icon={FileWarning}>
               Con icono lucide personalizado.

@@ -24,12 +24,12 @@ describe('formatDate', () => {
 });
 
 describe('formatDateRange', () => {
-  it('start + end → "inicio – fin"', () => {
-    expect(formatDateRange('2020-01-15T00:00:00Z', '2022-03-10T00:00:00Z')).toMatch(/2020.*–.*2022/);
+  it('start + end → "inicio - fin"', () => {
+    expect(formatDateRange('2020-01-15T00:00:00Z', '2022-03-10T00:00:00Z')).toMatch(/2020.*-.*2022/);
   });
 
   it('solo start → usa "Actual" como fin', () => {
-    expect(formatDateRange('2020-01-15T00:00:00Z', null)).toMatch(/2020.*–.*Actual/);
+    expect(formatDateRange('2020-01-15T00:00:00Z', null)).toMatch(/2020.*-.*Actual/);
   });
 
   it('solo end → devuelve el fin formateado', () => {
