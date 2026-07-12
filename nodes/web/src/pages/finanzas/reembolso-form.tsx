@@ -30,6 +30,7 @@ import {
   type ReimbursementCategory,
   type VehicleSubcategory,
 } from '@/types/finance';
+import { todaySantiagoString } from '@/lib/santiago-time';
 
 /** MIME de imagen aceptado por el OCR/boleta (alineado con el backend). */
 const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/heic';
@@ -46,13 +47,9 @@ const SUBCATEGORY_ORDER: VehicleSubcategory[] = [
   'OTRO',
 ];
 
-/** Fecha de hoy en formato YYYY-MM-DD (local). */
+/** Fecha de hoy (día calendario de Chile) en formato YYYY-MM-DD. */
 function getTodayString(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return todaySantiagoString();
 }
 
 /** Mapea el string de categoría del OCR a nuestro enum (best-effort). */

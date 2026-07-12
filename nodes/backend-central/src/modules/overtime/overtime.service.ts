@@ -13,6 +13,7 @@ import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { computeHours } from './overtime-hours.util';
 import { monthRange } from '../finance/finance-month.util';
+import { startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
 import type { CreateOvertimeDto } from './dto/overtime.dto';
@@ -79,7 +80,7 @@ export class OvertimeService {
   ): Promise<OvertimeView> {
     const targetWorkerId = canOnBehalf && dto.onBehalfOfUserId ? dto.onBehalfOfUserId : creatorId;
     const filedBy = targetWorkerId !== creatorId ? creatorId : null;
-    const date = canOnBehalf ? parseDate(dto.date) : startOfTodayUtc();
+    const date = canOnBehalf ? parseDate(dto.date) : startOfTodaySantiago();
     const isDraft = dto.endTime === undefined;
     const hours = isDraft ? null : computeHours(dto.startTime, dto.endTime as string);
 
@@ -366,12 +367,6 @@ function parseDate(value: string): Date {
     throw new BadRequestException('Fecha inválida.');
   }
   return date;
-}
-
-/** Medianoche UTC del día en curso (para forzar la fecha de HE sin permiso onBehalf). */
-function startOfTodayUtc(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
 }
 
 /** Construye el `where` de HE desde los filtros (fecha/mes/proyecto/cliente/trabajador). */

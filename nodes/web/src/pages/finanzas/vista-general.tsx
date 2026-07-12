@@ -7,16 +7,12 @@ import { useReimbursements } from '@/hooks/use-reimbursements';
 import { useOvertime } from '@/hooks/use-overtime';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { useFinanceProjects } from './use-finance-projects';
-import { toFinanceRows, filterRows, overtimeMonth } from './finance-overview';
+import { toFinanceRows, filterRows } from './finance-overview';
+import { currentAccountingMonth } from '@/lib/santiago-time';
 import { OverviewCards } from './overview-cards';
 import { HistoricalTable } from './historical-table';
 import { RequestDetailDialog } from './request-detail-dialog';
 import type { FinanceRow, OverviewFilters } from '@/types/finance';
-
-/** Mes contable en curso (cierre día 20) para el filtro por defecto (§5.3). */
-function currentOvertimeMonth(): string {
-  return overtimeMonth(new Date().toISOString());
-}
 
 function initialFilters(): OverviewFilters {
   return {
@@ -24,7 +20,7 @@ function initialFilters(): OverviewFilters {
     dateMode: 'month',
     dateFrom: null,
     dateTo: null,
-    month: currentOvertimeMonth(),
+    month: currentAccountingMonth(),
     projectId: null,
     clientId: null,
     order: 'desc',

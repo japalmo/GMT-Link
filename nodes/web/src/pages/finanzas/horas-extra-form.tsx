@@ -23,6 +23,7 @@ import {
 import { useDirectory } from '@/hooks/use-directory';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { useFinanceProjects } from './use-finance-projects';
+import { todaySantiagoString } from '@/lib/santiago-time';
 import type { CreateOvertimeInput } from '@/types/finance';
 
 /** Roles habilitados como "Autorizado por" (admin de contrato / gerencias). */
@@ -36,13 +37,9 @@ const AUTHORIZER_ROLES: ReadonlySet<string> = new Set([
 /** Valor centinela del select de proyecto para "Otro" (texto libre). */
 const OTHER_PROJECT = '__OTHER__';
 
-/** Fecha de hoy en formato YYYY-MM-DD (local). */
+/** Fecha de hoy (día calendario de Chile) en formato YYYY-MM-DD. */
 function getTodayString(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return todaySantiagoString();
 }
 
 export interface HorasExtraFormDialogProps {
