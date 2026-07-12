@@ -40,7 +40,10 @@ export class ProjectDocumentsService {
     }
 
     const clientCode = project.client.code.toUpperCase();
-    const deptCode = project.department.code.toUpperCase();
+    // El departamento ya no es obligatorio en el proyecto (jerarquía
+    // Cliente→Faena→Proyecto). Si no lo tiene, se usa 'SD' (Sin Departamento)
+    // para mantener el formato posicional del código de documento (§7).
+    const deptCode = (project.department?.code ?? 'SD').toUpperCase();
     const projCode = project.code.toUpperCase();
     const srvCode = service.code.toUpperCase();
     const docType = documentType.toUpperCase();

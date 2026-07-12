@@ -15,15 +15,14 @@ import {
 import { Metric } from './index';
 import { useClients } from '@/hooks/use-clients';
 import { useFaenas } from '@/hooks/use-faenas';
-import { useEligibleAdmins } from '@/hooks/use-project-hierarchy';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select } from '@/components/ui/select';
 import { SearchInput } from '@/components/ui/search-input';
 import { Alert } from '@/components/ui/alert';
+import { LocationPicker, type LocationValue } from '@/components/maps/location-picker';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -64,8 +63,6 @@ const STATUS_META: Record<
   },
 };
 
-const STATUS_OPTIONS: FaenaStatus[] = ['PLANIFICADA', 'EN_PROGRESO', 'COMPLETADA'];
-
 /**
  * Capa 2 — Faenas de un cliente (`/proyectos/cliente/:clientId`). Catálogo de
  * cards con métricas por faena, buscador y creación gateada. Breadcrumb/volver a
@@ -77,7 +74,6 @@ export default function ProyectosFaenasPage() {
 
   const { clients } = useClients();
   const { faenas, loading, error, create } = useFaenas(clientId);
-  const { admins } = useEligibleAdmins();
   const canCreate = useHasPermission('project:manage');
 
   const client = useMemo(
@@ -87,14 +83,11 @@ export default function ProyectosFaenasPage() {
 
   const [query, setQuery] = useState('');
 
-  // Estado del dialog de creación.
+  // Estado del dialog de creación. El código, estado, supervisor y fechas ya no
+  // se piden aquí: el código se autogenera server-side y el resto se edita luego.
   const [modalOpen, setModalOpen] = useState(false);
-  const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [status, setStatus] = useState<FaenaStatus>('PLANIFICADA');
-  const [supervisorId, setSupervisorId] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [location, setLocation] = useState<LocationValue>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -108,12 +101,8 @@ export default function ProyectosFaenasPage() {
   }, [faenas, query]);
 
   const resetForm = () => {
-    setCode('');
     setName('');
-    setStatus('PLANIFICADA');
-    setSupervisorId('');
-    setStartDate('');
-    setEndDate('');
+    setLocation({});
     setFormError(null);
   };
 
@@ -130,25 +119,19 @@ export default function ProyectosFaenasPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    const trimmedCode = code.trim().toUpperCase();
     const trimmedName = name.trim();
-    if (!trimmedCode || !trimmedName) {
-      setFormError('Código y nombre son obligatorios.');
+    if (!trimmedName) {
+      setFormError('El nombre es obligatorio.');
       return;
     }
-    if (startDate && endDate && endDate < startDate) {
-      setFormError('La fecha de término no puede ser anterior a la de inicio.');
-      return;
-    }
+    const trimmedAddress = location.address?.trim();
     setSubmitting(true);
     try {
       const created = await create({
-        code: trimmedCode,
         name: trimmedName,
-        status,
-        ...(supervisorId ? { supervisorId } : {}),
-        ...(startDate ? { startDate } : {}),
-        ...(endDate ? { endDate } : {}),
+        ...(location.latitude !== undefined ? { latitude: location.latitude } : {}),
+        ...(location.longitude !== undefined ? { longitude: location.longitude } : {}),
+        ...(trimmedAddress ? { address: trimmedAddress } : {}),
       });
       toast.success(`Faena "${created.name}" creada.`);
       setModalOpen(false);
@@ -263,89 +246,30 @@ export default function ProyectosFaenasPage() {
                 {formError}
               </Alert>
             )}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-1 flex flex-col gap-1.5">
-                <Label htmlFor="faena-code">Código</Label>
-                <Input
-                  id="faena-code"
-                  required
-                  maxLength={4}
-                  value={code}
-                  onChange={(e) =>
-                    setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())
-                  }
-                  placeholder="RT01"
-                />
-              </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <Label htmlFor="faena-name">Nombre</Label>
-                <Input
-                  id="faena-name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej. Rajo Norte"
-                />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="faena-name">Nombre</Label>
+              <Input
+                id="faena-name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Rajo Norte"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="faena-status">Estado</Label>
-                <Select
-                  id="faena-status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as FaenaStatus)}
-                  aria-label="Estado de la faena"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_META[s].label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="faena-supervisor">
-                  Supervisor <span className="text-muted-foreground">(opc.)</span>
-                </Label>
-                <Select
-                  id="faena-supervisor"
-                  value={supervisorId}
-                  onChange={(e) => setSupervisorId(e.target.value)}
-                  aria-label="Supervisor de la faena"
-                >
-                  <option value="">Sin asignar</option>
-                  {admins.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.firstName} {a.lastName}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="faena-start">
-                  Inicio <span className="text-muted-foreground">(opc.)</span>
-                </Label>
-                <Input
-                  id="faena-start"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="faena-end">
-                  Término <span className="text-muted-foreground">(opc.)</span>
-                </Label>
-                <Input
-                  id="faena-end"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
+            <Alert variant="info">
+              El código se asignará automáticamente (formato{' '}
+              {client ? `${client.code}-A` : 'COD_CLIENTE-A'}).
+            </Alert>
+            <div className="flex flex-col gap-1.5">
+              <Label>
+                Ubicación <span className="text-muted-foreground">(opcional)</span>
+              </Label>
+              <LocationPicker
+                value={location}
+                onChange={setLocation}
+                disabled={submitting}
+                addressInputId="faena-address"
+              />
             </div>
             <ModalFooter>
               <Button
@@ -381,7 +305,9 @@ function fmtDate(iso: string | null): string | null {
 
 /** Card de una faena con estado, métrica de proyectos y rango de fechas. */
 function FaenaCard({ faena, onOpen }: { faena: FaenaView; onOpen: () => void }) {
-  const meta = STATUS_META[faena.status];
+  // `status`/fechas ya no se fijan en la creación pero siguen en el modelo:
+  // toleramos que vengan nulos sin romper la card.
+  const meta = faena.status ? STATUS_META[faena.status] : null;
   const start = fmtDate(faena.startDate);
   const end = fmtDate(faena.endDate);
 
@@ -408,9 +334,11 @@ function FaenaCard({ faena, onOpen }: { faena: FaenaView; onOpen: () => void }) 
         </div>
         <div className="pt-1">
           <span
-            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.className}`}
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              meta?.className ?? 'border-border bg-muted/40 text-muted-foreground'
+            }`}
           >
-            {meta.label}
+            {meta?.label ?? '—'}
           </span>
         </div>
       </CardHeader>

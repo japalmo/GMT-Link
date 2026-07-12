@@ -370,6 +370,10 @@ export interface FaenaView {
   status: FaenaStatus;
   startDate: string | null;
   endDate: string | null;
+  /** Coordenadas/dirección para el mapa de la faena (opcionales). */
+  latitude: number | null;
+  longitude: number | null;
+  address: string | null;
   projectsCount: number;
   activeProjectsCount: number;
   pendingAlertsCount: number;
@@ -406,29 +410,44 @@ export interface UpdateClientInput {
   rut?: string;
 }
 
-/** Body de `POST /clients/:id/faenas` (A0.4). `code` 3-4 chars, único por cliente. */
+/**
+ * Body de `POST /clients/:id/faenas`. El `code` se autogenera server-side
+ * (`${client.code}-${letra correlativa}`): el input solo trae `name` y, opcional,
+ * la ubicación en el mapa. supervisor/estado/fechas se editan luego (no en la creación).
+ */
 export interface CreateFaenaInput {
-  code: string;
   name: string;
-  supervisorId?: string;
-  status?: FaenaStatus;
+  /** Ubicación en el mapa (opcional). lat -90..90 / lng -180..180. */
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+}
+
+/**
+ * Body de `POST /projects`. El `code` se autogenera server-side
+ * (`${faena.code}-${n correlativo}`), por eso `faenaId` es OBLIGATORIO. El
+ * departamento ya no se pide en la creación (jerarquía Cliente→Faena→Proyecto).
+ */
+export interface CreateProjectInput {
+  name: string;
+  clientId: string;
+  faenaId: string;
+  contractNumber?: string;
+  projectType?: ProjectType;
+  projectAdminId?: string;
   startDate?: string;
   endDate?: string;
 }
 
 /**
- * Body de `POST /projects` extendido (A0.4). Suma los campos de la jerarquía
- * demo (`contractNumber`, `projectType`, `faenaId`, `projectAdminId`) al
- * contrato de creación de proyecto existente.
+ * Opción del selector de administrador de proyecto (`GET /users/project-admins`).
+ * Solo usuarios cuyo rol otorga el permiso `project:manage`. `roleKeys` son las
+ * claves de rol del usuario que conceden ese permiso (para pintar el select).
  */
-export interface CreateProjectInput {
-  code: string;
-  name: string;
-  clientId: string;
-  contractNumber?: string;
-  projectType?: ProjectType;
-  faenaId?: string;
-  projectAdminId?: string;
+export interface ProjectAdminOption {
+  id: string;
+  fullName: string;
+  roleKeys: RoleKey[];
 }
 
 /** Body de `POST /projects/:id/assignments` (A0.4, gate `project:team:manage`). */

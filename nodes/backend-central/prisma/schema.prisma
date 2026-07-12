@@ -114,6 +114,10 @@ model Faena {
   status       FaenaStatus @default(PLANIFICADA)
   startDate    DateTime?
   endDate      DateTime?
+  // Ubicación en el mapa (formulario de faena). Opcionales: no toda faena la fija.
+  latitude     Float?
+  longitude    Float?
+  address      String?
   projects     Project[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -130,11 +134,13 @@ model Department {
 
 model Project {
   id             String                    @id @default(cuid())
-  code           String // 3 chars, único dentro del depto
+  code           String // autogenerado: `${faena.code}-${n}`, único dentro de la faena
   name           String
   description    String?
-  departmentId   String
-  department     Department                @relation(fields: [departmentId], references: [id])
+  // departmentId ya no se exige en la creación (jerarquía Cliente→Faena→Proyecto):
+  // nullable para no romper filas legacy ni el flujo nuevo.
+  departmentId   String?
+  department     Department?               @relation(fields: [departmentId], references: [id])
   clientId       String
   client         Client                    @relation(fields: [clientId], references: [id])
   contractNumber String?
@@ -143,6 +149,9 @@ model Project {
   faena          Faena?                    @relation(fields: [faenaId], references: [id])
   projectAdminId String?
   projectAdmin   User?                     @relation("ProjectAdmin", fields: [projectAdminId], references: [id])
+  // Fechas del proyecto (formulario). Opcionales.
+  startDate      DateTime?
+  endDate        DateTime?
   workers        ProjectWorkerAssignment[]
   services       Service[]
   kpis           Json?
@@ -153,7 +162,7 @@ model Project {
   overtimeRequests OvertimeRequest[]       @relation("OvertimeProject")
   createdAt      DateTime                  @default(now())
 
-  @@unique([departmentId, code])
+  @@unique([faenaId, code])
 }
 
 // ============ ASIGNACIÓN DE TRABAJADORES A PROYECTO ============

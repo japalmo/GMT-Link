@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ProjectDocumentStatus, TaskStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, ProjectDocumentStatus, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFaenaDto, UpdateFaenaDto } from './dto/faenas.dto';
 
@@ -10,8 +16,12 @@ export class FaenasService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Crea una faena para un cliente. `code` es único dentro del cliente
-   * (@@unique([clientId, code]) en el schema).
+   * Crea una faena para un cliente. El `code` se AUTOGENERA como
+   * `${client.code}-${letra}` donde `letra` es la siguiente correlativa (A, B,
+   * … Z, AA, AB…) según las faenas existentes del cliente. Se ignora cualquier
+   * `code` que venga en el input. `@@unique([clientId, code])` queda como red de
+   * seguridad ante concurrencia. supervisor/estado/fechas NO se fijan al crear
+   * (status toma su default PLANIFICADA del schema).
    */
   async create(clientId: string, dto: CreateFaenaDto) {
     const client = await this.prisma.client.findUnique({ where: { id: clientId } });
@@ -19,27 +29,52 @@ export class FaenasService {
       throw new NotFoundException('El cliente no existe.');
     }
 
-    const code = dto.code.toUpperCase();
-    const existing = await this.prisma.faena.findFirst({ where: { clientId, code } });
-    if (existing) {
-      throw new BadRequestException(`Ya existe una faena con el código "${dto.code}" en este cliente.`);
-    }
+    const code = await this.nextFaenaCode(clientId, client.code);
 
-    if (dto.supervisorId) {
-      await this.assertUserExists(dto.supervisorId);
+    try {
+      return await this.prisma.faena.create({
+        data: {
+          clientId,
+          code,
+          name: dto.name,
+          latitude: dto.latitude ?? null,
+          longitude: dto.longitude ?? null,
+          address: dto.address ?? null,
+        },
+      });
+    } catch (error) {
+      // `@@unique([clientId, code])`: dos creaciones simultáneas pueden calcular
+      // la misma letra. El segundo insert choca (P2002) → 409 para reintentar.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(
+          'No se pudo asignar el código de la faena por una creación simultánea. Intenta nuevamente.',
+        );
+      }
+      throw error;
     }
+  }
 
-    return this.prisma.faena.create({
-      data: {
-        clientId,
-        code,
-        name: dto.name,
-        supervisorId: dto.supervisorId ?? null,
-        status: dto.status,
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
-      },
+  /**
+   * Calcula el próximo código de faena para un cliente: `${clientCode}-${letra}`.
+   * Toma las faenas existentes del cliente cuyo `code` empieza con el prefijo
+   * `${clientCode}-`, parsea el sufijo alfabético tras el último `-`, lo convierte
+   * a índice (A=1, …, Z=26, AA=27…), toma el máximo y suma 1. Sin faenas → 'A'.
+   */
+  private async nextFaenaCode(clientId: string, clientCode: string): Promise<string> {
+    const prefix = `${clientCode}-`;
+    const faenas = await this.prisma.faena.findMany({
+      where: { clientId },
+      select: { code: true },
     });
+
+    let maxIndex = 0;
+    for (const { code } of faenas) {
+      if (!code.startsWith(prefix)) continue;
+      const index = lettersToIndex(code.slice(prefix.length).toUpperCase());
+      if (index > maxIndex) maxIndex = index;
+    }
+
+    return `${clientCode}-${indexToLetters(maxIndex + 1)}`;
   }
 
   /**
@@ -148,4 +183,29 @@ export class FaenasService {
       throw new BadRequestException('El supervisor indicado no existe.');
     }
   }
+}
+
+/**
+ * Sufijo alfabético (bijective base-26) → índice: 'A'→1, 'Z'→26, 'AA'→27…
+ * Devuelve 0 si el sufijo no es puramente alfabético (se ignora en el máximo).
+ */
+export function lettersToIndex(letters: string): number {
+  if (letters.length === 0 || !/^[A-Z]+$/.test(letters)) return 0;
+  let index = 0;
+  for (const char of letters) {
+    index = index * 26 + (char.charCodeAt(0) - 64); // 'A'(65) → 1
+  }
+  return index;
+}
+
+/** Índice (≥1) → sufijo alfabético: 1→'A', 26→'Z', 27→'AA'… (inversa de lettersToIndex). */
+export function indexToLetters(index: number): string {
+  let letters = '';
+  let n = index;
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
 }

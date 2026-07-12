@@ -1,5 +1,8 @@
 import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
+import { UnauthorizedException } from '@nestjs/common';
+import type { ProjectAdminOption } from '@gmt-platform/contracts';
+import type { AuthUser } from '../../src/authz/auth-user.types';
 import type { UsersService } from '../../src/modules/users/users.service';
 import type { UserRolesResponse } from '../../src/modules/users/users.types';
 import { UsersController } from '../../src/modules/users/users.controller';
@@ -98,5 +101,32 @@ describe('UsersController — asignación por scope', () => {
       scopeId: ORG_ID,
     });
     expect(result).toBe(response);
+  });
+});
+
+describe('UsersController — GET /users/project-admins', () => {
+  const admins: ProjectAdminOption[] = [
+    { id: 'u1', fullName: 'Ana Pérez', roleKeys: ['admin_contrato'] },
+  ];
+  const authUser: AuthUser = { id: 'requester' } as AuthUser;
+
+  it('delega en usersService.listProjectAdmins cuando hay usuario autenticado', async () => {
+    const listProjectAdmins = vi.fn(() => Promise.resolve(admins));
+    const service = { listProjectAdmins } as unknown as UsersService;
+    const controller = new UsersController(service);
+
+    const result = await controller.listProjectAdmins(authUser);
+
+    expect(listProjectAdmins).toHaveBeenCalledTimes(1);
+    expect(result).toBe(admins);
+  });
+
+  it('401 si no hay usuario autenticado', () => {
+    const listProjectAdmins = vi.fn(() => Promise.resolve(admins));
+    const service = { listProjectAdmins } as unknown as UsersService;
+    const controller = new UsersController(service);
+
+    expect(() => controller.listProjectAdmins(undefined)).toThrow(UnauthorizedException);
+    expect(listProjectAdmins).not.toHaveBeenCalled();
   });
 });

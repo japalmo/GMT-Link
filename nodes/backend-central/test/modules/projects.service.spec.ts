@@ -19,6 +19,9 @@ interface PrismaMock {
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
   };
+  faena: {
+    findUnique: ReturnType<typeof vi.fn>;
+  };
   membership: {
     findFirst: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
@@ -38,11 +41,13 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
   const mock: PrismaMock = {
     project: {
       findFirst: vi.fn(),
-      findMany: vi.fn(),
+      // Default: sin proyectos previos en la faena → el correlativo arranca en 1.
+      findMany: vi.fn(() => Promise.resolve([])),
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
+    faena: { findUnique: vi.fn() },
     membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     service: { findFirst: vi.fn(), create: vi.fn() },
     task: { aggregate: vi.fn(() => Promise.resolve({ _sum: { actualPoints: 0 } })) },
@@ -55,7 +60,7 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
 }
 
 const dto = (over: Partial<CreateProjectDto> = {}): CreateProjectDto =>
-  ({ code: 'abc', name: 'Proyecto', departmentId: 'd1', clientId: 'c1', ...over }) as CreateProjectDto;
+  ({ name: 'Proyecto', clientId: 'c1', faenaId: 'f1', ...over }) as CreateProjectDto;
 
 describe('ProjectsService', () => {
   let mock: PrismaMock;
@@ -80,28 +85,43 @@ describe('ProjectsService', () => {
   });
 
   describe('create', () => {
-    it('rechaza si ya existe un proyecto con el mismo código en el departamento', async () => {
-      mock.project.findFirst.mockResolvedValue({ id: 'p0' });
+    it('rechaza si la faena indicada no existe', async () => {
+      mock.faena.findUnique.mockResolvedValue(null);
       await expect(service.create('u1', dto())).rejects.toBeInstanceOf(BadRequestException);
       expect(mock.$transaction).not.toHaveBeenCalled();
     });
 
-    it('crea proyecto + membresía project_creator y sincroniza FGA; código en mayúsculas', async () => {
-      mock.project.findFirst.mockResolvedValue(null);
+    it('rechaza si la faena no pertenece al cliente del proyecto', async () => {
+      mock.faena.findUnique.mockResolvedValue({ id: 'f1', code: 'FAE', clientId: 'otro' });
+      await expect(service.create('u1', dto())).rejects.toBeInstanceOf(BadRequestException);
+      expect(mock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('autogenera code `${faena.code}-1` (primer proyecto), crea membresía project_creator y solo escribe la tupla de cliente en FGA', async () => {
+      mock.faena.findUnique.mockResolvedValue({ id: 'f1', code: 'FAE', clientId: 'c1' });
+      mock.project.findMany.mockResolvedValue([]); // sin proyectos previos en la faena
       mock.project.create.mockResolvedValue({
         id: 'p1',
-        code: 'ABC',
-        departmentId: 'd1',
+        code: 'FAE-1',
+        departmentId: null,
         clientId: 'c1',
         kpis: {},
       });
       mock.membership.create.mockResolvedValue({});
       mock.task.aggregate.mockResolvedValue({ _sum: { actualPoints: 12 } });
 
-      const result = await service.create('u1', dto({ code: 'abc' }));
+      const result = await service.create('u1', dto());
 
       expect(mock.project.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ code: 'ABC' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ code: 'FAE-1', faenaId: 'f1', clientId: 'c1' }),
+        }),
+      );
+      // Ya no se escribe departmentId en la creación.
+      expect(mock.project.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ departmentId: expect.anything() }),
+        }),
       );
       expect(mock.membership.create).toHaveBeenCalledWith({
         data: {
@@ -115,11 +135,47 @@ describe('ProjectsService', () => {
         expect.objectContaining({ userId: 'u1', roleKey: 'project_creator', scopeId: 'p1' }),
         'create',
       );
+      // Sin departamento → solo la tupla de cliente.
       expect(fga.writeTuples).toHaveBeenCalledWith([
-        { user: 'department:d1', relation: 'department', object: 'project:p1' },
         { user: 'client:c1', relation: 'client', object: 'project:p1' },
       ]);
       expect((result.kpis as { current: number }).current).toBe(12);
+    });
+
+    it('autogenera el correlativo por faena: con FAE-1 y FAE-2 existentes → FAE-3 (ignora sufijos no numéricos)', async () => {
+      mock.faena.findUnique.mockResolvedValue({ id: 'f1', code: 'FAE', clientId: 'c1' });
+      mock.project.findMany.mockResolvedValue([
+        { code: 'FAE-1' },
+        { code: 'FAE-2' },
+        { code: 'FAE-legacy' }, // sufijo no numérico: se ignora
+        { code: 'OTRA-9' }, // otra faena: no matchea el prefijo
+      ]);
+      mock.project.create.mockResolvedValue({ id: 'p3', code: 'FAE-3', clientId: 'c1', kpis: {} });
+      mock.membership.create.mockResolvedValue({});
+
+      await service.create('u1', dto());
+
+      expect(mock.project.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ code: 'FAE-3' }) }),
+      );
+    });
+
+    it('persiste startDate/endDate cuando se envían', async () => {
+      mock.faena.findUnique.mockResolvedValue({ id: 'f1', code: 'FAE', clientId: 'c1' });
+      mock.project.findMany.mockResolvedValue([]);
+      mock.project.create.mockResolvedValue({ id: 'p1', code: 'FAE-1', clientId: 'c1', kpis: {} });
+      mock.membership.create.mockResolvedValue({});
+
+      await service.create(
+        'u1',
+        dto({ startDate: '2026-07-01', endDate: '2026-08-01' }),
+      );
+
+      const createArgs = mock.project.create.mock.calls[0]?.[0] as {
+        data: { startDate: Date | null; endDate: Date | null };
+      };
+      expect(createArgs.data.startDate).toBeInstanceOf(Date);
+      expect(createArgs.data.endDate).toBeInstanceOf(Date);
     });
   });
 

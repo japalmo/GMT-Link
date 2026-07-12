@@ -24,7 +24,7 @@ import { AssignRoleScopedDto } from './dto/assign-role-scoped.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
 import { UsersService } from './users.service';
-import type { AssignRoleInput, ScopeType } from '@gmt-platform/contracts';
+import type { AssignRoleInput, ProjectAdminOption, ScopeType } from '@gmt-platform/contracts';
 import type {
   CreateUserResponse,
   ImportUsersResponse,
@@ -63,6 +63,22 @@ export class UsersController {
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
   list(@Query('search') search?: string): Promise<UserListItem[]> {
     return this.usersService.list(search);
+  }
+
+  /**
+   * Usuarios elegibles como administrador de proyecto: solo los que tienen un
+   * rol que otorga `project:manage`. Para el select del formulario de proyecto.
+   * Autenticado (lo consumen los que crean proyectos), sin gate `can_manage_users`.
+   * DEBE declararse antes de `@Get(':id')` para no ser capturado por el param.
+   */
+  @Get('project-admins')
+  listProjectAdmins(
+    @CurrentUser() authUser: AuthUser | undefined,
+  ): Promise<ProjectAdminOption[]> {
+    if (!authUser) {
+      throw new UnauthorizedException('Se requiere un usuario autenticado.');
+    }
+    return this.usersService.listProjectAdmins();
   }
 
   /** Detalle de un usuario. */

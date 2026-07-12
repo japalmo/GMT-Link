@@ -65,6 +65,7 @@ import type {
   FaenaView,
   CreateFaenaInput,
   CreateProjectInput,
+  ProjectAdminOption,
   ProjectWorkerAssignmentView,
   AssignWorkerInput,
   PhaseDataSpecInput,
@@ -386,6 +387,15 @@ export function uploadUserAvatar(id: string, file: File): Promise<UserListItem> 
     formData,
     'PATCH',
   );
+}
+
+/**
+ * `GET /users/project-admins` — usuarios cuyo rol otorga el permiso de
+ * administrador de proyecto (`project:manage`). Alimenta el selector
+ * "Administrador de proyecto" del wizard de creación de proyectos (Capa 3).
+ */
+export function getProjectAdmins(): Promise<ProjectAdminOption[]> {
+  return request<ProjectAdminOption[]>('/users/project-admins');
 }
 
 /* -------------------------------------------------------------------------- */

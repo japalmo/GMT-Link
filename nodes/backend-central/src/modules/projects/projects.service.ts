@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ScopeType, TaskStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, ScopeType, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import {
@@ -25,28 +31,14 @@ export class ProjectsService {
    * para el creador del proyecto con el rol `project_creator`, sincronizándolo a FGA.
    */
   async create(userId: string, dto: CreateProjectDto) {
-    // Verificar si ya existe un código de proyecto idéntico en el departamento
-    const existing = await this.prisma.project.findFirst({
-      where: {
-        departmentId: dto.departmentId,
-        code: dto.code.toUpperCase(),
-      },
-    });
-    if (existing) {
-      throw new BadRequestException(
-        `Ya existe un proyecto con el código "${dto.code}" en este departamento.`,
-      );
+    // La faena es OBLIGATORIA: de su `code` deriva el código autogenerado del
+    // proyecto y su cliente debe coincidir con el del proyecto.
+    const faena = await this.prisma.faena.findUnique({ where: { id: dto.faenaId } });
+    if (!faena) {
+      throw new BadRequestException('La faena indicada no existe.');
     }
-
-    // Validar referencias opcionales antes de abrir la transacción.
-    if (dto.faenaId) {
-      const faena = await this.prisma.faena.findUnique({ where: { id: dto.faenaId } });
-      if (!faena) {
-        throw new BadRequestException('La faena indicada no existe.');
-      }
-      if (faena.clientId !== dto.clientId) {
-        throw new BadRequestException('La faena no pertenece al cliente del proyecto.');
-      }
+    if (faena.clientId !== dto.clientId) {
+      throw new BadRequestException('La faena no pertenece al cliente del proyecto.');
     }
     if (dto.projectAdminId) {
       const admin = await this.prisma.user.findUnique({
@@ -58,19 +50,25 @@ export class ProjectsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    // Código autogenerado `${faena.code}-${n}` con `n` correlativo por faena.
+    // Se ignora cualquier `code` del input. `@@unique([faenaId, code])` cubre
+    // la concurrencia.
+    const code = await this.nextProjectCode(dto.faenaId, faena.code);
+
+    const created = this.prisma.$transaction(async (tx) => {
       // 1. Crear el proyecto
       const project = await tx.project.create({
         data: {
-          code: dto.code.toUpperCase(),
+          code,
           name: dto.name,
           description: dto.description ?? null,
-          departmentId: dto.departmentId,
           clientId: dto.clientId,
           contractNumber: dto.contractNumber ?? null,
           projectType: dto.projectType ?? null,
-          faenaId: dto.faenaId ?? null,
+          faenaId: dto.faenaId,
           projectAdminId: dto.projectAdminId ?? null,
+          startDate: dto.startDate ? new Date(dto.startDate) : null,
+          endDate: dto.endDate ? new Date(dto.endDate) : null,
           kpis: {},
         },
       });
@@ -96,22 +94,64 @@ export class ProjectsService {
         'create',
       );
 
-      // 4. Escribir relaciones estructurales en OpenFGA
-      await this.fga.writeTuples([
-        {
-          user: `department:${project.departmentId}`,
-          relation: 'department',
-          object: `project:${project.id}`,
-        },
+      // 4. Escribir relaciones estructurales en OpenFGA. La tupla de
+      //    departamento solo se escribe si el proyecto tiene departamento
+      //    (ya no se asigna en la creación; queda por si alguna fila lo tuviera).
+      const tuples = [
         {
           user: `client:${project.clientId}`,
           relation: 'client',
           object: `project:${project.id}`,
         },
-      ]);
+      ];
+      if (project.departmentId) {
+        tuples.unshift({
+          user: `department:${project.departmentId}`,
+          relation: 'department',
+          object: `project:${project.id}`,
+        });
+      }
+      await this.fga.writeTuples(tuples);
 
       return this.injectCurrentKpi(project);
     });
+
+    try {
+      return await created;
+    } catch (error) {
+      // `@@unique([faenaId, code])`: dos creaciones simultáneas en la misma faena
+      // pueden calcular el mismo `n`. El segundo insert choca (P2002) → 409.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(
+          'No se pudo asignar el código del proyecto por una creación simultánea. Intenta nuevamente.',
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Próximo código de proyecto dentro de una faena: `${faenaCode}-${n}`. Toma
+   * los proyectos de la faena cuyo `code` empieza con `${faenaCode}-`, parsea el
+   * sufijo numérico tras el último `-`, toma el máximo y suma 1. Sin proyectos → 1.
+   */
+  private async nextProjectCode(faenaId: string, faenaCode: string): Promise<string> {
+    const prefix = `${faenaCode}-`;
+    const projects = await this.prisma.project.findMany({
+      where: { faenaId },
+      select: { code: true },
+    });
+
+    let maxN = 0;
+    for (const { code } of projects) {
+      if (!code.startsWith(prefix)) continue;
+      const suffix = code.slice(prefix.length);
+      if (!/^\d+$/.test(suffix)) continue;
+      const n = Number.parseInt(suffix, 10);
+      if (n > maxN) maxN = n;
+    }
+
+    return `${faenaCode}-${maxN + 1}`;
   }
 
   /**

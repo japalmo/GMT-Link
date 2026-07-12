@@ -878,6 +878,83 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
   });
 });
 
+describe('UsersService.listProjectAdmins — dropdown filtrado por project:manage', () => {
+  it('deriva los roleKeys que otorgan project:manage desde RolePermission y proyecta {id, fullName, roleKeys}', async () => {
+    const rolePermissionFindMany = vi.fn(() =>
+      Promise.resolve([
+        { role: { key: 'admin_contrato' } },
+        { role: { key: 'gerencia_proyectos' } },
+        { role: { key: 'org_admin' } },
+        { role: { key: 'admin_ti' } },
+      ]),
+    );
+    const userFindMany = vi.fn(() =>
+      Promise.resolve([
+        {
+          id: 'u1',
+          firstName: 'Ana',
+          secondName: null,
+          lastName: 'Pérez',
+          secondLastName: null,
+          memberships: [{ roleKey: 'admin_contrato' }, { roleKey: 'trabajador' }],
+        },
+        {
+          id: 'u2',
+          firstName: 'Luis',
+          secondName: 'Al',
+          lastName: 'Soto',
+          secondLastName: 'Ríos',
+          memberships: [{ roleKey: 'gerencia_proyectos' }],
+        },
+      ]),
+    );
+    const prisma = {
+      rolePermission: { findMany: rolePermissionFindMany },
+      user: { findMany: userFindMany },
+    } as unknown as PrismaService;
+
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock());
+
+    const result = await service.listProjectAdmins();
+
+    // Se consultó el permiso project:manage para derivar el set de roleKeys.
+    expect(rolePermissionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { permission: { key: 'project:manage' } } }),
+    );
+    // Los usuarios se filtran por Membership en alguno de esos roles.
+    expect(userFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          memberships: {
+            some: { roleKey: { in: ['admin_contrato', 'gerencia_proyectos', 'org_admin', 'admin_ti'] } },
+          },
+        },
+      }),
+    );
+    // fullName = nombres no vacíos unidos; roleKeys = solo los que otorgan el permiso.
+    expect(result).toEqual([
+      { id: 'u1', fullName: 'Ana Pérez', roleKeys: ['admin_contrato'] },
+      { id: 'u2', fullName: 'Luis Al Soto Ríos', roleKeys: ['gerencia_proyectos'] },
+    ]);
+  });
+
+  it('si ningún rol otorga project:manage devuelve [] sin consultar usuarios', async () => {
+    const userFindMany = vi.fn(() => Promise.resolve([]));
+    const prisma = {
+      rolePermission: { findMany: vi.fn(() => Promise.resolve([])) },
+      user: { findMany: userFindMany },
+    } as unknown as PrismaService;
+    const fga = buildFgaMock();
+    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock());
+
+    const result = await service.listProjectAdmins();
+
+    expect(result).toEqual([]);
+    expect(userFindMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('UsersService — memberships en UserListItem (H13)', () => {
   it('getById expone memberships (roleKey, scopeType, scopeId) para la UI', async () => {
     const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };

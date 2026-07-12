@@ -10,6 +10,7 @@ export type {
   ClientView,
   FaenaView,
   ProjectWorkerAssignmentView,
+  ProjectAdminOption,
   UserRef,
   // Enums
   ProjectType,

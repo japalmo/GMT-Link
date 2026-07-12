@@ -9,7 +9,7 @@ import {
 import type { Prisma, User } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import type { AssignRoleInput, ScopeType, UserMembership } from '@gmt-platform/contracts';
+import type { AssignRoleInput, ProjectAdminOption, ScopeType, UserMembership } from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
 import { hashPassword } from '../../common/password';
@@ -26,6 +26,8 @@ import { credentialsEmail } from '../../common/email-templates';
 
 /** Rol cuya asignación org-scope sí confiere acceso de admin en OpenFGA (§4.3). */
 const ORG_ADMIN_ROLE: RoleKey = 'org_admin';
+/** Permiso que define quién puede ser administrador de proyecto (dropdown filtrado). */
+const PROJECT_MANAGE_PERMISSION = 'project:manage';
 import type {
   CreateUserResponse,
   ImportErrorRow,
@@ -236,6 +238,48 @@ export class UsersService {
     });
 
     return users.map((user) => this.toListItem(user));
+  }
+
+  /**
+   * Usuarios elegibles como administrador de proyecto: aquellos cuyo rol otorga
+   * el permiso `project:manage`. El set de roleKeys se DERIVA de `RolePermission`
+   * (no se hardcodea): se consultan los grants del permiso y se listan los
+   * usuarios con una Membership en alguno de esos roles. Devuelve `{id, fullName,
+   * roleKeys}` (roleKeys = los roles del usuario que conceden el permiso) para
+   * poblar el select del formulario de proyecto.
+   */
+  async listProjectAdmins(): Promise<ProjectAdminOption[]> {
+    const grants = await this.prisma.rolePermission.findMany({
+      where: { permission: { key: PROJECT_MANAGE_PERMISSION } },
+      include: { role: { select: { key: true } } },
+    });
+    const grantingRoleKeys = new Set(grants.map((grant) => grant.role.key));
+    if (grantingRoleKeys.size === 0) {
+      return [];
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { memberships: { some: { roleKey: { in: [...grantingRoleKeys] } } } },
+      select: {
+        id: true,
+        firstName: true,
+        secondName: true,
+        lastName: true,
+        secondLastName: true,
+        memberships: { select: { roleKey: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      fullName: [user.firstName, user.secondName, user.lastName, user.secondLastName]
+        .filter((part): part is string => Boolean(part))
+        .join(' '),
+      roleKeys: [...new Set(user.memberships.map((m) => m.roleKey))].filter((key) =>
+        grantingRoleKeys.has(key),
+      ),
+    }));
   }
 
   /** Detalle de un usuario por id. 404 si no existe. */

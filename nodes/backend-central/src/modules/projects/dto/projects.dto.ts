@@ -1,12 +1,12 @@
 import { IsEnum, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, Length } from 'class-validator';
 import { Prisma, ProjectType, ProjectWorkerStatus, ServiceFrequency } from '@prisma/client';
 
+/**
+ * Creación de proyecto. El `code` se autogenera en el service
+ * (`${faena.code}-${n}`), por eso NO es parte del input y `faenaId` es
+ * OBLIGATORIO. El departamento ya no se pide (jerarquía Cliente→Faena→Proyecto).
+ */
 export class CreateProjectDto {
-  @IsString()
-  @IsNotEmpty()
-  @Length(3, 4, { message: 'El código del proyecto debe tener entre 3 y 4 caracteres.' })
-  code!: string;
-
   @IsString()
   @IsNotEmpty()
   name!: string;
@@ -17,11 +17,11 @@ export class CreateProjectDto {
 
   @IsString()
   @IsNotEmpty()
-  departmentId!: string;
+  clientId!: string;
 
   @IsString()
   @IsNotEmpty()
-  clientId!: string;
+  faenaId!: string;
 
   @IsString()
   @IsOptional()
@@ -31,9 +31,13 @@ export class CreateProjectDto {
   @IsOptional()
   projectType?: ProjectType;
 
-  @IsString()
+  @IsISO8601()
   @IsOptional()
-  faenaId?: string;
+  startDate?: string;
+
+  @IsISO8601()
+  @IsOptional()
+  endDate?: string;
 
   @IsString()
   @IsOptional()

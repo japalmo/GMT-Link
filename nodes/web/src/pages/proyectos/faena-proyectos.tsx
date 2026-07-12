@@ -10,15 +10,14 @@ import {
   Plus,
   User,
 } from 'lucide-react';
-import { useFaenaProjects, useEligibleAdmins } from '@/hooks/use-project-hierarchy';
+import { useFaenaProjects } from '@/hooks/use-project-hierarchy';
+import { useProjectAdmins } from '@/hooks/use-project-admins';
 import { useClients } from '@/hooks/use-clients';
 import { useFaenas } from '@/hooks/use-faenas';
 import { useHasPermission } from '@/hooks/use-has-permission';
-import { listDepartments } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { SearchInput } from '@/components/ui/search-input';
@@ -112,7 +111,6 @@ export default function FaenaProyectosPage() {
   const { projects, loading, error, create } = useFaenaProjects(faenaId);
   const { clients } = useClients();
   const { faenas } = useFaenas(clientId);
-  const { admins } = useEligibleAdmins();
   const canCreate = useHasPermission('project:manage');
 
   const [search, setSearch] = useState('');
@@ -273,7 +271,6 @@ export default function FaenaProyectosPage() {
         clientId={clientId ?? ''}
         faenaId={faenaId ?? ''}
         clients={clients}
-        admins={admins}
         onCreate={async (dto) => {
           const created = await create(dto);
           toast.success('Proyecto creado.');
@@ -294,7 +291,6 @@ interface NewProjectDialogProps {
   clientId: string;
   faenaId: string;
   clients: Array<{ id: string; name: string; code: string }>;
-  admins: Array<{ id: string; firstName: string; lastName: string; email: string }>;
   onCreate: (dto: CreateProjectInput) => Promise<void>;
 }
 
@@ -304,25 +300,24 @@ function NewProjectDialog({
   clientId,
   faenaId,
   clients,
-  admins,
   onCreate,
 }: NewProjectDialogProps) {
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
   const [contractNumber, setContractNumber] = useState('');
-  const [description, setDescription] = useState('');
   const [projectType, setProjectType] = useState<ProjectType>('RUTINARIO');
   const [projectAdminId, setProjectAdminId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   // Cliente / faena autocompletados desde la ruta, pero editables.
   const [formClientId, setFormClientId] = useState(clientId);
   const [formFaenaId, setFormFaenaId] = useState(faenaId);
-  const [departmentId, setDepartmentId] = useState('');
-  const [departments, setDepartments] = useState<
-    Array<{ id: string; name: string; code: string }>
-  >([]);
 
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Administradores de proyecto: usuarios con permiso de admin de proyecto
+  // (`GET /users/project-admins`), NO todos los usuarios.
+  const { admins, loading: adminsLoading } = useProjectAdmins();
 
   // Faenas del cliente elegido en el formulario. Si el usuario cambia de
   // cliente, cargamos las faenas de ESE cliente (no las de la ruta) para que el
@@ -334,35 +329,15 @@ function NewProjectDialog({
   useEffect(() => {
     if (!open) return;
     setName('');
-    setCode('');
     setContractNumber('');
-    setDescription('');
     setProjectType('RUTINARIO');
     setProjectAdminId('');
+    setStartDate('');
+    setEndDate('');
     setFormClientId(clientId);
     setFormFaenaId(faenaId);
     setFormError(null);
   }, [open, clientId, faenaId]);
-
-  // departmentId: el DTO extendido no lo exige, pero `POST /projects` sí lo
-  // necesita. Lo resolvemos con un selector poblado por `listDepartments()` y
-  // preseleccionamos el primero para no dejarlo vacío nunca.
-  useEffect(() => {
-    let active = true;
-    listDepartments()
-      .then((list) => {
-        if (!active) return;
-        setDepartments(list);
-        const first = list[0];
-        if (first) setDepartmentId((prev) => prev || first.id);
-      })
-      .catch(() => {
-        /* silencioso: el submit mostrará el error si falta departamento */
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   // Al cambiar de cliente, la faena seleccionada deja de pertenecer al nuevo
   // cliente: la limpiamos para no crear una combinación inconsistente (a menos
@@ -374,20 +349,27 @@ function NewProjectDialog({
 
   const locationChanged = formClientId !== clientId || formFaenaId !== faenaId;
 
+  // Código de la faena seleccionada, para el aviso de código autogenerado.
+  const selectedFaenaCode = faenasForClient.find((f) => f.id === formFaenaId)?.code;
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!name.trim() || !code.trim()) {
-      setFormError('Nombre y código son obligatorios.');
+    if (!name.trim()) {
+      setFormError('El nombre es obligatorio.');
       return;
     }
     if (!formClientId) {
       setFormError('Selecciona un cliente.');
       return;
     }
-    if (!departmentId) {
-      setFormError('Selecciona un departamento.');
+    if (!formFaenaId) {
+      setFormError('Selecciona una faena.');
+      return;
+    }
+    if (startDate && endDate && endDate < startDate) {
+      setFormError('La fecha de término no puede ser anterior a la de inicio.');
       return;
     }
 
@@ -402,24 +384,18 @@ function NewProjectDialog({
 
     const dto: CreateProjectInput = {
       name: name.trim(),
-      code: code.trim().toUpperCase(),
       clientId: formClientId,
+      faenaId: formFaenaId,
       projectType,
-      ...(formFaenaId ? { faenaId: formFaenaId } : {}),
       ...(contractNumber.trim() ? { contractNumber: contractNumber.trim() } : {}),
       ...(projectAdminId ? { projectAdminId } : {}),
+      ...(startDate ? { startDate } : {}),
+      ...(endDate ? { endDate } : {}),
     };
-    // `description` y `departmentId` no están en `CreateProjectInput` pero el
-    // backend los acepta (contrato extendido). Se anexan sin romper el tipo.
-    const payload = {
-      ...dto,
-      departmentId,
-      ...(description.trim() ? { description: description.trim() } : {}),
-    } as CreateProjectInput;
 
     setSubmitting(true);
     try {
-      await onCreate(payload);
+      await onCreate(dto);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'No se pudo crear el proyecto.');
       setSubmitting(false);
@@ -455,30 +431,12 @@ function NewProjectDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="np-code">Código (3-4 chars)</Label>
-              <Input
-                id="np-code"
-                required
-                maxLength={4}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
-                placeholder="Ej. MON1"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="np-contract">N.º de contrato</Label>
-              <Input
-                id="np-contract"
-                value={contractNumber}
-                onChange={(e) => setContractNumber(e.target.value)}
-                placeholder="Ej. CTR-2026-014"
-              />
-            </div>
-          </div>
+          <Alert variant="info">
+            El código se genera automáticamente (formato{' '}
+            {selectedFaenaCode ? `${selectedFaenaCode}-N` : 'COD_FAENA-N'}).
+          </Alert>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-client">Cliente</Label>
               <Select
@@ -503,7 +461,7 @@ function NewProjectDialog({
                 value={formFaenaId}
                 onChange={(e) => setFormFaenaId(e.target.value)}
               >
-                <option value="">Sin faena</option>
+                <option value="">Selecciona una faena</option>
                 {faenasForClient.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.name} ({f.code})
@@ -520,7 +478,16 @@ function NewProjectDialog({
             </Alert>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="np-contract">Código de contrato</Label>
+              <Input
+                id="np-contract"
+                value={contractNumber}
+                onChange={(e) => setContractNumber(e.target.value)}
+                placeholder="Ej. CTR-2026-014"
+              />
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-type">Tipo de proyecto</Label>
               <Select
@@ -536,21 +503,30 @@ function NewProjectDialog({
                 ))}
               </Select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="np-dept">Departamento</Label>
-              <Select
-                id="np-dept"
-                aria-label="Departamento del proyecto"
-                value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
-              >
-                {departments.length === 0 && <option value="">Cargando…</option>}
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} ({d.code})
-                  </option>
-                ))}
-              </Select>
+              <Label htmlFor="np-start">
+                Fecha de inicio <span className="text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input
+                id="np-start"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="np-end">
+                Término aproximado <span className="text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input
+                id="np-end"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
             </div>
           </div>
 
@@ -561,25 +537,20 @@ function NewProjectDialog({
               aria-label="Administrador de proyecto"
               value={projectAdminId}
               onChange={(e) => setProjectAdminId(e.target.value)}
+              disabled={admins.length === 0}
             >
               <option value="">Sin asignar</option>
               {admins.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.firstName} {a.lastName} ({a.email})
+                  {a.fullName}
                 </option>
               ))}
             </Select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="np-desc">Descripción</Label>
-            <Textarea
-              id="np-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Alcance breve del proyecto (opcional)."
-            />
+            {!adminsLoading && admins.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No hay usuarios con rol de administrador de proyecto.
+              </p>
+            )}
           </div>
 
           <ModalFooter>
