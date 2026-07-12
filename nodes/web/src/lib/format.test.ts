@@ -21,6 +21,13 @@ describe('formatDate', () => {
     expect(out).not.toBe('—');
     expect(out).toContain('2026');
   });
+
+  it('trata la fecha date-only (medianoche UTC) como su día de calendario, no el anterior', () => {
+    // Sin el anclaje a UTC, un dispositivo al oeste (Chile) mostraría el día 9.
+    const out = formatDate('2026-07-10T00:00:00.000Z');
+    expect(out).toContain('10');
+    expect(out).toContain('2026');
+  });
 });
 
 describe('formatDateRange', () => {

@@ -3,11 +3,17 @@
  * y sin dependencias de UI para poder reutilizarse en cualquier página.
  */
 
-/** Formateador de fecha local (Chile) en formato corto: "14 jun 2026". */
+/**
+ * Formateador de fecha en formato corto: "14 jun 2026". Ancla en UTC porque las
+ * fechas date-only del sistema se guardan a medianoche UTC (representan el día de
+ * calendario que eligió el usuario); sin `timeZone`, un dispositivo al oeste de
+ * UTC (Chile) mostraría el día anterior.
+ */
 const dateFormatter = new Intl.DateTimeFormat('es-CL', {
   day: 'numeric',
   month: 'short',
   year: 'numeric',
+  timeZone: 'UTC',
 });
 
 /**
