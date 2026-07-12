@@ -97,10 +97,13 @@ export class ProfileService {
   }
 
   /**
-   * Solicita el OTP para cambiar el correo del PROPIO usuario. Valida formato y
-   * unicidad (409 si el `newEmail` ya lo usa OTRO usuario como email primario o
-   * institucional), registra el cambio como pendiente y envía el código al nuevo
-   * correo. El código NO se retorna: viaja solo por `EmailService`.
+   * Solicita el OTP para cambiar el correo del PROPIO usuario. ENDURECIDO: exige
+   * la contraseña actual (401 si no coincide) antes de gastar OTP/correo, para
+   * cortar el secuestro de sesión (el OTP viaja al correo NUEVO, así que no
+   * autentica al dueño). Valida formato y unicidad (409 si el `newEmail` ya lo usa
+   * OTRO usuario como email primario o institucional), registra el cambio como
+   * pendiente y envía el código al nuevo correo. El código NO se retorna: viaja
+   * solo por `EmailService`.
    */
   async requestEmailChange(userId: string, dto: ChangeEmailRequestDto): Promise<OkResponse> {
     const newEmail = dto.newEmail.trim();
@@ -108,6 +111,14 @@ export class ProfileService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('El usuario de la sesión ya no existe.');
+    }
+
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('La contraseña actual no es válida.');
+    }
+    const matches = await verifyPassword(dto.currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new UnauthorizedException('La contraseña actual no es válida.');
     }
 
     await this.assertEmailAvailable(newEmail, userId);

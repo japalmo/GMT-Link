@@ -40,8 +40,8 @@ export interface UseProfileResult {
   ) => Promise<void>;
   /** Envía un OTP al correo verificado del usuario (paso previo a cambiar la clave). */
   requestPasswordChange: () => Promise<void>;
-  /** Envía un OTP al `newEmail` para verificarlo antes de aplicarlo al campo `kind`. */
-  requestEmailChange: (newEmail: string, kind: EmailKind) => Promise<void>;
+  /** Exige la contraseña actual y envía un OTP al `newEmail` para verificarlo antes de aplicarlo al campo `kind`. */
+  requestEmailChange: (newEmail: string, kind: EmailKind, currentPassword: string) => Promise<void>;
   /**
    * Confirma el cambio de correo con el OTP y refresca el estado local con el
    * perfil ya actualizado que devuelve el backend.
@@ -109,8 +109,8 @@ export function useProfile(): UseProfileResult {
   );
 
   const requestEmailChange = useCallback(
-    (newEmail: string, kind: EmailKind): Promise<void> =>
-      apiRequestEmailChange(newEmail, kind),
+    (newEmail: string, kind: EmailKind, currentPassword: string): Promise<void> =>
+      apiRequestEmailChange(newEmail, kind, currentPassword),
     [],
   );
 

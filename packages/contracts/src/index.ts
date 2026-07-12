@@ -126,11 +126,13 @@ export interface OkResponse {
 }
 
 /**
- * Body de POST /profile/email/change-request. Pide un OTP al `newEmail` para
- * verificarlo antes de aplicarlo al campo `kind`. El código NO se retorna: viaja
- * solo por correo (EmailService).
+ * Body de POST /profile/email/change-request. Exige la contraseña actual
+ * (reautenticación) y pide un OTP al `newEmail` para verificarlo antes de
+ * aplicarlo al campo `kind`. El código NO se retorna: viaja solo por correo
+ * (EmailService).
  */
 export interface ChangeEmailRequestInput {
+  currentPassword: string;
   newEmail: string;
   kind: EmailKind;
 }

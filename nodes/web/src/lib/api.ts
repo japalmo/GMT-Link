@@ -500,18 +500,20 @@ export async function requestPasswordChange(): Promise<void> {
 }
 
 /**
- * `POST /profile/email/change-request` — pide un OTP de 6 dígitos al `newEmail`
- * para verificarlo antes de aplicarlo al campo `kind` (INSTITUCIONAL | PERSONAL).
- * El código NO vuelve en la respuesta (viaja solo por correo). 409 si el correo
- * ya está en uso por otra cuenta.
+ * `POST /profile/email/change-request` — exige la contraseña actual y pide un OTP
+ * de 6 dígitos al `newEmail` para verificarlo antes de aplicarlo al campo `kind`
+ * (INSTITUCIONAL | PERSONAL). El código NO vuelve en la respuesta (viaja solo por
+ * correo). 401 si la contraseña actual es incorrecta; 409 si el correo ya está en
+ * uso por otra cuenta.
  */
 export async function requestEmailChange(
   newEmail: string,
   kind: EmailKind,
+  currentPassword: string,
 ): Promise<void> {
   await request<{ ok: true }>('/profile/email/change-request', {
     method: 'POST',
-    body: JSON.stringify({ newEmail, kind }),
+    body: JSON.stringify({ newEmail, kind, currentPassword }),
   });
 }
 

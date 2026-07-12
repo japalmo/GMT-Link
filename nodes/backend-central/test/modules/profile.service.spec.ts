@@ -232,12 +232,20 @@ describe('ProfileService.updateMe', () => {
 
 describe('ProfileService.requestEmailChange', () => {
   const dto: ChangeEmailRequestDto = {
+    currentPassword: 'current123',
     newEmail: 'nueva@gmt.cl',
     kind: 'INSTITUCIONAL' as ChangeEmailRequestDto['kind'],
   };
 
+  /** Usuario con la contraseña 'current123' hasheada (para pasar el gate de reautenticación). */
+  async function userWithPassword(overrides: Partial<FakeUserRow> = {}): Promise<FakeUserRow> {
+    return baseUser({ passwordHash: await hashPassword('current123'), ...overrides });
+  }
+
   it('registra el pending, genera OTP para el nuevo correo y lo envía SIN revelar el código', async () => {
-    const { service, update, otpGenerate, emailSend } = buildService({ findUser: baseUser() });
+    const { service, update, otpGenerate, emailSend } = buildService({
+      findUser: await userWithPassword(),
+    });
 
     const res = await service.requestEmailChange('me-1', dto);
 
@@ -255,9 +263,10 @@ describe('ProfileService.requestEmailChange', () => {
   });
 
   it('recorta espacios del nuevo correo antes de persistir/generar', async () => {
-    const { service, update, otpGenerate } = buildService({ findUser: baseUser() });
+    const { service, update, otpGenerate } = buildService({ findUser: await userWithPassword() });
 
     await service.requestEmailChange('me-1', {
+      currentPassword: 'current123',
       newEmail: '  nueva@gmt.cl  ',
       kind: 'PERSONAL' as ChangeEmailRequestDto['kind'],
     });
@@ -269,7 +278,7 @@ describe('ProfileService.requestEmailChange', () => {
 
   it('409 si el nuevo correo ya lo usa OTRO usuario (colisión), sin generar OTP', async () => {
     const { service, findFirst, update, otpGenerate } = buildService({
-      findUser: baseUser(),
+      findUser: await userWithPassword(),
       findFirst: { id: 'otro-usuario' },
     });
 
@@ -279,6 +288,40 @@ describe('ProfileService.requestEmailChange', () => {
     expect(where.id).toEqual({ not: 'me-1' });
     expect(update).not.toHaveBeenCalled();
     expect(otpGenerate).not.toHaveBeenCalled();
+  });
+
+  it('401 si la contraseña actual no coincide: no genera OTP ni persiste', async () => {
+    const { service, update, otpGenerate } = buildService({ findUser: await userWithPassword() });
+
+    await expect(
+      service.requestEmailChange('me-1', { ...dto, currentPassword: 'incorrecta' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(update).not.toHaveBeenCalled();
+    expect(otpGenerate).not.toHaveBeenCalled();
+  });
+
+  it('401 si el usuario aún no tiene contraseña definida', async () => {
+    const { service, update, otpGenerate } = buildService({
+      findUser: baseUser({ passwordHash: null }),
+    });
+
+    await expect(service.requestEmailChange('me-1', dto)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(otpGenerate).not.toHaveBeenCalled();
+  });
+
+  it('valida la contraseña ANTES de chequear unicidad (401, no 409)', async () => {
+    const { service, findFirst } = buildService({
+      findUser: await userWithPassword(),
+      findFirst: { id: 'otro-usuario' },
+    });
+
+    await expect(
+      service.requestEmailChange('me-1', { ...dto, currentPassword: 'incorrecta' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(findFirst).not.toHaveBeenCalled();
   });
 
   it('404 si el usuario de la sesión ya no existe', async () => {

@@ -150,13 +150,14 @@ function EmailVerifyDialog({
   currentEmail: string | null;
   pendingEmail: string | null;
   onClose: () => void;
-  onRequest: (newEmail: string, kind: EmailKind) => Promise<void>;
+  onRequest: (newEmail: string, kind: EmailKind, currentPassword: string) => Promise<void>;
   onConfirm: (code: string) => Promise<void>;
 }): ReactNode {
   const [step, setStep] = useState<'email' | 'code'>(
     pendingEmail !== null ? 'code' : 'email',
   );
   const [email, setEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [code, setCode] = useState('');
   const [sentTo, setSentTo] = useState(pendingEmail ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -174,11 +175,16 @@ function EmailVerifyDialog({
       setError('Ingresa un correo electrónico válido.');
       return;
     }
+    if (currentPassword.length === 0) {
+      setError('Ingresa tu contraseña actual.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await onRequest(trimmed, kind);
+      await onRequest(trimmed, kind, currentPassword);
       setSentTo(trimmed);
+      setCurrentPassword('');
       setCode('');
       setStep('code');
       toast.success(`Te enviamos un código a ${trimmed}`);
@@ -250,6 +256,23 @@ function EmailVerifyDialog({
                 aria-invalid={error !== null || undefined}
                 required
                 autoFocus
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email-current-password">Contraseña actual</Label>
+              <Input
+                id="email-current-password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Confirma con tu contraseña actual"
+                value={currentPassword}
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value);
+                  setError(null);
+                }}
+                disabled={submitting}
+                required
               />
             </div>
 
@@ -341,7 +364,7 @@ export function ProfileForm({
 }: {
   profile: ProfileMe;
   onSave: (input: UpdateProfileInput) => Promise<ProfileMe>;
-  onRequestEmailChange: (newEmail: string, kind: EmailKind) => Promise<void>;
+  onRequestEmailChange: (newEmail: string, kind: EmailKind, currentPassword: string) => Promise<void>;
   onConfirmEmailChange: (code: string) => Promise<ProfileMe>;
 }): ReactNode {
   const [form, setForm] = useState<FormState>(() => toFormState(profile));
