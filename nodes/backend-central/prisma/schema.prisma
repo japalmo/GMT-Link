@@ -615,6 +615,20 @@ model ProjectDocument {
 enum AssetType {
   EQUIPO
   VEHICULO
+  MAQUINARIA
+}
+
+enum VehicleSubtype {
+  PICKUP
+  FURGON
+  AUTO
+  AUTOBUS
+  CAMION
+}
+
+enum AssetIdentifierType {
+  PATENTE
+  NUMERO_SERIE
 }
 
 enum AssetStatus {
@@ -632,6 +646,11 @@ model Asset {
   type                 AssetType
   name                 String
   description          String?
+  // Identificación (primera clase): fabricante/marca + identificador (patente o N° de serie).
+  manufacturer         String?
+  identifier           String?
+  identifierType       AssetIdentifierType?
+  vehicleSubtype       VehicleSubtype? // solo aplica a VEHICULO
   status               AssetStatus           @default(DISPONIBLE)
   // Pertenencia opcional a un proyecto (FGA asset.project → can_view_list / can_create).
   projectId            String?

@@ -55,6 +55,10 @@ function buildAssetRow(overrides: Partial<Asset> = {}): Asset {
     type: AssetType.EQUIPO,
     name: 'Generador 5kW',
     description: 'Generador de respaldo',
+    manufacturer: null,
+    identifier: null,
+    identifierType: null,
+    vehicleSubtype: null,
     status: AssetStatus.DISPONIBLE,
     createdById: null,
     projectId: null,
@@ -347,6 +351,41 @@ describe('AssetsService', () => {
       ]);
       expect(txMock.assetHistoryEntry.create).toHaveBeenCalled();
       expect(result.code).toBe('GMT-EQ-0001');
+    });
+
+    it('usa el prefijo GMT-MQ y persiste fabricante/identificador para MAQUINARIA', async () => {
+      prismaMock.asset.count.mockResolvedValueOnce(0);
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
+        ...buildAssetRow({
+          id: 'a-mq',
+          code: 'GMT-MQ-0001',
+          type: AssetType.MAQUINARIA,
+          manufacturer: 'Caterpillar',
+          identifier: 'SER-123',
+          identifierType: 'NUMERO_SERIE',
+        }),
+        project: null,
+        assignedTo: null,
+        inUseBy: null,
+      });
+
+      const result = await service.create('u-1', {
+        type: AssetType.MAQUINARIA,
+        name: 'Excavadora 320',
+        manufacturer: 'Caterpillar',
+        identifier: 'SER-123',
+        identifierType: 'NUMERO_SERIE',
+      });
+
+      expect(prismaMock.asset.count).toHaveBeenCalledWith({ where: { type: AssetType.MAQUINARIA } });
+      const createArg = txMock.asset.create.mock.calls[0]?.[0] as {
+        data: { code: string; manufacturer: string | null; identifier: string | null };
+      };
+      expect(createArg.data.code).toBe('GMT-MQ-0001');
+      expect(createArg.data.manufacturer).toBe('Caterpillar');
+      expect(createArg.data.identifier).toBe('SER-123');
+      expect(result.code).toBe('GMT-MQ-0001');
+      expect(result.manufacturer).toBe('Caterpillar');
     });
   });
 

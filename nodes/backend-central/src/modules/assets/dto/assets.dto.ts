@@ -1,8 +1,23 @@
-import { AssetStatus, AssetType, DocumentStatus } from '@prisma/client';
-import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import {
+  AssetIdentifierType,
+  AssetStatus,
+  AssetType,
+  DocumentStatus,
+  VehicleSubtype,
+} from '@prisma/client';
+import {
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  ValidateIf,
+} from 'class-validator';
 
 export class CreateAssetDto {
-  @IsEnum(AssetType, { message: 'El tipo de activo debe ser EQUIPO o VEHICULO' })
+  @IsEnum(AssetType, { message: 'El tipo de activo debe ser EQUIPO, VEHICULO o MAQUINARIA' })
   type!: AssetType;
 
   @IsString()
@@ -12,6 +27,28 @@ export class CreateAssetDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  /** Fabricante o marca del activo. */
+  @IsString()
+  @IsOptional()
+  manufacturer?: string;
+
+  /** Identificador único: patente (vehículos) o número de serie (equipos/maquinaria). */
+  @IsString()
+  @IsOptional()
+  identifier?: string;
+
+  @IsEnum(AssetIdentifierType, { message: 'El tipo de identificador debe ser PATENTE o NUMERO_SERIE' })
+  @IsOptional()
+  identifierType?: AssetIdentifierType;
+
+  /** Subtipo de vehículo (solo aplica cuando type = VEHICULO). */
+  @ValidateIf((o: CreateAssetDto) => o.type === AssetType.VEHICULO)
+  @IsEnum(VehicleSubtype, {
+    message: 'El subtipo debe ser PICKUP, FURGON, AUTO, AUTOBUS o CAMION',
+  })
+  @IsOptional()
+  vehicleSubtype?: VehicleSubtype;
 
   @IsString()
   @IsOptional()

@@ -111,6 +111,10 @@ export class AssetsService {
       type: row.type,
       name: row.name,
       description: row.description,
+      manufacturer: row.manufacturer,
+      identifier: row.identifier,
+      identifierType: row.identifierType,
+      vehicleSubtype: row.vehicleSubtype,
       status: row.status,
       projectId: row.projectId,
       assignedToId: row.assignedToId,
@@ -182,7 +186,13 @@ export class AssetsService {
    * GMT-EQ-XXXX (Equipos) o GMT-VH-XXXX (Vehículos).
    */
   private async generateAssetCode(type: AssetType): Promise<string> {
-    const prefix = type === AssetType.EQUIPO ? 'GMT-EQ' : 'GMT-VH';
+    const prefix = (
+      {
+        [AssetType.EQUIPO]: 'GMT-EQ',
+        [AssetType.VEHICULO]: 'GMT-VH',
+        [AssetType.MAQUINARIA]: 'GMT-MQ',
+      } as Record<AssetType, string>
+    )[type];
 
     // Contar los activos existentes del mismo tipo
     const count = await this.prisma.asset.count({
@@ -236,6 +246,10 @@ export class AssetsService {
           type: dto.type,
           name: dto.name,
           description: dto.description ?? null,
+          manufacturer: dto.manufacturer ?? null,
+          identifier: dto.identifier ?? null,
+          identifierType: dto.identifierType ?? null,
+          vehicleSubtype: dto.vehicleSubtype ?? null,
           status: AssetStatus.DISPONIBLE,
           projectId: dto.projectId ?? null,
           assignedToId: dto.assignedToId ?? null,
@@ -267,7 +281,13 @@ export class AssetsService {
       }
 
       // Registrar historial
-      const typeLabel = dto.type === AssetType.EQUIPO ? 'Equipo' : 'Vehículo';
+      const typeLabel = (
+        {
+          [AssetType.EQUIPO]: 'Equipo',
+          [AssetType.VEHICULO]: 'Vehículo',
+          [AssetType.MAQUINARIA]: 'Maquinaria',
+        } as Record<AssetType, string>
+      )[dto.type];
       await this.createHistoryEntry(
         tx,
         created.id,
@@ -406,6 +426,10 @@ export class AssetsService {
       type: asset.type,
       name: asset.name,
       description: asset.description,
+      manufacturer: asset.manufacturer,
+      identifier: asset.identifier,
+      identifierType: asset.identifierType,
+      vehicleSubtype: asset.vehicleSubtype,
       status: asset.status,
       project: asset.project ? { name: asset.project.name } : null,
       assignedTo: asset.assignedTo

@@ -1,4 +1,10 @@
-import { AssetType, AssetStatus, DocumentStatus } from '@prisma/client';
+import {
+  AssetType,
+  AssetStatus,
+  AssetIdentifierType,
+  VehicleSubtype,
+  DocumentStatus,
+} from '@prisma/client';
 
 export interface AssetView {
   id: string;
@@ -6,6 +12,10 @@ export interface AssetView {
   type: AssetType;
   name: string;
   description: string | null;
+  manufacturer: string | null;
+  identifier: string | null;
+  identifierType: AssetIdentifierType | null;
+  vehicleSubtype: VehicleSubtype | null;
   status: AssetStatus;
   projectId: string | null;
   assignedToId: string | null;
@@ -24,6 +34,10 @@ export interface AssetPublicView {
   type: AssetType;
   name: string;
   description: string | null;
+  manufacturer: string | null;
+  identifier: string | null;
+  identifierType: AssetIdentifierType | null;
+  vehicleSubtype: VehicleSubtype | null;
   status: AssetStatus;
   project?: { name: string } | null;
   assignedTo?: { firstName: string; lastName: string } | null;
