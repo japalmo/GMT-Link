@@ -5,6 +5,7 @@ import { AssetStatus, AssetType, DocumentStatus, Prisma, ScopeType, AssetAccesso
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { PermissionService } from '../../authz/permission.service';
+import { ORG_ID } from '../../common/org.constant';
 import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { CreateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
@@ -18,6 +19,14 @@ import {
   ChecklistTemplateView,
   ChecklistSubmissionView,
 } from './assets.types';
+
+/** Estados no operativos: un activo en cualquiera de ellos no puede tomarse en uso. */
+const NON_OPERATIONAL_STATUSES: AssetStatus[] = [
+  AssetStatus.MANTENIMIENTO,
+  AssetStatus.BAJA,
+  AssetStatus.DEFECTUOSO,
+  AssetStatus.NO_DISPONIBLE,
+];
 
 @Injectable()
 export class AssetsService {
@@ -74,6 +83,31 @@ export class AssetsService {
       relation: 'can_run_checklist',
       object: `asset:${assetId}`,
     });
+  }
+
+  /**
+   * Exige que el usuario pueda GESTIONAR el activo (p.ej. cambiar su estado): FGA
+   * `can_manage_assets` sobre su proyecto, o `admin` de la organización si el activo
+   * es global. Reservado a acciones de gestión (NO a lecturas ni a tomar en uso).
+   */
+  private async assertCanManageAsset(
+    userId: string,
+    asset: { projectId: string | null },
+  ): Promise<void> {
+    const ok = asset.projectId
+      ? await this.fga.check({
+          user: `user:${userId}`,
+          relation: 'can_manage_assets',
+          object: `project:${asset.projectId}`,
+        })
+      : await this.fga.check({
+          user: `user:${userId}`,
+          relation: 'admin',
+          object: `organization:${ORG_ID}`,
+        });
+    if (!ok) {
+      throw new ForbiddenException('No tienes permiso para gestionar este activo.');
+    }
   }
 
   /**
@@ -464,16 +498,13 @@ export class AssetsService {
     if (!asset) {
       throw new NotFoundException('El activo no existe.');
     }
+    // Cambiar el estado es una acción de GESTIÓN (puede dar de baja el activo y
+    // expulsar a quien lo tenga en uso): exige can_manage_assets, no basta con poder
+    // ver el activo (hallazgo de auditoría: escalada desde permiso de solo lectura).
+    await this.assertCanManageAsset(userId, asset);
 
-    // Si transiciona a un estado no operativo (MANTENIMIENTO/BAJA/DEFECTUOSO/NO_DISPONIBLE)
-    // y estaba en uso, liberarlo primero.
-    const nonOperationalStatuses: AssetStatus[] = [
-      AssetStatus.MANTENIMIENTO,
-      AssetStatus.BAJA,
-      AssetStatus.DEFECTUOSO,
-      AssetStatus.NO_DISPONIBLE,
-    ];
-    const needsRelease = nonOperationalStatuses.includes(dto.status) && asset.inUseById;
+    // Si transiciona a un estado no operativo y estaba en uso, liberarlo primero.
+    const needsRelease = NON_OPERATIONAL_STATUSES.includes(dto.status) && asset.inUseById;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.asset.update({
@@ -583,29 +614,27 @@ export class AssetsService {
       throw new NotFoundException('El activo no existe.');
     }
 
-    if (asset.status === AssetStatus.MANTENIMIENTO || asset.status === AssetStatus.BAJA) {
-      throw new BadRequestException('El activo no está disponible para su uso (en mantenimiento o baja).');
-    }
-
-    if (asset.inUseById) {
-      throw new ConflictException(`El activo ya está en uso por otro colaborador.`);
+    if (NON_OPERATIONAL_STATUSES.includes(asset.status)) {
+      throw new BadRequestException('El activo no está disponible para su uso.');
     }
 
     await this.prisma.$transaction(async (tx) => {
-      const row = await tx.asset.update({
-        where: { id },
+      // Toma ATÓMICA: la condición inUseById:null va en el mismo UPDATE para que dos
+      // tomas concurrentes no ganen ambas (TOCTOU en la "disputa en uso").
+      const claimed = await tx.asset.updateMany({
+        where: { id, inUseById: null },
         data: {
           inUseById: userId,
           inUseSince: new Date(),
           status: AssetStatus.EN_USO,
         },
-        include: {
-          inUseBy: true,
-        },
       });
+      if (claimed.count === 0) {
+        throw new ConflictException('El activo ya está en uso por otro colaborador.');
+      }
 
-      const userActor = row.inUseBy;
-      const actorName = userActor ? `${userActor.firstName} ${userActor.lastName}` : userId;
+      const actor = await tx.user.findUnique({ where: { id: userId } });
+      const actorName = actor ? `${actor.firstName} ${actor.lastName}` : userId;
 
       await this.createHistoryEntry(
         tx,

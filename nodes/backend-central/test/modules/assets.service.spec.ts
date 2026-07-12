@@ -156,6 +156,7 @@ interface MockTx {
   asset: {
     create: MockFunction;
     update: MockFunction;
+    updateMany: MockFunction;
   };
   assetDocument: {
     create: MockFunction;
@@ -246,6 +247,7 @@ describe('AssetsService', () => {
       asset: {
         create: vi.fn((args) => Promise.resolve(buildAssetRow(args.data))),
         update: vi.fn((args) => Promise.resolve(buildAssetRow(args.data))),
+        updateMany: vi.fn(() => Promise.resolve({ count: 1 })),
       },
       assetDocument: {
         create: vi.fn((args) => Promise.resolve(buildDocRow(args.data))),
@@ -528,6 +530,17 @@ describe('AssetsService', () => {
       expect(txMock.assetHistoryEntry.create).toHaveBeenCalled();
       expect(updated.status).toBe(AssetStatus.MANTENIMIENTO);
     });
+
+    it('rechaza (403) si el usuario no puede gestionar el activo (solo lectura)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow());
+      // assertCanManageAsset: sin can_manage_assets / admin => fga.check falsy.
+      fgaMock.check.mockResolvedValueOnce(false);
+
+      await expect(
+        service.updateStatus('a-1', 'u-viewer', { status: AssetStatus.MANTENIMIENTO }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(txMock.asset.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('disputa en uso', () => {
@@ -541,9 +554,10 @@ describe('AssetsService', () => {
       });
 
       const updated = await service.takeUse('a-1', 'u-1');
-      expect(txMock.asset.update).toHaveBeenCalledWith(
+      // Toma ATÓMICA: updateMany con la condición inUseById:null en el mismo statement.
+      expect(txMock.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'a-1' },
+          where: { id: 'a-1', inUseById: null },
           data: expect.objectContaining({
             status: AssetStatus.EN_USO,
             inUseById: 'u-1',
@@ -553,10 +567,19 @@ describe('AssetsService', () => {
       expect(updated.inUseById).toBe('u-1');
     });
 
-    it('takeUse lanza ConflictException si ya está en uso', async () => {
+    it('takeUse lanza ConflictException si la toma atómica no encuentra el activo libre', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ inUseById: 'u-other' }));
+      txMock.asset.updateMany.mockResolvedValueOnce({ count: 0 });
 
       await expect(service.takeUse('a-1', 'u-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('takeUse rechaza (400) un activo en estado no operativo (DEFECTUOSO)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DEFECTUOSO }),
+      );
+
+      await expect(service.takeUse('a-1', 'u-1')).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

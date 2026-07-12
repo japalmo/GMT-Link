@@ -128,7 +128,6 @@ export class AssetsController {
    * Cambia el estado del activo (DISPONIBLE, MANTENIMIENTO, etc.).
    */
   @Put(':id/status')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
   updateStatus(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
