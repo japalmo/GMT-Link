@@ -1,4 +1,6 @@
-export type AssetType = 'EQUIPO' | 'VEHICULO';
+export type AssetType = 'EQUIPO' | 'VEHICULO' | 'MAQUINARIA';
+export type VehicleSubtype = 'PICKUP' | 'FURGON' | 'AUTO' | 'AUTOBUS' | 'CAMION';
+export type AssetIdentifierType = 'PATENTE' | 'NUMERO_SERIE';
 export type AssetStatus =
   | 'DISPONIBLE'
   | 'EN_USO'
@@ -15,6 +17,10 @@ export interface AssetView {
   name: string;
   description: string | null;
   status: AssetStatus;
+  manufacturer: string | null;
+  identifier: string | null;
+  identifierType: AssetIdentifierType | null;
+  vehicleSubtype: VehicleSubtype | null;
   projectId: string | null;
   assignedToId: string | null;
   inUseById: string | null;
@@ -33,6 +39,10 @@ export interface AssetPublicView {
   name: string;
   description: string | null;
   status: AssetStatus;
+  manufacturer: string | null;
+  identifier: string | null;
+  identifierType: AssetIdentifierType | null;
+  vehicleSubtype: VehicleSubtype | null;
   project?: { name: string } | null;
   assignedTo?: { firstName: string; lastName: string } | null;
   inUseBy?: { firstName: string; lastName: string } | null;
@@ -68,10 +78,37 @@ export interface CreateAssetInput {
   type: AssetType;
   name: string;
   description?: string;
+  manufacturer?: string;
+  identifier?: string;
+  identifierType?: AssetIdentifierType;
+  vehicleSubtype?: VehicleSubtype;
   projectId?: string;
   assignedToId?: string;
   metadata?: Record<string, unknown>;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Labels es-CL para tipos y clasificaciones de activos                       */
+/* -------------------------------------------------------------------------- */
+
+export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  EQUIPO: 'Equipo',
+  VEHICULO: 'Vehículo',
+  MAQUINARIA: 'Maquinaria',
+};
+
+export const VEHICLE_SUBTYPE_LABELS: Record<VehicleSubtype, string> = {
+  PICKUP: 'Pickup',
+  FURGON: 'Furgón',
+  AUTO: 'Auto',
+  AUTOBUS: 'Autobús',
+  CAMION: 'Camión',
+};
+
+export const IDENTIFIER_TYPE_LABELS: Record<AssetIdentifierType, string> = {
+  PATENTE: 'Patente',
+  NUMERO_SERIE: 'Número de serie',
+};
 
 export interface ReviewAssetDocInput {
   status: 'APROBADO' | 'RECHAZADO';

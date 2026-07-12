@@ -4,13 +4,17 @@ import { getPublicAsset } from '@/lib/api';
 import {
   Wrench,
   Car,
+  Construction,
   Briefcase,
   User,
+  Factory,
+  Hash,
   ShieldAlert,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { AssetPublicView, AssetStatus } from '@/types/assets';
+import { ASSET_TYPE_LABELS, IDENTIFIER_TYPE_LABELS } from '@/types/assets';
 
 export default function PublicAssetPage(): ReactNode {
   const { code } = useParams<{ code: string }>();
@@ -89,10 +93,12 @@ export default function PublicAssetPage(): ReactNode {
 
             <CardHeader className="text-center pb-4">
               <div className="mx-auto size-16 rounded-full bg-primary/5 border border-primary/10 flex items-center justify-center mb-3">
-                {asset.type === 'EQUIPO' ? (
-                  <Wrench className="size-8 text-primary" />
-                ) : (
+                {asset.type === 'VEHICULO' ? (
                   <Car className="size-8 text-primary" />
+                ) : asset.type === 'MAQUINARIA' ? (
+                  <Construction className="size-8 text-primary" />
+                ) : (
+                  <Wrench className="size-8 text-primary" />
                 )}
               </div>
               <CardTitle className="text-xl font-bold text-foreground">{asset.name}</CardTitle>
@@ -105,7 +111,7 @@ export default function PublicAssetPage(): ReactNode {
               <div className="flex justify-between items-center border-b border-border/60 pb-3">
                 <span className="text-muted-foreground">Tipo de Activo:</span>
                 <span className="font-semibold text-foreground">
-                  {asset.type === 'EQUIPO' ? 'Equipo / Instrumento' : 'Vehículo de Flota'}
+                  {ASSET_TYPE_LABELS[asset.type]}
                 </span>
               </div>
 
@@ -113,6 +119,25 @@ export default function PublicAssetPage(): ReactNode {
                 <span className="text-muted-foreground">Estado Operativo:</span>
                 {statusBadge(asset.status)}
               </div>
+
+              {asset.manufacturer && (
+                <div className="flex justify-between items-center border-b border-border/60 pb-3">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Factory className="size-4" /> Fabricante:
+                  </span>
+                  <span className="font-semibold text-foreground">{asset.manufacturer}</span>
+                </div>
+              )}
+
+              {asset.identifier && (
+                <div className="flex justify-between items-center border-b border-border/60 pb-3">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Hash className="size-4" />{' '}
+                    {asset.identifierType ? IDENTIFIER_TYPE_LABELS[asset.identifierType] : 'Identificador'}:
+                  </span>
+                  <span className="font-mono font-semibold text-foreground">{asset.identifier}</span>
+                </div>
+              )}
 
               <div className="flex justify-between items-center border-b border-border/60 pb-3">
                 <span className="text-muted-foreground flex items-center gap-1.5">

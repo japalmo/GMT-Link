@@ -32,6 +32,7 @@ import {
   Play,
   Square,
   Navigation,
+  Construction,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -72,7 +73,15 @@ import type {
   ChecklistSubmissionView,
   ChecklistTemplateItem,
   ChecklistAnswer,
+  VehicleSubtype,
+  AssetIdentifierType,
 } from '@/types/assets';
+import {
+  ASSET_TYPE_LABELS,
+  VEHICLE_SUBTYPE_LABELS,
+  IDENTIFIER_TYPE_LABELS,
+} from '@/types/assets';
+import { formatDate } from '@/lib/format';
 
 // Types for select users
 interface UserOption {
@@ -81,7 +90,7 @@ interface UserOption {
   lastName: string;
 }
 
-type RecursosTab = 'equipos' | 'vehiculos' | 'insumos' | 'proveedores' | 'bodegas';
+type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria' | 'insumos' | 'proveedores' | 'bodegas';
 
 export default function RecursosPage(): ReactNode {
   // Proveedores y Bodegas solo son visibles para roles de gestión (§ gating de
@@ -99,11 +108,12 @@ export default function RecursosPage(): ReactNode {
     }
   }, [canManageSupplyChain, activeTab]);
 
-  const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos';
+  const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos' || activeTab === 'maquinaria';
 
   const tabItems: TabItem<RecursosTab>[] = [
     { value: 'equipos', label: 'Equipos', icon: Wrench },
     { value: 'vehiculos', label: 'Vehículos', icon: Car },
+    { value: 'maquinaria', label: 'Maquinaria', icon: Construction },
     { value: 'insumos', label: 'Insumos', icon: Package },
     ...(canManageSupplyChain
       ? ([
@@ -137,7 +147,13 @@ export default function RecursosPage(): ReactNode {
             <AssetDetailView id={selectedAssetId} onBack={() => setSelectedAssetId(null)} />
           ) : (
             <ActivosCatalogView
-              subsection={activeTab === 'vehiculos' ? 'vehiculos' : 'equipos'}
+              subsection={
+                activeTab === 'vehiculos'
+                  ? 'vehiculos'
+                  : activeTab === 'maquinaria'
+                    ? 'maquinaria'
+                    : 'equipos'
+              }
               onSelectAsset={setSelectedAssetId}
             />
           )
@@ -164,8 +180,11 @@ export default function RecursosPage(): ReactNode {
    ========================================================================== */
 
 interface ActivosCatalogViewProps {
-  /** Subsección dedicada: 'equipos' filtra type=EQUIPO, 'vehiculos' type=VEHICULO. */
-  subsection: 'equipos' | 'vehiculos';
+  /**
+   * Subsección dedicada: 'equipos' filtra type=EQUIPO, 'vehiculos' type=VEHICULO,
+   * 'maquinaria' type=MAQUINARIA.
+   */
+  subsection: 'equipos' | 'vehiculos' | 'maquinaria';
   onSelectAsset: (id: string) => void;
 }
 
@@ -174,7 +193,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const { assets, loading, error, create, takeUse, releaseUse } = useAssets();
   const { projects } = useProjects();
   const [users, setUsers] = useState<UserOption[]>([]);
-  const isVehicles = subsection === 'vehiculos';
+  // Tipo de activo real de la subsección: fija el filtro, el alta y el encabezado.
+  const subsectionType: AssetType =
+    subsection === 'vehiculos' ? 'VEHICULO' : subsection === 'maquinaria' ? 'MAQUINARIA' : 'EQUIPO';
 
   // Botón "Nuevo" gateado por permiso de gestión de activos (useHasPermission);
   // el tipo del alta se fija según la subsección activa.
@@ -192,6 +213,10 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const [newDesc, setNewDesc] = useState('');
   const [newProjId, setNewProjId] = useState('');
   const [newAssignedId, setNewAssignedId] = useState('');
+  // Campos comunes de identificación (aplican a todo tipo de activo)
+  const [newManufacturer, setNewManufacturer] = useState('');
+  const [newIdentifier, setNewIdentifier] = useState('');
+  const [newVehicleSubtype, setNewVehicleSubtype] = useState<VehicleSubtype | ''>('');
   // Subtype metadata
   const [eqCycles, setEqCycles] = useState('0');
   const [eqCalibration, setEqCalibration] = useState('');
@@ -223,7 +248,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       asset.code.toLowerCase().includes(search.toLowerCase()) ||
       (asset.description && asset.description.toLowerCase().includes(search.toLowerCase()));
 
-    const matchesTab = isVehicles ? asset.type === 'VEHICULO' : asset.type === 'EQUIPO';
+    const matchesTab = asset.type === subsectionType;
     const matchesStatus = filterStatus === 'ALL' || asset.status === filterStatus;
     const matchesProj = filterProj === 'ALL' || asset.projectId === filterProj;
 
@@ -235,9 +260,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     setActioning(id);
     try {
       await takeUse(id);
-      toast.success('Activo tomado con éxito.');
+      toast.success('Activo puesto en uso con éxito.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al tomar el activo.');
+      toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
     } finally {
       setActioning(null);
     }
@@ -262,6 +287,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     setNewDesc('');
     setNewProjId('');
     setNewAssignedId('');
+    setNewManufacturer('');
+    setNewIdentifier('');
+    setNewVehicleSubtype('');
     setEqCycles('0');
     setEqCalibration('');
     setVhKm('0');
@@ -285,16 +313,28 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       if (eqCalibration) {
         metadata.calibrationDate = new Date(eqCalibration).toISOString();
       }
-    } else {
+    } else if (newType === 'VEHICULO') {
       metadata.odometerKm = parseInt(vhKm || '0', 10);
       metadata.plateCode = vhPlaca.toUpperCase();
     }
+
+    // Los vehículos se identifican por patente (mismo valor que la placa de la
+    // metadata); equipos y maquinaria por número de serie.
+    const identifierType: AssetIdentifierType = newType === 'VEHICULO' ? 'PATENTE' : 'NUMERO_SERIE';
+    const identifier =
+      newType === 'VEHICULO'
+        ? (vhPlaca ? vhPlaca.toUpperCase() : undefined)
+        : (newIdentifier || undefined);
 
     try {
       await create({
         type: newType,
         name: newName,
         description: newDesc || undefined,
+        manufacturer: newManufacturer || undefined,
+        identifier,
+        identifierType,
+        vehicleSubtype: newType === 'VEHICULO' ? (newVehicleSubtype || undefined) : undefined,
         projectId: newProjId || undefined,
         assignedToId: newAssignedId || undefined,
         metadata,
@@ -375,12 +415,16 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
           {canCreate && (
             <Button
               onClick={() => {
-                setNewType(isVehicles ? 'VEHICULO' : 'EQUIPO');
+                setNewType(subsectionType);
                 setCreateModalOpen(true);
               }}
             >
               <Plus className="size-4 mr-2" />
-              {isVehicles ? 'Nuevo Vehículo' : 'Nuevo Equipo'}
+              {subsection === 'vehiculos'
+                ? 'Nuevo Vehículo'
+                : subsection === 'maquinaria'
+                  ? 'Nueva Maquinaria'
+                  : 'Nuevo Equipo'}
             </Button>
           )}
         </div>
@@ -389,14 +433,28 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       {/* Encabezado de la subsección dedicada (Equipos o Vehículos) */}
       <div className="flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          {isVehicles ? <Car className="size-5" /> : <Wrench className="size-5" />}
+          {subsection === 'vehiculos' ? (
+            <Car className="size-5" />
+          ) : subsection === 'maquinaria' ? (
+            <Construction className="size-5" />
+          ) : (
+            <Wrench className="size-5" />
+          )}
         </div>
         <div>
-          <h2 className="text-lg font-semibold">{isVehicles ? 'Vehículos de Flota' : 'Equipos e Instrumentos'}</h2>
+          <h2 className="text-lg font-semibold">
+            {subsection === 'vehiculos'
+              ? 'Vehículos de Flota'
+              : subsection === 'maquinaria'
+                ? 'Maquinaria'
+                : 'Equipos e Instrumentos'}
+          </h2>
           <p className="text-xs text-muted-foreground">
-            {isVehicles
+            {subsection === 'vehiculos'
               ? 'Camionetas y vehículos con checklist de camioneta, telemetría y kilometraje.'
-              : 'Instrumentos, herramientas y equipos con ciclos de carga y calibración.'}
+              : subsection === 'maquinaria'
+                ? 'Maquinaria y equipos pesados con fabricante e identificador de serie.'
+                : 'Instrumentos, herramientas y equipos con ciclos de carga y calibración.'}
           </p>
         </div>
       </div>
@@ -422,14 +480,17 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                 <TableHead>Estado</TableHead>
                 <TableHead>Proyecto</TableHead>
                 <TableHead>Responsable</TableHead>
-                {!isVehicles ? (
+                <TableHead>Fabricante</TableHead>
+                <TableHead>Identificador</TableHead>
+                {subsection === 'equipos' && (
                   <>
                     <TableHead>Ciclos de Carga</TableHead>
                     <TableHead>Próxima Calibración</TableHead>
                   </>
-                ) : (
+                )}
+                {subsection === 'vehiculos' && (
                   <>
-                    <TableHead>Patente/Placa</TableHead>
+                    <TableHead>Tipo de vehículo</TableHead>
                     <TableHead>Kilometraje</TableHead>
                   </>
                 )}
@@ -463,18 +524,34 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                         ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName.charAt(0)}.`
                         : 'Sin asignar'}
                     </TableCell>
-                    {!isVehicles ? (
+                    <TableCell>{asset.manufacturer || 'N/A'}</TableCell>
+                    <TableCell className="text-xs">
+                      {asset.identifier ? (
+                        <div className="flex flex-col">
+                          <span className="font-mono">{asset.identifier}</span>
+                          {asset.identifierType && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {IDENTIFIER_TYPE_LABELS[asset.identifierType]}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        'N/A'
+                      )}
+                    </TableCell>
+                    {subsection === 'equipos' && (
                       <>
                         <TableCell>{meta.chargeCycles !== undefined ? meta.chargeCycles : 'N/A'}</TableCell>
                         <TableCell>
-                          {meta.calibrationDate
-                            ? new Date(meta.calibrationDate).toLocaleDateString('es-CL')
-                            : 'N/A'}
+                          {meta.calibrationDate ? formatDate(meta.calibrationDate) : 'N/A'}
                         </TableCell>
                       </>
-                    ) : (
+                    )}
+                    {subsection === 'vehiculos' && (
                       <>
-                        <TableCell className="font-mono">{meta.plateCode || 'N/A'}</TableCell>
+                        <TableCell>
+                          {asset.vehicleSubtype ? VEHICLE_SUBTYPE_LABELS[asset.vehicleSubtype] : 'N/A'}
+                        </TableCell>
                         <TableCell>{meta.odometerKm !== undefined ? `${meta.odometerKm} KM` : 'N/A'}</TableCell>
                       </>
                     )}
@@ -488,7 +565,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                             disabled={actioning !== null}
                             onClick={() => void handleTakeUse(asset.id)}
                           >
-                            {actioning === asset.id ? 'Tomando...' : 'Tomar'}
+                            {actioning === asset.id ? 'Poniendo en uso...' : 'Poner en uso'}
                           </Button>
                         )}
                         {asset.status === 'EN_USO' && (asset.inUseById === profile?.id || isAdmin) && (
@@ -545,8 +622,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                       value={newType}
                       onChange={(e) => setNewType(e.target.value as AssetType)}
                     >
-                      <option value="EQUIPO">Equipo / Instrumento</option>
-                      <option value="VEHICULO">Vehículo de Flota</option>
+                      <option value="EQUIPO">{ASSET_TYPE_LABELS.EQUIPO}</option>
+                      <option value="VEHICULO">{ASSET_TYPE_LABELS.VEHICULO}</option>
+                      <option value="MAQUINARIA">{ASSET_TYPE_LABELS.MAQUINARIA}</option>
                     </Select>
                   </div>
 
@@ -569,6 +647,16 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
                     placeholder="Ej. Sismógrafo de 24 canales con batería"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="asset-manufacturer">Fabricante o marca</Label>
+                  <Input
+                    id="asset-manufacturer"
+                    value={newManufacturer}
+                    onChange={(e) => setNewManufacturer(e.target.value)}
+                    placeholder="Ej. Caterpillar, Toyota, Geometrics"
                   />
                 </div>
 
@@ -604,8 +692,40 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                   </div>
                 </div>
 
+                {/* Identificador: número de serie para equipo y maquinaria. Para
+                    vehículo se usa la patente de la metadata como identificador. */}
+                {(newType === 'EQUIPO' || newType === 'MAQUINARIA') && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="asset-identifier">Número de serie</Label>
+                    <Input
+                      id="asset-identifier"
+                      value={newIdentifier}
+                      onChange={(e) => setNewIdentifier(e.target.value)}
+                      placeholder="Ej. SN-000123"
+                    />
+                  </div>
+                )}
+
+                {/* Tipo de vehículo: solo aparece para vehículos y es opcional. */}
+                {newType === 'VEHICULO' && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="asset-veh-subtype">Tipo de vehículo</Label>
+                    <Select
+                      id="asset-veh-subtype"
+                      aria-label="Tipo de vehículo"
+                      value={newVehicleSubtype}
+                      onChange={(e) => setNewVehicleSubtype(e.target.value as VehicleSubtype | '')}
+                    >
+                      <option value="">Sin especificar</option>
+                      {(Object.keys(VEHICLE_SUBTYPE_LABELS) as VehicleSubtype[]).map((key) => (
+                        <option key={key} value={key}>{VEHICLE_SUBTYPE_LABELS[key]}</option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+
                 {/* Subtype metadata fields */}
-                {newType === 'EQUIPO' ? (
+                {newType === 'EQUIPO' && (
                   <div className="border border-border p-3 rounded-lg bg-muted/20 flex flex-col gap-3">
                     <p className="text-xs font-semibold text-primary">Metadata de Equipo</p>
                     <div className="grid grid-cols-2 gap-3">
@@ -631,7 +751,8 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                       </div>
                     </div>
                   </div>
-                ) : (
+                )}
+                {newType === 'VEHICULO' && (
                   <div className="border border-border p-3 rounded-lg bg-muted/20 flex flex-col gap-3">
                     <p className="text-xs font-semibold text-primary">Metadata de Vehículo</p>
                     <div className="grid grid-cols-2 gap-3">
@@ -854,10 +975,10 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     setActioning('takeUse');
     try {
       await takeUse(id);
-      toast.success('Activo tomado con éxito.');
+      toast.success('Activo puesto en uso con éxito.');
       void loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al tomar el activo.');
+      toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
     } finally {
       setActioning(null);
     }
@@ -1221,7 +1342,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               <div className="space-y-3">
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Tipo de Recurso:</span>
-                  <span className="font-medium text-foreground">{asset.type === 'EQUIPO' ? 'Equipo/Instrumento' : 'Vehículo'}</span>
+                  <span className="font-medium text-foreground">{ASSET_TYPE_LABELS[asset.type]}</span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Estado actual:</span>
@@ -1255,19 +1376,37 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               </div>
 
               {/* Subtype metadata details rendering */}
-              {asset.metadata && Object.keys(asset.metadata).length > 0 && (() => {
+              {(() => {
                 interface AssetMetadata {
                   chargeCycles?: number | string;
                   calibrationDate?: string;
                   odometerKm?: number | string;
                   plateCode?: string;
                 }
-                const meta = asset.metadata as AssetMetadata;
+                const meta = (asset.metadata ?? {}) as AssetMetadata;
                 return (
                   <div className="col-span-full mt-2 bg-muted/20 border p-3 rounded-lg">
                     <p className="text-xs font-semibold text-primary mb-2">Especificaciones de Ficha</p>
                     <div className="grid grid-cols-2 gap-4">
-                      {asset.type === 'EQUIPO' ? (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Fabricante:</span>
+                        <span className="font-medium text-foreground">{asset.manufacturer || 'No declarado'}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {asset.identifierType ? IDENTIFIER_TYPE_LABELS[asset.identifierType] : 'Identificador'}:
+                        </span>
+                        <span className="font-mono text-foreground">{asset.identifier || 'No declarado'}</span>
+                      </div>
+                      {asset.type === 'VEHICULO' && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Tipo de vehículo:</span>
+                          <span className="font-medium text-foreground">
+                            {asset.vehicleSubtype ? VEHICLE_SUBTYPE_LABELS[asset.vehicleSubtype] : 'No declarado'}
+                          </span>
+                        </div>
+                      )}
+                      {asset.type === 'EQUIPO' && (
                         <>
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Ciclos de uso:</span>
@@ -1276,13 +1415,12 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Próxima Calibración:</span>
                             <span className="font-medium text-foreground">
-                              {meta.calibrationDate
-                                ? new Date(meta.calibrationDate).toLocaleDateString('es-CL')
-                                : 'No declarada'}
+                              {meta.calibrationDate ? formatDate(meta.calibrationDate) : 'No declarada'}
                             </span>
                           </div>
                         </>
-                      ) : (
+                      )}
+                      {asset.type === 'VEHICULO' && (
                         <>
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Kilometraje acumulado:</span>
@@ -1324,12 +1462,12 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                 )}
                 {asset.status === 'DISPONIBLE' && (
                   <Button size="sm" onClick={() => void handleTakeUse()} disabled={actioning !== null}>
-                    {actioning === 'takeUse' ? 'Tomando...' : 'Tomar en Uso'}
+                    {actioning === 'takeUse' ? 'Poniendo en uso...' : 'Poner en uso'}
                   </Button>
                 )}
                 {asset.status === 'EN_USO' && (asset.inUseById === profile?.id || isAdmin) && (
                   <Button size="sm" variant="outline" onClick={() => void handleReleaseUse()} disabled={actioning !== null}>
-                    {actioning === 'releaseUse' ? 'Liberando...' : 'Liberar Uso'}
+                    {actioning === 'releaseUse' ? 'Liberando...' : 'Liberar'}
                   </Button>
                 )}
               </div>
@@ -1494,7 +1632,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                               Estado: <span className="font-medium text-foreground">{doc.status}</span>
                               {doc.expirationDate && (
                                 <span className="ml-2 font-mono text-[10px]">
-                                  (Vence: {new Date(doc.expirationDate).toLocaleDateString('es-CL')})
+                                  (Vence: {formatDate(doc.expirationDate)})
                                 </span>
                               )}
                             </p>

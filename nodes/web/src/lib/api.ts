@@ -1456,7 +1456,18 @@ export function listAssets(filters: {
 export function createAsset(dto: CreateAssetInput): Promise<AssetView> {
   return request<AssetView>('/assets', {
     method: 'POST',
-    body: JSON.stringify(dto),
+    body: JSON.stringify({
+      type: dto.type,
+      name: dto.name,
+      description: dto.description,
+      manufacturer: dto.manufacturer,
+      identifier: dto.identifier,
+      identifierType: dto.identifierType,
+      vehicleSubtype: dto.vehicleSubtype,
+      projectId: dto.projectId,
+      assignedToId: dto.assignedToId,
+      metadata: dto.metadata,
+    }),
   });
 }
 
