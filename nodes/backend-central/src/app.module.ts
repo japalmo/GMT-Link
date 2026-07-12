@@ -25,7 +25,6 @@ import { RolesModule } from './modules/roles/roles.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { LiquidationsModule } from './modules/liquidations/liquidations.module';
 
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
@@ -62,7 +61,6 @@ import { FaenasModule } from './modules/faenas/faenas.module';
     PermissionRequestsModule,
     ReimbursementsModule,
     OvertimeModule,
-    LiquidationsModule,
     ProjectsModule,
     TasksModule,
     ProjectDocumentsModule,

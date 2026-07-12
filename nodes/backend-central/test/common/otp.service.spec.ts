@@ -156,6 +156,27 @@ describe('OtpService', () => {
       });
     });
 
+    it('trata un hash almacenado de longitud distinta como no-match sin lanzar error inesperado', async () => {
+      const row: OtpRow = {
+        id: 'otp-1',
+        // Hash malformado: al decodificar hex da una longitud en bytes distinta
+        // a la del SHA-256 esperado, ejercitando la rama de longitud desigual de
+        // la comparación en tiempo constante (no debe crashear).
+        codeHash: 'abcd',
+        expiresAt: new Date(Date.now() + 10_000),
+        attempts: 0,
+      };
+      prismaMock.otpCode.findFirst.mockResolvedValue(row);
+
+      await expect(
+        service.verify('user@gmt.cl', OTP_PURPOSES.CHANGE_EMAIL, '123456'),
+      ).rejects.toThrow('Código OTP incorrecto.');
+      expect(prismaMock.otpCode.update).toHaveBeenCalledWith({
+        where: { id: 'otp-1' },
+        data: { attempts: { increment: 1 } },
+      });
+    });
+
     it('devuelve true y consume el OTP cuando el código es correcto', async () => {
       const code = '654321';
       const row: OtpRow = {

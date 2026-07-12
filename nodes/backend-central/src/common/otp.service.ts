@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { randomInt, createHash } from 'crypto';
+import { randomInt, createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** TTL de un OTP: 5 minutos de validez desde su emisión. */
@@ -25,6 +25,19 @@ export const OTP_PURPOSES = {
 /** SHA-256 hex del código: nunca se persiste el OTP en claro. */
 function hashOtp(otp: string): string {
   return createHash('sha256').update(otp).digest('hex');
+}
+
+/**
+ * Compara dos hashes SHA-256 (hex) en tiempo constante para no filtrar
+ * información por timing al verificar el OTP. Ambos son hex de la misma longitud
+ * en el uso normal; si por algún motivo difirieran en longitud, se trata como
+ * no-match sin lanzar (`timingSafeEqual` exige buffers de igual tamaño).
+ */
+function hashesEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'hex');
+  const bufB = Buffer.from(b, 'hex');
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 /**
@@ -93,7 +106,7 @@ export class OtpService {
       throw new BadRequestException('Demasiados intentos fallidos. Solicita un nuevo código.');
     }
 
-    if (record.codeHash !== hashOtp(code)) {
+    if (!hashesEqual(record.codeHash, hashOtp(code))) {
       await this.prisma.otpCode.update({
         where: { id: record.id },
         data: { attempts: { increment: 1 } },

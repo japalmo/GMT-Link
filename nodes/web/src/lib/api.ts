@@ -21,7 +21,6 @@ import type {
   FinanceStatus,
   OvertimeView,
   ReimbursementView,
-  LiquidationView,
 } from '@/types/finance';
 import type { NotificationView } from '@/types/notifications';
 import type {
@@ -1193,38 +1192,6 @@ export function payOvertime(id: string): Promise<OvertimeView> {
     `/overtime/${encodeURIComponent(id)}/pay`,
     { method: 'POST' },
   );
-}
-
-/* --- Liquidaciones --- */
-
-/** `GET /liquidations/me` — obtiene las liquidaciones propias del colaborador. */
-export function listMyLiquidations(): Promise<LiquidationView[]> {
-  return request<LiquidationView[]>('/liquidations/me');
-}
-
-/** `GET /liquidations` — obtiene todas las liquidaciones del sistema (gestor). */
-export function listAllLiquidations(): Promise<LiquidationView[]> {
-  return request<LiquidationView[]>('/liquidations');
-}
-
-/** `POST /liquidations` — sube una liquidación de sueldo PDF (gestor). */
-export function uploadLiquidation(
-  userId: string,
-  period: string,
-  file: File,
-): Promise<LiquidationView> {
-  const formData = new FormData();
-  formData.append('userId', userId);
-  formData.append('period', period);
-  formData.append('file', file);
-  return uploadRequest<LiquidationView>('/liquidations', formData);
-}
-
-/** `DELETE /liquidations/:id` — elimina una liquidación (gestor). */
-export function deleteLiquidation(id: string): Promise<void> {
-  return request<void>(`/liquidations/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
 }
 
 /* --- Proyectos --- */

@@ -182,19 +182,6 @@ export interface CreateOvertimeInput {
   reason?: string;
 }
 
-/** Vista de una liquidación de sueldo (espejo del backend). Huérfana tras C2
- * (la subsección se quitó de la UI), pero el tipo se conserva para el hook/api. */
-export interface LiquidationView {
-  id: string;
-  userId: string;
-  /** Mes en formato YYYY-MM. */
-  period: string;
-  fileUrl: string;
-  uploadedById: string | null;
-  createdAt: string;
-  user?: FinanceRequester;
-}
-
 /* ─────────────────────────── Vista general (§5.2/§5.3) ─────────────────────── */
 
 /** Referencia mínima de proyecto para hidratar nombre/cliente en la fila unificada.
