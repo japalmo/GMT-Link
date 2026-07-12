@@ -33,6 +33,8 @@ model User {
   avatarUrl              String?
   passwordHash           String? // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
   status                 UserStatus                @default(PENDING_FIRST_LOGIN)
+  tokenVersion           Int                       @default(0) // época de sesión (A3): incrementar invalida todos los JWT previos del usuario
+  firstLoginAt           DateTime? // primer acceso completado; null = invitación aún no usada
   points                 Int                       @default(0) // gamificación
   isClientUser           Boolean                   @default(false)
   clientId               String?

@@ -98,7 +98,7 @@ export class AuthController {
   async login(@Body() body: LoginDto): Promise<{ token: string }> {
     const user = await this.prisma.user.findUnique({
       where: { username: body.username },
-      select: { id: true, passwordHash: true, status: true },
+      select: { id: true, passwordHash: true, status: true, tokenVersion: true },
     });
     const ok = user?.passwordHash ? await verifyPassword(body.password, user.passwordHash) : false;
     if (!user || !ok) {
@@ -112,7 +112,7 @@ export class AuthController {
     if (user.status === 'SUSPENDED') {
       throw new UnauthorizedException('Tu cuenta está suspendida. Contacta a un administrador.');
     }
-    return { token: signToken(user.id) };
+    return { token: signToken(user.id, user.tokenVersion) };
   }
 
   /** Datos del usuario autenticado. 401 si no hay sesión. */
@@ -237,7 +237,9 @@ export class AuthController {
     const passwordHash = await hashPassword(body.newPassword);
     await this.prisma.user.update({
       where: { id: authUser.id },
-      data: { passwordHash, status: 'ACTIVE' },
+      // firstLoginAt marca la invitación como USADA (distingue "invitada pendiente"
+      // de "suspendida tras uso" en la gestión de usuarios).
+      data: { passwordHash, status: 'ACTIVE', firstLoginAt: new Date() },
     });
     void this.gamification.awardPoints(authUser.id, 'FIRST_LOGIN');
     return { status: 'ACTIVE' };

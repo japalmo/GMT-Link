@@ -32,6 +32,7 @@ import type {
   CreateUserResponse,
   ImportErrorRow,
   ImportUsersResponse,
+  ResendInviteResponse,
   UserListItem,
   UserRolesResponse,
 } from './users.types';
@@ -117,6 +118,63 @@ export class UsersService {
     await this.trySendCredentialsEmail(email, dto, provisionalPassword);
 
     return { user: this.toProvisionedUser(user, roleKeys), provisionalPassword };
+  }
+
+  /**
+   * Revoca todas las sesiones activas del usuario incrementando su época de
+   * sesión (`tokenVersion`): cualquier JWT emitido antes deja de ser válido de
+   * inmediato (A3). Útil para forzar el cierre de sesión de una cuenta ACTIVA.
+   */
+  async revokeSessions(userId: string): Promise<void> {
+    await this.assertUserExists(userId);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+  }
+
+  /**
+   * Revoca el acceso de un usuario (lo suspende) e invalida cualquier token ya
+   * emitido. Pensado para invitaciones aún NO usadas ("se envió el token y no lo
+   * han usado"), pero también sirve para cortar el acceso de una cuenta activa.
+   */
+  async revokeInvite(userId: string): Promise<UserListItem> {
+    await this.assertUserExists(userId);
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { status: 'SUSPENDED', tokenVersion: { increment: 1 } },
+      include: { memberships: true },
+    });
+    return this.toListItem(updated);
+  }
+
+  /**
+   * Reenvía la invitación: regenera la clave provisoria y deja al usuario en
+   * PENDING_FIRST_LOGIN (reactivándolo si estaba suspendido sin haber ingresado).
+   * 409 si la invitación YA fue usada (firstLoginAt no null o cuenta ACTIVA), para
+   * no pisar la clave de alguien que ya definió la suya. Retorna la nueva clave
+   * provisoria (se muestra una vez en la UI, igual que al crear).
+   */
+  async resendInvite(userId: string): Promise<ResendInviteResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstLoginAt: true, status: true },
+    });
+    if (!user) {
+      throw new NotFoundException(`No existe un usuario con id "${userId}".`);
+    }
+    if (user.firstLoginAt !== null || user.status === 'ACTIVE') {
+      throw new ConflictException('La invitación ya fue usada: el usuario ya definió su contraseña.');
+    }
+    const provisionalPassword = generateProvisionalPassword();
+    const passwordHash = await hashPassword(provisionalPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      // Reemplazar el hash invalida la clave provisoria anterior; el bump de
+      // tokenVersion invalida cualquier token que hubiese quedado dando vueltas.
+      data: { passwordHash, status: 'PENDING_FIRST_LOGIN', tokenVersion: { increment: 1 } },
+    });
+    return { provisionalPassword };
   }
 
   /**
@@ -734,6 +792,7 @@ export class UsersService {
       roleKeys: this.collectRoleKeys(user.memberships.map((m) => m.roleKey)),
       memberships: user.memberships.map((m) => this.toUserMembership(m)),
       createdAt: user.createdAt.toISOString(),
+      firstLoginAt: user.firstLoginAt ? user.firstLoginAt.toISOString() : null,
     };
   }
 

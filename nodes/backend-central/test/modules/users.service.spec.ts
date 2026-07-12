@@ -241,6 +241,109 @@ const ALL_ROLES = new Set([
   'client_ito',
 ]);
 
+describe('UsersService — gestión de invitación y sesiones (A3)', () => {
+  function fullUser(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'u1',
+      firstName: 'Ana',
+      secondName: null,
+      lastName: 'Pérez',
+      secondLastName: null,
+      email: 'ana@gmt.cl',
+      username: 'ana',
+      emailInstitucional: 'ana@gmt.cl',
+      emailPersonal: null,
+      status: 'SUSPENDED',
+      isClientUser: false,
+      tokenVersion: 1,
+      firstLoginAt: null,
+      createdAt: new Date('2026-06-13T00:00:00.000Z'),
+      memberships: [],
+      ...overrides,
+    };
+  }
+
+  function serviceWith(userMock: {
+    findUnique: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  }): UsersService {
+    const prisma = { user: userMock } as unknown as PrismaService;
+    return new UsersService(prisma, buildFgaMock().fga, buildStorageMock(), buildRolesStub(), buildEmailMock());
+  }
+
+  it('revokeSessions incrementa la época de sesión (tokenVersion) del usuario', async () => {
+    const findUnique = vi.fn(() => Promise.resolve({ id: 'u1' }));
+    const update = vi.fn(() => Promise.resolve({}));
+    const service = serviceWith({ findUnique, update });
+
+    await service.revokeSessions('u1');
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { tokenVersion: { increment: 1 } },
+    });
+  });
+
+  it('revokeSessions lanza 404 si el usuario no existe', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(null));
+    const update = vi.fn();
+    const service = serviceWith({ findUnique, update });
+
+    await expect(service.revokeSessions('ghost')).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('revokeInvite suspende al usuario e incrementa tokenVersion', async () => {
+    const findUnique = vi.fn(() => Promise.resolve({ id: 'u1' }));
+    const update = vi.fn((args: { data: Record<string, unknown> }) =>
+      Promise.resolve(fullUser({ ...args.data })),
+    );
+    const service = serviceWith({ findUnique, update });
+
+    const result = await service.revokeInvite('u1');
+
+    const data = update.mock.calls[0]?.[0]?.data as { status: string; tokenVersion: unknown };
+    expect(data.status).toBe('SUSPENDED');
+    expect(data.tokenVersion).toEqual({ increment: 1 });
+    expect(result.status).toBe('SUSPENDED');
+  });
+
+  it('resendInvite regenera la clave provisoria de una invitación pendiente', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve({ firstLoginAt: null, status: 'PENDING_FIRST_LOGIN' }),
+    );
+    const update = vi.fn((_args: { data: Record<string, unknown> }) => Promise.resolve({}));
+    const service = serviceWith({ findUnique, update });
+
+    const { provisionalPassword } = await service.resendInvite('u1');
+
+    expect(provisionalPassword).toBeTruthy();
+    const data = update.mock.calls[0]?.[0]?.data as { status: string; passwordHash: string };
+    expect(data.status).toBe('PENDING_FIRST_LOGIN');
+    expect(typeof data.passwordHash).toBe('string');
+  });
+
+  it('resendInvite rechaza (409) si la invitación ya fue usada', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve({ firstLoginAt: new Date('2026-07-01T00:00:00.000Z'), status: 'ACTIVE' }),
+    );
+    const update = vi.fn();
+    const service = serviceWith({ findUnique, update });
+
+    await expect(service.resendInvite('u1')).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('resendInvite lanza 404 si el usuario no existe', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(null));
+    const update = vi.fn();
+    const service = serviceWith({ findUnique, update });
+
+    await expect(service.resendInvite('ghost')).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
 describe('UsersService.create', () => {
   let state: PrismaState;
 

@@ -49,6 +49,13 @@ export interface UserListItem {
   roleKeys: RoleKey[];
   memberships: UserMembership[];
   createdAt: string;
+  /** Primer acceso completado (ISO) o null si la invitación aún no se ha usado. */
+  firstLoginAt: string | null;
+}
+
+/** Respuesta de `POST /users/:id/resend-invite`: la nueva clave provisoria (se muestra una vez). */
+export interface ResendInviteResponse {
+  provisionalPassword: string;
 }
 
 /** Respuesta de asignar / quitar rol — EXTENDIDA (enmienda A4). */

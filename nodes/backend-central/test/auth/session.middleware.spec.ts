@@ -11,6 +11,7 @@ interface UserRow {
   id: string;
   email: string;
   status: string;
+  tokenVersion: number;
 }
 
 interface Mocks {
@@ -53,9 +54,14 @@ describe('SessionMiddleware', () => {
   });
 
   it('setea authUser con un JWT propio válido y usuario existente', async () => {
-    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl', status: 'ACTIVE' });
+    const { prisma, findUnique } = buildMocks({
+      id: 'u1',
+      email: 'colaborador@gmt.cl',
+      status: 'ACTIVE',
+      tokenVersion: 0,
+    });
     const mw = new SessionMiddleware(prisma);
-    const token = signToken('u1');
+    const token = signToken('u1', 0);
     const req = buildReq(`Bearer ${token}`);
     const next: NextFunction = vi.fn();
 
@@ -63,16 +69,40 @@ describe('SessionMiddleware', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      select: { id: true, email: true, status: true },
+      select: { id: true, email: true, status: true, tokenVersion: true },
     });
     expect(req.authUser).toEqual({ id: 'u1', email: 'colaborador@gmt.cl' });
     expect(next).toHaveBeenCalledTimes(1);
   });
 
   it('NO setea authUser cuando el usuario está SUSPENDED (corta tokens ya emitidos, hallazgo A1)', async () => {
-    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl', status: 'SUSPENDED' });
+    const { prisma, findUnique } = buildMocks({
+      id: 'u1',
+      email: 'colaborador@gmt.cl',
+      status: 'SUSPENDED',
+      tokenVersion: 0,
+    });
     const mw = new SessionMiddleware(prisma);
-    const token = signToken('u1');
+    const token = signToken('u1', 0);
+    const req = buildReq(`Bearer ${token}`);
+    const next: NextFunction = vi.fn();
+
+    await mw.use(req, RES, next);
+
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    expect(req.authUser).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('NO setea authUser cuando el tokenVersion del JWT quedó desfasado (sesión revocada, A3)', async () => {
+    const { prisma, findUnique } = buildMocks({
+      id: 'u1',
+      email: 'colaborador@gmt.cl',
+      status: 'ACTIVE',
+      tokenVersion: 1, // el usuario ya rotó su época; el token viejo trae 0
+    });
+    const mw = new SessionMiddleware(prisma);
+    const token = signToken('u1', 0);
     const req = buildReq(`Bearer ${token}`);
     const next: NextFunction = vi.fn();
 
@@ -84,7 +114,12 @@ describe('SessionMiddleware', () => {
   });
 
   it('no setea authUser cuando el token es inválido', async () => {
-    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl', status: 'ACTIVE' });
+    const { prisma, findUnique } = buildMocks({
+      id: 'u1',
+      email: 'colaborador@gmt.cl',
+      status: 'ACTIVE',
+      tokenVersion: 0,
+    });
     const mw = new SessionMiddleware(prisma);
     const req = buildReq('Bearer token-invalido');
     const next: NextFunction = vi.fn();
@@ -99,7 +134,7 @@ describe('SessionMiddleware', () => {
   it('no setea authUser cuando no existe User en Postgres', async () => {
     const { prisma } = buildMocks(null);
     const mw = new SessionMiddleware(prisma);
-    const token = signToken('fantasma');
+    const token = signToken('fantasma', 0);
     const req = buildReq(`Bearer ${token}`);
     const next: NextFunction = vi.fn();
 

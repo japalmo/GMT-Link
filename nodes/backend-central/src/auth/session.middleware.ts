@@ -14,6 +14,10 @@ import './auth-request.types';
  * Cuentas suspendidas (hallazgo A1): si el `User` está `SUSPENDED` NO se puebla
  * `authUser` (se trata como no autenticado), de modo que un token ya emitido deja
  * de dar acceso apenas se suspende la cuenta — sin depender de revocación de JWT.
+ *
+ * Revocación de sesión (A3): además se compara la época de sesión del token
+ * (`payload.tokenVersion`) con la del usuario. Si difieren, el token fue revocado
+ * (cambio de clave, revocación explícita) y NO se puebla `authUser`.
  */
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
@@ -29,11 +33,12 @@ export class SessionMiddleware implements NestMiddleware {
     if (payload) {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true, status: true },
+        select: { id: true, email: true, status: true, tokenVersion: true },
       });
       // Cuenta inexistente o suspendida → no autenticar (corta tokens ya emitidos
-      // a cuentas dadas de baja). PENDING_FIRST_LOGIN/ACTIVE sí se pueblan.
-      if (user && user.status !== 'SUSPENDED') {
+      // a cuentas dadas de baja). Token revocado (tokenVersion desfasado) tampoco.
+      // PENDING_FIRST_LOGIN/ACTIVE con la época vigente sí se pueblan.
+      if (user && user.status !== 'SUSPENDED' && user.tokenVersion === payload.tokenVersion) {
         req.authUser = { id: user.id, email: user.email };
       }
     }

@@ -36,6 +36,8 @@ function buildUserRow(overrides: Partial<User> = {}): User {
     passwordHash: null,
     avatarUrl: null,
     status: 'ACTIVE',
+    tokenVersion: 0,
+    firstLoginAt: null,
     points: 10,
     isClientUser: false,
     clientId: null,

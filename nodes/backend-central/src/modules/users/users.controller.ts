@@ -29,6 +29,7 @@ import type { AssignRoleInput, ProjectAdminOption, ScopeType } from '@gmt-platfo
 import type {
   CreateUserResponse,
   ImportUsersResponse,
+  ResendInviteResponse,
   UserListItem,
   UserRolesResponse,
 } from './users.types';
@@ -152,6 +153,33 @@ export class UsersController {
     @Param('roleKey') roleKey: string,
   ): Promise<UserRolesResponse> {
     return this.usersService.removeRoleScoped(id, this.resolveScopedInput(roleKey));
+  }
+
+  /**
+   * Revoca todas las sesiones activas del usuario incrementando su época de sesión
+   * (invalida sus JWT). Para forzar el cierre de sesión de una cuenta ACTIVA.
+   */
+  @Post(':id/revoke-sessions')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  revokeSessions(@Param('id') id: string): Promise<void> {
+    return this.usersService.revokeSessions(id);
+  }
+
+  /** Revoca el acceso de un usuario (lo suspende e invalida sus tokens). */
+  @Post(':id/revoke-invite')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  revokeInvite(@Param('id') id: string): Promise<UserListItem> {
+    return this.usersService.revokeInvite(id);
+  }
+
+  /**
+   * Reenvía la invitación: regenera la clave provisoria y deja al usuario en
+   * PENDING_FIRST_LOGIN. 409 si la invitación ya fue usada.
+   */
+  @Post(':id/resend-invite')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  resendInvite(@Param('id') id: string): Promise<ResendInviteResponse> {
+    return this.usersService.resendInvite(id);
   }
 
   /** Completa un scope parcial con el default org (ORGANIZATION/ORG_ID) para el `AssignRoleInput`. */
