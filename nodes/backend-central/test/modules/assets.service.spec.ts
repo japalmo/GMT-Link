@@ -13,6 +13,7 @@ import type {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FgaService } from '../../src/fga/fga.service';
+import type { PermissionService } from '../../src/authz/permission.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 import { AssetsService } from '../../src/modules/assets/assets.service';
@@ -216,11 +217,16 @@ interface MockStorage {
   save: MockFunction;
 }
 
+interface MockPermissions {
+  scopeFilter: MockFunction;
+}
+
 describe('AssetsService', () => {
   let prismaMock: MockPrisma;
   let txMock: MockTx;
   let fgaMock: MockFga;
   let storageMock: MockStorage;
+  let permissionsMock: MockPermissions;
   let service: AssetsService;
 
   beforeEach(() => {
@@ -300,11 +306,18 @@ describe('AssetsService', () => {
       save: vi.fn(() => Promise.resolve({ url: 'http://localhost/new.pdf' })),
     };
 
+    // Por defecto: lector GLOBAL (asset:read con scope none) => ve todo. Cada
+    // test que necesite otro scope lo sobrescribe con mockResolvedValueOnce.
+    permissionsMock = {
+      scopeFilter: vi.fn(() => Promise.resolve({ kind: 'none' })),
+    };
+
     service = new AssetsService(
       prismaMock as unknown as PrismaService,
       fgaMock as unknown as FgaService,
       storageMock as unknown as StorageService,
       { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService,
+      permissionsMock as unknown as PermissionService,
     );
   });
 
@@ -336,26 +349,44 @@ describe('AssetsService', () => {
   });
 
   describe('listAll', () => {
-    it('lista todos los activos para un org_admin', async () => {
-      prismaMock.membership.findFirst.mockResolvedValueOnce({
-        roleKey: 'org_admin',
-        scopeType: ScopeType.ORGANIZATION,
-      });
+    it('lista TODOS los activos (incluidos los de proyecto) con asset:read GLOBAL (kind none)', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
       prismaMock.asset.findMany.mockResolvedValueOnce([
-        { ...buildAssetRow(), project: null, assignedTo: null, inUseBy: null },
+        { ...buildAssetRow({ projectId: 'p-9' }), project: null, assignedTo: null, inUseBy: null },
+        { ...buildAssetRow({ id: 'a-2', projectId: null }), project: null, assignedTo: null, inUseBy: null },
       ]);
 
       const list = await service.listAll('u-admin');
-      expect(list.length).toBe(1);
+
+      expect(list.length).toBe(2);
+      // GLOBAL => sin restricción de projectId.
+      expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+      // No se consultan membresías cuando el scope es GLOBAL.
+      expect(prismaMock.membership.findMany).not.toHaveBeenCalled();
+    });
+
+    it('lista proyectos asignados + globales con asset:read de PROJECT (kind projects)', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'projects', ids: ['p1'] });
+      prismaMock.asset.findMany.mockResolvedValueOnce([]);
+
+      await service.listAll('u-proj');
+
       expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: {},
+          where: {
+            OR: [
+              { projectId: { in: ['p1'] } },
+              { projectId: null },
+            ],
+          },
         }),
       );
     });
 
-    it('lista activos filtrados por proyectos accesibles para usuarios normales', async () => {
-      prismaMock.membership.findFirst.mockResolvedValueOnce(null);
+    it('cae al filtro por membresías cuando no tiene asset:read (scopeFilter null)', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null);
       prismaMock.membership.findMany.mockResolvedValueOnce([
         { scopeType: ScopeType.PROJECT, scopeId: 'p-1' },
       ]);
@@ -378,7 +409,24 @@ describe('AssetsService', () => {
   });
 
   describe('getById', () => {
-    it('obtiene el activo si FGA lo autoriza', async () => {
+    it('un lector GLOBAL (asset:read none) ve la ficha de un activo de proyecto sin tupla FGA', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
+      prismaMock.asset.findUnique.mockResolvedValueOnce({
+        ...buildAssetRow({ projectId: 'p-9' }),
+        project: null,
+        assignedTo: null,
+        inUseBy: null,
+      });
+
+      const asset = await service.getById('a-1', 'u-admin');
+
+      expect(asset.id).toBe('a-1');
+      // GLOBAL cortocircuita: no se consulta la tupla por-activo en OpenFGA.
+      expect(fgaMock.check).not.toHaveBeenCalled();
+    });
+
+    it('sin asset:read pero con tupla can_view_list sigue viendo la ficha (fallback FGA)', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null);
       prismaMock.asset.findUnique.mockResolvedValueOnce({
         ...buildAssetRow(),
         project: null,
@@ -388,6 +436,7 @@ describe('AssetsService', () => {
       fgaMock.check.mockResolvedValueOnce(true);
 
       const asset = await service.getById('a-1', 'u-1');
+
       expect(asset.id).toBe('a-1');
       expect(fgaMock.check).toHaveBeenCalledWith({
         user: 'user:u-1',
@@ -396,7 +445,8 @@ describe('AssetsService', () => {
       });
     });
 
-    it('lanza NotFoundException si FGA no lo autoriza', async () => {
+    it('sin asset:read ni tupla FGA lanza NotFoundException', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null);
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow());
       fgaMock.check.mockResolvedValueOnce(false);
 
@@ -490,7 +540,7 @@ describe('AssetsService', () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.EQUIPO }));
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
 
-      const res = await service.getChecklistTemplate('a-1');
+      const res = await service.getChecklistTemplate('a-1', 'u-1');
 
       expect(prismaMock.checklistTemplate.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -506,7 +556,7 @@ describe('AssetsService', () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
 
-      const res = await service.getChecklistTemplate('a-1');
+      const res = await service.getChecklistTemplate('a-1', 'u-1');
 
       expect(prismaMock.checklistTemplate.create).toHaveBeenCalledWith(
         expect.objectContaining({

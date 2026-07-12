@@ -4,6 +4,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import { AssetStatus, AssetType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
+import { PermissionService } from '../../authz/permission.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { CreateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
@@ -27,7 +28,72 @@ export class AssetsService {
     private readonly fga: FgaService,
     private readonly storage: StorageService,
     private readonly gamification: GamificationService,
+    private readonly permissions: PermissionService,
   ) {}
+
+  /**
+   * ¿Puede el usuario VER la ficha (y sub-recursos de lectura) de este activo?
+   *
+   * Regla funcional (ADR-0001): quien tenga `asset:read` con scope GLOBAL ve
+   * todo; con scope de proyectos, ve los de sus proyectos y los globales. Si no
+   * tiene el permiso funcional, se conserva el gate estructural por-activo de
+   * OpenFGA (usuario asignado / con `can_view_list` del proyecto) para no
+   * romper la retrocompatibilidad. No concede ninguna escritura.
+   */
+  private async canViewAsset(
+    userId: string,
+    asset: { id: string; projectId: string | null },
+  ): Promise<boolean> {
+    const filter = await this.permissions.scopeFilter(userId, 'asset:read');
+    if (filter) {
+      if (filter.kind === 'none') return true; // GLOBAL => ve todo
+      if (filter.kind === 'projects') {
+        if (asset.projectId === null) return true; // globales visibles (paridad con hoy)
+        if (filter.ids.includes(asset.projectId)) return true;
+      }
+    }
+    // Fallback estructural: usuario asignado / con can_view del proyecto ve su
+    // ficha aunque no tenga asset:read (retrocompatibilidad con el gate por-activo).
+    return this.fga.check({
+      user: `user:${userId}`,
+      relation: 'can_view_list',
+      object: `asset:${asset.id}`,
+    });
+  }
+
+  /**
+   * Proyectos "asociados" al usuario vía membresías directas (PROJECT) y por
+   * expansión de departamento (DEPARTMENT). Usado como filtro de respaldo en
+   * las listas cuando el usuario no tiene `asset:read` funcional.
+   */
+  private async allowedProjectIdsForUser(userId: string): Promise<string[]> {
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId,
+        scopeType: { in: [ScopeType.PROJECT, ScopeType.DEPARTMENT] },
+      },
+    });
+
+    const userProjectIds = memberships
+      .filter((m) => m.scopeType === ScopeType.PROJECT)
+      .map((m) => m.scopeId);
+
+    const departmentIds = memberships
+      .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
+      .map((m) => m.scopeId);
+
+    const projects = await this.prisma.project.findMany({
+      where: {
+        OR: [
+          { id: { in: userProjectIds } },
+          { departmentId: { in: departmentIds } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return projects.map((p) => p.id);
+  }
 
   /**
    * Mapea un registro de Asset de base de datos a la vista del frontend.
@@ -241,46 +307,20 @@ export class AssetsService {
    * Lista todos los activos visibles por el usuario.
    */
   async listAll(userId: string, type?: AssetType, status?: AssetStatus, projectId?: string): Promise<AssetView[]> {
-    // Si es administrador global de la organización, puede ver todos los activos.
-    const isGlobalAdmin = await this.prisma.membership.findFirst({
-      where: {
-        userId,
-        roleKey: 'org_admin',
-        scopeType: ScopeType.ORGANIZATION,
-      },
-    });
+    // Decisión funcional única (ADR-0001): quien tenga `asset:read` GLOBAL ve
+    // TODO; con scope de proyectos, ve los suyos + globales; sin el permiso, se
+    // cae al filtro estructural por membresías (retrocompatibilidad).
+    const filter = await this.permissions.scopeFilter(userId, 'asset:read');
 
+    // `undefined` = sin restricción de proyecto (GLOBAL). Un arreglo restringe
+    // a esos proyectos (+ los globales sin proyecto).
     let allowedProjectIds: string[] | undefined;
-
-    if (!isGlobalAdmin) {
-      // Obtener proyectos accesibles para el usuario
-      const memberships = await this.prisma.membership.findMany({
-        where: {
-          userId,
-          scopeType: { in: [ScopeType.PROJECT, ScopeType.DEPARTMENT] },
-        },
-      });
-
-      const userProjectIds = memberships
-        .filter((m) => m.scopeType === ScopeType.PROJECT)
-        .map((m) => m.scopeId);
-
-      const departmentIds = memberships
-        .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
-        .map((m) => m.scopeId);
-
-      const projects = await this.prisma.project.findMany({
-        where: {
-          OR: [
-            { id: { in: userProjectIds } },
-            { departmentId: { in: departmentIds } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      allowedProjectIds = projects.map((p) => p.id);
+    if (!filter || filter.kind === 'own') {
+      allowedProjectIds = await this.allowedProjectIdsForUser(userId);
+    } else if (filter.kind === 'projects') {
+      allowedProjectIds = filter.ids;
     }
+    // filter.kind === 'none' => allowedProjectIds queda undefined => ve todo.
 
     const where: Prisma.AssetWhereInput = {};
 
@@ -336,14 +376,8 @@ export class AssetsService {
       throw new NotFoundException('El activo no existe.');
     }
 
-    // Verificar permiso can_view_list en OpenFGA
-    const allowed = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'can_view_list',
-      object: `asset:${id}`,
-    });
-
-    if (!allowed) {
+    // Decisión funcional (asset:read) con respaldo estructural por-activo.
+    if (!(await this.canViewAsset(userId, asset))) {
       throw new NotFoundException('El activo no existe o no tienes acceso.');
     }
 
@@ -711,9 +745,26 @@ export class AssetsService {
   }
 
   /**
+   * Carga la referencia mínima del activo (id + projectId) y valida que el
+   * usuario pueda VERLO. Lanza 404 si no existe o no tiene acceso. Compartido
+   * por los sub-recursos de lectura para no dejarlos sin autorización tras
+   * remover el guard `can_view_list` del controller.
+   */
+  private async assertCanViewAsset(id: string, userId: string): Promise<void> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { id },
+      select: { id: true, projectId: true },
+    });
+    if (!asset || !(await this.canViewAsset(userId, asset))) {
+      throw new NotFoundException('El activo no existe o no tienes acceso.');
+    }
+  }
+
+  /**
    * Obtiene la lista de documentos de un activo.
    */
-  async listDocuments(id: string): Promise<AssetDocumentView[]> {
+  async listDocuments(id: string, userId: string): Promise<AssetDocumentView[]> {
+    await this.assertCanViewAsset(id, userId);
     const rows = await this.prisma.assetDocument.findMany({
       where: { assetId: id },
       include: { reviewedBy: true },
@@ -725,7 +776,8 @@ export class AssetsService {
   /**
    * Obtiene la línea de tiempo de eventos históricos de un activo.
    */
-  async getHistory(id: string): Promise<AssetHistoryEntryView[]> {
+  async getHistory(id: string, userId: string): Promise<AssetHistoryEntryView[]> {
+    await this.assertCanViewAsset(id, userId);
     const rows = await this.prisma.assetHistoryEntry.findMany({
       where: { assetId: id },
       include: { actor: true },
@@ -750,7 +802,8 @@ export class AssetsService {
     };
   }
 
-  async listAccessories(assetId: string): Promise<AssetAccessoryView[]> {
+  async listAccessories(assetId: string, userId: string): Promise<AssetAccessoryView[]> {
+    await this.assertCanViewAsset(assetId, userId);
     const rows = await this.prisma.assetAccessory.findMany({
       where: { assetId },
       orderBy: { createdAt: 'asc' },
@@ -919,10 +972,13 @@ export class AssetsService {
     }
   }
 
-  async getChecklistTemplate(assetId: string): Promise<ChecklistTemplateView> {
+  async getChecklistTemplate(assetId: string, userId: string): Promise<ChecklistTemplateView> {
     const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
     if (!asset) {
       throw new NotFoundException('El activo no existe.');
+    }
+    if (!(await this.canViewAsset(userId, asset))) {
+      throw new NotFoundException('El activo no existe o no tienes acceso.');
     }
 
     let template = await this.prisma.checklistTemplate.findUnique({
@@ -1180,7 +1236,8 @@ export class AssetsService {
     void this.gamification.awardPoints(userId, 'RUN_CHECKLIST');
   }
 
-  async listChecklistSubmissions(assetId: string): Promise<ChecklistSubmissionView[]> {
+  async listChecklistSubmissions(assetId: string, userId: string): Promise<ChecklistSubmissionView[]> {
+    await this.assertCanViewAsset(assetId, userId);
     const rows = await this.prisma.checklistSubmission.findMany({
       where: { assetId },
       include: { user: true },
@@ -1194,7 +1251,8 @@ export class AssetsService {
    * Devuelve los bytes (application/pdf). Lanza 404 si la submission no existe
    * o no pertenece al activo indicado.
    */
-  async generateChecklistSubmissionPdf(assetId: string, submissionId: string): Promise<Uint8Array> {
+  async generateChecklistSubmissionPdf(assetId: string, submissionId: string, userId: string): Promise<Uint8Array> {
+    await this.assertCanViewAsset(assetId, userId);
     const submission = await this.prisma.checklistSubmission.findUnique({
       where: { id: submissionId },
       include: { user: true, template: true, asset: true },

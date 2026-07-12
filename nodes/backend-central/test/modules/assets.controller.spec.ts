@@ -38,6 +38,11 @@ function buildController(options: { allowed?: boolean } = {}): Mocks {
     updateAccessory: vi.fn(() => Promise.resolve({ id: 'acc-1' })),
     removeAccessory: vi.fn(() => Promise.resolve(undefined)),
     updateChecklistTemplate: vi.fn(() => Promise.resolve({ id: 'tpl-1' })),
+    listDocuments: vi.fn(() => Promise.resolve([])),
+    getHistory: vi.fn(() => Promise.resolve([])),
+    listAccessories: vi.fn(() => Promise.resolve([])),
+    getChecklistTemplate: vi.fn(() => Promise.resolve({ id: 'tpl-1' })),
+    listChecklistSubmissions: vi.fn(() => Promise.resolve([])),
   };
 
   return {
@@ -106,5 +111,53 @@ describe('AssetsController — gate FGA propio de activos (can_manage_assets)', 
     );
     expect(check).toHaveBeenCalledWith(MANAGE_GATE);
     expect(service.updateChecklistTemplate).toHaveBeenCalledWith('a-1', 'u1', 'Diaria', [{ label: 'Aceite' }]);
+  });
+});
+
+describe('AssetsController — GET de lectura sin guard can_view_list', () => {
+  // Los GET de lectura pura ya no llevan @RequirePermission: la autorización
+  // (asset:read con respaldo estructural) la resuelve el servicio. El controller
+  // solo pasa el userId; nunca hace fga.check propio en estas rutas.
+  it('getById delega en el servicio con el userId, sin gate FGA en el controller', async () => {
+    const { controller, check, service } = buildController();
+    const res = await controller.getById(USER, 'a-1');
+    expect(service.getById).toHaveBeenCalledWith('a-1', 'u1');
+    expect(res).toEqual({ id: 'a-1', projectId: 'p1' });
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('listDocuments delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.listDocuments(USER, 'a-1');
+    expect(service.listDocuments).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('getHistory delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.getHistory(USER, 'a-1');
+    expect(service.getHistory).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('listAccessories delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.listAccessories(USER, 'a-1');
+    expect(service.listAccessories).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('getChecklistTemplate delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.getChecklistTemplate(USER, 'a-1');
+    expect(service.getChecklistTemplate).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('listChecklistSubmissions delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.listChecklistSubmissions(USER, 'a-1');
+    expect(service.listChecklistSubmissions).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
   });
 });

@@ -112,10 +112,10 @@ export class AssetsController {
   }
 
   /**
-   * Detalle de un activo.
+   * Detalle de un activo. Lectura pura: la autorización (funcional `asset:read`
+   * con respaldo estructural por-activo) la resuelve el servicio, no el guard.
    */
   @Get(':id')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
   getById(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
@@ -240,9 +240,12 @@ export class AssetsController {
    * Obtiene la lista de documentos cargados en el activo.
    */
   @Get(':id/documents')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
-  listDocuments(@Param('id') id: string): Promise<AssetDocumentView[]> {
-    return this.assets.listDocuments(id);
+  listDocuments(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<AssetDocumentView[]> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.listDocuments(id, userId);
   }
 
   /**
@@ -272,18 +275,24 @@ export class AssetsController {
    * Obtiene la línea de tiempo del activo.
    */
   @Get(':id/history')
-  @RequirePermission('can_view_history', { type: 'asset', param: 'id' })
-  getHistory(@Param('id') id: string): Promise<AssetHistoryEntryView[]> {
-    return this.assets.getHistory(id);
+  getHistory(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<AssetHistoryEntryView[]> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.getHistory(id, userId);
   }
 
   /**
    * Obtiene la lista de accesorios del activo.
    */
   @Get(':id/accessories')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
-  listAccessories(@Param('id') id: string): Promise<AssetAccessoryView[]> {
-    return this.assets.listAccessories(id);
+  listAccessories(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<AssetAccessoryView[]> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.listAccessories(id, userId);
   }
 
   /**
@@ -397,9 +406,12 @@ export class AssetsController {
    * Obtiene la plantilla de checklist del activo.
    */
   @Get(':id/checklist/template')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
-  getChecklistTemplate(@Param('id') id: string): Promise<ChecklistTemplateView> {
-    return this.assets.getChecklistTemplate(id);
+  getChecklistTemplate(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<ChecklistTemplateView> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.getChecklistTemplate(id, userId);
   }
 
   /**
@@ -478,24 +490,28 @@ export class AssetsController {
    * Obtiene el historial de envíos de checklist del activo.
    */
   @Get(':id/checklist/submissions')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
-  listChecklistSubmissions(@Param('id') id: string): Promise<ChecklistSubmissionView[]> {
-    return this.assets.listChecklistSubmissions(id);
+  listChecklistSubmissions(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<ChecklistSubmissionView[]> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.listChecklistSubmissions(id, userId);
   }
 
   /**
    * Genera y descarga un PDF con la plantilla + respuestas de una submission de
-   * checklist. Mismo permiso que ver el activo (`can_view_list`).
-   * Responde `application/pdf`.
+   * checklist. Lectura pura: la autorización (`asset:read` con respaldo
+   * estructural por-activo) la resuelve el servicio. Responde `application/pdf`.
    */
   @Get(':id/checklist/submissions/:submissionId/pdf')
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
   async getChecklistSubmissionPdf(
+    @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
     @Param('submissionId') submissionId: string,
     @Res() res: Response,
   ): Promise<void> {
-    const pdf = await this.assets.generateChecklistSubmissionPdf(id, submissionId);
+    const userId = this.requireUserId(authUser);
+    const pdf = await this.assets.generateChecklistSubmissionPdf(id, submissionId, userId);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="checklist-${submissionId}.pdf"`);
     res.end(Buffer.from(pdf));
