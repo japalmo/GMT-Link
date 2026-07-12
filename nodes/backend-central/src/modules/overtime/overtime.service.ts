@@ -161,13 +161,19 @@ export class OvertimeService {
       this.prisma.overtimeRequest.groupBy({ by: ['status', 'isDraft'], where, _count: true }),
       this.prisma.overtimeRequest.groupBy({
         by: ['userId'],
-        where,
+        // `hours: { not: null }` excluye los borradores del ranking: con `hours`
+        // nullable, Postgres ordena NULLS FIRST y un trabajador con solo
+        // borradores (SUM=NULL) treparía a la cima. Filtrando el NULL, quien no
+        // tiene horas reales simplemente no aparece.
+        where: { ...where, hours: { not: null } },
         _sum: { hours: true },
         orderBy: { _sum: { hours: 'desc' } },
       }),
       this.prisma.overtimeRequest.groupBy({
         by: ['projectId'],
-        where: { ...where, projectId: { not: null } },
+        // Mismo motivo que el ranking por trabajador: excluir borradores (hours
+        // NULL) para que no encabecen el desglose por proyecto.
+        where: { ...where, projectId: { not: null }, hours: { not: null } },
         _sum: { hours: true },
         orderBy: { _sum: { hours: 'desc' } },
       }),
@@ -391,7 +397,13 @@ function buildOvertimeWhere(f: ListOvertimeFilters): Prisma.OvertimeRequestWhere
     dateWhere.lt = end;
   }
   if (f.dateFrom) dateWhere.gte = new Date(f.dateFrom);
-  if (f.dateTo) dateWhere.lte = new Date(f.dateTo);
+  if (f.dateTo) {
+    // Half-open: `lt` del día siguiente (mismo criterio que el filtro `date`
+    // exacto) para no excluir un `dateTo` con hora ≠ 0. Se mantiene UTC.
+    const end = new Date(f.dateTo);
+    end.setUTCDate(end.getUTCDate() + 1);
+    dateWhere.lt = end;
+  }
   if (Object.keys(dateWhere).length > 0) where.date = dateWhere;
 
   return where;

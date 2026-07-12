@@ -20,10 +20,11 @@ export interface StatCarouselProps {
 }
 
 /**
- * Card de 2 (o N) estados que autoalterna cada `intervalMs` (§5.2). Un clic en la
- * card **congela** el estado actual; las flechas y los puntitos permiten navegar
- * manualmente. Las flechas sólo aparecen en hover (group-hover). Cuando está
- * congelada, el autoalternado se detiene.
+ * Card de 2 (o N) estados que autoalterna cada `intervalMs` (§5.2). Un clic (o
+ * Enter/Espacio con foco) en la card **congela** el estado actual; las flechas y
+ * los puntitos permiten navegar manualmente. Las flechas aparecen en hover, al
+ * tabular dentro de la card (focus-within) y siempre en pantallas táctiles
+ * (pointer:coarse). Cuando está congelada, el autoalternado se detiene.
  */
 export function StatCarousel({
   states,
@@ -55,6 +56,12 @@ export function StatCarousel({
     <Card
       className={cn('group relative flex flex-col gap-3 p-5 cursor-pointer select-none', className)}
       onClick={() => setFrozen((f) => !f)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setFrozen((f) => !f);
+        }
+      }}
       role="button"
       tabIndex={0}
       aria-label={`${current.title}. Clic para ${frozen ? 'reanudar' : 'congelar'} el carrusel.`}
@@ -62,11 +69,11 @@ export function StatCarousel({
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-muted-foreground">{current.title}</p>
         {count > 1 && (
-          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(pointer:coarse)]:opacity-100">
             <button
               type="button"
               aria-label="Anterior"
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={(e) => go(index - 1, e)}
             >
               <ChevronLeft className="size-4" aria-hidden />
@@ -74,7 +81,7 @@ export function StatCarousel({
             <button
               type="button"
               aria-label="Siguiente"
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={(e) => go(index + 1, e)}
             >
               <ChevronRight className="size-4" aria-hidden />

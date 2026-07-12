@@ -21,7 +21,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/components/ui/modal';
-import { listAssets, scanReceipt } from '@/lib/api';
+import { ApiError, errorToMessage, listAssets, scanReceipt } from '@/lib/api';
 import type { AssetView } from '@/types/assets';
 import {
   REIMBURSEMENT_CATEGORY_LABELS,
@@ -153,8 +153,15 @@ export function ReembolsoFormDialog({
       if (res.date) setDate(res.date.slice(0, 10));
       const cat = normalizeCategory(res.category);
       if (cat) setCategory(cat);
-    } catch {
-      setError('No se pudo leer la boleta automáticamente. Completa los campos a mano.');
+    } catch (err) {
+      // El backend responde 400 con "límite diario" al agotar la cuota (3/día).
+      // Ese caso lleva su propio mensaje; cualquier otro error cae al genérico.
+      const message = errorToMessage(err);
+      if (err instanceof ApiError && message.includes('límite diario')) {
+        setError(message);
+      } else {
+        setError('No se pudo leer la boleta automáticamente. Completa los campos a mano.');
+      }
     } finally {
       setScanning(false);
     }

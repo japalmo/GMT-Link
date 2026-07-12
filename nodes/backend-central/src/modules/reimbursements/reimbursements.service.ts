@@ -503,7 +503,13 @@ function buildReimbursementWhere(f: ListReimbursementsFilters): Prisma.Reimburse
     dateWhere.lt = end;
   }
   if (f.dateFrom) dateWhere.gte = new Date(f.dateFrom);
-  if (f.dateTo) dateWhere.lte = new Date(f.dateTo);
+  if (f.dateTo) {
+    // Half-open: `lt` del día siguiente (mismo criterio que el filtro `date`
+    // exacto) para no excluir un `dateTo` con hora ≠ 0. Se mantiene UTC.
+    const end = new Date(f.dateTo);
+    end.setUTCDate(end.getUTCDate() + 1);
+    dateWhere.lt = end;
+  }
   if (Object.keys(dateWhere).length > 0) where.date = dateWhere;
 
   return where;

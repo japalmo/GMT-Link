@@ -392,4 +392,39 @@ describe('OvertimeService', () => {
     expect(payload.body).toContain('Las horas no corresponden al proyecto.');
     expect(payload.link).toBe('/finanzas/horas');
   });
+
+  it('summary: los rankings (trabajador y proyecto) filtran hours NOT NULL para no encabezar con solo-borradores', async () => {
+    interface GroupByArgs {
+      by: string[];
+      where?: { hours?: unknown; projectId?: unknown };
+    }
+    // Un trabajador/proyecto con SOLO borradores tiene SUM(hours)=NULL; sin el
+    // filtro `hours NOT NULL`, Postgres lo ordena NULLS FIRST (0h en la cima).
+    const groupBy = vi.fn<(args: GroupByArgs) => Promise<unknown[]>>((args) => {
+      if (args.by.includes('userId')) {
+        return Promise.resolve([{ userId: 'u1', _sum: { hours: 5 } }]);
+      }
+      if (args.by.includes('projectId')) {
+        return Promise.resolve([{ projectId: 'p1', _sum: { hours: 3 } }]);
+      }
+      return Promise.resolve([]); // statusGroups
+    });
+    const userFindMany = vi.fn(() => Promise.resolve([{ id: 'u1', firstName: 'Ana', lastName: 'Pérez' }]));
+    const projectFindMany = vi.fn(() => Promise.resolve([{ id: 'p1', name: 'Proyecto 1' }]));
+    const prisma = {
+      overtimeRequest: { groupBy },
+      user: { findMany: userFindMany },
+      project: { findMany: projectFindMany },
+    } as unknown as PrismaService;
+    const service = makeService(prisma);
+
+    const summary = await service.summary({});
+
+    const workerCall = groupBy.mock.calls.find((c) => c[0].by.includes('userId'));
+    const projectCall = groupBy.mock.calls.find((c) => c[0].by.includes('projectId'));
+    expect(workerCall?.[0].where?.hours).toEqual({ not: null });
+    expect(projectCall?.[0].where?.hours).toEqual({ not: null });
+    expect(summary.rankingByWorker[0]).toEqual({ userId: 'u1', name: 'Ana Pérez', hours: 5 });
+    expect(summary.byProject[0]).toEqual({ projectId: 'p1', name: 'Proyecto 1', hours: 3 });
+  });
 });

@@ -44,3 +44,6 @@ cubicador-app-key.json
 # NOTA: NO afecta a prisma/data-reservorios.json ni a nodes/web/public/dem
 # (data pública versionada intencionalmente; ver runbook docs/infra/git-railway-setup.md).
 /data/
+
+# Cliente Prisma generado (build output, no versionar)
+nodes/backend-central/generated/

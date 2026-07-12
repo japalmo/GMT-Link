@@ -18,6 +18,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ORG_ID } from '../../common/org.constant';
 import { RequirePermission } from '../../authz/require-permission.decorator';
+import { PermissionService } from '../../authz/permission.service';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { AssignRoleScopedDto } from './dto/assign-role-scoped.dto';
@@ -42,7 +43,10 @@ import type {
 @Controller('users')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly permissions: PermissionService,
+  ) {}
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
   @Post()
@@ -68,15 +72,30 @@ export class UsersController {
   /**
    * Usuarios elegibles como administrador de proyecto: solo los que tienen un
    * rol que otorga `project:manage`. Para el select del formulario de proyecto.
-   * Autenticado (lo consumen los que crean proyectos), sin gate `can_manage_users`.
+   *
+   * Escalada acotada: antes lo listaba cualquier autenticado (fuga de nombres +
+   * roleKeys). Ahora se exige poder abrir el formulario de creación de proyecto.
+   * Se acepta `project:create` O `project:manage` porque el gate del formulario
+   * NO es uniforme: el backend crea con `project:create` (department_admin,
+   * org_admin, admin_ti, gerencias beta) pero el front muestra el formulario con
+   * `project:manage` (admin_contrato, gerencia_proyectos, org_admin, admin_ti).
+   * Con solo `project:create` se quedarían sin dropdown admin_contrato y
+   * gerencia_proyectos; la unión cubre a todos los que hoy abren el formulario.
    * DEBE declararse antes de `@Get(':id')` para no ser capturado por el param.
    */
   @Get('project-admins')
-  listProjectAdmins(
+  async listProjectAdmins(
     @CurrentUser() authUser: AuthUser | undefined,
   ): Promise<ProjectAdminOption[]> {
     if (!authUser) {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');
+    }
+    const [canCreate, canManage] = await Promise.all([
+      this.permissions.can(authUser.id, 'project:create'),
+      this.permissions.can(authUser.id, 'project:manage'),
+    ]);
+    if (canCreate.effect !== 'allow' && canManage.effect !== 'allow') {
+      throw new ForbiddenException('No tienes permisos para listar administradores de proyecto.');
     }
     return this.usersService.listProjectAdmins();
   }
