@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AssetStatus, AssetType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
@@ -58,6 +58,21 @@ export class AssetsService {
       user: `user:${userId}`,
       relation: 'can_view_list',
       object: `asset:${asset.id}`,
+    });
+  }
+
+  /**
+   * ¿Puede el usuario EJECUTAR el checklist/telemetría de este activo? Permite el
+   * permiso funcional GLOBAL `asset:checklist:run:any` (admin/gerencia, cualquier
+   * activo) O el gate estructural del usuario asignado (`can_run_checklist` en FGA).
+   */
+  private async canRunChecklist(userId: string, assetId: string): Promise<boolean> {
+    const decision = await this.permissions.can(userId, 'asset:checklist:run:any');
+    if (decision.effect === 'allow') return true;
+    return this.fga.check({
+      user: `user:${userId}`,
+      relation: 'can_run_checklist',
+      object: `asset:${assetId}`,
     });
   }
 
@@ -1135,6 +1150,9 @@ export class AssetsService {
     if (!asset) {
       throw new NotFoundException('El activo no existe.');
     }
+    if (!(await this.canRunChecklist(userId, assetId))) {
+      throw new ForbiddenException('No tienes permiso para ejecutar el checklist de este activo.');
+    }
 
     const template = await this.prisma.checklistTemplate.findUnique({ where: { id: templateId } });
     if (!template || template.assetId !== assetId) {
@@ -1341,6 +1359,9 @@ export class AssetsService {
     const asset = await this.prisma.asset.findUnique({ where: { id } });
     if (!asset) {
       throw new NotFoundException('El activo no existe.');
+    }
+    if (!(await this.canRunChecklist(userId, id))) {
+      throw new ForbiddenException('No tienes permiso para registrar telemetría de este activo.');
     }
 
     if (asset.type !== AssetType.VEHICULO) {

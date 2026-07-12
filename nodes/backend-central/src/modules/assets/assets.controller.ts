@@ -476,7 +476,6 @@ export class AssetsController {
    * Envía las respuestas de un checklist ejecutado.
    */
   @Post(':id/checklist/submit')
-  @RequirePermission('can_run_checklist', { type: 'asset', param: 'id' })
   submitChecklist(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
@@ -525,11 +524,11 @@ export class AssetsController {
   }
 
   /**
-   * Envía telemetría de ubicación y velocidad para un vehículo.
-   * Requiere permiso can_run_checklist (usuario asignado) o admin.
+   * Envía telemetría de ubicación y velocidad para un vehículo. La autorización
+   * (funcional `asset:checklist:run:any` o el gate estructural del asignado) la
+   * resuelve el servicio, igual que el envío de checklist.
    */
   @Post(':id/telemetry')
-  @RequirePermission('can_run_checklist', { type: 'asset', param: 'id' })
   submitTelemetry(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,

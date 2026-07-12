@@ -125,6 +125,10 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // PERMISSION_MODULE en auth.controller). FUNCTIONAL org-scope (siempre GLOBAL):
   // NO concede los botones de crear/configurar (esos dependen de asset:manage).
   { key: 'asset:read', label: 'Ver recursos (solo lectura)', module: 'recursos', kind: 'FUNCTIONAL', scopeable: false },
+  // Ejecutar el checklist de CUALQUIER activo (admin/gerencia), sin depender de la
+  // asignación por-activo (can_run_checklist). FUNCTIONAL org-scope (siempre GLOBAL);
+  // el submit lo honra ADEMÁS del gate estructural del usuario asignado.
+  { key: 'asset:checklist:run:any', label: 'Ejecutar checklist de cualquier activo', module: 'recursos', kind: 'FUNCTIONAL', scopeable: false },
 ];
 
 /** Todo el catálogo a GLOBAL EXCEPTO system:beta:full (org_admin / admin_ti). */
@@ -178,6 +182,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
       g('project:manage', 'GLOBAL'),
       g('asset:read', 'GLOBAL'),
+      g('asset:checklist:run:any', 'GLOBAL'),
     ],
   },
   {
@@ -193,6 +198,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('project:doc:upload:worker', 'GLOBAL'),
       g('project:doc:upload:project', 'GLOBAL'),
       g('asset:read', 'GLOBAL'),
+      g('asset:checklist:run:any', 'GLOBAL'),
     ],
   },
   {
@@ -234,6 +240,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
       g('project:manage', 'GLOBAL'),
       g('asset:read', 'GLOBAL'),
+      g('asset:checklist:run:any', 'GLOBAL'),
     ],
   },
   { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },

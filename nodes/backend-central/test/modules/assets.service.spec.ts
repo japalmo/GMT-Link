@@ -1,5 +1,10 @@
 import 'reflect-metadata';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { AssetStatus, AssetType, DocumentStatus, ScopeType } from '@prisma/client';
 import type {
   Asset,
@@ -225,6 +230,7 @@ interface MockStorage {
 
 interface MockPermissions {
   scopeFilter: MockFunction;
+  can: MockFunction;
 }
 
 describe('AssetsService', () => {
@@ -316,6 +322,9 @@ describe('AssetsService', () => {
     // test que necesite otro scope lo sobrescribe con mockResolvedValueOnce.
     permissionsMock = {
       scopeFilter: vi.fn(() => Promise.resolve({ kind: 'none' })),
+      // Por defecto SIN el permiso funcional global: la ejecución del checklist
+      // cae al gate estructural (fga.check, que el mock resuelve truthy).
+      can: vi.fn(() => Promise.resolve({ effect: 'deny' })),
     };
 
     service = new AssetsService(
@@ -637,6 +646,31 @@ describe('AssetsService', () => {
       }));
       expect(txMock.assetHistoryEntry.create).toHaveBeenCalled();
       expect(res.userId).toBe('u-1');
+    });
+
+    it('permite ejecutar el checklist con el permiso funcional global (admin/gerencia)', async () => {
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow({ status: DocumentStatus.APROBADO }));
+
+      const res = await service.submitChecklist('a-1', 'tpl-1', 'u-admin', [
+        { itemId: '1', label: 'Freno', value: true },
+      ]);
+
+      expect(permissionsMock.can).toHaveBeenCalledWith('u-admin', 'asset:checklist:run:any');
+      expect(txMock.checklistSubmission.create).toHaveBeenCalled();
+      expect(res.userId).toBe('u-admin');
+    });
+
+    it('rechaza (403) si no tiene el permiso funcional ni la asignación estructural', async () => {
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
+      fgaMock.check.mockResolvedValueOnce(false);
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow());
+
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-x', [{ itemId: '1', value: true }]),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
     });
   });
 
