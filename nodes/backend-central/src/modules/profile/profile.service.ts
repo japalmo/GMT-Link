@@ -11,6 +11,7 @@ import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
 import { hashPassword, verifyPassword } from '../../common/password';
 import { EmailService } from '../../common/email.service';
+import { verificationCodeEmail, passwordChangeCodeEmail } from '../../common/email-templates';
 import { OtpService, OTP_PURPOSES } from '../../common/otp.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ChangeEmailRequestDto } from './dto/change-email-request.dto';
@@ -117,11 +118,7 @@ export class ProfileService {
     });
 
     const code = await this.otp.generate(newEmail, OTP_PURPOSES.CHANGE_EMAIL);
-    await this.emailService.send({
-      to: newEmail,
-      subject: 'Verificá tu nuevo correo — GMT Link',
-      body: `Tu código es ${code}. Válido por 5 minutos.`,
-    });
+    await this.emailService.send({ to: newEmail, ...verificationCodeEmail(code) });
 
     return { ok: true };
   }
@@ -204,11 +201,7 @@ export class ProfileService {
 
     const target = this.resolvePasswordOtpTarget(user);
     const code = await this.otp.generate(target, OTP_PURPOSES.CHANGE_PASSWORD);
-    await this.emailService.send({
-      to: target,
-      subject: 'Código para cambiar tu contraseña — GMT Link',
-      body: `Tu código es ${code}. Válido por 5 minutos.`,
-    });
+    await this.emailService.send({ to: target, ...passwordChangeCodeEmail(code) });
 
     return { ok: true };
   }

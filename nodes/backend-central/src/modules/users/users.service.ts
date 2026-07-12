@@ -21,6 +21,8 @@ import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
 import { StorageService } from '../../common/storage/storage.service';
+import { EmailService, NoopEmailService } from '../../common/email.service';
+import { credentialsEmail } from '../../common/email-templates';
 
 /** Rol cuya asignación org-scope sí confiere acceso de admin en OpenFGA (§4.3). */
 const ORG_ADMIN_ROLE: RoleKey = 'org_admin';
@@ -43,8 +45,11 @@ type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true 
  *                  provisoria + Membership por rol (espejo §4.1).
  *  2. OpenFGA    — tupla de acceso org (member/admin).
  *
- * Decisión §9: NO se envía email; la clave provisoria se RETORNA en la respuesta
- * para que el admin la comparta. Solo se persiste su hash bcrypt; nunca en claro.
+ * Decisión §9: la clave provisoria se RETORNA en la respuesta para que el admin
+ * la comparta (y se muestra en la UI). Solo se persiste su hash bcrypt; nunca en
+ * claro. ADEMÁS, si el usuario trae email primario y hay un proveedor de correo
+ * real configurado (Brevo/SMTP), se le envían las credenciales por correo como
+ * conveniencia (best-effort: un fallo de envío NO aborta la creación).
  *
  * Modelo de roles en la provisión (decisión §9 "acceso org + roles por defecto"):
  * a nivel ORGANIZACIÓN OpenFGA solo distingue acceso (admin/member). Por eso al
@@ -68,6 +73,7 @@ export class UsersService {
     private readonly fga: FgaService,
     private readonly storage: StorageService,
     private readonly roles: RolesService,
+    private readonly emailService: EmailService,
   ) {}
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
@@ -103,7 +109,49 @@ export class UsersService {
       throw error;
     }
 
+    // Envío ADICIONAL (best-effort) de las credenciales por correo: NO reemplaza
+    // el retorno de la clave (§9-1.1 sigue vigente: el admin también la ve en la
+    // UI). Solo se intenta si hay email primario y un proveedor de correo real.
+    await this.trySendCredentialsEmail(email, dto, provisionalPassword);
+
     return { user: this.toProvisionedUser(user, roleKeys), provisionalPassword };
+  }
+
+  /**
+   * Envía las credenciales de acceso por correo (usuario + clave provisoria +
+   * enlace de login). Best-effort: si no hay email primario o el proveedor de
+   * correo no es real (Noop), no hace nada; si el envío falla, solo se loguea —
+   * NUNCA aborta la creación del usuario (la clave ya se retorna igual).
+   */
+  private async trySendCredentialsEmail(
+    email: string,
+    dto: CreateUserDto,
+    provisionalPassword: string,
+  ): Promise<void> {
+    if (email.length === 0 || !this.isRealEmailProvider()) {
+      return;
+    }
+    const loginUrl = process.env.APP_WEB_URL || 'https://web-dev-production-05f2.up.railway.app';
+    try {
+      await this.emailService.send({
+        to: email,
+        ...credentialsEmail({
+          nombre: dto.firstName,
+          username: dto.username,
+          provisionalPassword,
+          loginUrl,
+        }),
+      });
+    } catch (error: unknown) {
+      this.logger.error(
+        `No se pudo enviar el correo de credenciales a ${email} (el usuario se creó igual): ${this.errorMessage(error)}`,
+      );
+    }
+  }
+
+  /** ¿Hay un proveedor de correo real activo (no el Noop de "sin envío")? */
+  private isRealEmailProvider(): boolean {
+    return !(this.emailService instanceof NoopEmailService);
   }
 
   /**

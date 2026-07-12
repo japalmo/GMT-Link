@@ -1,0 +1,139 @@
+import { escapeHtml } from './email.service';
+
+/**
+ * Plantillas de correo branded de GMT Link.
+ *
+ * Cada función devuelve `{ subject, body, html }`:
+ *  - `subject` → asunto del correo.
+ *  - `body`    → texto plano (fallback para clientes sin HTML).
+ *  - `html`    → cuerpo HTML con estilos INLINE (los clientes de correo no
+ *                soportan `<style>` externo ni imágenes remotas de forma fiable).
+ *
+ * Diseño: layout de tablas (máxima compatibilidad), ancho acotado y centrado
+ * (responsive básico), sin imágenes externas, header simple con la marca y el
+ * dato destacado dentro de una caja. Todo valor dinámico proveniente de la BD se
+ * escapa con `escapeHtml` antes de incrustarse.
+ */
+
+/** Contenido de un correo sin destinatario: el caller añade `to` al enviarlo. */
+export interface EmailContent {
+  subject: string;
+  body: string;
+  html: string;
+}
+
+const FOOTER_NOTE = 'Este es un correo automático, no respondas.';
+
+/** Envuelve el contenido interno en el shell branded (header + cuerpo + footer). */
+function shell(innerHtml: string): string {
+  return `<div style="margin:0;padding:0;background-color:#f1f5f9;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <tr>
+            <td style="background-color:#0f172a;padding:22px 32px;">
+              <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.5px;">GMT<span style="color:#38bdf8;"> Link</span></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;color:#0f172a;font-size:15px;line-height:1.6;">
+${innerHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 32px;background-color:#f8fafc;border-top:1px solid #e2e8f0;">
+              <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">${FOOTER_NOTE}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>`;
+}
+
+/** Caja destacada con un código de 6 dígitos (grande, monospace, espaciado). */
+function codeBox(code: string): string {
+  return `<div style="margin:24px 0;padding:22px 16px;background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;text-align:center;">
+                <div style="font-size:34px;font-weight:700;letter-spacing:10px;color:#0f172a;font-family:'Courier New',Courier,monospace;">${escapeHtml(code)}</div>
+              </div>
+              <p style="margin:0;color:#64748b;font-size:13px;">Este código es válido por <strong>5 minutos</strong>.</p>`;
+}
+
+/** Correo de verificación de un nuevo correo (OTP de 6 dígitos). */
+export function verificationCodeEmail(code: string): EmailContent {
+  const html = shell(`<p style="margin:0 0 12px;font-size:18px;font-weight:600;">Verificá tu correo</p>
+              <p style="margin:0;color:#475569;">Usá el siguiente código para confirmar tu dirección de correo en GMT Link:</p>
+              ${codeBox(code)}
+              <p style="margin:16px 0 0;color:#94a3b8;font-size:13px;">Si no solicitaste este código, podés ignorar este mensaje.</p>`);
+
+  return {
+    subject: 'Verificá tu correo — GMT Link',
+    body: `Tu código de verificación es ${code}. Válido por 5 minutos. Si no solicitaste este código, ignorá este mensaje.`,
+    html,
+  };
+}
+
+/** Correo con el OTP para cambiar la contraseña. */
+export function passwordChangeCodeEmail(code: string): EmailContent {
+  const html = shell(`<p style="margin:0 0 12px;font-size:18px;font-weight:600;">Cambio de contraseña</p>
+              <p style="margin:0;color:#475569;">Ingresá este código para confirmar el cambio de tu contraseña en GMT Link:</p>
+              ${codeBox(code)}
+              <p style="margin:16px 0 0;color:#94a3b8;font-size:13px;">Si no pediste cambiar tu contraseña, ignorá este mensaje y tu clave seguirá igual.</p>`);
+
+  return {
+    subject: 'Código para cambiar tu contraseña — GMT Link',
+    body: `Tu código para cambiar la contraseña es ${code}. Válido por 5 minutos. Si no lo solicitaste, ignorá este mensaje.`,
+    html,
+  };
+}
+
+/** Fila etiqueta/valor para la caja de credenciales. */
+function credentialRow(label: string, value: string): string {
+  return `<p style="margin:0 0 4px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(label)}</p>
+                <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Courier New',Courier,monospace;">${escapeHtml(value)}</p>`;
+}
+
+/** Correo con las credenciales de acceso (usuario + clave provisoria + login). */
+export function credentialsEmail(params: {
+  nombre: string;
+  username: string;
+  provisionalPassword: string;
+  loginUrl: string;
+}): EmailContent {
+  const { nombre, username, provisionalPassword, loginUrl } = params;
+  const safeLoginUrl = escapeHtml(loginUrl);
+
+  const html = shell(`<p style="margin:0 0 12px;font-size:18px;font-weight:600;">Hola ${escapeHtml(nombre)},</p>
+              <p style="margin:0;color:#475569;">Se creó tu cuenta en GMT Link. Estas son tus credenciales de acceso:</p>
+              <div style="margin:24px 0;padding:22px 20px;background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;">
+                ${credentialRow('Usuario', username)}
+                ${credentialRow('Clave provisoria', provisionalPassword)}
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                <tr>
+                  <td style="background-color:#2563eb;border-radius:8px;">
+                    <a href="${safeLoginUrl}" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Ingresar a GMT Link</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px;color:#475569;font-size:14px;">O copiá este enlace en tu navegador:</p>
+              <p style="margin:0 0 16px;"><a href="${safeLoginUrl}" style="color:#2563eb;font-size:13px;word-break:break-all;">${safeLoginUrl}</a></p>
+              <p style="margin:0;color:#b45309;font-size:13px;background-color:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">Por seguridad, cambiá tu clave en el primer ingreso.</p>`);
+
+  return {
+    subject: 'Tus credenciales de acceso — GMT Link',
+    body: `Hola ${nombre},
+
+Se creó tu cuenta en GMT Link. Tus credenciales de acceso son:
+
+Usuario: ${username}
+Clave provisoria: ${provisionalPassword}
+
+Ingresá en: ${loginUrl}
+
+Por seguridad, cambiá tu clave en el primer ingreso.`,
+    html,
+  };
+}
