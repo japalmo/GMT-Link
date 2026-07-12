@@ -24,7 +24,6 @@ import { PermissionService } from '../../authz/permission.service';
 import { ReimbursementsService } from './reimbursements.service';
 import {
   CreateReimbursementDto,
-  ImportReimbursementsDto,
   ListReimbursementsQueryDto,
   MarkPrintedDto,
   PrintReimbursementsDto,
@@ -74,16 +73,6 @@ export class ReimbursementsController {
     const userId = this.requireUserId(authUser);
     await this.require(userId, P_CREATE);
     return this.reimbursements.create(userId, dto);
-  }
-
-  @Post('import')
-  async importBatch(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Body() dto: ImportReimbursementsDto,
-  ): Promise<ReimbursementView[]> {
-    const userId = this.requireUserId(authUser);
-    await this.require(userId, P_CREATE);
-    return this.reimbursements.importBatch(userId, dto);
   }
 
   /** OCR de boleta: imagen multipart → campos sugeridos (spec §5.5). */

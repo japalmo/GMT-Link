@@ -408,17 +408,11 @@ export default function BodegasPage(): ReactNode {
                             </TableCell>
                             <TableCell>
                               {tx.type === 'ENTRY' ? (
-                                <Badge
-                                  variant="outline"
-                                  className="border-emerald-500/30 bg-emerald-500/5 px-2 text-[10px] font-bold text-emerald-500"
-                                >
+                                <Badge variant="success" className="px-2 text-[10px] font-bold">
                                   Ingreso
                                 </Badge>
                               ) : (
-                                <Badge
-                                  variant="outline"
-                                  className="border-amber-500/30 bg-amber-500/5 px-2 text-[10px] font-bold text-amber-500"
-                                >
+                                <Badge variant="warning" className="px-2 text-[10px] font-bold">
                                   Egreso
                                 </Badge>
                               )}

@@ -56,6 +56,7 @@ import {
   type MetricDataPoint,
 } from '@/lib/api';
 import type { ProjectView, ServiceView } from '@/types/operations';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { DemViewer } from './dem-viewer';
 
 import type L from 'leaflet';
@@ -128,6 +129,7 @@ export default function MetricsDashboard(): ReactNode {
   const [, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'satellite' | 'vector'>('satellite');
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Leaflet references
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -603,10 +605,6 @@ export default function MetricsDashboard(): ReactNode {
   };
 
   const handleDeletePool = async (id: string) => {
-    if (!window.confirm('¿Está seguro de que desea eliminar este reservorio? Se eliminarán también todas sus mediciones históricas asociadas.')) {
-      return;
-    }
-
     try {
       await deleteMetricElement(id);
       toast.success('Vaso de evaporación eliminado correctamente.');
@@ -909,8 +907,8 @@ export default function MetricsDashboard(): ReactNode {
             <Button
               size="sm"
               variant="destructive"
-              onClick={() => handleDeletePool(selectedElement.id)}
-              className="text-xs font-bold bg-red-600 hover:bg-red-700 text-white h-9 rounded-xl border-none"
+              onClick={() => setPendingDeleteId(selectedElement.id)}
+              className="text-xs font-bold h-9 rounded-xl"
             >
               Eliminar
             </Button>
@@ -1009,7 +1007,7 @@ export default function MetricsDashboard(): ReactNode {
                   setStartDateFilter('');
                   setEndDateFilter('');
                 }}
-                className="text-[10px] font-bold text-red-500 hover:text-red-600 px-2 py-1 h-7"
+                className="text-[10px] font-bold text-destructive hover:text-destructive/80 px-2 py-1 h-7"
               >
                 Limpiar Filtros
               </Button>
@@ -1668,6 +1666,18 @@ export default function MetricsDashboard(): ReactNode {
           </form>
         </ModalContent>
       </Modal>
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => !open && setPendingDeleteId(null)}
+        title="¿Eliminar reservorio?"
+        description="Esta acción eliminará de forma permanente el reservorio y todas sus mediciones históricas asociadas. ¿Deseas continuar?"
+        onConfirm={async () => {
+          if (pendingDeleteId) {
+            await handleDeletePool(pendingDeleteId);
+          }
+        }}
+      />
     </div>
   );
 }

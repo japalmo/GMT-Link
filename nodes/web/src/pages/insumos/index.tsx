@@ -165,8 +165,8 @@ export default function InsumosPage(): ReactNode {
         try {
           const results = await listSupplies(searchSupplyQuery);
           setSuggestedSupplies(results);
-        } catch (err) {
-          console.error(err);
+        } catch {
+          setSuggestedSupplies([]);
         }
       }, 300);
       return () => clearTimeout(delay);
@@ -706,7 +706,7 @@ export default function InsumosPage(): ReactNode {
                             onClick={() => setTxType('ENTRY')}
                             className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                               txType === 'ENTRY'
-                                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                                ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:border-emerald-400/20'
                                 : 'border-border/60 hover:bg-muted/30 text-muted-foreground'
                             }`}
                           >
@@ -717,7 +717,7 @@ export default function InsumosPage(): ReactNode {
                             onClick={() => setTxType('EXIT')}
                             className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                               txType === 'EXIT'
-                                ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                                ? 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/20'
                                 : 'border-border/60 hover:bg-muted/30 text-muted-foreground'
                             }`}
                           >
@@ -922,11 +922,11 @@ export default function InsumosPage(): ReactNode {
                               </TableCell>
                               <TableCell>
                                 {tx.type === 'ENTRY' ? (
-                                  <Badge variant="outline" className="text-[10px] font-bold border-emerald-500/30 text-emerald-500 bg-emerald-500/5 px-2">
+                                  <Badge variant="success" className="text-[10px] font-bold px-2">
                                     Ingreso (ENTRY)
                                   </Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-[10px] font-bold border-amber-500/30 text-amber-500 bg-amber-500/5 px-2">
+                                  <Badge variant="warning" className="text-[10px] font-bold px-2">
                                     Egreso (EXIT)
                                   </Badge>
                                 )}

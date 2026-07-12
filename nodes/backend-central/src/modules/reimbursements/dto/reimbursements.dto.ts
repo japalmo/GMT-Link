@@ -12,7 +12,6 @@ import {
   MinLength,
   Min,
   IsArray,
-  ValidateNested,
   ArrayNotEmpty,
   ArrayMaxSize,
   IsIn,
@@ -124,16 +123,6 @@ export class RejectReimbursementDto {
   @IsString()
   @MaxLength(1000)
   reason?: string;
-}
-
-/** Body de `POST /reimbursements/import` para importación masiva. */
-export class ImportReimbursementsDto {
-  @IsArray()
-  @ArrayNotEmpty({ message: 'El lote debe traer al menos un reembolso.' })
-  @ArrayMaxSize(200, { message: 'No se pueden importar más de 200 reembolsos a la vez.' })
-  @ValidateNested({ each: true })
-  @Type(() => CreateReimbursementDto)
-  items!: CreateReimbursementDto[];
 }
 
 /**

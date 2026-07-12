@@ -208,7 +208,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       .then((res) => {
         setUsers(res.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })));
       })
-      .catch((err) => console.error('Error fetching users:', err));
+      .catch(() => toast.error('No se pudieron cargar los usuarios del directorio.'));
   }, []);
 
   const isAdmin =
@@ -312,17 +312,17 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const statusBadge = (status: AssetStatus) => {
     switch (status) {
       case 'DISPONIBLE':
-        return <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Disponible</Badge>;
+        return <Badge variant="success">Disponible</Badge>;
       case 'EN_USO':
-        return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">En Uso</Badge>;
+        return <Badge variant="info">En Uso</Badge>;
       case 'MANTENIMIENTO':
-        return <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">Mantenimiento</Badge>;
+        return <Badge variant="warning">Mantenimiento</Badge>;
       case 'BAJA':
-        return <Badge className="bg-rose-500/10 text-rose-500 border-rose-500/20">De Baja</Badge>;
+        return <Badge variant="danger">De Baja</Badge>;
       case 'DEFECTUOSO':
-        return <Badge className="bg-orange-500/10 text-orange-500 border-orange-500/20">Defectuoso</Badge>;
+        return <Badge variant="warning">Defectuoso</Badge>;
       case 'NO_DISPONIBLE':
-        return <Badge className="bg-zinc-500/10 text-zinc-400 border-zinc-500/20">No Disponible</Badge>;
+        return <Badge variant="neutral">No Disponible</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -791,8 +791,8 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
       setSubmissions(subList);
       setTplName(tpl?.name || '');
       setTplItems(tpl?.items || []);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      toast.error('No se pudieron cargar los datos del activo.');
     } finally {
       setLoading(false);
     }
@@ -804,7 +804,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
       .then((res) => {
         setUsers(res.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })));
       })
-      .catch((err) => console.error('Error fetching users:', err));
+      .catch(() => toast.error('No se pudieron cargar los usuarios del directorio.'));
   }, [loadData]);
 
   // Telemetria simulation effect
@@ -833,8 +833,9 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             speed: simSpeed,
           });
           void loadData();
-        } catch (err) {
-          console.error('Error simulating telemetry:', err);
+        } catch {
+          toast.error('No se pudo registrar la telemetría simulada. Detén y reinicia la simulación.');
+          setSimulating(false);
         }
       }, 3000);
     }

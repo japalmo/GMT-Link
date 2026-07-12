@@ -12,6 +12,7 @@ import {
   Loader2,
   DollarSign,
   Info,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -147,8 +148,8 @@ export default function ProveedoresPage(): ReactNode {
     try {
       const quota = await getGeminiQuota();
       setAiQuota(quota);
-    } catch (err) {
-      console.error('Error fetching AI quota', err);
+    } catch {
+      setAiQuota(null);
     }
   };
 
@@ -698,17 +699,27 @@ export default function ProveedoresPage(): ReactNode {
                       <form onSubmit={handleSubmitRating} className="border border-border/80 rounded-lg p-3 bg-muted/40 flex flex-col gap-3 mb-4">
                         <div className="flex justify-between items-center pb-1 border-b border-border">
                           <span className="text-[11px] font-bold text-primary uppercase">Evaluar Proveedor</span>
-                          <button type="button" className="text-xs text-muted-foreground" onClick={() => setShowAddRating(false)}>X</button>
+                          <button
+                            type="button"
+                            aria-label="Cerrar"
+                            className="text-muted-foreground hover:text-foreground rounded focus-visible:ring-2 focus-visible:ring-ring focus:outline-none"
+                            onClick={() => setShowAddRating(false)}
+                          >
+                            <X className="size-4" />
+                          </button>
                         </div>
                         <div className="flex flex-col gap-1.5">
                           <Label className="text-[11px]">Puntuación (1 a 5 estrellas)</Label>
-                          <div className="flex gap-2 items-center">
+                          <div className="flex gap-2 items-center" role="radiogroup" aria-label="Puntuación">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <button
                                 key={star}
                                 type="button"
+                                role="radio"
+                                aria-checked={star === ratingScore}
+                                aria-label={`${star} estrellas`}
                                 onClick={() => setRatingScore(star)}
-                                className="focus:outline-none"
+                                className="rounded focus-visible:ring-2 focus-visible:ring-ring focus:outline-none"
                               >
                                 <Star
                                   className={`size-6 ${

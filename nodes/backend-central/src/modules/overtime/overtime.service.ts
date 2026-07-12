@@ -52,9 +52,9 @@ export interface ListOvertimeFilters {
  *
  * Seguridad: el `userId` SIEMPRE llega del controller (sesión), nunca del body.
  * "Solo el dueño" (crear/listar propios) es lógica de este service. La GESTIÓN
- * (lista global, aprobar/rechazar/pagar) la autoriza OpenFGA en el controller vía
- * `@RequirePermission('can_manage_finance', organization:gmt)`. `getById` admite
- * al dueño O a un gestor (la decisión es lógica de service, sin guard).
+ * (lista global, aprobar/rechazar/pagar) la autoriza el controller con un check de
+ * permiso funcional inline (`PermissionService.can`, respaldado por Postgres).
+ * `getById` admite al dueño O a un gestor (la decisión es lógica de service).
  */
 @Injectable()
 export class OvertimeService {
@@ -211,7 +211,7 @@ export class OvertimeService {
 
   /**
    * Detalle visible para el DUEÑO o un GESTOR. `isManager` lo resuelve el
-   * controller (check FGA); si no es ninguno, 404. El gestor recibe los datos del
+   * controller (check de permiso inline); si no es ninguno, 404. El gestor recibe los datos del
    * solicitante.
    */
   async getById(
@@ -229,7 +229,7 @@ export class OvertimeService {
     return isManager ? toViewWithRequester(row) : toView(row);
   }
 
-  /** Aprueba (gestor; gating FGA en el controller). PENDIENTE→APROBADO. */
+  /** Aprueba (gestor; gating por permiso inline en el controller). PENDIENTE→APROBADO. */
   async approve(managerId: string, id: string): Promise<OvertimeView> {
     return this.transition(id, 'approve', managerId);
   }

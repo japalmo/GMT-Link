@@ -17,11 +17,12 @@ export interface EmailMessage {
 /**
  * Interfaz enchufable de envío de email (§9, decisión 1.1).
  *
- * DECISIÓN CERRADA: la provisión de usuarios NO envía email todavía; la clave
- * provisoria se RETORNA en la respuesta para que el admin la comparta. Este
- * contrato existe para enchufar un proveedor real (Brevo/SMTP/…) más adelante
- * sin tocar la lógica de negocio: cuando exista, se cambia el provider que
- * satisface `EmailService` por una implementación real.
+ * Estado actual: hay proveedor real activo. La factory (`common.module.ts`) elige
+ * `BrevoEmailService` (API HTTP) si hay `BREVO_API_KEY`, `SmtpEmailService` si hay
+ * `SMTP_HOST`, o `NoopEmailService` como fallback si no hay ninguno. La provisión
+ * de usuarios envía las credenciales por correo best-effort cuando el proveedor es
+ * real (y el OTP se entrega por esta misma interfaz); la clave provisoria SIEMPRE
+ * se retorna igual en la respuesta como respaldo para el admin.
  */
 export abstract class EmailService {
   abstract send(message: EmailMessage): Promise<void>;
@@ -47,9 +48,9 @@ export function textToHtml(text: string): string {
 }
 
 /**
- * Implementación por defecto: NO envía nada (solo registra en debug).
- * Es el placeholder hasta integrar un proveedor (§9). Mantener este no-op evita
- * que el resto del código dependa de un proveedor inexistente.
+ * Fallback sin envío: NO manda nada (solo registra en debug). Se usa cuando no hay
+ * ningún proveedor real configurado (sin `BREVO_API_KEY` ni `SMTP_HOST`). Mantener
+ * este no-op permite que el resto del código dependa siempre de `EmailService`.
  */
 @Injectable()
 export class NoopEmailService extends EmailService {
@@ -57,7 +58,7 @@ export class NoopEmailService extends EmailService {
 
   send(message: EmailMessage): Promise<void> {
     this.logger.debug(
-      `EmailService no integrado (§9): se omite envío a ${message.to} ("${message.subject}").`,
+      `Sin proveedor de correo configurado: se omite envío a ${message.to} ("${message.subject}").`,
     );
     return Promise.resolve();
   }

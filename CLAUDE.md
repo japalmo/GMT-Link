@@ -8,7 +8,7 @@
 
 ## Stack (decisiones cerradas — §2, no re-litigar)
 
-PostgreSQL + Prisma · OpenFGA · BD + gateway por tenant (multicloud; ver nota arriba) · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Firebase Auth · Cloudflare R2 · Gemini (cuota 3/día/usuario).
+PostgreSQL + Prisma · OpenFGA (autorización estructural) · BD + gateway por tenant (multicloud; ver nota arriba) · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Auth propia (JWT + bcrypt) · Cloudflare R2 · NVIDIA NIM (cuota 3/día/usuario).
 
 ## Estructura
 
@@ -27,7 +27,7 @@ docker-compose.yml     → PostgreSQL + Redis local
 ## Reglas duras
 
 - TypeScript **estricto** en todo el monorepo. Cero `any` explícito.
-- Toda decisión de permiso pasa por el guard de OpenFGA (`@RequirePermission`). Nunca `if (rol === ...)` suelto.
+- Autorización híbrida (ADR-0001): `PermissionService` es el único punto de decisión. Los grants funcionales viven en Postgres (`Role → RolePermission.scope`) y, para los permisos STRUCTURAL, la parte de proyecto se delega en OpenFGA (jerarquía depto→proyecto). Se aplica vía el guard `@RequirePermission` o, en finanzas, con `PermissionService.can` inline. Nunca `if (rol === ...)` suelto.
 - Los módulos **ensamblan** las primitivas de §5 (`ImportWizard`, `ApprovalWorkflow`, `RoleScopedList`, …); no reimplementan esa lógica.
 - Mobile-first y responsive. Estados vacío/carga/error siempre.
 - Por cada modelo nuevo → migración Prisma. Por cada permiso nuevo → entrada en catálogo (§8) + relación OpenFGA (§4.3).
@@ -63,5 +63,6 @@ Redis en WSL aún no es accesible desde Windows (bind loopback; pendiente hasta 
 
 ## Git
 
-- `master` → monorepo GMT Link (este código)
+- `main` → monorepo GMT Link (rama principal)
+- `feat/finanzas-roles-deploy` → rama de trabajo actual (finanzas + roles + deploy)
 - `mvp-v0` → MVP anterior preservado (NestJS + Next.js, no tocar)

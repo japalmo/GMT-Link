@@ -91,6 +91,19 @@ export default function GisToolsPage(): ReactNode {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Colores derivados del tema activo (claro/oscuro) leyendo las variables CSS
+    // del documento, para que texto, grilla y sombra se vean bien en ambos temas.
+    const rootStyles = getComputedStyle(document.documentElement);
+    const readVar = (name: string, fallback: string): string => {
+      const value = rootStyles.getPropertyValue(name).trim();
+      return value.length > 0 ? value : fallback;
+    };
+    const colorForeground = readVar('--foreground', '#e5e5e5');
+    const colorMuted = readVar('--muted-foreground', '#888888');
+    const colorGrid = readVar('--border', 'rgba(128,128,128,0.2)');
+    const colorBackground = readVar('--background', '#000000');
+    const colorMarker = readVar('--destructive', '#ef4444');
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -109,7 +122,7 @@ export default function GisToolsPage(): ReactNode {
 
     if (points.length === 0) {
       // Draw grid placeholder
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.strokeStyle = colorGrid;
       ctx.lineWidth = 1;
       for (let i = 20; i < canvas.width; i += 20) {
         ctx.beginPath();
@@ -123,7 +136,7 @@ export default function GisToolsPage(): ReactNode {
         ctx.lineTo(canvas.width, j);
         ctx.stroke();
       }
-      ctx.fillStyle = '#666';
+      ctx.fillStyle = colorMuted;
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Ingresa coordenadas para visualizar el trazado en el plano', canvas.width / 2, canvas.height / 2);
@@ -161,7 +174,7 @@ export default function GisToolsPage(): ReactNode {
     };
 
     // Draw coordinate axis/grid
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.strokeStyle = colorGrid;
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 4]);
 
@@ -188,7 +201,7 @@ export default function GisToolsPage(): ReactNode {
       ctx.stroke();
 
       // Labels
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.fillStyle = colorMuted;
       ctx.font = '9px monospace';
       ctx.setLineDash([]);
       ctx.fillText(lngVal.toFixed(4), cx + 2, canvas.height - 5);
@@ -229,14 +242,14 @@ export default function GisToolsPage(): ReactNode {
       // Inner dot
       ctx.beginPath();
       ctx.arc(cx, cy, 3.5, 0, 2 * Math.PI);
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = colorMarker;
       ctx.fill();
 
       // Node label
       if (pt.label) {
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = colorForeground;
         ctx.font = 'bold 9px sans-serif';
-        ctx.shadowColor = '#000';
+        ctx.shadowColor = colorBackground;
         ctx.shadowBlur = 3;
         ctx.fillText(pt.label, cx + 8, cy - 4);
         ctx.shadowBlur = 0;

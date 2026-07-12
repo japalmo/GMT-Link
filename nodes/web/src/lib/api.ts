@@ -882,16 +882,6 @@ export function createReimbursement(
   });
 }
 
-/** `POST /reimbursements/import` — importa un lote de reembolsos propios (PENDIENTE). */
-export function importReimbursements(
-  items: CreateReimbursementInput[],
-): Promise<ReimbursementView[]> {
-  return request<ReimbursementView[]>('/reimbursements/import', {
-    method: 'POST',
-    body: JSON.stringify({ items }),
-  });
-}
-
 /** `GET /reimbursements/me?status=` — reembolsos propios. Filtro de estado opcional. */
 export function listMyReimbursements(
   status?: FinanceStatus,

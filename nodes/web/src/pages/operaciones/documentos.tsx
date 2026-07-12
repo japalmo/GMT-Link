@@ -297,10 +297,11 @@ export function DocumentosTab(): ReactNode {
                   {filteredDocs.map((doc) => {
                     const isSelected = activeDocId === doc.id;
                     return (
-                      <div
+                      <button
                         key={doc.id}
+                        type="button"
                         onClick={() => setActiveDocId(doc.id)}
-                        className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 cursor-pointer transition-colors ${
+                        className={`flex w-full flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 text-left transition-colors ${
                           isSelected
                             ? 'bg-primary/5 hover:bg-primary/5 border-l-2 border-primary'
                             : 'hover:bg-muted/30'
@@ -329,7 +330,7 @@ export function DocumentosTab(): ReactNode {
                             {DOC_STATUS_META[doc.status].label}
                           </Badge>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
 

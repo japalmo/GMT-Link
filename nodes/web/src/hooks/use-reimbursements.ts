@@ -4,7 +4,6 @@ import {
   approveReimbursement,
   attachReimbursementReceipt,
   createReimbursement,
-  importReimbursements,
   listAllReimbursements,
   listMyReimbursements,
   payReimbursement,
@@ -45,8 +44,6 @@ export interface UseReimbursementsResult {
    * adjuntarle la boleta a continuación). Propaga el error al llamador.
    */
   create: (input: CreateReimbursementInput) => Promise<ReimbursementView>;
-  /** Importa un lote de reembolsos propios y refresca. */
-  importBatch: (items: CreateReimbursementInput[]) => Promise<void>;
   /** Adjunta/actualiza la boleta (solo dueño, solo si PENDIENTE) y refresca. */
   attachReceipt: (id: string, file: File) => Promise<void>;
   /** Aprueba un reembolso (gestor) y refresca. */
@@ -139,14 +136,6 @@ export function useReimbursements(): UseReimbursementsResult {
     [refreshAll],
   );
 
-  const importBatch = useCallback(
-    async (items: CreateReimbursementInput[]) => {
-      await importReimbursements(items);
-      await refreshAll();
-    },
-    [refreshAll],
-  );
-
   const attachReceipt = useCallback(
     async (id: string, file: File) => {
       await attachReimbursementReceipt(id, file);
@@ -187,7 +176,6 @@ export function useReimbursements(): UseReimbursementsResult {
     error,
     refetch: load,
     create,
-    importBatch,
     attachReceipt,
     approve,
     reject,

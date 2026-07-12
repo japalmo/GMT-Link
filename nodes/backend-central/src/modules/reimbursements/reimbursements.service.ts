@@ -15,7 +15,7 @@ import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
-import { CreateReimbursementDto, ImportReimbursementsDto } from './dto/reimbursements.dto';
+import { CreateReimbursementDto } from './dto/reimbursements.dto';
 import type { ReimbursementView } from './reimbursements.types';
 import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
 import type { ReceiptForPdf, ComposeOptions } from './reimbursements-pdf.util';
@@ -74,10 +74,10 @@ export interface ListReimbursementsFilters {
  * Seguridad: el `userId` SIEMPRE llega del controller (sesión), nunca del body.
  * "Solo el dueño" (crear/listar propios/subir boleta) es lógica de este service
  * (filtra por `userId`). La GESTIÓN (lista global, aprobar/rechazar/pagar) la
- * autoriza OpenFGA en el controller vía
- * `@RequirePermission('can_manage_finance', organization:gmt)` → el guard corta
- * con 403 si el usuario no es gestor. `getById` admite al dueño O a un gestor:
- * como el guard no aplica a esa ruta, la decisión es lógica de service.
+ * autoriza el controller con un check de permiso funcional inline
+ * (`PermissionService.can`, respaldado por Postgres) → 403 si el usuario no tiene
+ * el permiso. `getById` admite al dueño O a un gestor: como ese check no aplica a
+ * esa ruta, la decisión es lógica de service.
  */
 @Injectable()
 export class ReimbursementsService {
@@ -112,29 +112,8 @@ export class ReimbursementsService {
   }
 
   /**
-   * Importa un lote de reembolsos para el propio usuario en estado PENDIENTE.
-   */
-  async importBatch(userId: string, dto: ImportReimbursementsDto): Promise<ReimbursementView[]> {
-    const created = await this.prisma.$transaction(
-      dto.items.map((item) =>
-        this.prisma.reimbursement.create({
-          data: {
-            userId,
-            amount: item.amount,
-            date: parseDate(item.date),
-            concept: item.concept,
-            category: item.category ?? null,
-            status: FinanceStatus.PENDIENTE,
-          },
-        }),
-      ),
-    );
-    return created.map(toView);
-  }
-
-  /**
    * Genera (servidor, §6-3.2) un PDF con las boletas de los reembolsos indicados,
-   * en grilla de `perPage` por página. Gating FGA en el controller. Solo incluye
+   * en grilla de `perPage` por página. Gating por permiso funcional inline en el controller. Solo incluye
    * los que tienen boleta adjunta y cuyo archivo se puede leer; 400 si ninguno.
    */
   async generateBatchPdf(ids: string[], options: ComposeOptions): Promise<Uint8Array> {
@@ -307,7 +286,7 @@ export class ReimbursementsService {
 
   /**
    * Detalle de un reembolso visible para el DUEÑO o para un GESTOR. `isManager`
-   * lo resuelve el controller (check FGA `can_manage_finance`); si no es ninguno,
+   * lo resuelve el controller (check de permiso `finance:request:view:all`); si no es ninguno,
    * 404 (no revela existencia de ajenos). El gestor recibe los datos del
    * solicitante.
    */
@@ -360,7 +339,7 @@ export class ReimbursementsService {
     return toView(row);
   }
 
-  /** Aprueba un reembolso (gestor; gating FGA en el controller). PENDIENTE→APROBADO. */
+  /** Aprueba un reembolso (gestor; gating por permiso inline en el controller). PENDIENTE→APROBADO. */
   async approve(managerId: string, id: string): Promise<ReimbursementView> {
     return this.transition(id, 'approve', managerId);
   }

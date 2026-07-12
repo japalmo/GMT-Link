@@ -2,10 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { describe, expect, it } from 'vitest';
-import {
-  CreateReimbursementDto,
-  ImportReimbursementsDto,
-} from '../../src/modules/reimbursements/dto/reimbursements.dto';
+import { CreateReimbursementDto } from '../../src/modules/reimbursements/dto/reimbursements.dto';
 
 /** Valida una instancia con las mismas opciones que el ValidationPipe global. */
 async function failuresOf(instance: object): Promise<string[]> {
@@ -36,28 +33,5 @@ describe('CreateReimbursementDto — límites de amount (CLP entero Int32)', () 
     const failures = await failuresOf(dto);
     expect(failures.length).toBeGreaterThan(0);
     expect(failures.join(' ')).toMatch(/amount/i);
-  });
-});
-
-describe('ImportReimbursementsDto — forma del lote', () => {
-  it('rechaza un lote vacío (items: [])', async () => {
-    const dto = plainToInstance(ImportReimbursementsDto, { items: [] });
-    const failures = await failuresOf(dto);
-    expect(failures.length).toBeGreaterThan(0);
-  });
-
-  it('rechaza un lote de más de 200 items', async () => {
-    const dto = plainToInstance(ImportReimbursementsDto, {
-      items: Array.from({ length: 201 }, () => ({ ...VALID_BODY })),
-    });
-    const failures = await failuresOf(dto);
-    expect(failures.length).toBeGreaterThan(0);
-  });
-
-  it('acepta un lote válido', async () => {
-    const dto = plainToInstance(ImportReimbursementsDto, {
-      items: [{ ...VALID_BODY }],
-    });
-    expect(await failuresOf(dto)).toHaveLength(0);
   });
 });
