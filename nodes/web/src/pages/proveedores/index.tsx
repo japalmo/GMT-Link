@@ -807,7 +807,7 @@ export default function ProveedoresPage(): ReactNode {
       {/* AI Assistant Data Cleaner Modal */}
       {showAiCleaner && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
-          <div className="bg-card border border-border rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-card border border-border rounded-xl shadow-xl max-w-3xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
             <div className="p-5 border-b border-border flex justify-between items-center">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <Sparkles className="size-5 text-indigo-500" />

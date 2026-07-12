@@ -144,7 +144,7 @@ export default function ProyectosClientesPage() {
       {/* Buscador + filtro */}
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput
-          className="min-w-[220px]"
+          className="w-full sm:w-auto sm:min-w-[220px]"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar por nombre o código…"

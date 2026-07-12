@@ -372,7 +372,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     <div className="flex flex-col gap-6">
       {/* Search and Filters Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-card/40 border border-border p-4 rounded-xl">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[300px]">
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0 basis-full sm:basis-auto">
           <SearchInput
             className="max-w-sm"
             label="Buscar activos"
@@ -613,7 +613,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                   </div>
                 )}
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="asset-type">Tipo de Activo</Label>
                     <Select
@@ -660,7 +660,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="asset-proj">Proyecto Asignado</Label>
                     <Select
@@ -728,7 +728,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                 {newType === 'EQUIPO' && (
                   <div className="border border-border p-3 rounded-lg bg-muted/20 flex flex-col gap-3">
                     <p className="text-xs font-semibold text-primary">Metadata de Equipo</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1">
                         <Label htmlFor="eq-cycles" className="text-xs">Ciclos de Carga</Label>
                         <Input
@@ -755,7 +755,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                 {newType === 'VEHICULO' && (
                   <div className="border border-border p-3 rounded-lg bg-muted/20 flex flex-col gap-3">
                     <p className="text-xs font-semibold text-primary">Metadata de Vehículo</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1">
                         <Label htmlFor="vh-km" className="text-xs">Kilometraje Inicial</Label>
                         <Input
@@ -1387,7 +1387,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                 return (
                   <div className="col-span-full mt-2 bg-muted/20 border p-3 rounded-lg">
                     <p className="text-xs font-semibold text-primary mb-2">Especificaciones de Ficha</p>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Fabricante:</span>
                         <span className="font-medium text-foreground">{asset.manufacturer || 'No declarado'}</span>
@@ -2406,7 +2406,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                       {/* Speed Selector */}
                       <div className="flex flex-col gap-1.5">
                         <Label className="text-[10px] text-muted-foreground uppercase font-semibold">Velocidad Simulación</Label>
-                        <div className="grid grid-cols-3 gap-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1">
                           {[60, 90, 120].map((v) => (
                             <Button
                               key={v}

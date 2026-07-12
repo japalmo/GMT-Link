@@ -1180,7 +1180,7 @@ export function BacklogTab(): ReactNode {
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="task-est-pts">Puntos Estimados</Label>
                       <Input
@@ -1446,7 +1446,7 @@ export function BacklogTab(): ReactNode {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="edit-assigned">Responsable</Label>
                     <Select
@@ -1477,7 +1477,7 @@ export function BacklogTab(): ReactNode {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="edit-act-pts">Puntos Reales</Label>
                     <Input
@@ -1638,7 +1638,7 @@ export function BacklogTab(): ReactNode {
                       <Label className="font-semibold text-xs text-foreground">
                         Ingreso de Mediciones de Campo
                       </Label>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1">
                           <Label htmlFor="metric-cota" className="text-[10px] text-muted-foreground">Cota espejo (m)</Label>
                           <Input

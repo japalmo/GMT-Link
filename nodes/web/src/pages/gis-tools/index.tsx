@@ -534,7 +534,7 @@ export default function GisToolsPage(): ReactNode {
                   <form onSubmit={handleSingleConvert} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs">Dirección de Conversión</Label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -615,7 +615,7 @@ export default function GisToolsPage(): ReactNode {
                             required
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="flex flex-col gap-1">
                             <Label htmlFor="zone" className="text-xs">Huso / Zona (1-60)</Label>
                             <Input
@@ -659,7 +659,7 @@ export default function GisToolsPage(): ReactNode {
                   {singleResult && (
                     <div className="border border-primary/20 bg-primary/5 rounded-lg p-4 mt-4 flex flex-col gap-2.5">
                       <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Resultado Proyección</p>
-                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
                         <div className="flex flex-col">
                           <span className="text-[10px] text-muted-foreground">Latitud</span>
                           <span className="font-semibold">{singleResult.latitude?.toFixed(7) ?? '—'}</span>

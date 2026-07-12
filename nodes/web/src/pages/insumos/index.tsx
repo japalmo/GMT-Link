@@ -700,7 +700,7 @@ export default function InsumosPage(): ReactNode {
                       {/* Type: Entry/Exit */}
                       <div className="flex flex-col gap-1.5">
                         <Label className="text-xs">Tipo de Movimiento *</Label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => setTxType('ENTRY')}

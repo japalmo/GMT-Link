@@ -65,7 +65,7 @@ export function RequestDetailDialog({
             <ModalDescription>{formatDate(row.date)}</ModalDescription>
           </ModalHeader>
 
-          <dl className="grid grid-cols-2 gap-3 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-muted-foreground">Estado</dt>
               <dd>

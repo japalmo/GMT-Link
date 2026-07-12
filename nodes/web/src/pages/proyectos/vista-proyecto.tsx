@@ -536,7 +536,7 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="assign-role">Rol</Label>
                 <Select
@@ -880,7 +880,7 @@ function FasesTab({
             </Alert>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="service-code">Código</Label>
               <Input
@@ -1157,7 +1157,7 @@ function ServiceBlock({
               </Alert>
             )}
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`phase-code-${service.id}`}>Código</Label>
                 <Input
