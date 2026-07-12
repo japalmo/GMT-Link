@@ -42,6 +42,34 @@ export function roleLabel(role: string): string {
   return ROLE_LABELS[role as RoleKey] ?? role;
 }
 
+/**
+ * Etiquetas legibles (es-CL) por módulo del catálogo de permisos (§8). Igual que
+ * {@link ROLE_LABELS}, es solo presentación: reemplaza la clave cruda (minúscula)
+ * por un nombre presentable en la matriz de roles.
+ */
+export const MODULE_LABELS: Record<string, string> = {
+  sistema: 'Sistema',
+  directorio: 'Directorio',
+  clientes: 'Clientes',
+  proveedores: 'Proveedores',
+  bodegas: 'Bodegas',
+  proyectos: 'Proyectos',
+  tareas: 'Tareas',
+  documentos: 'Documentos',
+  'v-metric': 'V-Metric',
+  finanzas: 'Finanzas',
+  activos: 'Activos',
+  recursos: 'Recursos',
+};
+
+/**
+ * Devuelve la etiqueta legible de un módulo, con fallback al propio valor crudo
+ * si no está mapeado (mismo patrón que {@link roleLabel}).
+ */
+export function moduleLabel(module: string): string {
+  return MODULE_LABELS[module] ?? module;
+}
+
 /** Etiquetas legibles (es-CL) para cada {@link UserStatus}. */
 export const STATUS_LABELS: Record<UserStatus, string> = {
   PENDING_FIRST_LOGIN: 'Pendiente primer ingreso',

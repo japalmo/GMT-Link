@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { errorToMessage } from '@/lib/api';
+import { moduleLabel } from '@/lib/role-labels';
 import { cn } from '@/lib/utils';
 
 const SCOPE_OPTIONS: ReadonlyArray<{ value: PermissionScopeValue; label: string }> = [
@@ -152,7 +153,7 @@ export function RoleEditor({
         {catalog.map((group) => (
           <fieldset key={group.module} className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.module}
+              {moduleLabel(group.module)}
             </legend>
             <div className="flex flex-col gap-1.5">
               {group.items.map((item) => {
@@ -170,17 +171,24 @@ export function RoleEditor({
                     )}
                     title={!item.composable ? 'Este permiso no es componible en roles personalizados.' : undefined}
                   >
-                    <label htmlFor={checkboxId} className="flex flex-1 cursor-pointer items-center gap-2 text-sm">
-                      <input
-                        id={checkboxId}
-                        type="checkbox"
-                        checked={checked}
-                        disabled={disabled}
-                        onChange={(e) => toggle(item.key, e.target.checked, 'GLOBAL')}
-                        className="size-4 rounded border-input accent-primary outline-none"
-                      />
-                      {item.label}
-                    </label>
+                    <div className="flex flex-1 flex-col gap-1">
+                      <label htmlFor={checkboxId} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={(e) => toggle(item.key, e.target.checked, 'GLOBAL')}
+                          className="size-4 rounded border-input accent-primary outline-none"
+                        />
+                        {item.label}
+                      </label>
+                      {item.kind === 'STRUCTURAL' && !item.composable && (
+                        <Badge variant="neutral" className="w-fit font-normal">
+                          Se otorga al asignar a un proyecto o activo
+                        </Badge>
+                      )}
+                    </div>
 
                     {item.scopeable && (
                       <label

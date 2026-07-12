@@ -114,6 +114,12 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'asset:history:view', label: 'Ver históricos de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_history', scopeable: true },
   { key: 'asset:doc:upload', label: 'Subir doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_doc', scopeable: true },
   { key: 'asset:doc:approve', label: 'Aprobar doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_and_approve_doc', scopeable: true },
+  // Relaciones FGA de activos que se heredan al ASIGNAR el activo/proyecto (no se
+  // marcan en un rol): existen en el catálogo como STRUCTURAL informativos y NO
+  // componibles (fuera de COMPOSABLE_STRUCTURAL). Cierran el hueco de las relaciones
+  // huérfanas can_view_list / can_view_speed del modelo FGA (tipo asset).
+  { key: 'asset:list:view', label: 'Ver listado de activos', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_list', scopeable: true },
+  { key: 'asset:speed:view', label: 'Ver velocidad del activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_speed', scopeable: true },
   { key: 'asset:fields:edit', label: 'Editar campos de equipo', module: 'recursos', kind: 'FUNCTIONAL', scopeable: true },
   // Acceso de SOLO LECTURA al módulo Recursos (enciende la pestaña de nav vía
   // PERMISSION_MODULE en auth.controller). FUNCTIONAL org-scope (siempre GLOBAL):
