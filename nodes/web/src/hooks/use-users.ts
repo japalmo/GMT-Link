@@ -7,6 +7,9 @@ import {
   importUsers,
   listUsers,
   removeUserRole,
+  resendUserInvite,
+  revokeUserInvite,
+  revokeUserSessions,
   type CreateUserDto,
   type CreateUserResponse,
   type ImportUsersResponse,
@@ -39,6 +42,15 @@ export interface UseUsersResult {
   assignRole: (id: string, input: AssignRoleInput) => Promise<UserRolesResponse>;
   /** Quita la membership exacta (rol + alcance) de un usuario. */
   removeRole: (id: string, membership: UserMembership) => Promise<UserRolesResponse>;
+  /**
+   * Reenvía la invitación (regenera la clave provisoria) y recarga la lista.
+   * Devuelve la nueva clave para mostrarla una única vez.
+   */
+  resendInvite: (id: string) => Promise<{ provisionalPassword: string }>;
+  /** Revoca el acceso del usuario (suspende / revoca invitación) y recarga la lista. */
+  revokeInvite: (id: string) => Promise<UserListItem>;
+  /** Cierra las sesiones vivas del usuario (no cambia su estado). */
+  revokeSessions: (id: string) => Promise<void>;
 }
 
 /**
@@ -111,6 +123,34 @@ export function useUsers(search?: string): UseUsersResult {
     [],
   );
 
+  const resendInvite = useCallback(
+    async (id: string): Promise<{ provisionalPassword: string }> => {
+      const result = await resendUserInvite(id);
+      await load();
+      return result;
+    },
+    [load],
+  );
+
+  const revokeInvite = useCallback(
+    async (id: string): Promise<UserListItem> => {
+      const result = await revokeUserInvite(id);
+      await load();
+      return result;
+    },
+    [load],
+  );
+
+  const revokeSessions = useCallback(
+    async (id: string): Promise<void> => {
+      // No cambia el estado del usuario; recargamos igual para reflejar cualquier
+      // dato derivado y mantener la lista fresca.
+      await revokeUserSessions(id);
+      await load();
+    },
+    [load],
+  );
+
   return {
     users,
     loading,
@@ -120,5 +160,8 @@ export function useUsers(search?: string): UseUsersResult {
     importRows,
     assignRole,
     removeRole,
+    resendInvite,
+    revokeInvite,
+    revokeSessions,
   };
 }

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Plus, Upload, UserCog, X } from 'lucide-react';
+import { Ban, KeyRound, LogOut, Plus, Upload, UserCog, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -8,8 +8,9 @@ import { PageHeader } from '@/components/layout/page-header';
 import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
 import { useUsers } from '@/hooks/use-users';
 import type { CreateUserDto, ImportUsersResponse, UserListItem } from '@/lib/api';
-import { uploadUserAvatar } from '@/lib/api';
+import { errorToMessage, uploadUserAvatar } from '@/lib/api';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { RoleChips } from './role-chips';
 import { NewUserDialog } from './new-user-dialog';
 import { ImportUsersDialog } from './import-users-dialog';
@@ -29,14 +30,49 @@ function formatDate(iso: string): string {
  * tras crear/importar (decisión §9: sin email).
  */
 export default function UsuariosPage(): ReactNode {
-  const { users, loading, error, refetch, create, importRows, assignRole, removeRole } = useUsers();
+  const {
+    users,
+    loading,
+    error,
+    refetch,
+    create,
+    importRows,
+    assignRole,
+    removeRole,
+    resendInvite,
+    revokeInvite,
+    revokeSessions,
+  } = useUsers();
 
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [rolesUser, setRolesUser] = useState<UserListItem | null>(null);
+  const [revokeUser, setRevokeUser] = useState<UserListItem | null>(null);
+  const [sessionsUser, setSessionsUser] = useState<UserListItem | null>(null);
   const [credentials, setCredentials] = useState<readonly ProvisionalCredential[] | null>(null);
   const [credentialsTitle, setCredentialsTitle] = useState('Credencial provisoria');
   const [importErrors, setImportErrors] = useState<ImportUsersResponse['errors']>([]);
+
+  /**
+   * Reenvía la invitación de un usuario pendiente y muestra la nueva clave
+   * provisoria en el {@link CredentialDialog} (mismo mecanismo que al crear). El
+   * hook ya refresca la lista tras el reenvío.
+   */
+  async function handleResend(u: UserListItem): Promise<void> {
+    try {
+      const { provisionalPassword } = await resendInvite(u.id);
+      setCredentialsTitle('Clave provisoria reenviada');
+      setCredentials([
+        {
+          username: u.username,
+          email: u.emailInstitucional ?? u.emailPersonal ?? u.email,
+          provisionalPassword,
+        },
+      ]);
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo reenviar la clave.'));
+    }
+  }
 
   async function handleCreate(dto: CreateUserDto, avatarFile: File | null): Promise<void> {
     const res = await create(dto);
@@ -173,17 +209,58 @@ export default function UsuariosPage(): ReactNode {
         onRetry={() => void refetch()}
         emptyMessage="No hay usuarios todavía. Crea el primero o importa un CSV."
         rowActionsLabel="Acciones"
-        rowActions={(u) => (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setRolesUser(u)}
-            aria-label={`Gestionar roles de ${u.firstName} ${u.lastName}`}
-          >
-            <UserCog aria-hidden />
-            Roles
-          </Button>
-        )}
+        rowActions={(u) => {
+          // Invitación pendiente: token enviado y aún no usado.
+          const invitePending =
+            u.status === 'PENDING_FIRST_LOGIN' ||
+            (u.status === 'SUSPENDED' && u.firstLoginAt === null);
+          return (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRolesUser(u)}
+                aria-label={`Gestionar roles de ${u.firstName} ${u.lastName}`}
+              >
+                <UserCog aria-hidden />
+                Roles
+              </Button>
+              {invitePending && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleResend(u)}
+                  aria-label={`Reenviar clave de ${u.firstName} ${u.lastName}`}
+                >
+                  <KeyRound aria-hidden />
+                  Reenviar clave
+                </Button>
+              )}
+              {u.status !== 'SUSPENDED' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRevokeUser(u)}
+                  aria-label={`Revocar acceso de ${u.firstName} ${u.lastName}`}
+                >
+                  <Ban aria-hidden />
+                  Revocar acceso
+                </Button>
+              )}
+              {u.status === 'ACTIVE' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSessionsUser(u)}
+                  aria-label={`Cerrar sesiones de ${u.firstName} ${u.lastName}`}
+                >
+                  <LogOut aria-hidden />
+                  Cerrar sesiones
+                </Button>
+              )}
+            </>
+          );
+        }}
         caption="Directorio de usuarios"
       />
 
@@ -209,6 +286,32 @@ export default function UsuariosPage(): ReactNode {
         onOpenChange={(open) => (open ? undefined : setCredentials(null))}
         credentials={credentials ?? []}
         title={credentialsTitle}
+      />
+
+      <ConfirmDialog
+        open={revokeUser !== null}
+        onOpenChange={(open) => (open ? undefined : setRevokeUser(null))}
+        title="Revocar acceso"
+        description="¿Revocas el acceso de este usuario? No podrá iniciar sesión."
+        confirmLabel="Revocar acceso"
+        onConfirm={async () => {
+          if (!revokeUser) return;
+          await revokeInvite(revokeUser.id);
+          toast.success('Acceso revocado.');
+        }}
+      />
+
+      <ConfirmDialog
+        open={sessionsUser !== null}
+        onOpenChange={(open) => (open ? undefined : setSessionsUser(null))}
+        title="Cerrar sesiones"
+        description="¿Cierras todas las sesiones de este usuario?"
+        confirmLabel="Cerrar sesiones"
+        onConfirm={async () => {
+          if (!sessionsUser) return;
+          await revokeSessions(sessionsUser.id);
+          toast.success('Sesiones cerradas.');
+        }}
       />
     </PageContainer>
   );

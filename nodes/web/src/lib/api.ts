@@ -166,7 +166,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  // Respuestas 2xx sin cuerpo (p. ej. el 201 `void` de revoke-sessions): no hay
+  // JSON que parsear y `res.json()` lanzaría. En ese caso resolvemos `undefined`.
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return undefined as T;
+  }
 }
 
 /**
@@ -274,6 +280,8 @@ export interface UserListItem {
   emailInstitucional: string | null;
   emailPersonal: string | null;
   status: UserStatus;
+  /** ISO del primer ingreso completado; `null` = invitación aún no usada. */
+  firstLoginAt: string | null;
   isClientUser: boolean;
   roleKeys: RoleKey[];
   /** Membresías (rol + alcance) del usuario — chips por membership (H13). */
@@ -395,6 +403,41 @@ export function uploadUserAvatar(id: string, file: File): Promise<UserListItem> 
  */
 export function getProjectAdmins(): Promise<ProjectAdminOption[]> {
   return request<ProjectAdminOption[]>('/users/project-admins');
+}
+
+/**
+ * `POST /users/:id/resend-invite` — regenera la clave provisoria de una
+ * invitación NO usada y la devuelve (única vez, igual que al crear). 409 si la
+ * invitación ya fue usada (el usuario ya completó su primer ingreso).
+ */
+export function resendUserInvite(id: string): Promise<{ provisionalPassword: string }> {
+  return request<{ provisionalPassword: string }>(
+    `/users/${encodeURIComponent(id)}/resend-invite`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * `POST /users/:id/revoke-invite` — revoca el acceso del usuario. Para un
+ * usuario PENDING revoca la invitación; para un ACTIVE lo suspende y corta sus
+ * sesiones. Devuelve el {@link UserListItem} ya suspendido.
+ */
+export function revokeUserInvite(id: string): Promise<UserListItem> {
+  return request<UserListItem>(
+    `/users/${encodeURIComponent(id)}/revoke-invite`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * `POST /users/:id/revoke-sessions` — invalida las sesiones vivas del usuario sin
+ * cambiar su estado. No devuelve cuerpo.
+ */
+export function revokeUserSessions(id: string): Promise<void> {
+  return request<void>(
+    `/users/${encodeURIComponent(id)}/revoke-sessions`,
+    { method: 'POST' },
+  );
 }
 
 /* -------------------------------------------------------------------------- */

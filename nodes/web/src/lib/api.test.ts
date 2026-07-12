@@ -326,6 +326,7 @@ describe('api — UserRolesResponse/UserListItem extendidos con memberships (A4)
       emailInstitucional: 'ada@gmt.cl',
       emailPersonal: null,
       status: 'ACTIVE',
+      firstLoginAt: new Date().toISOString(),
       isClientUser: false,
       roleKeys: ['c_inspector'],
       memberships: [membership],

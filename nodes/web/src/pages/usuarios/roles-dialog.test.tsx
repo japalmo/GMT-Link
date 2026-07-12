@@ -43,6 +43,7 @@ const user: UserListItem = {
   emailInstitucional: 'ada@gmt.cl',
   emailPersonal: null,
   status: 'ACTIVE',
+  firstLoginAt: new Date().toISOString(),
   isClientUser: false,
   roleKeys: ['org_admin', 'c_inspector'],
   memberships: [orgMembership, projMembership],
