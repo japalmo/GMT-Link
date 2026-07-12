@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { FinanceStatus } from '@prisma/client';
 import type { Reimbursement } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -55,6 +55,8 @@ interface PrismaParts {
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
+  geminiCount: ReturnType<typeof vi.fn>;
+  geminiCreate: ReturnType<typeof vi.fn>;
 }
 
 function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
@@ -65,8 +67,20 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
     updateMany: parts.updateMany ?? vi.fn(() => Promise.resolve({ count: 0 })),
+    geminiCount: parts.geminiCount ?? vi.fn(() => Promise.resolve(0)),
+    geminiCreate: parts.geminiCreate ?? vi.fn(() => Promise.resolve(undefined)),
   };
-  const prisma = { reimbursement: resolved } as unknown as PrismaService;
+  const prisma = {
+    reimbursement: {
+      create: resolved.create,
+      findMany: resolved.findMany,
+      findFirst: resolved.findFirst,
+      findUnique: resolved.findUnique,
+      update: resolved.update,
+      updateMany: resolved.updateMany,
+    },
+    geminiUsage: { count: resolved.geminiCount, create: resolved.geminiCreate },
+  } as unknown as PrismaService;
   return { prisma, parts: resolved };
 }
 
@@ -386,10 +400,38 @@ describe('ReimbursementsService', () => {
     expect(call?.orderBy.date).toBe('asc');
   });
 
-  it('scanReceipt sin clave NVIDIA => objeto vacío', async () => {
-    const { prisma } = buildPrisma();
+  it('scanReceipt sin clave NVIDIA => objeto vacío y NO consume cuota', async () => {
+    const geminiCreate = vi.fn(() => Promise.resolve(undefined));
+    const { prisma } = buildPrisma({ geminiCreate });
     const service = makeService(prisma);
-    await expect(service.scanReceipt('data:image/jpeg;base64,AAAA')).resolves.toEqual({});
+    await expect(service.scanReceipt('u1', 'data:image/jpeg;base64,AAAA')).resolves.toEqual({});
+    expect(geminiCreate).not.toHaveBeenCalled();
+  });
+
+  it('scanReceipt cuenta la cuota diaria por el propio userId (tabla geminiUsage)', async () => {
+    const geminiCount = vi.fn<
+      (args: { where: { userId: string; createdAt: { gte: Date } } }) => Promise<number>
+    >(() => Promise.resolve(0));
+    const { prisma } = buildPrisma({ geminiCount });
+    const service = makeService(prisma);
+
+    await service.scanReceipt('u1', 'data:image/jpeg;base64,AAAA');
+
+    const where = geminiCount.mock.calls[0]?.[0]?.where;
+    expect(where?.userId).toBe('u1');
+    expect(where?.createdAt.gte).toBeInstanceOf(Date);
+  });
+
+  it('scanReceipt supera el límite diario (>=3) => BadRequest y NO consume cuota', async () => {
+    const geminiCount = vi.fn(() => Promise.resolve(3));
+    const geminiCreate = vi.fn(() => Promise.resolve(undefined));
+    const { prisma } = buildPrisma({ geminiCount, geminiCreate });
+    const service = makeService(prisma);
+
+    await expect(service.scanReceipt('u1', 'data:image/jpeg;base64,AAAA')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(geminiCreate).not.toHaveBeenCalled();
   });
 
   it('generateBatchPdf usa receiptKey y arma el PDF', async () => {

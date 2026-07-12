@@ -13,7 +13,7 @@ import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { computeHours } from './overtime-hours.util';
 import { monthRange } from '../finance/finance-month.util';
-import { summarizeOvertime } from './overtime-summary.util';
+import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
 import type { CreateOvertimeDto } from './dto/overtime.dto';
 import type { OvertimeView } from './overtime.types';
@@ -148,23 +148,65 @@ export class OvertimeService {
     return rows.map(toViewWithRequester);
   }
 
-  /** Agregaciones para las cards (spec §5.2), sobre el MISMO filtro que la tabla. */
+  /**
+   * Agregaciones para las cards (spec §5.2), sobre el MISMO filtro que la tabla.
+   * Se calcula todo en BD (conteos por estado/borrador y sumas de horas por
+   * trabajador y por proyecto) en vez de traer TODAS las filas y sumar en JS. Los
+   * nombres se resuelven con `findMany` acotados a los ids que aparecen en el top.
+   */
   async summary(filters: ListOvertimeFilters): Promise<OvertimeSummary> {
-    const rows = await this.prisma.overtimeRequest.findMany({
-      where: buildOvertimeWhere(filters),
-      include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
-    });
-    return summarizeOvertime(
-      rows.map((r) => ({
-        userId: r.userId,
-        requesterName: `${r.user.firstName} ${r.user.lastName}`,
-        hours: r.hours,
-        status: r.status,
-        isDraft: r.isDraft,
-        projectId: r.projectId,
-        projectName: r.project?.name ?? null,
+    const where = buildOvertimeWhere(filters);
+
+    const [statusGroups, workerGroups, projectGroups] = await Promise.all([
+      this.prisma.overtimeRequest.groupBy({ by: ['status', 'isDraft'], where, _count: true }),
+      this.prisma.overtimeRequest.groupBy({
+        by: ['userId'],
+        where,
+        _sum: { hours: true },
+        orderBy: { _sum: { hours: 'desc' } },
+      }),
+      this.prisma.overtimeRequest.groupBy({
+        by: ['projectId'],
+        where: { ...where, projectId: { not: null } },
+        _sum: { hours: true },
+        orderBy: { _sum: { hours: 'desc' } },
+      }),
+    ]);
+
+    const userIds = workerGroups.map((g) => g.userId);
+    const projectIds = projectGroups.flatMap((g) => (g.projectId === null ? [] : [g.projectId]));
+
+    const [users, projects] = await Promise.all([
+      userIds.length > 0
+        ? this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : Promise.resolve([]),
+      projectIds.length > 0
+        ? this.prisma.project.findMany({
+            where: { id: { in: projectIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const workerNames = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
+    const projectNames = new Map(projects.map((p) => [p.id, p.name]));
+
+    return buildOvertimeSummary({
+      statusCounts: statusGroups.map((g) => ({
+        status: g.status,
+        isDraft: g.isDraft,
+        count: g._count,
       })),
-    );
+      ranking: workerGroups.map((g) => ({ userId: g.userId, hours: g._sum.hours ?? 0 })),
+      byProject: projectGroups.flatMap((g) =>
+        g.projectId === null ? [] : [{ projectId: g.projectId, hours: g._sum.hours ?? 0 }],
+      ),
+      workerNames,
+      projectNames,
+    });
   }
 
   /**

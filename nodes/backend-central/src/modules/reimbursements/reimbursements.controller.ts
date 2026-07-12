@@ -98,7 +98,7 @@ export class ReimbursementsController {
     await this.require(userId, P_CREATE);
     const checked = this.requireValidFile(file);
     const dataUrl = `data:${checked.mimetype};base64,${checked.buffer.toString('base64')}`;
-    return this.reimbursements.scanReceipt(dataUrl);
+    return this.reimbursements.scanReceipt(userId, dataUrl);
   }
 
   @Post('print')

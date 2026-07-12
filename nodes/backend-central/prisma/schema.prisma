@@ -459,6 +459,8 @@ model Reimbursement {
   updatedAt       DateTime      @updatedAt
 
   @@index([userId, status])
+  // Vistas de gestión: filtran por status + rango de date y ordenan por date.
+  @@index([status, date])
   @@map("reimbursements")
 }
 
@@ -489,6 +491,8 @@ model OvertimeRequest {
   updatedAt        DateTime      @updatedAt
 
   @@index([userId, status])
+  // Vistas de gestión: filtran por status + rango de date y ordenan por date.
+  @@index([status, date])
   @@map("overtime_requests")
 }
 
@@ -856,7 +860,7 @@ model GeminiUsage {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation("GeminiUsageActor", fields: [userId], references: [id], onDelete: Cascade)
-  action    String // "SHORE_DETECTION" | "DATA_CLEANING"
+  action    String // "SHORE_DETECTION" | "DATA_CLEANING" | "RECEIPT_OCR"
   createdAt DateTime @default(now())
 
   @@map("gemini_usage")

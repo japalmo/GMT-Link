@@ -1,16 +1,5 @@
 import { FinanceStatus } from '@prisma/client';
 
-/** Fila mínima para agregar (ya proyectada desde Prisma). */
-export interface OvertimeSummaryRow {
-  userId: string;
-  requesterName: string;
-  hours: number | null;
-  status: FinanceStatus;
-  isDraft: boolean;
-  projectId: string | null;
-  projectName: string | null;
-}
-
 export interface OvertimeSummary {
   pendingCount: number;
   approvedCount: number;
@@ -19,40 +8,64 @@ export interface OvertimeSummary {
   byProject: Array<{ projectId: string; name: string; hours: number }>;
 }
 
-/** Agrega las HE para las cards (spec §5.2). Orden desc por horas. */
-export function summarizeOvertime(rows: readonly OvertimeSummaryRow[]): OvertimeSummary {
+/** Conteo por estado + borrador (proyectado desde `groupBy({ by:['status','isDraft'], _count })`). */
+export interface OvertimeStatusCount {
+  status: FinanceStatus;
+  isDraft: boolean;
+  count: number;
+}
+
+/** Horas por trabajador (proyectado desde `groupBy({ by:['userId'] })`, YA ordenado desc). */
+export interface OvertimeWorkerHours {
+  userId: string;
+  hours: number;
+}
+
+/** Horas por proyecto (proyectado desde `groupBy({ by:['projectId'] })`, YA ordenado desc). */
+export interface OvertimeProjectHours {
+  projectId: string;
+  hours: number;
+}
+
+/** Entradas ya agregadas en BD para armar el resumen (spec §5.2). */
+export interface OvertimeSummaryInput {
+  statusCounts: readonly OvertimeStatusCount[];
+  ranking: readonly OvertimeWorkerHours[]; // orden desc por horas (viene del groupBy)
+  byProject: readonly OvertimeProjectHours[]; // orden desc por horas (viene del groupBy)
+  workerNames: ReadonlyMap<string, string>; // userId → nombre del solicitante
+  projectNames: ReadonlyMap<string, string>; // projectId → nombre del proyecto
+}
+
+/**
+ * Ensambla el resumen de horas extra (cards §5.2) a partir de agregaciones YA
+ * calculadas en BD. Un borrador NUNCA cuenta como pendiente/aprobado (se prioriza
+ * `isDraft`, igual que la lógica en memoria previa). El ranking por trabajador y el
+ * desglose por proyecto conservan el orden de entrada (desc por horas del groupBy).
+ */
+export function buildOvertimeSummary(input: OvertimeSummaryInput): OvertimeSummary {
   let pendingCount = 0;
   let approvedCount = 0;
   let draftCount = 0;
-  const byWorker = new Map<string, { name: string; hours: number }>();
-  const byProject = new Map<string, { name: string; hours: number }>();
 
-  for (const r of rows) {
-    if (r.isDraft) draftCount += 1;
-    else if (r.status === FinanceStatus.PENDIENTE) pendingCount += 1;
-    else if (r.status === FinanceStatus.APROBADO) approvedCount += 1;
-
-    const h = r.hours ?? 0;
-    const w = byWorker.get(r.userId) ?? { name: r.requesterName, hours: 0 };
-    w.hours += h;
-    byWorker.set(r.userId, w);
-
-    if (r.projectId) {
-      const p = byProject.get(r.projectId) ?? { name: r.projectName ?? r.projectId, hours: 0 };
-      p.hours += h;
-      byProject.set(r.projectId, p);
-    }
+  for (const c of input.statusCounts) {
+    if (c.isDraft) draftCount += c.count;
+    else if (c.status === FinanceStatus.PENDIENTE) pendingCount += c.count;
+    else if (c.status === FinanceStatus.APROBADO) approvedCount += c.count;
   }
 
   return {
     pendingCount,
     approvedCount,
     draftCount,
-    rankingByWorker: [...byWorker.entries()]
-      .map(([userId, v]) => ({ userId, name: v.name, hours: v.hours }))
-      .sort((a, b) => b.hours - a.hours),
-    byProject: [...byProject.entries()]
-      .map(([projectId, v]) => ({ projectId, name: v.name, hours: v.hours }))
-      .sort((a, b) => b.hours - a.hours),
+    rankingByWorker: input.ranking.map((r) => ({
+      userId: r.userId,
+      name: input.workerNames.get(r.userId) ?? r.userId,
+      hours: r.hours,
+    })),
+    byProject: input.byProject.map((p) => ({
+      projectId: p.projectId,
+      name: input.projectNames.get(p.projectId) ?? p.projectId,
+      hours: p.hours,
+    })),
   };
 }

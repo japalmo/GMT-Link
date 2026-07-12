@@ -21,11 +21,17 @@ import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util'
 import type { ReceiptForPdf, ComposeOptions } from './reimbursements-pdf.util';
 import { buildReceiptOcrMessages, parseReceiptOcr } from './receipt-ocr.util';
 import type { ReceiptScanResult } from './receipt-ocr.util';
-import { summarizeReimbursements } from './reimbursements-summary.util';
+import { buildReimbursementSummary } from './reimbursements-summary.util';
 import type { ReimbursementSummary } from './reimbursements-summary.util';
 
 /** Carpeta lógica del storage para boletas de reembolso (§6-3.1). */
 const RECEIPTS_FOLDER = 'reimbursements';
+
+/** Cuota diaria de IA por usuario (mismo mecanismo/límite que tools y providers). */
+const DAILY_AI_QUOTA = 3;
+
+/** Acción registrada en `geminiUsage` por cada OCR de boleta (comparte cuota con el resto de IA). */
+const RECEIPT_OCR_ACTION = 'RECEIPT_OCR';
 
 /** Tipo de notificación que recibe el solicitante en cada transición (§6-2.2). */
 const NOTIFICATION_TYPE = 'reimbursement.decided';
@@ -212,33 +218,78 @@ export class ReimbursementsService {
     return rows.map(toViewWithRequester);
   }
 
-  /** Agregaciones para las cards (spec §5.2), sobre el MISMO filtro que la tabla. */
+  /**
+   * Agregaciones para las cards (spec §5.2), sobre el MISMO filtro que la tabla.
+   * Se calcula todo en BD (conteos por estado, suma de APROBADO y ranking por
+   * trabajador) en vez de traer TODAS las filas y sumar en JS. Los nombres del
+   * ranking se resuelven con UN `findMany` acotado a los userId del top.
+   */
   async summary(filters: ListReimbursementsFilters): Promise<ReimbursementSummary> {
-    const rows = await this.prisma.reimbursement.findMany({
-      where: buildReimbursementWhere(filters),
-      include: { user: REQUESTER_SELECT },
+    const where = buildReimbursementWhere(filters);
+    const approvedWhere: Prisma.ReimbursementWhereInput = {
+      ...where,
+      status: FinanceStatus.APROBADO,
+    };
+
+    const [statusGroups, approvedAgg, rankingGroups] = await Promise.all([
+      this.prisma.reimbursement.groupBy({ by: ['status'], where, _count: true }),
+      this.prisma.reimbursement.aggregate({ where: approvedWhere, _sum: { amount: true } }),
+      this.prisma.reimbursement.groupBy({
+        by: ['userId'],
+        where: approvedWhere,
+        _sum: { amount: true },
+        orderBy: { _sum: { amount: 'desc' } },
+      }),
+    ]);
+
+    const userIds = rankingGroups.map((g) => g.userId);
+    const users =
+      userIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : [];
+    const names = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
+
+    return buildReimbursementSummary({
+      statusCounts: statusGroups.map((g) => ({ status: g.status, count: g._count })),
+      approvedPendingAmount: approvedAgg._sum.amount ?? 0,
+      ranking: rankingGroups.map((g) => ({ userId: g.userId, total: g._sum.amount ?? 0 })),
+      names,
     });
-    return summarizeReimbursements(
-      rows.map((r) => ({
-        userId: r.userId,
-        requesterName: `${r.user.firstName} ${r.user.lastName}`,
-        amount: r.amount,
-        status: r.status,
-      })),
-    );
   }
 
   /**
    * OCR de boleta (spec §5.5): imagen (data URL base64) → NVIDIA visión → campos
-   * sugeridos. Sin cuota diaria (a diferencia de detectShoreline). Si no hay clave
-   * NVIDIA, devuelve objeto vacío (el usuario llena a mano).
+   * sugeridos. Protegido por una cuota diaria por usuario (MISMO mecanismo que
+   * `tools.detectShoreline` y `providers.cleanProviderData`: tabla `geminiUsage`,
+   * conteo de filas del día, límite `DAILY_AI_QUOTA`) para acotar el costo del
+   * modelo de visión. Si no hay clave NVIDIA, devuelve objeto vacío SIN consumir
+   * cuota (no hay llamada paga; el usuario llena a mano).
    */
-  async scanReceipt(imageDataUrl: string): Promise<ReceiptScanResult> {
+  async scanReceipt(userId: string, imageDataUrl: string): Promise<ReceiptScanResult> {
+    // 1. Cuota diaria por usuario (comparte contador con el resto de features de IA).
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const usageCount = await this.prisma.geminiUsage.count({
+      where: { userId, createdAt: { gte: today } },
+    });
+    if (usageCount >= DAILY_AI_QUOTA) {
+      throw new BadRequestException(
+        `Alcanzaste el límite diario de lectura automática de boletas (${DAILY_AI_QUOTA}/día). Completa los datos a mano.`,
+      );
+    }
+
     const apiKey =
       this.config.get<string>('NVIDIA_API_KEY_VISION') ?? this.config.get<string>('NVIDIA_API_KEY');
     if (!apiKey) return {};
     const model =
       this.config.get<string>('NVIDIA_VISION_MODEL') ?? 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
+
+    // 2. Registrar el uso ANTES de la llamada paga (cuenta como una consulta de IA).
+    await this.prisma.geminiUsage.create({ data: { userId, action: RECEIPT_OCR_ACTION } });
+
     try {
       const content = await callNvidiaChat({
         apiKey,

@@ -180,7 +180,7 @@ export class ProjectsService {
         },
         orderBy: { createdAt: 'desc' },
       });
-      return Promise.all(projects.map((p) => this.injectCurrentKpi(p)));
+      return this.injectCurrentKpiBatch(projects);
     }
 
     // 2. Si no es admin global, leer sus membresías de proyecto y departamento
@@ -216,7 +216,7 @@ export class ProjectsService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return Promise.all(projects.map((p) => this.injectCurrentKpi(p)));
+    return this.injectCurrentKpiBatch(projects);
   }
 
   /**
@@ -482,6 +482,31 @@ export class ProjectsService {
     });
     const current = completedTasksSum._sum.actualPoints || 0;
 
+    return this.withCurrentKpi(project, current);
+  }
+
+  /**
+   * Igual que `injectCurrentKpi` pero para una LISTA: calcula el KPI `current` de
+   * todos los proyectos con UNA sola agregación por lotes (`groupBy` por proyecto)
+   * en vez de un `task.aggregate` por proyecto (evita el N+1 del listado). La forma
+   * de salida es idéntica: cada proyecto con `kpis.current` inyectado.
+   */
+  private async injectCurrentKpiBatch<T extends { id: string; kpis: unknown }>(projects: T[]) {
+    if (projects.length === 0) return [];
+    const sums = await this.prisma.task.groupBy({
+      by: ['projectId'],
+      where: {
+        status: TaskStatus.COMPLETADO,
+        projectId: { in: projects.map((p) => p.id) },
+      },
+      _sum: { actualPoints: true },
+    });
+    const byProject = new Map(sums.map((s) => [s.projectId, s._sum.actualPoints ?? 0]));
+    return projects.map((project) => this.withCurrentKpi(project, byProject.get(project.id) ?? 0));
+  }
+
+  /** Inyecta `kpis.current` conservando el resto de KPIs configurados (JSONB). */
+  private withCurrentKpi<T extends { kpis: unknown }>(project: T, current: number) {
     const existingKpis =
       typeof project.kpis === 'object' && project.kpis !== null
         ? (project.kpis as Record<string, unknown>)

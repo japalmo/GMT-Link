@@ -31,7 +31,7 @@ interface PrismaMock {
     findFirst: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
   };
-  task: { aggregate: ReturnType<typeof vi.fn> };
+  task: { aggregate: ReturnType<typeof vi.fn>; groupBy: ReturnType<typeof vi.fn> };
   department: { findMany: ReturnType<typeof vi.fn> };
   client: { findMany: ReturnType<typeof vi.fn> };
   $transaction: ReturnType<typeof vi.fn>;
@@ -50,7 +50,10 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
     faena: { findUnique: vi.fn() },
     membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     service: { findFirst: vi.fn(), create: vi.fn() },
-    task: { aggregate: vi.fn(() => Promise.resolve({ _sum: { actualPoints: 0 } })) },
+    task: {
+      aggregate: vi.fn(() => Promise.resolve({ _sum: { actualPoints: 0 } })),
+      groupBy: vi.fn(() => Promise.resolve([])),
+    },
     department: { findMany: vi.fn() },
     client: { findMany: vi.fn() },
     // $transaction ejecuta el callback con el mismo mock como `tx`.
@@ -180,15 +183,18 @@ describe('ProjectsService', () => {
   });
 
   describe('listAll', () => {
-    it('org_admin ve todos los proyectos', async () => {
+    it('org_admin ve todos los proyectos con el KPI actual por lotes (una sola agregación)', async () => {
       mock.membership.findFirst.mockResolvedValue({ id: 'adm' });
       mock.project.findMany.mockResolvedValue([{ id: 'p1', kpis: {} }]);
-      mock.task.aggregate.mockResolvedValue({ _sum: { actualPoints: 5 } });
+      // Batch: UNA sola agregación groupBy por proyecto (no aggregate por proyecto).
+      mock.task.groupBy.mockResolvedValue([{ projectId: 'p1', _sum: { actualPoints: 5 } }]);
 
       const result = await service.listAll('admin');
 
       expect(mock.membership.findMany).not.toHaveBeenCalled();
       expect(mock.project.findMany).toHaveBeenCalledTimes(1);
+      expect(mock.task.groupBy).toHaveBeenCalledTimes(1);
+      expect(mock.task.aggregate).not.toHaveBeenCalled();
       expect((result[0]?.kpis as { current: number }).current).toBe(5);
     });
 
