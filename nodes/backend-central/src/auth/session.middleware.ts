@@ -10,6 +10,10 @@ import './auth-request.types';
  * NUESTRO JWT (firma + exp) y, si es válido, busca el `User` por id y setea
  * `req.authUser = { id, email }`. Token ausente/ inválido → sigue sin authUser
  * (fail-open; el guard responde 401 donde corresponda).
+ *
+ * Cuentas suspendidas (hallazgo A1): si el `User` está `SUSPENDED` NO se puebla
+ * `authUser` (se trata como no autenticado), de modo que un token ya emitido deja
+ * de dar acceso apenas se suspende la cuenta — sin depender de revocación de JWT.
  */
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {
@@ -25,9 +29,11 @@ export class SessionMiddleware implements NestMiddleware {
     if (payload) {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, email: true },
+        select: { id: true, email: true, status: true },
       });
-      if (user) {
+      // Cuenta inexistente o suspendida → no autenticar (corta tokens ya emitidos
+      // a cuentas dadas de baja). PENDING_FIRST_LOGIN/ACTIVE sí se pueblan.
+      if (user && user.status !== 'SUSPENDED') {
         req.authUser = { id: user.id, email: user.email };
       }
     }

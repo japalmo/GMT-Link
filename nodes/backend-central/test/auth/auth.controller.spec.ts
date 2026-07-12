@@ -116,6 +116,17 @@ describe('AuthController · GET /auth/me', () => {
     expect(result.modules).not.toContain('usuarios');
   });
 
+  it('deriva el módulo "recursos" cuando el usuario tiene asset:read (solo lectura)', async () => {
+    const { controller } = buildController({
+      user: { id: 'u1', email: 'x@gmt.cl', firstName: 'X', lastName: 'Y', status: 'ACTIVE' },
+      permissions: ['asset:read'],
+    });
+    const result = await controller.me(ACTIVE_USER);
+    expect(result.permissions).toEqual(['asset:read']);
+    expect(result.modules).toEqual(expect.arrayContaining(['dashboard', 'finanzas', 'recursos']));
+    expect(result.modules).not.toContain('usuarios');
+  });
+
   it('system:beta:full → todos los módulos', async () => {
     const { controller } = buildController({
       user: { id: 'u1', email: 'x@gmt.cl', firstName: 'X', lastName: 'Y', status: 'ACTIVE' },

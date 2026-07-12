@@ -66,6 +66,7 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   'task:create': 'operaciones',
   'asset:manage': 'recursos',
   'asset:fields:edit': 'recursos',
+  'asset:read': 'recursos',
   'vmetric:view': 'v-metric',
 };
 
@@ -97,11 +98,19 @@ export class AuthController {
   async login(@Body() body: LoginDto): Promise<{ token: string }> {
     const user = await this.prisma.user.findUnique({
       where: { username: body.username },
-      select: { id: true, passwordHash: true },
+      select: { id: true, passwordHash: true, status: true },
     });
     const ok = user?.passwordHash ? await verifyPassword(body.password, user.passwordHash) : false;
     if (!user || !ok) {
       throw new UnauthorizedException('Usuario o contraseña incorrectos.');
+    }
+    // Bloqueo de cuentas suspendidas (hallazgo A1). Se evalúa RECIÉN tras validar
+    // las credenciales: así solo el dueño de la clave correcta descubre que la
+    // cuenta está suspendida — un atacante con credenciales inválidas sigue viendo
+    // el 401 genérico (anti-enumeración intacta). `PENDING_FIRST_LOGIN` NO se
+    // bloquea aquí: ese flujo debe poder loguear para completar el primer acceso.
+    if (user.status === 'SUSPENDED') {
+      throw new UnauthorizedException('Tu cuenta está suspendida. Contacta a un administrador.');
     }
     return { token: signToken(user.id) };
   }

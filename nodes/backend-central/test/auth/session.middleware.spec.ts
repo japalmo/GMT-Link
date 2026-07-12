@@ -10,6 +10,7 @@ import '../../src/auth/auth-request.types';
 interface UserRow {
   id: string;
   email: string;
+  status: string;
 }
 
 interface Mocks {
@@ -52,7 +53,7 @@ describe('SessionMiddleware', () => {
   });
 
   it('setea authUser con un JWT propio válido y usuario existente', async () => {
-    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl' });
+    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl', status: 'ACTIVE' });
     const mw = new SessionMiddleware(prisma);
     const token = signToken('u1');
     const req = buildReq(`Bearer ${token}`);
@@ -62,14 +63,28 @@ describe('SessionMiddleware', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: 'u1' },
-      select: { id: true, email: true },
+      select: { id: true, email: true, status: true },
     });
     expect(req.authUser).toEqual({ id: 'u1', email: 'colaborador@gmt.cl' });
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it('NO setea authUser cuando el usuario está SUSPENDED (corta tokens ya emitidos, hallazgo A1)', async () => {
+    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl', status: 'SUSPENDED' });
+    const mw = new SessionMiddleware(prisma);
+    const token = signToken('u1');
+    const req = buildReq(`Bearer ${token}`);
+    const next: NextFunction = vi.fn();
+
+    await mw.use(req, RES, next);
+
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    expect(req.authUser).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it('no setea authUser cuando el token es inválido', async () => {
-    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl' });
+    const { prisma, findUnique } = buildMocks({ id: 'u1', email: 'colaborador@gmt.cl', status: 'ACTIVE' });
     const mw = new SessionMiddleware(prisma);
     const req = buildReq('Bearer token-invalido');
     const next: NextFunction = vi.fn();

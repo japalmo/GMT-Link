@@ -115,6 +115,10 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'asset:doc:upload', label: 'Subir doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_doc', scopeable: true },
   { key: 'asset:doc:approve', label: 'Aprobar doc de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_upload_and_approve_doc', scopeable: true },
   { key: 'asset:fields:edit', label: 'Editar campos de equipo', module: 'recursos', kind: 'FUNCTIONAL', scopeable: true },
+  // Acceso de SOLO LECTURA al módulo Recursos (enciende la pestaña de nav vía
+  // PERMISSION_MODULE en auth.controller). FUNCTIONAL org-scope (siempre GLOBAL):
+  // NO concede los botones de crear/configurar (esos dependen de asset:manage).
+  { key: 'asset:read', label: 'Ver recursos (solo lectura)', module: 'recursos', kind: 'FUNCTIONAL', scopeable: false },
 ];
 
 /** Todo el catálogo a GLOBAL EXCEPTO system:beta:full (org_admin / admin_ti). */
@@ -167,6 +171,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:request:approve', 'GLOBAL'),
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
       g('project:manage', 'GLOBAL'),
+      g('asset:read', 'GLOBAL'),
     ],
   },
   {
@@ -181,6 +186,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:worker', 'GLOBAL'),
       g('project:doc:upload:project', 'GLOBAL'),
+      g('asset:read', 'GLOBAL'),
     ],
   },
   {
@@ -221,6 +227,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:request:approve', 'GLOBAL'),
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
       g('project:manage', 'GLOBAL'),
+      g('asset:read', 'GLOBAL'),
     ],
   },
   { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },

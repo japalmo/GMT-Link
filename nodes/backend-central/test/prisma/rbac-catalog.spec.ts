@@ -92,4 +92,20 @@ describe('rbac-catalog — invariantes', () => {
       expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'finance:request:create' && x.scope === 'GLOBAL')).toBe(true);
     }
   });
+
+  it('asset:read existe como permiso FUNCTIONAL de módulo recursos (solo lectura, siempre GLOBAL)', () => {
+    const p = PERMISSIONS.find((x) => x.key === 'asset:read');
+    expect(p, 'asset:read debe existir en el catálogo').toBeDefined();
+    expect(p!.kind).toBe('FUNCTIONAL');
+    expect(p!.module).toBe('recursos');
+    expect(p!.scopeable).toBe(false);
+  });
+
+  it('admin_contrato, admin_finanzas y gerencia_proyectos otorgan asset:read a GLOBAL (acceso de solo lectura a Recursos)', () => {
+    for (const k of ['admin_contrato', 'admin_finanzas', 'gerencia_proyectos']) {
+      const grant = roleByKey.get(k)!.grants.find((x) => x.perm === 'asset:read');
+      expect(grant, `rol ${k} debe otorgar asset:read`).toBeDefined();
+      expect(grant!.scope).toBe('GLOBAL');
+    }
+  });
 });
