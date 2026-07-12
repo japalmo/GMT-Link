@@ -40,10 +40,10 @@ export interface UseReimbursementsResult {
   /** Vuelve a cargar mis reembolsos + (si soy gestor) la lista global. */
   refetch: () => Promise<void>;
   /**
-   * Crea un reembolso propio y refresca. Devuelve la vista creada (para poder
-   * adjuntarle la boleta a continuación). Propaga el error al llamador.
+   * Crea un reembolso propio con su boleta OBLIGATORIA (un solo paso, multipart) y
+   * refresca. Devuelve la vista creada. Propaga el error al llamador.
    */
-  create: (input: CreateReimbursementInput) => Promise<ReimbursementView>;
+  create: (input: CreateReimbursementInput, file: File) => Promise<ReimbursementView>;
   /** Adjunta/actualiza la boleta (solo dueño, solo si PENDIENTE) y refresca. */
   attachReceipt: (id: string, file: File) => Promise<void>;
   /** Aprueba un reembolso (gestor) y refresca. */
@@ -128,8 +128,8 @@ export function useReimbursements(): UseReimbursementsResult {
   }, [isManager, loadManager]);
 
   const create = useCallback(
-    async (input: CreateReimbursementInput) => {
-      const created = await createReimbursement(input);
+    async (input: CreateReimbursementInput, file: File) => {
+      const created = await createReimbursement(input, file);
       await refreshAll();
       return created;
     },

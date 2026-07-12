@@ -66,13 +66,17 @@ export class ReimbursementsController {
   ) {}
 
   @Post()
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_RECEIPT_BYTES } }))
   async create(
     @CurrentUser() authUser: AuthUser | undefined,
     @Body() dto: CreateReimbursementDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
   ): Promise<ReimbursementView> {
     const userId = this.requireUserId(authUser);
     await this.require(userId, P_CREATE);
-    return this.reimbursements.create(userId, dto);
+    // La boleta es obligatoria: requireValidFile lanza 400 si falta y 415 por MIME.
+    const checked = this.requireValidFile(file);
+    return this.reimbursements.create(userId, dto, checked);
   }
 
   /** OCR de boleta: imagen multipart → campos sugeridos (spec §5.5). */

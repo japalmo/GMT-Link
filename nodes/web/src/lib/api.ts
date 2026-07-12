@@ -874,14 +874,25 @@ export function rejectPermissionRequest(
 
 /* --- Reembolsos --- */
 
-/** `POST /reimbursements` — crea un reembolso propio (PENDIENTE). */
+/**
+ * `POST /reimbursements` — crea un reembolso propio (PENDIENTE) con su boleta
+ * OBLIGATORIA. Se envía como multipart (campo `file` PDF/imagen) para persistir el
+ * respaldo de forma atómica; el backend rechaza con 400 si falta la boleta.
+ */
 export function createReimbursement(
   input: CreateReimbursementInput,
+  file: File,
 ): Promise<ReimbursementView> {
-  return request<ReimbursementView>('/reimbursements', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+  const formData = new FormData();
+  formData.append('amount', String(input.amount));
+  formData.append('date', input.date);
+  formData.append('concept', input.concept);
+  if (input.category) formData.append('category', input.category);
+  if (input.subcategory) formData.append('subcategory', input.subcategory);
+  if (input.vehicle) formData.append('vehicle', input.vehicle);
+  if (input.observations) formData.append('observations', input.observations);
+  formData.append('file', file);
+  return uploadRequest<ReimbursementView>('/reimbursements', formData);
 }
 
 /** `GET /reimbursements/me?status=` — reembolsos propios. Filtro de estado opcional. */

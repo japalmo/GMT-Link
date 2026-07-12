@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -91,10 +92,24 @@ export class ReimbursementsService {
   ) {}
 
   /**
-   * Crea un reembolso del propio usuario en estado PENDIENTE (RequestForm).
-   * `amount` es CLP entero; `date` es la fecha del gasto.
+   * Crea un reembolso del propio usuario en estado PENDIENTE (RequestForm). La
+   * BOLETA es obligatoria (control interno): el archivo llega por multipart ya
+   * validado por el controller y se persiste de forma atómica junto con la fila,
+   * evitando la ventana en que un reembolso quedaba sin respaldo. `amount` es CLP
+   * entero; `date` es la fecha del gasto.
    */
-  async create(userId: string, dto: CreateReimbursementDto): Promise<ReimbursementView> {
+  async create(
+    userId: string,
+    dto: CreateReimbursementDto,
+    file: UploadedReceiptFile,
+  ): Promise<ReimbursementView> {
+    const saved = await this.storage.save({
+      buffer: file.buffer,
+      filename: file.originalname,
+      contentType: file.mimetype,
+      folder: RECEIPTS_FOLDER,
+    });
+
     const row = await this.prisma.reimbursement.create({
       data: {
         userId,
@@ -105,6 +120,9 @@ export class ReimbursementsService {
         subcategory: dto.subcategory ?? null,
         vehicle: dto.vehicle ?? null,
         observations: dto.observations ?? null,
+        // Persistimos la `key` ESTABLE del storage (la `url` de R2 es firmada/efímera).
+        receiptUrl: saved.url,
+        receiptKey: saved.key,
         status: FinanceStatus.PENDIENTE,
       },
     });
@@ -377,6 +395,10 @@ export class ReimbursementsService {
     const current = await this.prisma.reimbursement.findUnique({ where: { id } });
     if (!current) {
       throw new NotFoundException('El reembolso no existe.');
+    }
+    // Maker-checker (control interno): nadie aprueba su propio reembolso.
+    if (transition === 'approve' && current.userId === managerId) {
+      throw new ForbiddenException('No puedes aprobar tu propio reembolso.');
     }
     const status = nextFinanceStatus(current.status, transition);
 

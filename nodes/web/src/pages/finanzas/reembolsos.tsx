@@ -56,15 +56,12 @@ export function ReembolsosTab(): ReactNode {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /** Crea el reembolso y, si el formulario trajo una boleta, la adjunta. */
+  /** Crea el reembolso con su boleta obligatoria en un solo paso (multipart). */
   const handleCreate = async (
     input: CreateReimbursementInput,
-    receiptFile: File | null,
+    receiptFile: File,
   ): Promise<void> => {
-    const created = await create(input);
-    if (receiptFile) {
-      await attachReceipt(created.id, receiptFile);
-    }
+    await create(input, receiptFile);
   };
 
   const handleApprove = async (id: string): Promise<void> => {

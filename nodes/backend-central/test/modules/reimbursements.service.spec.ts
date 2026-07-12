@@ -1,5 +1,10 @@
 import 'reflect-metadata';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { FinanceStatus } from '@prisma/client';
 import type { Reimbursement } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,28 +131,40 @@ describe('ReimbursementsService', () => {
     return new ReimbursementsService(prisma, storageBits.storage, notifBits.notifications, config);
   }
 
-  it('create crea un reembolso propio en estado PENDIENTE (userId de sesión)', async () => {
+  it('create crea un reembolso propio PENDIENTE con boleta obligatoria (userId de sesión)', async () => {
     const create = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data, id: 'r-new' })),
     );
     const { prisma } = buildPrisma({ create });
     const service = makeService(prisma);
 
-    const view = await service.create('u1', {
-      amount: 15000,
-      date: '2026-06-10T00:00:00.000Z',
-      concept: 'Taxi',
-      category: 'transporte',
-    });
+    const view = await service.create(
+      'u1',
+      {
+        amount: 15000,
+        date: '2026-06-10T00:00:00.000Z',
+        concept: 'Taxi',
+        category: 'transporte',
+      },
+      RECEIPT,
+    );
+
+    // La boleta se sube al storage (carpeta reimbursements) ANTES de insertar la fila.
+    expect(storageBits.save).toHaveBeenCalledTimes(1);
+    expect(storageBits.save.mock.calls[0]?.[0]).toMatchObject({ folder: 'reimbursements' });
 
     const data = create.mock.calls[0]?.[0]?.data as {
       userId: string;
       status: FinanceStatus;
       amount: number;
+      receiptUrl: string;
+      receiptKey: string;
     };
     expect(data.userId).toBe('u1');
     expect(data.status).toBe(FinanceStatus.PENDIENTE);
     expect(data.amount).toBe(15000);
+    expect(data.receiptKey).toBe('reimbursements/new.pdf');
+    expect(data.receiptUrl).toBe('http://localhost:3001/files/reimbursements/new.pdf');
     expect(view.status).toBe(FinanceStatus.PENDIENTE);
   });
 
@@ -284,6 +301,19 @@ describe('ReimbursementsService', () => {
     expect(payload.type).toBe('reimbursement.decided');
     expect(payload.link).toBe('/finanzas/reembolsos');
     expect(payload.title).toContain('aprobado');
+  });
+
+  it('approve: rechaza aprobar el PROPIO reembolso (maker-checker), sin update ni notificación', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ userId: 'mgr', status: FinanceStatus.PENDIENTE })),
+    );
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(service.approve('mgr', 'r-1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+    expect(notifBits.create).not.toHaveBeenCalled();
   });
 
   it('reject: PENDIENTE→RECHAZADO y notifica', async () => {

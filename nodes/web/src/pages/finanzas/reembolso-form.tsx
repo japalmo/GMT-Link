@@ -66,10 +66,10 @@ export interface ReembolsoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /**
-   * Crea el reembolso y, si hay `receiptFile`, adjunta la boleta a continuación.
-   * Debe propagar el error (el diálogo lo muestra y no se cierra).
+   * Crea el reembolso con su boleta OBLIGATORIA (un solo paso). Debe propagar el
+   * error (el diálogo lo muestra y no se cierra).
    */
-  onSubmit: (input: CreateReimbursementInput, receiptFile: File | null) => Promise<void>;
+  onSubmit: (input: CreateReimbursementInput, receiptFile: File) => Promise<void>;
 }
 
 /**
@@ -189,6 +189,7 @@ export function ReembolsoFormDialog({
     if (category === 'VEHICULOS' && !vehicleSubcategory) {
       return setError('Selecciona la subcategoría del vehículo.');
     }
+    if (!receiptFile) return setError('La boleta es obligatoria.');
 
     setSubmitting(true);
     try {
