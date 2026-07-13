@@ -30,7 +30,16 @@ function authErrorMessage(error: unknown): string {
  */
 export default function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState('');
+  // Prefill del usuario desde el link del correo de credenciales (?u=<usuario>). La
+  // clave NUNCA viaja por URL (se registra/filtra); el usuario la copia del correo.
+  const prefilledUsername = (() => {
+    try {
+      return new URLSearchParams(window.location.search).get('u')?.trim() ?? '';
+    } catch {
+      return '';
+    }
+  })();
+  const [username, setUsername] = useState(prefilledUsername);
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -80,7 +89,7 @@ export default function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   aria-invalid={error ? true : undefined}
                   disabled={submitting}
-                  autoFocus
+                  autoFocus={!prefilledUsername}
                 />
               </div>
 
@@ -95,6 +104,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={error ? true : undefined}
                   disabled={submitting}
+                  autoFocus={!!prefilledUsername}
                 />
               </div>
 

@@ -151,3 +151,58 @@ Por seguridad, cambia tu contraseña en tu primer ingreso.`,
     html,
   };
 }
+
+/**
+ * Credenciales + aviso de que son los PRIMEROS usuarios de prueba (piloto): invita a
+ * dar feedback y aclara que pueden existir errores aún no detectados. Reutiliza el
+ * shell branded y agrega un bloque informativo antes del aviso de seguridad.
+ */
+export function onboardingCredentialsEmail(params: {
+  nombre: string;
+  username: string;
+  provisionalPassword: string;
+  loginUrl: string;
+  feedbackEmail: string;
+}): EmailContent {
+  const { nombre, username, provisionalPassword, loginUrl, feedbackEmail } = params;
+  // El link precarga el usuario en el login (?u=). La clave NO viaja por URL.
+  const prefillUrl = `${loginUrl}?u=${encodeURIComponent(username)}`;
+  const safePrefillUrl = escapeHtml(prefillUrl);
+  const disclaimer =
+    `Eres parte del primer grupo de usuarios de prueba de GMT Link. Es normal que encuentres detalles por pulir o errores que aún no alcanzamos a detectar. Si algo no funciona como esperas, escríbenos a ${feedbackEmail} y cuéntanos qué pasó: tu opinión nos ayuda a mejorar la plataforma antes del lanzamiento general. Gracias por probar.`;
+
+  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
+              <p style="margin:0;color:#475569;">Se creó tu cuenta en GMT Link y eres parte del primer grupo de usuarios de prueba. Estas son tus credenciales de acceso:</p>
+              <div style="margin:24px 0;padding:22px 20px;background-color:#f4f6fb;border:1px solid #e2e8f0;border-radius:10px;">
+                ${credentialRow('Usuario', username)}
+                ${credentialRow('Clave provisoria', provisionalPassword)}
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                <tr>
+                  <td style="background-color:${BRAND_NAVY};border-radius:8px;">
+                    <a href="${safePrefillUrl}" style="display:inline-block;padding:13px 30px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Ingresar a GMT Link</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 6px;color:#475569;font-size:14px;">O copia este enlace en tu navegador:</p>
+              <p style="margin:0 0 20px;"><a href="${safePrefillUrl}" style="color:${BRAND_NAVY};font-size:13px;word-break:break-all;">${safePrefillUrl}</a></p>
+              <p style="margin:0 0 14px;color:#1e3a5f;font-size:13px;line-height:1.55;background-color:#eef2fb;border:1px solid #c7d2fe;border-radius:8px;padding:13px 15px;">${escapeHtml(disclaimer)}</p>
+              <p style="margin:0;color:#b45309;font-size:13px;background-color:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">Por seguridad, cambia tu contraseña en tu primer ingreso.</p>`);
+
+  return {
+    subject: 'Tus credenciales de acceso a GMT Link (usuario de prueba)',
+    body: `Hola ${nombre}:
+
+Se creó tu cuenta en GMT Link y eres parte del primer grupo de usuarios de prueba. Tus credenciales de acceso son:
+
+Usuario: ${username}
+Clave provisoria: ${provisionalPassword}
+
+Ingresa en: ${prefillUrl}
+
+${disclaimer}
+
+Por seguridad, cambia tu contraseña en tu primer ingreso.`,
+    html,
+  };
+}
