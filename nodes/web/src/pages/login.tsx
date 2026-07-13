@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,19 +30,28 @@ function authErrorMessage(error: unknown): string {
  */
 export default function LoginPage() {
   const { login } = useAuth();
-  // Prefill del usuario desde el link del correo de credenciales (?u=<usuario>). La
-  // clave NUNCA viaja por URL (se registra/filtra); el usuario la copia del correo.
-  const prefilledUsername = (() => {
+  // Prefill de usuario y clave desde el link del correo de credenciales (?u=&p=). Se
+  // leen una sola vez; ver el useEffect que limpia la URL enseguida para que las
+  // credenciales NO queden en el historial ni en la barra de direcciones.
+  const [initialCreds] = useState(() => {
     try {
-      return new URLSearchParams(window.location.search).get('u')?.trim() ?? '';
+      const q = new URLSearchParams(window.location.search);
+      return { u: q.get('u')?.trim() ?? '', p: q.get('p') ?? '' };
     } catch {
-      return '';
+      return { u: '', p: '' };
     }
-  })();
-  const [username, setUsername] = useState(prefilledUsername);
-  const [password, setPassword] = useState('');
+  });
+  const [username, setUsername] = useState(initialCreds.u);
+  const [password, setPassword] = useState(initialCreds.p);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Borra usuario/clave de la URL apenas se cargan (no quedan en historial/barra).
+  useEffect(() => {
+    if ((initialCreds.u || initialCreds.p) && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+    }
+  }, [initialCreds]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -89,7 +98,7 @@ export default function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   aria-invalid={error ? true : undefined}
                   disabled={submitting}
-                  autoFocus={!prefilledUsername}
+                  autoFocus={!initialCreds.u}
                 />
               </div>
 
@@ -104,7 +113,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={error ? true : undefined}
                   disabled={submitting}
-                  autoFocus={!!prefilledUsername}
+                  autoFocus={!!initialCreds.u && !initialCreds.p}
                 />
               </div>
 

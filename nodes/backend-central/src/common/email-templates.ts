@@ -165,9 +165,12 @@ export function onboardingCredentialsEmail(params: {
   feedbackEmail: string;
 }): EmailContent {
   const { nombre, username, provisionalPassword, loginUrl, feedbackEmail } = params;
-  // El link precarga el usuario en el login (?u=). La clave NO viaja por URL.
-  const prefillUrl = `${loginUrl}?u=${encodeURIComponent(username)}`;
+  // El link precarga usuario y clave en el login (?u=&p=). El login los lee y limpia la
+  // URL enseguida (history.replaceState) para que no queden en el historial/barra. Son
+  // claves provisorias que se cambian al primer ingreso.
+  const prefillUrl = `${loginUrl}?u=${encodeURIComponent(username)}&p=${encodeURIComponent(provisionalPassword)}`;
   const safePrefillUrl = escapeHtml(prefillUrl);
+  const safeLoginUrl = escapeHtml(loginUrl);
   const disclaimer =
     `Eres parte del primer grupo de usuarios de prueba de GMT Link. Es normal que encuentres detalles por pulir o errores que aún no alcanzamos a detectar. Si algo no funciona como esperas, escríbenos a ${feedbackEmail} y cuéntanos qué pasó: tu opinión nos ayuda a mejorar la plataforma antes del lanzamiento general. Gracias por probar.`;
 
@@ -185,7 +188,7 @@ export function onboardingCredentialsEmail(params: {
                 </tr>
               </table>
               <p style="margin:0 0 6px;color:#475569;font-size:14px;">O copia este enlace en tu navegador:</p>
-              <p style="margin:0 0 20px;"><a href="${safePrefillUrl}" style="color:${BRAND_NAVY};font-size:13px;word-break:break-all;">${safePrefillUrl}</a></p>
+              <p style="margin:0 0 20px;"><a href="${safeLoginUrl}" style="color:${BRAND_NAVY};font-size:13px;word-break:break-all;">${safeLoginUrl}</a></p>
               <p style="margin:0 0 14px;color:#1e3a5f;font-size:13px;line-height:1.55;background-color:#eef2fb;border:1px solid #c7d2fe;border-radius:8px;padding:13px 15px;">${escapeHtml(disclaimer)}</p>
               <p style="margin:0;color:#b45309;font-size:13px;background-color:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">Por seguridad, cambia tu contraseña en tu primer ingreso.</p>`);
 
@@ -198,7 +201,7 @@ Se creó tu cuenta en GMT Link y eres parte del primer grupo de usuarios de prue
 Usuario: ${username}
 Clave provisoria: ${provisionalPassword}
 
-Ingresa en: ${prefillUrl}
+Ingresa en: ${loginUrl}
 
 ${disclaimer}
 
