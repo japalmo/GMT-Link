@@ -1,10 +1,32 @@
 import path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { config } from 'dotenv';
 import { PrismaClient, VariableType, ScopeType } from '@prisma/client';
 
 config({ path: path.resolve(process.cwd(), '../../.env') });
 
 const prisma = new PrismaClient();
+
+/**
+ * Lee el polígono REPRESENTATIVO de una poza desde su KML (WGS84, exportado de Google
+ * Earth) y lo devuelve como JSON de pares `[lat, lng]` (orden que consume Leaflet /
+ * `parsePolygon` en la web). KML entrega `lng,lat,alt` → se swapea. Devuelve null si el
+ * KML no está (p. ej. checkout sin seed-data) para no pisar un polígono ya cargado.
+ */
+function readPozaPolygon(code: string): string | null {
+  const file = path.resolve(process.cwd(), 'prisma', 'seed-data', 'reservorios', `${code}.kml`);
+  if (!existsSync(file)) return null;
+  const match = readFileSync(file, 'utf8').match(/<coordinates>([\s\S]*?)<\/coordinates>/);
+  if (!match || !match[1]) return null;
+  const coords: [number, number][] = [];
+  for (const token of match[1].trim().split(/\s+/)) {
+    const parts = token.split(',');
+    const lng = Number.parseFloat(parts[0] ?? '');
+    const lat = Number.parseFloat(parts[1] ?? '');
+    if (Number.isFinite(lat) && Number.isFinite(lng)) coords.push([lat, lng]);
+  }
+  return coords.length >= 3 ? JSON.stringify(coords) : null;
+}
 
 const POZAS = [
   { code: 'R1', name: 'Reservorio 1', cota_lamina_critica: 2301.80, cota_salm: 2301.429, cota_sal_ref: 2301.14, cota_fondo: 2300.70, cota_segura: 2301.50 },
@@ -82,18 +104,22 @@ async function main(): Promise<void> {
   });
   console.log(`Servicio: ${service.name} (id=${service.id})`);
 
-  // 5. Asegurar Pozas (Elements)
+  // 5. Asegurar Pozas (Elements) con su polígono representativo (KML → [lat,lng]).
+  let withPolygon = 0;
   for (const poza of POZAS) {
     const { cota_lamina_critica, cota_salm, cota_sal_ref, cota_fondo, cota_segura, ...base } = poza;
     const metadata = { cota_lamina_critica, cota_salm, cota_sal_ref, cota_fondo, cota_segura };
+    const locationPolygon = readPozaPolygon(base.code);
+    if (locationPolygon) withPolygon += 1;
+    const polyData = locationPolygon ? { locationPolygon } : {};
 
     await prisma.element.upsert({
       where: { code: base.code },
-      update: { name: base.name, type: 'POZA', metadata, projectId: project.id },
-      create: { code: base.code, name: base.name, type: 'POZA', metadata, projectId: project.id },
+      update: { name: base.name, type: 'POZA', metadata, projectId: project.id, ...polyData },
+      create: { code: base.code, name: base.name, type: 'POZA', metadata, projectId: project.id, ...polyData },
     });
   }
-  console.log(`Pozas registradas: ${POZAS.length}`);
+  console.log(`Pozas registradas: ${POZAS.length} (con polígono representativo: ${withPolygon})`);
 
   // 6. Asegurar Fase
   const phase = await prisma.phase.upsert({
