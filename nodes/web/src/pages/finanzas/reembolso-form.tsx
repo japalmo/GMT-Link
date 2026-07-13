@@ -265,6 +265,23 @@ export function ReembolsoFormDialog({
                 </span>
               )}
             </div>
+            {/* Aviso de espera: el OCR (NVIDIA) tarda varios segundos; se avisa al
+                usuario para que no cierre ni reenvíe el formulario mientras corre. */}
+            {scanning && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground"
+              >
+                <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden />
+                <span>
+                  <span className="font-medium">Estamos interpretando la boleta…</span>{' '}
+                  <span className="text-muted-foreground">
+                    Puede tardar unos segundos. No cierres ni reenvíes el formulario mientras tanto.
+                  </span>
+                </span>
+              </div>
+            )}
             <input
               ref={uploadRef}
               type="file"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useAssets } from '@/hooks/use-assets';
 import { useProjects } from '@/hooks/use-operations';
@@ -26,12 +26,6 @@ import {
   ClipboardCheck,
   Settings,
   X,
-  MapPin,
-  Gauge,
-  Wifi,
-  Play,
-  Square,
-  Navigation,
   Construction,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -875,7 +869,6 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     submitChecklistAnswers,
     listSubmissions,
     getSubmissionPdf,
-    submitTelemetryAnswers,
   } = useAssets();
 
   const [asset, setAsset] = useState<AssetView | null>(null);
@@ -901,7 +894,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   const [newAssignId, setNewAssignId] = useState('');
 
   // Tabs for detailed view
-  const [detailTab, setDetailTab] = useState<'documentos' | 'accesorios' | 'checklist' | 'historial' | 'telemetria'>('documentos');
+  const [detailTab, setDetailTab] = useState<'documentos' | 'accesorios' | 'checklist' | 'historial'>('documentos');
 
   // Descarga de PDF de una inspección (submissionId en curso).
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
@@ -923,17 +916,6 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
 
   // Checklist execution answers state
   const [executionAnswers, setExecutionAnswers] = useState<Record<string, unknown>>({});
-
-  // Telemetria simulation state
-  const [simulating, setSimulating] = useState(false);
-  const [, setRouteIndex] = useState(0);
-  const routeIndexRef = useRef(0);
-  const [simSpeed, setSimSpeed] = useState(60);
-  const [manualLat, setManualLat] = useState('-33.460');
-  const [manualLng, setManualLng] = useState('-70.668');
-  const [manualSpeed, setManualSpeed] = useState('60');
-  const [submittingManualTelemetry, setSubmittingManualTelemetry] = useState(false);
-  const [telemetryMessage, setTelemetryMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [actioning, setActioning] = useState<string | null>(null);
 
@@ -977,47 +959,14 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
       .catch(() => toast.error('No se pudieron cargar los usuarios del directorio.'));
   }, [loadData]);
 
-  // Telemetria simulation effect
-  useEffect(() => {
-    const MOCK_ROUTE = [
-      { latitude: -33.456, longitude: -70.662 },
-      { latitude: -33.458, longitude: -70.665 },
-      { latitude: -33.460, longitude: -70.668 },
-      { latitude: -33.462, longitude: -70.671 },
-      { latitude: -33.465, longitude: -70.674 },
-      { latitude: -33.468, longitude: -70.677 },
-    ];
-
-    let timer: ReturnType<typeof setInterval> | null = null;
-    if (simulating) {
-      timer = setInterval(async () => {
-        const nextIdx = (routeIndexRef.current + 1) % MOCK_ROUTE.length;
-        routeIndexRef.current = nextIdx;
-        setRouteIndex(nextIdx);
-        const pt = MOCK_ROUTE[nextIdx];
-        if (!pt) return;
-        try {
-          await submitTelemetryAnswers(id, {
-            latitude: pt.latitude,
-            longitude: pt.longitude,
-            speed: simSpeed,
-          });
-          void loadData();
-        } catch {
-          toast.error('No se pudo registrar la telemetría simulada. Detén y reinicia la simulación.');
-          setSimulating(false);
-        }
-      }, 3000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [simulating, id, submitTelemetryAnswers, loadData, simSpeed]);
-
   const isAdmin =
     profile?.roleKeys.includes('org_admin') ||
     profile?.roleKeys.includes('department_admin') ||
     profile?.roleKeys.includes('project_creator');
+
+  // Permiso real (del backend) para gestionar el activo: accesorios, asignación,
+  // checklist. Cae a `isAdmin` mientras carga el detalle.
+  const canManageAsset = asset?.canManageAssets ?? isAdmin;
 
   const handleTakeUse = async () => {
     if (actioning) return;
@@ -1025,7 +974,12 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     try {
       await takeUse(id);
       toast.success('Activo puesto en uso con éxito.');
-      void loadData();
+      await loadData();
+      // Para vehículos, abrir el checklist tras ponerlo en uso: el operador debe
+      // registrar el estado del vehículo al recibirlo.
+      if (asset?.type === 'VEHICULO') {
+        goToChecklist(false);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
     } finally {
@@ -1093,32 +1047,6 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
       toast.error(msg);
     } finally {
       setActioning(null);
-    }
-  };
-
-  const handleSendManualTelemetry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmittingManualTelemetry(true);
-    setTelemetryMessage(null);
-    try {
-      const lat = parseFloat(manualLat);
-      const lng = parseFloat(manualLng);
-      const speed = parseFloat(manualSpeed);
-      if (isNaN(lat) || isNaN(lng) || isNaN(speed)) {
-        throw new Error('Todos los campos deben ser valores numéricos válidos.');
-      }
-      await submitTelemetryAnswers(id, {
-        latitude: lat,
-        longitude: lng,
-        speed: speed,
-      });
-      setTelemetryMessage({ type: 'success', text: 'Telemetría enviada con éxito.' });
-      void loadData();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al enviar telemetría.';
-      setTelemetryMessage({ type: 'error', text: msg });
-    } finally {
-      setSubmittingManualTelemetry(false);
     }
   };
 
@@ -1528,11 +1456,11 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </CardFooter>
           </Card>
 
-          {/* Detail View Tab Header */}
-          <div className="flex border-b border-border gap-2 mb-4">
+          {/* Detail View Tab Header — scroll horizontal en móvil (barra oculta). */}
+          <div className="flex border-b border-border gap-2 mb-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button
               onClick={() => setDetailTab('documentos')}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 detailTab === 'documentos'
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1542,7 +1470,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </button>
             <button
               onClick={() => setDetailTab('accesorios')}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 detailTab === 'accesorios'
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1552,7 +1480,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </button>
             <button
               onClick={() => setDetailTab('checklist')}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 detailTab === 'checklist'
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1562,7 +1490,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </button>
             <button
               onClick={() => setDetailTab('historial')}
-              className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
                 detailTab === 'historial'
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1570,18 +1498,6 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             >
               <History className="size-3.5" /> Historial ({history.length})
             </button>
-            {asset.type === 'VEHICULO' && (
-              <button
-                onClick={() => setDetailTab('telemetria')}
-                className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                  detailTab === 'telemetria'
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Car className="size-3.5" /> Ubicación y Telemetría
-              </button>
-            )}
           </div>
 
           {/* Documents Tab */}
@@ -1742,8 +1658,8 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col gap-6">
-                {/* Form to Add/Edit (Admins) */}
-                {isAdmin && (
+                {/* Formulario agregar/editar: visible a quien puede gestionar el activo. */}
+                {canManageAsset && (
                   <form onSubmit={handleAddAccessory} className="border border-dashed p-4 rounded-lg bg-card/25 flex flex-col gap-3">
                     <p className="text-xs font-semibold text-foreground">
                       {editingAccId ? 'Editar Accesorio' : 'Registrar Nuevo Accesorio'}
@@ -1820,7 +1736,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                             </p>
                           )}
                         </div>
-                        {isAdmin && (
+                        {canManageAsset && (
                           <div className="flex gap-2">
                             <Button
                               size="sm"
@@ -2239,309 +2155,6 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </Card>
           )}
 
-          {detailTab === 'telemetria' && asset && asset.type === 'VEHICULO' && (() => {
-            const getCoords = (lat: number, lng: number) => {
-              const minLat = -33.472;
-              const maxLat = -33.450;
-              const minLng = -70.680;
-              const maxLng = -70.658;
-              const y = ((maxLat - lat) / (maxLat - minLat)) * 350;
-              const x = ((lng - minLng) / (maxLng - minLng)) * 500;
-              return { x, y };
-            };
-
-            const metadata = (asset.metadata as Record<string, unknown> | null) || {};
-            const speed = metadata.speed !== undefined ? Number(metadata.speed) : 0;
-            const location = metadata.location as { latitude: number; longitude: number; updatedAt?: string } | null;
-            const speedLimit = metadata.speedLimit !== undefined ? Number(metadata.speedLimit) : 100;
-            const currentLoc = location || { latitude: -33.456, longitude: -70.662 };
-            const { x: curX, y: curY } = getCoords(currentLoc.latitude, currentLoc.longitude);
-
-            return (
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <MapPin className="size-4 text-primary" /> Monitoreo de Ubicación y Trayecto
-                      </CardTitle>
-                      <CardDescription>
-                        Última ubicación registrada, velocidad y simulación de trayecto.
-                      </CardDescription>
-                    </div>
-                    <Badge variant={simulating ? "default" : "outline"} className={simulating ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 animate-pulse" : "text-muted-foreground"}>
-                      <Wifi className="size-3 mr-1.5" />
-                      {simulating ? 'Simulación Activa' : 'Sin señal activa'}
-                    </Badge>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="flex flex-col gap-6">
-                  {/* 1. MOCK MAP INTERACTIVO */}
-                  <div className="relative w-full h-[360px] bg-slate-950 border border-slate-800 rounded-lg overflow-hidden shadow-inner flex flex-col justify-between p-4 font-mono select-none">
-                    {/* Grid background & design patterns */}
-                    <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
-                    
-                    {/* Map SVG element */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 500 350" preserveAspectRatio="none">
-                      {/* Simulated streets/roads */}
-                      <line x1="0" y1="100" x2="500" y2="100" stroke="#1e293b" strokeWidth="2" strokeDasharray="4,4" />
-                      <line x1="0" y1="220" x2="500" y2="220" stroke="#1e293b" strokeWidth="2" />
-                      <line x1="150" y1="0" x2="150" y2="350" stroke="#1e293b" strokeWidth="2" />
-                      <line x1="380" y1="0" x2="380" y2="350" stroke="#1e293b" strokeWidth="2" strokeDasharray="6,4" />
-                      
-                      {/* Diagonals to simulate avenues */}
-                      <path d="M 0,0 L 500,350" stroke="#334155" strokeWidth="1.5" strokeOpacity="0.4" />
-                      <path d="M 0,350 L 500,0" stroke="#334155" strokeWidth="1.5" strokeOpacity="0.4" />
-
-                      {/* Pre-drawn Santiago Route Line */}
-                      <polyline
-                        points="409,95 340,127 272,159 204,190 136,238 68,286"
-                        fill="none"
-                        stroke="#4f46e5"
-                        strokeWidth="3"
-                        strokeDasharray="4,4"
-                        strokeOpacity="0.75"
-                      />
-
-                      {/* Landmark Hub Circles */}
-                      <circle cx="409" cy="95" r="4" fill="#312e81" stroke="#4f46e5" strokeWidth="1" />
-                      <circle cx="272" cy="159" r="4" fill="#312e81" stroke="#4f46e5" strokeWidth="1" />
-                      <circle cx="68" cy="286" r="4" fill="#312e81" stroke="#4f46e5" strokeWidth="1" />
-                      
-                      {/* Blinking Vehicle Indicator */}
-                      <circle cx={curX} cy={curY} r="10" fill="#06b6d4" className="animate-ping opacity-60" />
-                      <circle cx={curX} cy={curY} r="6" fill="#06b6d4" stroke="#ffffff" strokeWidth="2" />
-                    </svg>
-
-                    {/* Labels overlay */}
-                    <div className="absolute top-6 right-8 text-[10px] text-slate-500 font-semibold tracking-wider pointer-events-none">PROVIDENCIA</div>
-                    <div className="absolute top-1/3 left-1/3 text-[10px] text-slate-500 font-semibold tracking-wider pointer-events-none">SANTIAGO CENTRO</div>
-                    <div className="absolute bottom-12 left-8 text-[10px] text-slate-500 font-semibold tracking-wider pointer-events-none">ESTACIÓN CENTRAL</div>
-                    
-                    {/* Map HUD UI Details */}
-                    <div className="relative flex justify-between items-start pointer-events-none">
-                      <div className="bg-slate-900/90 border border-slate-800 text-[10px] text-emerald-400 p-2 rounded backdrop-blur-sm flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5 font-bold">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                          GNSS FEED: ACTIVE
-                        </div>
-                        <div>SATELLITES: 12 (3D-FIX)</div>
-                        <div>HDOP: 0.82</div>
-                      </div>
-
-                      <div className="bg-slate-900/90 border border-slate-800 text-[10px] text-slate-300 p-2 rounded backdrop-blur-sm text-right flex flex-col gap-0.5">
-                        <div>MAP VIEWPORT: SANTIAGO, CL</div>
-                        <div>EPSG:4326</div>
-                      </div>
-                    </div>
-
-                    {/* Map Bottom Coordinates Display */}
-                    <div className="relative bg-slate-900/95 border border-slate-800 text-xs text-white p-3 rounded-lg backdrop-blur-sm flex justify-between items-center mt-auto">
-                      <div className="flex items-center gap-4">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Latitud</span>
-                          <span className="font-semibold text-cyan-400">{currentLoc.latitude.toFixed(6)}</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Longitud</span>
-                          <span className="font-semibold text-cyan-400">{currentLoc.longitude.toFixed(6)}</span>
-                        </div>
-                      </div>
-                      {location?.updatedAt && (
-                        <div className="text-[10px] text-muted-foreground text-right">
-                          Actualizado: {new Date(location.updatedAt).toLocaleTimeString('es-CL')}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 2. GAUGES & METRICS GRID */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* SPEED GAUGE CARD */}
-                    <div className="p-4 rounded-lg border bg-card/45 flex flex-col gap-3">
-                      <div className="flex items-center gap-2">
-                        <Gauge className="size-4 text-muted-foreground" />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Velocidad Actual</span>
-                      </div>
-
-                      <div className="flex flex-col items-center justify-center py-2 relative">
-                        <span className={`text-4xl font-extrabold font-mono transition-colors duration-300 ${
-                          speed > speedLimit ? 'text-rose-500 animate-pulse' :
-                          speed > speedLimit * 0.8 ? 'text-amber-500' : 'text-emerald-500'
-                        }`}>
-                          {speed}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground font-mono mt-0.5">KM/H</span>
-
-                        {speed > speedLimit && (
-                          <span className="absolute -top-1 right-0 bg-rose-500/10 text-rose-500 text-[9px] px-1.5 py-0.5 rounded font-bold border border-rose-500/20 animate-bounce">
-                            EXCESO
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Speed Bar Progression */}
-                      <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${
-                            speed > speedLimit ? 'bg-rose-500' :
-                            speed > speedLimit * 0.8 ? 'bg-amber-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${Math.min(100, (speed / 140) * 100)}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-[9px] text-muted-foreground font-mono">
-                        <span>0 km/h</span>
-                        <span>Límite: {speedLimit} km/h</span>
-                        <span>140 km/h</span>
-                      </div>
-                    </div>
-
-                    {/* ODOMETER & STATUS CARD */}
-                    <div className="p-4 rounded-lg border bg-card/45 flex flex-col justify-between">
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                          <Car className="size-4 text-muted-foreground" />
-                          <span className="text-xs font-semibold text-muted-foreground uppercase">Bitácora & Odómetro</span>
-                        </div>
-
-                        <div className="flex flex-col gap-1.5 text-xs">
-                          <div className="flex justify-between border-b pb-1.5 border-border/40">
-                            <span className="text-muted-foreground">Odómetro Activo:</span>
-                            <span className="font-semibold font-mono text-foreground">
-                              {metadata.odometer !== undefined ? `${Number(metadata.odometer).toLocaleString('es-CL')} km` : 'Sin registro'}
-                            </span>
-                          </div>
-                          <div className="flex justify-between border-b pb-1.5 border-border/40">
-                            <span className="text-muted-foreground">Código QR:</span>
-                            <span className="font-semibold font-mono">{asset.code}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Responsable:</span>
-                            <span className="font-semibold text-foreground truncate max-w-[120px]">
-                              {asset.assignedTo ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName}` : 'No asignado'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* SIMULATION CONTROLS CARD */}
-                    <div className="p-4 rounded-lg border bg-slate-900/25 flex flex-col gap-3">
-                      <div className="flex items-center gap-2">
-                        <Settings className="size-4 text-muted-foreground" />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase">Simulador de Trayecto</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          className={`w-full text-xs font-semibold ${
-                            simulating
-                              ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20'
-                              : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20'
-                          }`}
-                          variant="outline"
-                          onClick={() => setSimulating(!simulating)}
-                        >
-                          {simulating ? (
-                            <>
-                              <Square className="size-3 mr-1.5" /> Detener Simulación
-                            </>
-                          ) : (
-                            <>
-                              <Play className="size-3 mr-1.5" /> Iniciar Simulación
-                            </>
-                          )}
-                        </Button>
-                      </div>
-
-                      {/* Speed Selector */}
-                      <div className="flex flex-col gap-1.5">
-                        <Label className="text-[10px] text-muted-foreground uppercase font-semibold">Velocidad Simulación</Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1">
-                          {[60, 90, 120].map((v) => (
-                            <Button
-                              key={v}
-                              size="sm"
-                              type="button"
-                              variant={simSpeed === v ? "default" : "outline"}
-                              className="text-[10px] h-7 px-1"
-                              onClick={() => setSimSpeed(v)}
-                            >
-                              {v} km/h {v > 100 ? '⚠️' : ''}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. MANUAL INJECTION FORM */}
-                  <div className="border border-dashed p-4 rounded-lg bg-card/25 flex flex-col gap-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Navigation className="size-4 text-primary" />
-                        <span className="text-xs font-semibold text-foreground">Enviar Telemetría Manual (Prueba de API)</span>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleSendManualTelemetry} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="manual-lat" className="text-[10px] text-muted-foreground">Latitud</Label>
-                        <Input
-                          id="manual-lat"
-                          value={manualLat}
-                          onChange={(e) => setManualLat(e.target.value)}
-                          placeholder="Ej. -33.460"
-                          className="h-8 text-xs font-mono"
-                          required
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="manual-lng" className="text-[10px] text-muted-foreground">Longitud</Label>
-                        <Input
-                          id="manual-lng"
-                          value={manualLng}
-                          onChange={(e) => setManualLng(e.target.value)}
-                          placeholder="Ej. -70.668"
-                          className="h-8 text-xs font-mono"
-                          required
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="manual-speed" className="text-[10px] text-muted-foreground">Velocidad (km/h)</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="manual-speed"
-                            value={manualSpeed}
-                            onChange={(e) => setManualSpeed(e.target.value)}
-                            placeholder="Ej. 85"
-                            className="h-8 text-xs font-mono flex-1"
-                            required
-                          />
-                          <Button type="submit" size="sm" className="h-8 text-xs" disabled={submittingManualTelemetry}>
-                            {submittingManualTelemetry ? 'Enviando...' : 'Enviar'}
-                          </Button>
-                        </div>
-                      </div>
-                    </form>
-
-                    {telemetryMessage && (
-                      <div className={`p-2.5 rounded text-xs border ${
-                        telemetryMessage.type === 'success'
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                      }`}>
-                        {telemetryMessage.text}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
         </div>
 
         {/* Timeline & QR Panel */}

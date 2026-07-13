@@ -48,7 +48,10 @@ export function Tabs<V extends string = string>({
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
-        'inline-flex w-full gap-1 rounded-lg border border-border bg-muted/40 p-1 sm:w-auto',
+        // Móvil: scroll horizontal cuando las pestañas no caben (barra oculta).
+        // Desktop (sm:): ancho natural. `flex-1` en los botones las expande cuando
+        // caben y, al desbordar, respetan su ancho de contenido y aparece el scroll.
+        'inline-flex w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/40 p-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden',
         className,
       )}
     >

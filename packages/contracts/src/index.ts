@@ -537,6 +537,13 @@ export interface AssetView {
   project?: { id: string; name: string } | null;
   assignedTo?: { id: string; firstName: string; lastName: string } | null;
   inUseBy?: { id: string; firstName: string; lastName: string } | null;
+  /**
+   * ¿El usuario actual puede gestionar este activo (accesorios, asignación,
+   * checklist)? Es el mismo permiso que exigen las mutaciones: `can_manage_assets`
+   * sobre el proyecto, o `admin` de la organización para activos globales. Solo lo
+   * puebla el detalle (`GET /assets/:id`); en listados queda `undefined`.
+   */
+  canManageAssets?: boolean;
 }
 
 /** Ficha pública de un activo (respuesta del endpoint público por token, GAP3). */

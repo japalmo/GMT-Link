@@ -12,12 +12,13 @@ export interface ReceiptScanResult {
 const PROMPT = `Eres un asistente que lee boletas/recibos chilenos. Analiza la imagen y devuelve
 SOLO un objeto JSON crudo (sin markdown) con estos campos cuando puedas inferirlos:
 {
-  "concept": "descripción corta del gasto",
+  "concept": "descripción corta del gasto, SIEMPRE en español",
   "amount": <monto total en CLP como entero, sin puntos ni símbolo>,
   "date": "YYYY-MM-DD",
   "category": "Alimentación | Transporte | Vehículos | Otro(s)"
 }
-Si un campo no se puede leer, omítelo. No inventes valores.`;
+IMPORTANTE: escribe TODOS los textos ("concept" y "category") en español de Chile,
+aunque la boleta esté en otro idioma. Si un campo no se puede leer, omítelo. No inventes valores.`;
 
 /** Arma el mensaje multimodal (patrón detectShoreline) para la API de NVIDIA. */
 export function buildReceiptOcrMessages(imageDataUrl: string): NvidiaMessage[] {

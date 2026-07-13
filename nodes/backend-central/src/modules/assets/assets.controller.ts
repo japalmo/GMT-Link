@@ -132,12 +132,27 @@ export class AssetsController {
    * con respaldo estructural por-activo) la resuelve el servicio, no el guard.
    */
   @Get(':id')
-  getById(
+  async getById(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<AssetView> {
     const userId = this.requireUserId(authUser);
-    return this.assets.getById(id, userId);
+    const asset = await this.assets.getById(id, userId);
+    // Adjunta `canManageAssets` (mismo permiso que exigen las mutaciones de
+    // accesorios/asignación/checklist) para que el front muestre las acciones a
+    // quien de verdad puede, en vez de aproximar por roles en el cliente.
+    const canManageAssets = asset.projectId
+      ? await this.fga.check({
+          user: `user:${userId}`,
+          relation: 'can_manage_assets',
+          object: `project:${asset.projectId}`,
+        })
+      : await this.fga.check({
+          user: `user:${userId}`,
+          relation: 'admin',
+          object: 'organization:gmt',
+        });
+    return { ...asset, canManageAssets };
   }
 
   /**
