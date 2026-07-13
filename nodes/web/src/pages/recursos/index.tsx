@@ -222,6 +222,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const [eqCalibration, setEqCalibration] = useState('');
   const [vhKm, setVhKm] = useState('0');
   const [vhPlaca, setVhPlaca] = useState('');
+  const [vhYear, setVhYear] = useState('');
 
   const [formError, setFormError] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
@@ -294,6 +295,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     setEqCalibration('');
     setVhKm('0');
     setVhPlaca('');
+    setVhYear('');
     setFormError(null);
   };
 
@@ -316,6 +318,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     } else if (newType === 'VEHICULO') {
       metadata.odometerKm = parseInt(vhKm || '0', 10);
       metadata.plateCode = vhPlaca.toUpperCase();
+      if (vhYear) {
+        metadata.year = parseInt(vhYear, 10);
+      }
     }
 
     // Los vehículos se identifican por patente (mismo valor que la placa de la
@@ -492,6 +497,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                   <>
                     <TableHead>Tipo de vehículo</TableHead>
                     <TableHead>Kilometraje</TableHead>
+                    <TableHead>Año</TableHead>
                   </>
                 )}
                 <TableHead className="text-right">Acciones</TableHead>
@@ -499,7 +505,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
             </TableHeader>
             <TableBody>
               {filteredAssets.map((asset) => {
-                const meta = (asset.metadata || {}) as { chargeCycles?: number; calibrationDate?: string; plateCode?: string; odometerKm?: number };
+                const meta = (asset.metadata || {}) as { chargeCycles?: number; calibrationDate?: string; plateCode?: string; odometerKm?: number; year?: number };
                 return (
                   <TableRow
                     key={asset.id}
@@ -553,6 +559,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                           {asset.vehicleSubtype ? VEHICLE_SUBTYPE_LABELS[asset.vehicleSubtype] : 'N/A'}
                         </TableCell>
                         <TableCell>{meta.odometerKm !== undefined ? `${meta.odometerKm} KM` : 'N/A'}</TableCell>
+                        <TableCell>{meta.year !== undefined ? meta.year : 'N/A'}</TableCell>
                       </>
                     )}
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -774,6 +781,19 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                           value={vhPlaca}
                           onChange={(e) => setVhPlaca(e.target.value)}
                           placeholder="ABCD12"
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="vh-year" className="text-xs">Año</Label>
+                        <Input
+                          id="vh-year"
+                          type="number"
+                          min={1990}
+                          max={2030}
+                          value={vhYear}
+                          onChange={(e) => setVhYear(e.target.value)}
+                          placeholder="2024"
                           className="h-8 text-xs"
                         />
                       </div>
@@ -1382,6 +1402,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                   calibrationDate?: string;
                   odometerKm?: number | string;
                   plateCode?: string;
+                  year?: number | string;
                 }
                 const meta = (asset.metadata ?? {}) as AssetMetadata;
                 return (
@@ -1429,6 +1450,10 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">Patente/Matrícula:</span>
                             <span className="font-mono text-foreground">{meta.plateCode || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">Año:</span>
+                            <span className="font-medium text-foreground">{meta.year ? String(meta.year) : 'No declarado'}</span>
                           </div>
                         </>
                       )}

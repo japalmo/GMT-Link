@@ -659,7 +659,7 @@ export default function MetricsDashboard(): ReactNode {
         projectId: selectedProject?.id || '',
       });
 
-      toast.success('Vasode evaporación creado correctamente.');
+      toast.success('Vaso de evaporación creado correctamente.');
       setIsCreateModalOpen(false);
       
       // Clean inputs

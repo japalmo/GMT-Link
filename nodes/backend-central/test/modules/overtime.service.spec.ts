@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { NotificationsService } from '../../src/modules/notifications/notifications.service';
 import { OvertimeService } from '../../src/modules/overtime/overtime.service';
+import { startOfTodaySantiago } from '../../src/modules/finance/finance-time.util';
 
 /** Fila OvertimeRequest (sin solicitante) con overrides. */
 function buildRow(overrides: Partial<OvertimeRequest> = {}): OvertimeRequest {
@@ -120,10 +121,10 @@ describe('OvertimeService', () => {
     );
 
     const savedDate = (create.mock.calls[0]?.[0]?.data as { date: Date }).date;
-    const today = new Date();
-    expect(savedDate.getUTCFullYear()).toBe(today.getUTCFullYear());
-    expect(savedDate.getUTCMonth()).toBe(today.getUTCMonth());
-    expect(savedDate.getUTCDate()).toBe(today.getUTCDate());
+    // La fecha se ancla al día CALENDARIO de Chile (helper DST-safe), no al día UTC:
+    // comparar contra el mismo helper hace el test determinista incluso cerca de
+    // medianoche (antes comparaba contra new Date() UTC y era flaky en el borde de día).
+    expect(savedDate.toISOString()).toBe(startOfTodaySantiago().toISOString());
   });
 
   it('create con permiso onBehalf y trabajador objetivo: userId=objetivo, onBehalfOfUserId=creador, respeta fecha', async () => {
