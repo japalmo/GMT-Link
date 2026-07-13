@@ -45,18 +45,29 @@ async function main(): Promise<void> {
   });
   console.log(`Faena: ${faena.name} (id=${faena.id})`);
 
+  // 2b. Departamento: la autorización estructural de OpenFGA deriva `can_view` de
+  //     proyecto por la cadena proyecto→department→organization. Sin departamento el
+  //     proyecto no es visible ni para el org_admin (el gate de métricas usa fga.check
+  //     crudo, sin el bypass funcional). Se adjunta a OPS y `fga-resync` escribe la tupla.
+  const department = await prisma.department.upsert({
+    where: { code: 'OPS' },
+    update: {},
+    create: { code: 'OPS', name: 'Operaciones' },
+  });
+
   // 3. Asegurar Proyecto (único por [faenaId, code]).
   const project = await prisma.project.upsert({
     where: { faenaId_code: { faenaId: faena.id, code: 'ATA' } },
-    update: { name: 'Proyecto Atacama' },
+    update: { name: 'Proyecto Atacama', departmentId: department.id },
     create: {
       code: 'ATA',
       name: 'Proyecto Atacama',
       faenaId: faena.id,
       clientId: client.id,
+      departmentId: department.id,
     },
   });
-  console.log(`Proyecto: ${project.name} (id=${project.id})`);
+  console.log(`Proyecto: ${project.name} (id=${project.id}, dept=${department.code})`);
 
   // 4. Asegurar Servicio
   const service = await prisma.service.upsert({

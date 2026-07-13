@@ -27,7 +27,9 @@ RUN pnpm --filter @gmt-platform/backend-central build
 ENV NODE_ENV=production
 WORKDIR /app/nodes/backend-central
 
-# Release + arranque: migraciones + seed idempotente del catálogo de permisos/roles/
-# departamentos (para que cambios de permisos lleguen a prod) + levanta. El seed es
-# no-fatal (no debe tumbar el arranque si algo falla). PORT lo inyecta Railway.
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy && (pnpm exec prisma db seed || echo 'db seed failed, continuing') && node dist/main.js"]
+# Release + arranque: migraciones + seed idempotente del catálogo (permisos/roles/
+# departamentos) + estructura V-Metric (proyecto ATA + pozas) + resync FGA (escribe las
+# tuplas estructurales proyecto→depto→org que hacen visible ATA para el org_admin; corre
+# DENTRO del contenedor, donde OpenFGA es alcanzable por DNS interno). Todos idempotentes
+# y no-fatales (no deben tumbar el arranque). PORT lo inyecta Railway.
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && (pnpm exec prisma db seed || echo 'db seed failed, continuing') && (pnpm exec tsx prisma/seed-metrics.ts || echo 'seed-metrics failed, continuing') && (pnpm exec tsx scripts/fga-resync.ts || echo 'fga-resync failed, continuing') && node dist/main.js"]
