@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { config } from 'dotenv';
-import { PrismaClient, VariableType } from '@prisma/client';
+import { PrismaClient, VariableType, ScopeType } from '@prisma/client';
 
 config({ path: path.resolve(process.cwd(), '../../.env') });
 
@@ -122,6 +122,37 @@ async function main(): Promise<void> {
     });
   }
   console.log(`Variables registradas: ${VARIABLES.length}`);
+
+  // 8. Acceso demo a V-Metric: admin y gerencia deben VER el proyecto ATA. El gate de
+  //    métricas usa fga.check('can_view') estructural, así que un rol funcional org no
+  //    basta: hace falta una relación FGA por-proyecto. Se crea una membresía `viewer`
+  //    (roleKey 'viewer' → MEMBERSHIP_RELATION_MAP PROJECT → FGA viewer → can_view) en ATA
+  //    para cada usuario con rol org admin_* o gerencia_*; fga-resync (paso siguiente del
+  //    arranque) materializa la tupla. Idempotente. El org_admin ya ve ATA por la cadena
+  //    org→depto→proyecto, así que no necesita esta membresía.
+  const adminGerencia = await prisma.membership.findMany({
+    where: {
+      scopeType: ScopeType.ORGANIZATION,
+      OR: [{ roleKey: { startsWith: 'admin_' } }, { roleKey: { startsWith: 'gerencia_' } }],
+    },
+    select: { userId: true },
+  });
+  const viewerUserIds = [...new Set(adminGerencia.map((m) => m.userId))];
+  for (const userId of viewerUserIds) {
+    await prisma.membership.upsert({
+      where: {
+        userId_roleKey_scopeType_scopeId: {
+          userId,
+          roleKey: 'viewer',
+          scopeType: ScopeType.PROJECT,
+          scopeId: project.id,
+        },
+      },
+      update: {},
+      create: { userId, roleKey: 'viewer', scopeType: ScopeType.PROJECT, scopeId: project.id },
+    });
+  }
+  console.log(`Acceso V-Metric (viewer@ATA) para admin/gerencia: ${viewerUserIds.length} usuarios`);
 }
 
 main()
