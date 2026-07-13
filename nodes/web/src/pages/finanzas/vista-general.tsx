@@ -92,6 +92,13 @@ export function VistaGeneralTab(): ReactNode {
   const loading = reimb.loading || ot.loading;
   const error = reimb.error ?? ot.error;
 
+  // Las derivaciones (cards, rankings, alertas) se calculan client-side sobre lo
+  // cargado (tope 100 por tipo). Si hay más de una página, avisamos que los
+  // agregados quedan acotados a las 100 más recientes (hasta agregación server-side).
+  const dataTruncated =
+    (reimb.isManager ? reimb.managerHasMore : reimb.mineHasMore) ||
+    (ot.isManager ? ot.managerHasMore : ot.mineHasMore);
+
   const handleApprove = async (row: FinanceRow): Promise<void> => {
     try {
       if (row.kind === 'REEMBOLSO') await reimb.approve(row.id);
@@ -130,6 +137,16 @@ export function VistaGeneralTab(): ReactNode {
   return (
     <div className="flex flex-col gap-6">
       <OverviewCards rows={filtered} hasAllAccess={hasAllAccess} />
+
+      {dataTruncated && (
+        <Card className="flex items-center gap-2 border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          <span>
+            Estás viendo las 100 solicitudes más recientes por tipo. Los totales, rankings
+            y alertas pueden quedar incompletos si el período tiene más.
+          </span>
+        </Card>
+      )}
 
       {/* Alertas: solicitudes pendientes → clic abre detalle */}
       {canApprove && pending.length > 0 && (

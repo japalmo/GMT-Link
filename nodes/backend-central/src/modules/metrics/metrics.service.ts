@@ -691,7 +691,11 @@ export class MetricsService {
    * `sanitizeFilename` del storage sea un no-op y la key de lectura calce con la de save.
    */
   private demGridCacheName(code: string, blobPath: string): string {
-    const safeCode = code.replace(/[^a-zA-Z0-9_-]/g, '') || 'dem';
+    // Acota el code (aunque los reales son cortos, p.ej. "R2") para que el nombre total
+    // (code + "-" + hash12 + ".json" = code+18) nunca supere el slice(0,120) que aplica
+    // sanitizeFilename en storage.save; si divergiera, la key de lectura no calzaría con
+    // la de escritura y la caché nunca acertaría.
+    const safeCode = (code.replace(/[^a-zA-Z0-9_-]/g, '') || 'dem').slice(0, 80);
     const hash = createHash('sha1').update(blobPath).digest('hex').slice(0, 12);
     return `${safeCode}-${hash}.json`;
   }

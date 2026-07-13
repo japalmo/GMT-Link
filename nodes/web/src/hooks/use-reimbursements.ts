@@ -182,7 +182,7 @@ export function useReimbursements(opts: UseReimbursementsOptions = {}): UseReimb
         setError(toMessage(err, 'No se pudieron cargar más reembolsos.'));
       }
     } finally {
-      if (mountedRef.current && genRef.current === gen) setLoadingMoreMine(false);
+      if (mountedRef.current) setLoadingMoreMine(false); // guard de montaje solo (ver nota en use-users)
     }
   }, [mineNextCursor, loadingMoreMine, limit]);
 
@@ -201,7 +201,7 @@ export function useReimbursements(opts: UseReimbursementsOptions = {}): UseReimb
         setError(toMessage(err, 'No se pudieron cargar más reembolsos.'));
       }
     } finally {
-      if (mountedRef.current && genRef.current === gen) setLoadingMoreManager(false);
+      if (mountedRef.current) setLoadingMoreManager(false); // guard de montaje solo (ver nota en use-users)
     }
   }, [managerNextCursor, loadingMoreManager, limit]);
 

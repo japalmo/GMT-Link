@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getDemGrid, type DemGrid } from '@/lib/api';
+import { getDemGrid, ApiError, type DemGrid } from '@/lib/api';
 
 /** Lienzo three.js: heightmap del DEM con OrbitControls y colormap por elevación. */
 function Terrain3D({ grid, exaggeration }: { grid: DemGrid; exaggeration: number }): ReactNode {
@@ -118,12 +118,17 @@ export function DemViewer({ code = 'R2' }: { code?: string }): ReactNode {
   useEffect(() => {
     let alive = true;
     getDemGrid(code)
-      .catch(() =>
-        // Respaldo demo: si la poza no tiene DEM real en R2, usa el grid estático.
-        fetch(`/dem/${code}.json`).then((r) =>
-          r.ok ? (r.json() as Promise<DemGrid>) : Promise.reject(new Error('DEM no encontrado')),
-        ),
-      )
+      .catch((e: unknown) => {
+        // Respaldo demo SOLO cuando la poza no tiene DEM real (404): usa el grid
+        // estático. Los demás errores (403 sin permiso, 500, timeout) se propagan
+        // para no mostrar datos viejos como si fueran del último vuelo.
+        if (e instanceof ApiError && e.status === 404) {
+          return fetch(`/dem/${code}.json`).then((r) =>
+            r.ok ? (r.json() as Promise<DemGrid>) : Promise.reject(new Error('DEM no encontrado')),
+          );
+        }
+        throw e;
+      })
       .then((g: DemGrid) => {
         if (!alive) return;
         setGrid(g);

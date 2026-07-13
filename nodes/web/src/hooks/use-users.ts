@@ -153,7 +153,11 @@ export function useUsers(opts: UseUsersOptions = {}): UseUsersResult {
         setError(toMessage(err, 'No se pudieron cargar más usuarios.'));
       }
     } finally {
-      if (mountedRef.current && genRef.current === gen) setLoadingMore(false);
+      // Reset con guard de montaje SOLO (no de generación): si una recarga de página 1
+      // cambió genRef mientras este loadMore estaba en vuelo, el try ya descartó la
+      // respuesta; igual hay que liberar el flag o el botón queda atascado en "Cargando".
+      // Es seguro porque el guard inicial (if loadingMore return) impide dos en vuelo.
+      if (mountedRef.current) setLoadingMore(false);
     }
   }, [nextCursor, loadingMore, debouncedSearch, limit]);
 
