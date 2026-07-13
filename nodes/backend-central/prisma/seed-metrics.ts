@@ -37,22 +37,22 @@ async function main(): Promise<void> {
   });
   console.log(`Cliente: ${client.name} (id=${client.id})`);
 
-  // 2. Asegurar Departamento
-  const department = await prisma.department.upsert({
-    where: { code: 'OPS' },
-    update: { name: 'Operaciones Geofísica' },
-    create: { code: 'OPS', name: 'Operaciones Geofísica' },
+  // 2. Asegurar Faena (jerarquía Cliente→Faena→Proyecto del esquema actual).
+  const faena = await prisma.faena.upsert({
+    where: { clientId_code: { clientId: client.id, code: 'ATA' } },
+    update: { name: 'Faena Atacama' },
+    create: { code: 'ATA', name: 'Faena Atacama', clientId: client.id },
   });
-  console.log(`Departamento: ${department.name} (id=${department.id})`);
+  console.log(`Faena: ${faena.name} (id=${faena.id})`);
 
-  // 3. Asegurar Proyecto
+  // 3. Asegurar Proyecto (único por [faenaId, code]).
   const project = await prisma.project.upsert({
-    where: { departmentId_code: { departmentId: department.id, code: 'ATA' } },
+    where: { faenaId_code: { faenaId: faena.id, code: 'ATA' } },
     update: { name: 'Proyecto Atacama' },
     create: {
       code: 'ATA',
       name: 'Proyecto Atacama',
-      departmentId: department.id,
+      faenaId: faena.id,
       clientId: client.id,
     },
   });
