@@ -38,6 +38,9 @@ interface FakeUserRow {
   memberships: Array<{ roleKey: string; scopeType: string; scopeId: string }>;
 }
 
+// changePassword re-emite el JWT (signToken) tras subir tokenVersion: requiere secreto.
+process.env.AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET || 'test-secret-para-profile-spec-32bytes';
+
 function baseUser(overrides: Partial<FakeUserRow> = {}): FakeUserRow {
   return {
     id: 'me-1',
@@ -477,11 +480,18 @@ describe('ProfileService.changePassword (endurecido)', () => {
     };
     const result = await service.changePassword('me-1', dto);
 
-    expect(result).toEqual({ ok: true });
+    // Devuelve el JWT re-emitido (para no autoexpulsar la sesión actual).
+    expect(result.ok).toBe(true);
+    expect(typeof result.token).toBe('string');
     // OTP verificado contra el destino resuelto (institucional verificado en baseUser).
     expect(otpVerify).toHaveBeenCalledWith('ana@gmt.cl', 'CHANGE_PASSWORD', '123456');
-    const arg = update.mock.calls[0]?.[0] as { where: { id: string }; data: { passwordHash: string } };
+    const arg = update.mock.calls[0]?.[0] as {
+      where: { id: string };
+      data: { passwordHash: string; tokenVersion: unknown };
+    };
     expect(arg.where).toEqual({ id: 'me-1' });
+    // Cierra las demás sesiones (A3): sube la época de sesión.
+    expect(arg.data.tokenVersion).toEqual({ increment: 1 });
     await expect(verifyPassword('newpass123', arg.data.passwordHash)).resolves.toBe(true);
   });
 

@@ -1,4 +1,4 @@
-import { getToken } from '@/lib/auth-token';
+import { getToken, setToken } from '@/lib/auth-token';
 import type { AuthedUser } from '@/types/auth';
 import type {
   CvCertificationInput,
@@ -524,10 +524,13 @@ export async function changePassword(
   newPassword: string,
   code: string,
 ): Promise<void> {
-  await request<{ ok: true }>('/profile/change-password', {
+  const res = await request<{ ok: true; token: string }>('/profile/change-password', {
     method: 'POST',
     body: JSON.stringify({ currentPassword, newPassword, code }),
   });
+  // La clave nueva rota tokenVersion en el backend, que re-emite el JWT de ESTA
+  // sesión. Guardarlo mantiene viva la sesión actual; las demás caen en 401.
+  setToken(res.token);
 }
 
 /**

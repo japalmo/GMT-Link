@@ -112,9 +112,12 @@ export interface UpdateProfileInput {
   avatarUrl?: string;
 }
 
-/** Respuesta de POST /profile/change-password. */
+/** Respuesta de POST /profile/change-password. Incluye el JWT re-emitido de la
+ * sesión actual (al cambiar la clave se sube tokenVersion y los tokens previos
+ * quedan inválidos; el cliente debe guardar este token para no cerrar su sesión). */
 export interface ChangePasswordResponse {
   ok: true;
+  token: string;
 }
 
 /**

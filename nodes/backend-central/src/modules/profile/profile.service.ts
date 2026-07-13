@@ -10,6 +10,7 @@ import { ORG_ID } from '../../common/org.constant';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
 import { hashPassword, verifyPassword } from '../../common/password';
+import { signToken } from '../../common/jwt';
 import { EmailService } from '../../common/email.service';
 import { verificationCodeEmail, passwordChangeCodeEmail } from '../../common/email-templates';
 import { OtpService, OTP_PURPOSES } from '../../common/otp.service';
@@ -241,9 +242,16 @@ export class ProfileService {
     const target = this.resolvePasswordOtpTarget(user);
     await this.otp.verify(target, OTP_PURPOSES.CHANGE_PASSWORD, dto.code);
 
+    // Cambiar la clave CIERRA las demás sesiones (A3): al subir tokenVersion, los
+    // JWT previos quedan inválidos. Se re-emite el token de la sesión ACTUAL para no
+    // autoexpulsar a quien acaba de cambiar su clave (el front lo guarda).
     const passwordHash = await hashPassword(dto.newPassword);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
-    return { ok: true };
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+      select: { tokenVersion: true },
+    });
+    return { ok: true, token: signToken(userId, updated.tokenVersion) };
   }
 
   /**
