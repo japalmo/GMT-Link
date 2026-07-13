@@ -331,9 +331,14 @@ export class ReimbursementsService {
 
     const apiKey =
       this.config.get<string>('NVIDIA_API_KEY_VISION') ?? this.config.get<string>('NVIDIA_API_KEY');
-    if (!apiKey) return {};
+    if (!apiKey) {
+      this.logger.warn(
+        'OCR de boleta omitido: falta NVIDIA_API_KEY_VISION / NVIDIA_API_KEY en el entorno; el formulario no se autorrellena.',
+      );
+      return {};
+    }
     const model =
-      this.config.get<string>('NVIDIA_VISION_MODEL') ?? 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
+      this.config.get<string>('NVIDIA_VISION_MODEL') ?? 'meta/llama-3.2-90b-vision-instruct';
 
     // 2. Registrar el uso ANTES de la llamada paga (cuenta como una consulta de IA).
     await this.prisma.geminiUsage.create({ data: { userId, action: RECEIPT_OCR_ACTION } });
@@ -342,7 +347,7 @@ export class ReimbursementsService {
       const content = await callNvidiaChat({
         apiKey,
         model,
-        maxTokens: 1024,
+        maxTokens: 3072,
         temperature: 0,
         messages: buildReceiptOcrMessages(imageDataUrl),
       });

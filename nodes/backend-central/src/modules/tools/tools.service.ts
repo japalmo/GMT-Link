@@ -188,7 +188,7 @@ export class ToolsService {
 
     const model =
       this.configService.get<string>('NVIDIA_VISION_MODEL') ??
-      'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
+      'meta/llama-3.2-90b-vision-instruct';
     const prompt = `Analyze the attached orthophoto image. Detect the shoreline / land-water boundary.
 Return ONLY a valid, raw JSON object containing a list of normalized coordinates tracing the shoreline polygon.
 Use normalized percentage values from 0 to 100 relative to the image size (where top-left is {"x": 0, "y": 0} and bottom-right is {"x": 100, "y": 100}).
