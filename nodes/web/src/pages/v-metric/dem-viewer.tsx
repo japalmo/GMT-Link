@@ -1,24 +1,15 @@
 /**
- * Visor 3D de DEM + tabla de cubicación + gráfico temporal (Módulo 5, Albemarle).
- * Auto-contenido: lee /dem/<code>.json (grid de elevaciones) y /dem/<code>-cubicacion.json
- * (variables × fechas) desde public/. Pensado para la demo: no depende de la API/DB.
+ * Visor 3D de DEM. Consume el grid de elevaciones del DEM REAL vía la API
+ * (`getDemGrid`, que lee el GeoTIFF desde R2 con el gate can_view del proyecto).
+ * Si la poza aún no tiene un DEM registrado en R2, cae al grid estático de
+ * public/dem/<code>.json para no romper la demo.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
-interface DemGrid {
-  code: string;
-  width: number;
-  height: number;
-  bbox: [number, number, number, number];
-  minZ: number;
-  maxZ: number;
-  noData: number | null;
-  elevations: number[];
-}
+import { getDemGrid, type DemGrid } from '@/lib/api';
 
 /** Lienzo three.js: heightmap del DEM con OrbitControls y colormap por elevación. */
 function Terrain3D({ grid, exaggeration }: { grid: DemGrid; exaggeration: number }): ReactNode {
@@ -126,8 +117,13 @@ export function DemViewer({ code = 'R2' }: { code?: string }): ReactNode {
 
   useEffect(() => {
     let alive = true;
-    fetch(`/dem/${code}.json`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('DEM no encontrado'))))
+    getDemGrid(code)
+      .catch(() =>
+        // Respaldo demo: si la poza no tiene DEM real en R2, usa el grid estático.
+        fetch(`/dem/${code}.json`).then((r) =>
+          r.ok ? (r.json() as Promise<DemGrid>) : Promise.reject(new Error('DEM no encontrado')),
+        ),
+      )
       .then((g: DemGrid) => {
         if (!alive) return;
         setGrid(g);

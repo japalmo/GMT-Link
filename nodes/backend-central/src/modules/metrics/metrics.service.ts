@@ -15,7 +15,8 @@ import {
   SaveReservorioMetadataDto,
   SetPhaseDataSpecDto,
 } from './dto/metrics.dto';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
+import { buildDemGrid, type DemSourceImage, type DemGridResult } from './dem-grid.util';
 
 /** Bolsa JSON dinámica validada solo como "objeto" → cruce explícito al tipo Json de Prisma. */
 function toInputJson(value: Record<string, unknown> | undefined): Prisma.InputJsonValue {
@@ -630,6 +631,69 @@ export class MetricsService {
         drone: 'Matrice 300 RTK',
       })),
     };
+  }
+
+  /**
+   * Grid de elevaciones (downsampled) del DEM más reciente de una poza, para el visor
+   * 3D web. Lee el GeoTIFF REAL desde R2 por range requests (`fromUrl` no bufferiza el
+   * .tif completo, que puede pesar cientos de MB) y lo cachea en R2 como JSON. La caché
+   * se invalida sola cuando cambia el `blob_path` (vuelo nuevo). Requiere R2 activo: sin
+   * él (dev) o con un `blob_path` legacy (URL absoluta) no hay lectura por rangos.
+   */
+  async getDemGrid(body: { reservorio_codigo: string }): Promise<DemGridResult> {
+    const { blob_path } = await this.getLatestDem(body); // 404 si no hay DEM registrado
+    if (!blob_path) {
+      throw new NotFoundException('El DEM registrado no tiene un archivo asociado.');
+    }
+    const r2 = this.r2;
+    if (!r2 || /^https?:\/\//i.test(blob_path)) {
+      throw new NotFoundException(
+        'El visor 3D con DEM real requiere almacenamiento R2 configurado.',
+      );
+    }
+
+    const cacheName = this.demGridCacheName(body.reservorio_codigo, blob_path);
+    const cacheKey = `dem-grids/${cacheName}`;
+
+    // 1) Caché: si el grid ya se computó para este vuelo, se sirve tal cual.
+    try {
+      const cached = await this.storage.read(cacheKey);
+      return JSON.parse(cached.toString('utf-8')) as DemGridResult;
+    } catch (error: unknown) {
+      if (!(error instanceof NotFoundException)) throw error; // miss → se computa
+    }
+
+    // 2) Miss: leer el GeoTIFF de R2 por rangos y submuestrear. `geotiff` es ESM-only →
+    //    import dinámico (el backend compila a CommonJS).
+    const url = await r2.createPresignedGetUrl(blob_path);
+    const { fromUrl } = await import('geotiff');
+    const tiff = await fromUrl(url);
+    const image = await tiff.getImage();
+    const grid = await buildDemGrid(image as unknown as DemSourceImage);
+    const result: DemGridResult = { code: body.reservorio_codigo, ...grid };
+
+    // 3) Persistir el grid en R2 para próximas visitas (mismo `cacheName`).
+    await this.storage.save({
+      buffer: Buffer.from(JSON.stringify(result), 'utf-8'),
+      filename: `${cacheName}`,
+      contentType: 'application/json',
+      folder: 'dem-grids',
+      customFilename: cacheName,
+    });
+
+    return result;
+  }
+
+  /**
+   * Nombre estable del grid cacheado: `<code>-<hash(blob_path)>.json`. El hash del
+   * `blob_path` hace que un vuelo nuevo (otra key R2) produzca otro nombre y, por tanto,
+   * invalide la caché sin borrarla. Ya viene saneado (alfanumérico) para que el
+   * `sanitizeFilename` del storage sea un no-op y la key de lectura calce con la de save.
+   */
+  private demGridCacheName(code: string, blobPath: string): string {
+    const safeCode = code.replace(/[^a-zA-Z0-9_-]/g, '') || 'dem';
+    const hash = createHash('sha1').update(blobPath).digest('hex').slice(0, 12);
+    return `${safeCode}-${hash}.json`;
   }
 
   async saveReservorioMetadata(userId: string, body: SaveReservorioMetadataDto) {

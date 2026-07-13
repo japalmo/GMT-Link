@@ -2072,6 +2072,31 @@ export function listMetricElements(projectId: string): Promise<MetricElement[]> 
   return request<MetricElement[]>(`/metrics/elements?projectId=${encodeURIComponent(projectId)}`);
 }
 
+/**
+ * Grid de elevaciones (downsampled) del DEM real de una poza. Mismo shape que el
+ * visor 3D consumía desde public/dem, ahora servido por el backend leyendo el
+ * GeoTIFF desde R2.
+ */
+export interface DemGrid {
+  code: string;
+  width: number;
+  height: number;
+  bbox: [number, number, number, number];
+  minZ: number;
+  maxZ: number;
+  noData: number | null;
+  elevations: number[];
+}
+
+/**
+ * `GET /metrics/elements/code/:code/dem-grid` — grid de elevaciones del DEM más
+ * reciente de la poza, con el gate `can_view` del proyecto. Sustituye la lectura
+ * pública de public/dem/<code>.json por acceso autorizado.
+ */
+export function getDemGrid(code: string): Promise<DemGrid> {
+  return request<DemGrid>(`/metrics/elements/code/${encodeURIComponent(code)}/dem-grid`);
+}
+
 export function listMetricPhases(serviceId: string): Promise<MetricPhase[]> {
   return request<MetricPhase[]>(`/metrics/phases?serviceId=${encodeURIComponent(serviceId)}`);
 }

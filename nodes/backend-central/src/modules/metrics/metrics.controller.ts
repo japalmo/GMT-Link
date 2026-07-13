@@ -85,6 +85,22 @@ export class MetricsController {
     return this.service.getPoolByCode(code);
   }
 
+  /**
+   * Grid de elevaciones (downsampled) del DEM más reciente de la poza, para el visor 3D
+   * web. Sustituye el acceso público a public/dem/<code>.json por acceso autorizado
+   * (mismo gate `can_view` del proyecto que resuelve el código de elemento).
+   */
+  @Get('elements/code/:code/dem-grid')
+  async getDemGrid(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('code') code: string,
+  ) {
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForElementCode(code);
+    await this.requireProjectPermission(userId, projectId, 'can_view');
+    return this.service.getDemGrid({ reservorio_codigo: code });
+  }
+
   // ── Fases & Variables ────────────────────────────────────────────────────────
 
   @Post('phases')

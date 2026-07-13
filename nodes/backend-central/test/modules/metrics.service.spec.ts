@@ -104,6 +104,29 @@ describe('MetricsService', () => {
     );
   });
 
+  describe('getDemGrid (visor 3D con DEM real)', () => {
+    it('lanza NotFound si la poza no tiene DEM registrado', async () => {
+      prismaMock.element.findUnique.mockResolvedValue({
+        id: 'el-1',
+        project: { services: [{ id: 's-1' }] },
+      });
+      prismaMock.dataPoint.findFirst.mockResolvedValue(null);
+      await expect(service.getDemGrid({ reservorio_codigo: 'R1' })).rejects.toThrow(NotFoundException);
+    });
+
+    it('lanza NotFound si el almacenamiento no es R2 (no hay lectura por rangos en dev)', async () => {
+      prismaMock.element.findUnique.mockResolvedValue({
+        id: 'el-1',
+        project: { services: [{ id: 's-1' }] },
+      });
+      prismaMock.dataPoint.findFirst.mockResolvedValue({
+        fileUrl: 'dems/R1/MDE_R1.tif',
+        value: 'MDE_R1.tif',
+      });
+      await expect(service.getDemGrid({ reservorio_codigo: 'R1' })).rejects.toThrow(/R2/);
+    });
+  });
+
   describe('Resolvers de ProjectId para scoping', () => {
     it('getProjectIdForElementCode debería retornar projectId o lanzar error si no existe', async () => {
       prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-1' });

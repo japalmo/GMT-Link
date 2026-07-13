@@ -1,7 +1,8 @@
 /**
  * Procesa un DEM GeoTIFF a un grid de elevaciones SIMPLIFICADO (downsampled) en JSON,
  * que el visor 3D de v-metric consume directo desde nodes/web/public/dem/<code>.json.
- * Reemplaza el paso que en producción hará el cliente PyQt (subir el raster simplificado).
+ * Generador OFFLINE de respaldo: en producción el mismo grid lo sirve on-demand
+ * `MetricsService.getDemGrid` leyendo el .tif real desde R2 (misma util `buildDemGrid`).
  *
  * Uso (desde nodes/backend-central):  npx tsx scripts/process-dem.ts R2 var/uploads/dem/R2.tif
  *   arg1 = code del Element (nombre del json de salida)
@@ -10,8 +11,7 @@
 import { fromFile } from 'geotiff';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-
-const TARGET = 220; // grid máximo por lado (≈48k vértices: fluido en three.js)
+import { buildDemGrid, type DemSourceImage } from '../src/modules/metrics/dem-grid.util';
 
 async function main(): Promise<void> {
   const code = process.argv[2] ?? 'R2';
@@ -21,49 +21,21 @@ async function main(): Promise<void> {
 
   const tiff = await fromFile(src);
   const image = await tiff.getImage();
-  const W = image.getWidth();
-  const H = image.getHeight();
-  const bbox = image.getBoundingBox(); // [minX, minY, maxX, maxY] en el CRS del DEM
-  const noDataRaw = image.getGDALNoData();
-  const noData = typeof noDataRaw === 'number' ? noDataRaw : null;
+  const srcW = image.getWidth();
+  const srcH = image.getHeight();
 
-  const factor = Math.max(1, Math.ceil(Math.max(W, H) / TARGET));
-  const outW = Math.max(2, Math.round(W / factor));
-  const outH = Math.max(2, Math.round(H / factor));
-
-  const rasters = await image.readRasters({ width: outW, height: outH, resampleMethod: 'nearest' });
-  const band = rasters[0] as ArrayLike<number>;
-
-  let minZ = Infinity;
-  let maxZ = -Infinity;
-  for (let i = 0; i < band.length; i++) {
-    const v = band[i];
-    if ((noData !== null && v === noData) || !Number.isFinite(v)) continue;
-    if (v < minZ) minZ = v;
-    if (v > maxZ) maxZ = v;
-  }
-  if (!Number.isFinite(minZ)) {
-    minZ = 0;
-    maxZ = 1;
-  }
-
-  // Reemplaza noData / inválidos por minZ (piso plano) para una malla continua.
-  const elevations: number[] = new Array(band.length);
-  for (let i = 0; i < band.length; i++) {
-    const v = band[i];
-    elevations[i] = (noData !== null && v === noData) || !Number.isFinite(v) ? minZ : v;
-  }
+  // Misma util que el endpoint on-demand, para no divergir del algoritmo de producción.
+  const grid = await buildDemGrid(image as unknown as DemSourceImage);
 
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(
-    out,
-    JSON.stringify({ code, width: outW, height: outH, bbox, minZ, maxZ, noData, elevations }),
-  );
+  writeFileSync(out, JSON.stringify({ code, ...grid }));
 
-  console.log(`DEM ${code}: ${W}x${H} -> ${outW}x${outH} (factor ${factor})`);
-  console.log(`Elevación: min=${minZ.toFixed(2)} max=${maxZ.toFixed(2)} Δ=${(maxZ - minZ).toFixed(2)} m`);
-  console.log(`bbox=${JSON.stringify(bbox)} noData=${noData}`);
-  console.log(`-> ${out} (${elevations.length} celdas)`);
+  console.log(`DEM ${code}: ${srcW}x${srcH} -> ${grid.width}x${grid.height}`);
+  console.log(
+    `Elevación: min=${grid.minZ.toFixed(2)} max=${grid.maxZ.toFixed(2)} Δ=${(grid.maxZ - grid.minZ).toFixed(2)} m`,
+  );
+  console.log(`bbox=${JSON.stringify(grid.bbox)} noData=${grid.noData}`);
+  console.log(`-> ${out} (${grid.elevations.length} celdas)`);
 }
 
 main().catch((e: unknown) => {
