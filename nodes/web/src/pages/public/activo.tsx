@@ -6,15 +6,13 @@ import {
   Car,
   Construction,
   Briefcase,
-  User,
   Factory,
-  Hash,
   ShieldAlert,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { AssetPublicView, AssetStatus } from '@/types/assets';
-import { ASSET_TYPE_LABELS, IDENTIFIER_TYPE_LABELS } from '@/types/assets';
+import { ASSET_TYPE_LABELS } from '@/types/assets';
 
 export default function PublicAssetPage(): ReactNode {
   const { code } = useParams<{ code: string }>();
@@ -129,16 +127,6 @@ export default function PublicAssetPage(): ReactNode {
                 </div>
               )}
 
-              {asset.identifier && (
-                <div className="flex justify-between items-center border-b border-border/60 pb-3">
-                  <span className="text-muted-foreground flex items-center gap-1.5">
-                    <Hash className="size-4" />{' '}
-                    {asset.identifierType ? IDENTIFIER_TYPE_LABELS[asset.identifierType] : 'Identificador'}:
-                  </span>
-                  <span className="font-mono font-semibold text-foreground">{asset.identifier}</span>
-                </div>
-              )}
-
               <div className="flex justify-between items-center border-b border-border/60 pb-3">
                 <span className="text-muted-foreground flex items-center gap-1.5">
                   <Briefcase className="size-4" /> Proyecto Asignado:
@@ -147,27 +135,6 @@ export default function PublicAssetPage(): ReactNode {
                   {asset.project?.name || 'Global / Sin asignar'}
                 </span>
               </div>
-
-              <div className="flex justify-between items-center border-b border-border/60 pb-3">
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <User className="size-4" /> Responsable a cargo:
-                </span>
-                <span className="font-semibold text-foreground">
-                  {asset.assignedTo
-                    ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName}`
-                    : 'Sin asignar'}
-                </span>
-              </div>
-
-              {asset.status === 'EN_USO' && asset.inUseBy && (
-                <div className="bg-blue-500/5 border border-blue-500/10 p-3 rounded-lg mt-2 flex flex-col gap-1.5">
-                  <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider">Operación en curso</p>
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className="text-muted-foreground">En uso por:</span>
-                    <span className="font-semibold text-foreground">{asset.inUseBy.firstName} {asset.inUseBy.lastName}</span>
-                  </div>
-                </div>
-              )}
             </CardContent>
 
             <CardFooter className="bg-muted/30 border-t py-4 text-center justify-center">

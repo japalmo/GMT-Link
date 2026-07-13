@@ -40,12 +40,8 @@ export interface AssetPublicView {
   description: string | null;
   status: AssetStatus;
   manufacturer: string | null;
-  identifier: string | null;
-  identifierType: AssetIdentifierType | null;
   vehicleSubtype: VehicleSubtype | null;
   project?: { name: string } | null;
-  assignedTo?: { firstName: string; lastName: string } | null;
-  inUseBy?: { firstName: string; lastName: string } | null;
 }
 
 export interface AssetDocumentView {

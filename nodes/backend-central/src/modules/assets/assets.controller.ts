@@ -18,6 +18,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AssetStatus, AssetType } from '@prisma/client';
 import { RequirePermission } from '../../authz/require-permission.decorator';
@@ -106,6 +107,7 @@ export class AssetsController {
   /**
    * Ficha pública accesible sin autenticación por código QR.
    */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } }) // 20/min por IP: endpoint sin auth
   @Get('public/:code')
   getPublicByCode(@Param('code') code: string): Promise<AssetPublicView> {
     return this.assets.getPublicByCode(code);

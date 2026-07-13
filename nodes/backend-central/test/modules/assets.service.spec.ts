@@ -186,6 +186,7 @@ interface MockPrisma {
   $transaction: MockFunction;
   asset: {
     count: MockFunction;
+    findFirst: MockFunction;
     findUnique: MockFunction;
     findMany: MockFunction;
     findUniqueOrThrow: MockFunction;
@@ -277,6 +278,7 @@ describe('AssetsService', () => {
       $transaction: vi.fn((cb) => cb(txMock)),
       asset: {
         count: vi.fn(() => Promise.resolve(0)),
+        findFirst: vi.fn(() => Promise.resolve(null)),
         findUnique: vi.fn(),
         findMany: vi.fn(() => Promise.resolve([])),
         findUniqueOrThrow: vi.fn(),
@@ -398,6 +400,28 @@ describe('AssetsService', () => {
       expect(result.code).toBe('GMT-MQ-0001');
       expect(result.manufacturer).toBe('Caterpillar');
     });
+
+    it('rechaza (409) al crear un activo con patente duplicada', async () => {
+      // findFirst devuelve un activo existente con el mismo (identifierType, identifier).
+      prismaMock.asset.findFirst.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-existente', identifier: 'ABCD12', identifierType: 'PATENTE' }),
+      );
+
+      await expect(
+        service.create('u-1', {
+          type: AssetType.VEHICULO,
+          name: 'Camioneta Hilux',
+          identifier: 'ABCD12',
+          identifierType: 'PATENTE',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(prismaMock.asset.findFirst).toHaveBeenCalledWith({
+        where: { identifier: 'ABCD12', identifierType: 'PATENTE' },
+      });
+      // No debe intentar crear el activo si la validación de unicidad falla.
+      expect(txMock.asset.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('listAll', () => {
@@ -503,6 +527,42 @@ describe('AssetsService', () => {
       fgaMock.check.mockResolvedValueOnce(false);
 
       await expect(service.getById('a-1', 'u-1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getPublicByCode', () => {
+    it('normaliza el código a mayúsculas y devuelve solo campos no sensibles', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({
+        ...buildAssetRow({
+          code: 'GMT-EQ-0001',
+          identifier: 'ABCD12',
+          identifierType: 'PATENTE',
+          assignedToId: 'u-1',
+          inUseById: 'u-2',
+        }),
+        project: { id: 'p-1', name: 'Proyecto Norte' },
+        assignedTo: buildUserRow({ firstName: 'Juan', lastName: 'Pérez' }),
+        inUseBy: buildUserRow({ id: 'u-2', firstName: 'Ana', lastName: 'Soto' }),
+      });
+
+      const view = await service.getPublicByCode('gmt-eq-0001');
+
+      expect(prismaMock.asset.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { code: 'GMT-EQ-0001' } }),
+      );
+      expect(view.code).toBe('GMT-EQ-0001');
+      expect(view.project).toEqual({ name: 'Proyecto Norte' });
+      // GAP 3: la ficha pública no debe filtrar el identificador ni nombres de personas.
+      expect(view).not.toHaveProperty('identifier');
+      expect(view).not.toHaveProperty('identifierType');
+      expect(view).not.toHaveProperty('assignedTo');
+      expect(view).not.toHaveProperty('inUseBy');
+    });
+
+    it('lanza NotFoundException cuando el código no existe', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.getPublicByCode('GMT-EQ-9999')).rejects.toThrow(NotFoundException);
     });
   });
 

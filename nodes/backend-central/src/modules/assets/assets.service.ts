@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AssetStatus, AssetType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
+import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { PermissionService } from '../../authz/permission.service';
@@ -286,6 +286,25 @@ export class AssetsService {
    * Crea un nuevo activo con código auto-generado, sincroniza FGA y registra historial.
    */
   async create(userId: string, dto: CreateAssetDto): Promise<AssetView> {
+    // Unicidad a nivel de aplicación (paridad con el MVP que tenía @unique):
+    // si viene un identificador (patente / número de serie), no permitir duplicados
+    // sobre la misma combinación (identifierType, identifier).
+    if (dto.identifier) {
+      const existing = await this.prisma.asset.findFirst({
+        where: {
+          identifier: dto.identifier,
+          identifierType: dto.identifierType ?? null,
+        },
+      });
+      if (existing) {
+        throw new ConflictException(
+          dto.identifierType === AssetIdentifierType.PATENTE
+            ? 'Ya existe un activo con esa patente.'
+            : 'Ya existe un activo con ese número de serie.',
+        );
+      }
+    }
+
     const code = await this.generateAssetCode(dto.type);
 
     const assetId = await this.prisma.$transaction(async (tx) => {
@@ -461,8 +480,6 @@ export class AssetsService {
       where: { code: code.toUpperCase() },
       include: {
         project: true,
-        assignedTo: true,
-        inUseBy: true,
       },
     });
 
@@ -470,23 +487,17 @@ export class AssetsService {
       throw new NotFoundException('Ficha técnica no encontrada.');
     }
 
+    // GAP 3: la ficha pública (sin autenticación) no debe filtrar datos personales
+    // ni el identificador. Solo expone información no sensible del activo.
     return {
       code: asset.code,
       type: asset.type,
       name: asset.name,
       description: asset.description,
       manufacturer: asset.manufacturer,
-      identifier: asset.identifier,
-      identifierType: asset.identifierType,
       vehicleSubtype: asset.vehicleSubtype,
       status: asset.status,
       project: asset.project ? { name: asset.project.name } : null,
-      assignedTo: asset.assignedTo
-        ? { firstName: asset.assignedTo.firstName, lastName: asset.assignedTo.lastName }
-        : null,
-      inUseBy: asset.inUseBy
-        ? { firstName: asset.inUseBy.firstName, lastName: asset.inUseBy.lastName }
-        : null,
     };
   }
 
