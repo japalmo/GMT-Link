@@ -108,9 +108,9 @@ export class AssetsController {
    * Ficha pública accesible sin autenticación por código QR.
    */
   @Throttle({ default: { limit: 20, ttl: 60_000 } }) // 20/min por IP: endpoint sin auth
-  @Get('public/:code')
-  getPublicByCode(@Param('code') code: string): Promise<AssetPublicView> {
-    return this.assets.getPublicByCode(code);
+  @Get('public/:token')
+  getPublicByToken(@Param('token') token: string): Promise<AssetPublicView> {
+    return this.assets.getPublicByToken(token);
   }
 
   /**

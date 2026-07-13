@@ -9,6 +9,8 @@ import {
 export interface AssetView {
   id: string;
   code: string;
+  /** Token opaco no enumerable para la ficha pública / QR (GAP3). */
+  publicToken: string;
   type: AssetType;
   name: string;
   description: string | null;

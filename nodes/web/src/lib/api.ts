@@ -1478,8 +1478,8 @@ export function getAsset(id: string): Promise<AssetView> {
   return request<AssetView>(`/assets/${encodeURIComponent(id)}`);
 }
 
-export function getPublicAsset(code: string): Promise<AssetPublicView> {
-  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(code)}`);
+export function getPublicAsset(token: string): Promise<AssetPublicView> {
+  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(token)}`);
 }
 
 export function updateAssetStatus(

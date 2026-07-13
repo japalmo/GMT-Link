@@ -642,7 +642,8 @@ enum AssetStatus {
 
 model Asset {
   id                   String                @id @default(cuid())
-  code                 String                @unique // codificación automática; identifica el activo en el QR / ficha pública
+  code                 String                @unique // codificación automática; identificador INTERNO visible en la UI autenticada
+  publicToken          String                @unique @default(uuid()) // token OPACO no enumerable: es lo que va en el QR / ficha pública (GAP3)
   type                 AssetType
   name                 String
   description          String?

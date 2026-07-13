@@ -13,6 +13,7 @@ export type DocumentStatus = 'BORRADOR' | 'EN_REVISION' | 'APROBADO' | 'RECHAZAD
 export interface AssetView {
   id: string;
   code: string;
+  publicToken: string;
   type: AssetType;
   name: string;
   description: string | null;

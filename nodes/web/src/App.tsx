@@ -79,7 +79,7 @@ const router = createBrowserRouter([
   // Cuenta suspendida: se auto-guarda (requiere sesión + status SUSPENDED),
   // fuera de ProtectedRoute para no entrar en bucle de redirección.
   { path: '/suspended', element: <SuspendedPage /> },
-  { path: '/public/activos/:code', element: <PublicAssetPage /> },
+  { path: '/public/activos/:token', element: <PublicAssetPage /> },
   {
     element: <ProtectedRoute />,
     children: [

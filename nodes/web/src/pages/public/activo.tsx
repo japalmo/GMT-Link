@@ -15,16 +15,16 @@ import type { AssetPublicView, AssetStatus } from '@/types/assets';
 import { ASSET_TYPE_LABELS } from '@/types/assets';
 
 export default function PublicAssetPage(): ReactNode {
-  const { code } = useParams<{ code: string }>();
+  const { token } = useParams<{ token: string }>();
   const [asset, setAsset] = useState<AssetPublicView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!code) return;
+    if (!token) return;
     setLoading(true);
     setError(null);
-    getPublicAsset(code)
+    getPublicAsset(token)
       .then((res) => {
         setAsset(res);
       })
@@ -34,7 +34,7 @@ export default function PublicAssetPage(): ReactNode {
       .finally(() => {
         setLoading(false);
       });
-  }, [code]);
+  }, [token]);
 
   const statusBadge = (status: AssetStatus) => {
     switch (status) {
@@ -80,7 +80,7 @@ export default function PublicAssetPage(): ReactNode {
             <div>
               <CardTitle className="text-destructive font-semibold">Error al consultar activo</CardTitle>
               <CardDescription className="mt-2 text-sm text-muted-foreground">
-                {error || 'El código del activo es inválido o no existe en la plataforma.'}
+                {error || 'El enlace del activo es inválido o no existe en la plataforma.'}
               </CardDescription>
             </div>
           </Card>

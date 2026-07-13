@@ -57,6 +57,7 @@ function buildAssetRow(overrides: Partial<Asset> = {}): Asset {
   return {
     id: 'a-1',
     code: 'GMT-EQ-0001',
+    publicToken: 'tok-a-1',
     type: AssetType.EQUIPO,
     name: 'Generador 5kW',
     description: 'Generador de respaldo',
@@ -530,11 +531,12 @@ describe('AssetsService', () => {
     });
   });
 
-  describe('getPublicByCode', () => {
-    it('normaliza el código a mayúsculas y devuelve solo campos no sensibles', async () => {
+  describe('getPublicByToken', () => {
+    it('busca por token opaco (no por código) y devuelve solo campos no sensibles', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({
         ...buildAssetRow({
           code: 'GMT-EQ-0001',
+          publicToken: 'tok-xyz',
           identifier: 'ABCD12',
           identifierType: 'PATENTE',
           assignedToId: 'u-1',
@@ -545,24 +547,25 @@ describe('AssetsService', () => {
         inUseBy: buildUserRow({ id: 'u-2', firstName: 'Ana', lastName: 'Soto' }),
       });
 
-      const view = await service.getPublicByCode('gmt-eq-0001');
+      const view = await service.getPublicByToken('tok-xyz');
 
+      // GAP 3: la consulta pública es por publicToken opaco, NO por el code enumerable.
       expect(prismaMock.asset.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { code: 'GMT-EQ-0001' } }),
+        expect.objectContaining({ where: { publicToken: 'tok-xyz' } }),
       );
       expect(view.code).toBe('GMT-EQ-0001');
       expect(view.project).toEqual({ name: 'Proyecto Norte' });
-      // GAP 3: la ficha pública no debe filtrar el identificador ni nombres de personas.
+      // No debe filtrar el identificador ni nombres de personas.
       expect(view).not.toHaveProperty('identifier');
       expect(view).not.toHaveProperty('identifierType');
       expect(view).not.toHaveProperty('assignedTo');
       expect(view).not.toHaveProperty('inUseBy');
     });
 
-    it('lanza NotFoundException cuando el código no existe', async () => {
+    it('lanza NotFoundException cuando el token no existe', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.getPublicByCode('GMT-EQ-9999')).rejects.toThrow(NotFoundException);
+      await expect(service.getPublicByToken('tok-inexistente')).rejects.toThrow(NotFoundException);
     });
   });
 

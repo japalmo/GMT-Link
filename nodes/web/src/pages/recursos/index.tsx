@@ -1319,7 +1319,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     );
   }
 
-  const publicUrl = `${window.location.origin}/public/activos/${asset.code}`;
+  const publicUrl = `${window.location.origin}/public/activos/${asset.publicToken}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicUrl)}`;
 
   return (

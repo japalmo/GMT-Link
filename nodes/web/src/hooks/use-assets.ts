@@ -66,7 +66,7 @@ export interface UseAssetsResult {
   reviewDoc: (id: string, docId: string, input: ReviewAssetDocInput) => Promise<AssetDocumentView>;
   getHistory: (id: string) => Promise<AssetHistoryEntryView[]>;
   getById: (id: string) => Promise<AssetView>;
-  getPublic: (code: string) => Promise<AssetPublicView>;
+  getPublic: (token: string) => Promise<AssetPublicView>;
   listAccessories: (id: string) => Promise<AssetAccessoryView[]>;
   addAccessory: (id: string, input: CreateAccessoryInput) => Promise<AssetAccessoryView>;
   updateAccessory: (id: string, accId: string, input: UpdateAccessoryInput) => Promise<AssetAccessoryView>;
@@ -227,8 +227,8 @@ export function useAssets(): UseAssetsResult {
     return asset;
   }, []);
 
-  const getPublic = useCallback(async (code: string) => {
-    const asset = await getPublicAsset(code);
+  const getPublic = useCallback(async (token: string) => {
+    const asset = await getPublicAsset(token);
     return asset;
   }, []);
 

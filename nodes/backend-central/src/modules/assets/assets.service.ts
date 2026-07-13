@@ -157,6 +157,7 @@ export class AssetsService {
     return {
       id: row.id,
       code: row.code,
+      publicToken: row.publicToken,
       type: row.type,
       name: row.name,
       description: row.description,
@@ -473,11 +474,12 @@ export class AssetsService {
   }
 
   /**
-   * Ficha pública: consulta rápida por código correlativo (sin autenticación).
+   * Ficha pública por TOKEN OPACO no enumerable (sin autenticación). El código
+   * correlativo ya NO sirve para esta ruta: evita el raspado del parque (GAP3).
    */
-  async getPublicByCode(code: string): Promise<AssetPublicView> {
+  async getPublicByToken(token: string): Promise<AssetPublicView> {
     const asset = await this.prisma.asset.findUnique({
-      where: { code: code.toUpperCase() },
+      where: { publicToken: token },
       include: {
         project: true,
       },
