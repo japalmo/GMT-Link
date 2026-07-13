@@ -98,14 +98,13 @@ async function main(): Promise<void> {
       console.error('--test= requiere un email.');
       process.exit(1);
     }
-    console.log(`Prueba a ${testEmail} desde ${from}. Login: ${LOGIN_URL}. Feedback: ${FEEDBACK_EMAIL}`);
-    await sendOne({
-      nombre: 'Juan Apalmo',
-      username: 'japalmo',
-      email: testEmail,
-      roleKey: 'admin_ti',
-      provisional: 'Ab3x-Kf9m-Qr2t',
-    });
+    const sample = creds[0];
+    if (!sample) {
+      console.error('Sin credenciales en el archivo.');
+      process.exit(1);
+    }
+    console.log(`Prueba (datos reales de ${sample.username}) a ${testEmail}. Login: ${LOGIN_URL}. Feedback: ${FEEDBACK_EMAIL}`);
+    await sendOne({ ...sample, email: testEmail });
     return;
   }
 
