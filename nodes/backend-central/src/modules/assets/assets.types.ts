@@ -1,46 +1,20 @@
-import {
+import { DocumentStatus } from '@prisma/client';
+
+/**
+ * Los tipos de dominio de activos (unions + vistas) viven en
+ * `@gmt-platform/contracts` (fuente única, GAP5). Se re-exportan aquí para que
+ * `assets.service.ts` / controllers sigan importando desde `./assets.types` sin
+ * cambios. Los enums Prisma (`row.type`, `AssetStatus.MANTENIMIENTO`, …) son
+ * string-valued y por tanto asignables a estos unions.
+ */
+export type {
   AssetType,
   AssetStatus,
-  AssetIdentifierType,
   VehicleSubtype,
-  DocumentStatus,
-} from '@prisma/client';
-
-export interface AssetView {
-  id: string;
-  code: string;
-  /** Token opaco no enumerable para la ficha pública / QR (GAP3). */
-  publicToken: string;
-  type: AssetType;
-  name: string;
-  description: string | null;
-  manufacturer: string | null;
-  identifier: string | null;
-  identifierType: AssetIdentifierType | null;
-  vehicleSubtype: VehicleSubtype | null;
-  status: AssetStatus;
-  projectId: string | null;
-  assignedToId: string | null;
-  inUseById: string | null;
-  inUseSince: string | null; // ISO-8601
-  metadata: Record<string, unknown> | null;
-  createdAt: string; // ISO-8601
-  updatedAt: string; // ISO-8601
-  project?: { id: string; name: string } | null;
-  assignedTo?: { id: string; firstName: string; lastName: string } | null;
-  inUseBy?: { id: string; firstName: string; lastName: string } | null;
-}
-
-export interface AssetPublicView {
-  code: string;
-  type: AssetType;
-  name: string;
-  description: string | null;
-  manufacturer: string | null;
-  vehicleSubtype: VehicleSubtype | null;
-  status: AssetStatus;
-  project?: { name: string } | null;
-}
+  AssetIdentifierType,
+  AssetView,
+  AssetPublicView,
+} from '@gmt-platform/contracts';
 
 export interface AssetDocumentView {
   id: string;

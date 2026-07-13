@@ -1,49 +1,31 @@
-export type AssetType = 'EQUIPO' | 'VEHICULO' | 'MAQUINARIA';
-export type VehicleSubtype = 'PICKUP' | 'FURGON' | 'AUTO' | 'AUTOBUS' | 'CAMION';
-export type AssetIdentifierType = 'PATENTE' | 'NUMERO_SERIE';
-export type AssetStatus =
-  | 'DISPONIBLE'
-  | 'EN_USO'
-  | 'MANTENIMIENTO'
-  | 'BAJA'
-  | 'DEFECTUOSO'
-  | 'NO_DISPONIBLE';
+/**
+ * Tipos de activos. Los dominios compartidos (unions + vistas) reexportan
+ * `@gmt-platform/contracts` (fuente única, GAP5) para que los consumidores del
+ * front importen desde `@/types/assets` sin duplicar definiciones (patrón del
+ * repo, ver `@/types/projects`, `@/types/operations`). Aquí se mantienen SOLO
+ * los tipos de UI (labels, CreateAssetInput, checklists) y los que aún no viven
+ * en contracts (DocumentStatus).
+ */
+import type {
+  AssetType,
+  AssetStatus,
+  VehicleSubtype,
+  AssetIdentifierType,
+  AssetView,
+  AssetPublicView,
+} from '@gmt-platform/contracts';
+
+export type {
+  AssetType,
+  AssetStatus,
+  VehicleSubtype,
+  AssetIdentifierType,
+  AssetView,
+  AssetPublicView,
+};
+
+/** Estado de un documento/checklist de activo (local; aún no en contracts). */
 export type DocumentStatus = 'BORRADOR' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO';
-
-export interface AssetView {
-  id: string;
-  code: string;
-  publicToken: string;
-  type: AssetType;
-  name: string;
-  description: string | null;
-  status: AssetStatus;
-  manufacturer: string | null;
-  identifier: string | null;
-  identifierType: AssetIdentifierType | null;
-  vehicleSubtype: VehicleSubtype | null;
-  projectId: string | null;
-  assignedToId: string | null;
-  inUseById: string | null;
-  inUseSince: string | null; // ISO-8601
-  metadata: Record<string, unknown> | null;
-  createdAt: string; // ISO-8601
-  updatedAt: string; // ISO-8601
-  project?: { id: string; name: string } | null;
-  assignedTo?: { id: string; firstName: string; lastName: string } | null;
-  inUseBy?: { id: string; firstName: string; lastName: string } | null;
-}
-
-export interface AssetPublicView {
-  code: string;
-  type: AssetType;
-  name: string;
-  description: string | null;
-  status: AssetStatus;
-  manufacturer: string | null;
-  vehicleSubtype: VehicleSubtype | null;
-  project?: { name: string } | null;
-}
 
 export interface AssetDocumentView {
   id: string;

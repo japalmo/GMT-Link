@@ -478,3 +478,64 @@ export interface PhaseVariableSpecInput {
 export interface PhaseDataSpecInput {
   variables: PhaseVariableSpecInput[];
 }
+
+// ============ Activos: tipos, estados, subtipos y vistas (GAP5) ============
+
+/** Tipo de activo (espejo del enum Prisma `AssetType`). */
+export type AssetType = 'EQUIPO' | 'VEHICULO' | 'MAQUINARIA';
+
+/** Estado operativo de un activo (espejo del enum Prisma `AssetStatus`). */
+export type AssetStatus =
+  | 'DISPONIBLE'
+  | 'EN_USO'
+  | 'MANTENIMIENTO'
+  | 'BAJA'
+  | 'DEFECTUOSO'
+  | 'NO_DISPONIBLE';
+
+/** Subtipo de vehículo (espejo del enum Prisma `VehicleSubtype`). */
+export type VehicleSubtype = 'PICKUP' | 'FURGON' | 'AUTO' | 'AUTOBUS' | 'CAMION';
+
+/** Tipo de identificador de un activo (espejo del enum Prisma `AssetIdentifierType`). */
+export type AssetIdentifierType = 'PATENTE' | 'NUMERO_SERIE';
+
+/**
+ * Vista completa de un activo (respuesta de listados, detalle y mutaciones).
+ * Incluye `publicToken`: token opaco no enumerable para la ficha pública / QR (GAP3).
+ */
+export interface AssetView {
+  id: string;
+  code: string;
+  /** Token opaco no enumerable para la ficha pública / QR (GAP3). */
+  publicToken: string;
+  type: AssetType;
+  name: string;
+  description: string | null;
+  manufacturer: string | null;
+  identifier: string | null;
+  identifierType: AssetIdentifierType | null;
+  vehicleSubtype: VehicleSubtype | null;
+  status: AssetStatus;
+  projectId: string | null;
+  assignedToId: string | null;
+  inUseById: string | null;
+  inUseSince: string | null; // ISO-8601
+  metadata: Record<string, unknown> | null;
+  createdAt: string; // ISO-8601
+  updatedAt: string; // ISO-8601
+  project?: { id: string; name: string } | null;
+  assignedTo?: { id: string; firstName: string; lastName: string } | null;
+  inUseBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
+/** Ficha pública de un activo (respuesta del endpoint público por token, GAP3). */
+export interface AssetPublicView {
+  code: string;
+  type: AssetType;
+  name: string;
+  description: string | null;
+  manufacturer: string | null;
+  vehicleSubtype: VehicleSubtype | null;
+  status: AssetStatus;
+  project?: { name: string } | null;
+}
