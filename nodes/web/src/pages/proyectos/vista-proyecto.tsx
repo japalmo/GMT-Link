@@ -364,9 +364,12 @@ function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
 
   useEffect(() => {
     let alive = true;
-    listUsers()
-      .then((list) => {
-        if (alive) setUsers(list);
+    // `listUsers` está paginado (keyset): para poblar el picker se pide la
+    // página más grande permitida (tope 100), igual que el resto de selects de
+    // directorio de esta página.
+    listUsers({ limit: 100 })
+      .then((page) => {
+        if (alive) setUsers(page.items);
       })
       .catch(() => {
         // Silencioso: el picker cae a "sin usuarios" y el diálogo lo informa.

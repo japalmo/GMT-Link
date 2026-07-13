@@ -29,6 +29,7 @@ import type { AssignRoleInput, ProjectAdminOption, ScopeType } from '@gmt-platfo
 import type {
   CreateUserResponse,
   ImportUsersResponse,
+  Paginated,
   ResendInviteResponse,
   UserListItem,
   UserRolesResponse,
@@ -63,11 +64,24 @@ export class UsersController {
     return this.usersService.importBatch(dto.rows);
   }
 
-  /** Lista usuarios con sus roleKeys (RoleScopedList). `?search=` opcional server-side. */
+  /**
+   * Lista los usuarios (RoleScopedList) con paginación keyset. Devuelve una
+   * página (`items` + `nextCursor`): el cliente pide la siguiente reenviando
+   * `nextCursor` como `cursor`. `search` filtra server-side por nombre /
+   * apellido / email / username.
+   */
   @Get()
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
-  list(@Query('search') search?: string): Promise<UserListItem[]> {
-    return this.usersService.list(search);
+  list(
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ): Promise<Paginated<UserListItem>> {
+    return this.usersService.list({
+      search,
+      limit: limit !== undefined ? Number(limit) : undefined,
+      cursor,
+    });
   }
 
   /**

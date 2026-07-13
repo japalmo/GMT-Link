@@ -18,26 +18,49 @@ function toMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Opciones de {@link useReimbursements}. */
+export interface UseReimbursementsOptions {
+  /**
+   * Tamaño de página de `mine`/`managerItems` (carga inicial y cada
+   * `loadMore`). Default 30 (tope 100), igual que el resto de listados
+   * paginados. Súbelo (p. ej. 100) cuando el consumidor necesita "prácticamente
+   * todo" en una sola página (p. ej. la Vista general, que agrega client-side).
+   */
+  limit?: number;
+}
+
 /** Valor expuesto por {@link useReimbursements}. */
 export interface UseReimbursementsResult {
-  /** Reembolsos propios del usuario (siempre cargados). */
+  /** Reembolsos propios del usuario (página actual, siempre cargados). */
   mine: ReimbursementView[];
+  /** ¿Hay más páginas de `mine`? (`nextCursor != null`). */
+  mineHasMore: boolean;
+  /** Carga de una página siguiente de `mine` vía `loadMoreMine`. */
+  loadingMoreMine: boolean;
+  /** Carga y agrega la siguiente página de `mine` al final. */
+  loadMoreMine: () => Promise<void>;
   /**
    * TODOS los reembolsos (solo si soy gestor; `[]` y silencioso si no). Cada fila
    * incluye `requester` para la vista de gestión.
    */
   managerItems: ReimbursementView[];
+  /** ¿Hay más páginas de `managerItems`? (`nextCursor != null`). */
+  managerHasMore: boolean;
+  /** Carga de una página siguiente de `managerItems` vía `loadMoreManager`. */
+  loadingMoreManager: boolean;
+  /** Carga y agrega la siguiente página de `managerItems` al final. */
+  loadMoreManager: () => Promise<void>;
   /**
    * `true` si el probe de `GET /reimbursements` NO dio 403, es decir, el usuario
    * puede ver/decidir todos los reembolsos. La sección de gestión de la UI se
    * monta solo si esto es `true`.
    */
   isManager: boolean;
-  /** `true` mientras se carga la información inicial. */
+  /** `true` mientras se carga la información inicial (página 1 de ambas listas). */
   loading: boolean;
   /** Mensaje de error de la última carga de "mis reembolsos", o `null`. */
   error: string | null;
-  /** Vuelve a cargar mis reembolsos + (si soy gestor) la lista global. */
+  /** Vuelve a cargar la página 1 de mis reembolsos + (si soy gestor) la lista global. */
   refetch: () => Promise<void>;
   /**
    * Crea un reembolso propio con su boleta OBLIGATORIA (un solo paso, multipart) y
@@ -57,16 +80,28 @@ export interface UseReimbursementsResult {
 /**
  * Hook de datos de Reembolsos (§6-3.1).
  *
- * Carga siempre "mis reembolsos". La lista global de gestión se intenta con un
- * probe silencioso: si `GET /reimbursements` responde 403, el usuario no es
- * gestor → `managerItems=[]`, `isManager=false`, y NO se publica error (un 403
- * esperado no es un fallo de UI). Cualquier otro error del probe tampoco rompe
- * la carga principal. Las mutaciones refrescan "lo mío" y, si soy gestor, la
- * lista global. El cleanup ignora respuestas tras desmontar (mountedRef).
+ * `mine` y `managerItems` usan paginación KEYSET server-side (misma forma que
+ * `useAssets`): cada uno expone su propia página actual + `hasMore`/`loadMore`
+ * ("Cargar más"). La lista global de gestión se intenta con un probe silencioso:
+ * si `GET /reimbursements` responde 403, el usuario no es gestor →
+ * `managerItems=[]`, `isManager=false`, y NO se publica error (un 403 esperado
+ * no es un fallo de UI). Cualquier otro error del probe tampoco rompe la carga
+ * principal. Las mutaciones refrescan la PÁGINA 1 de "lo mío" y, si soy gestor,
+ * de la lista global (se pierde lo acumulado por `loadMore`, igual que al
+ * cambiar filtros en `useAssets`). El cleanup ignora respuestas tras desmontar
+ * (mountedRef); `genRef` descarta páginas de consultas ya obsoletas.
  */
-export function useReimbursements(): UseReimbursementsResult {
+export function useReimbursements(opts: UseReimbursementsOptions = {}): UseReimbursementsResult {
+  const { limit } = opts;
+
   const [mine, setMine] = useState<ReimbursementView[]>([]);
+  const [mineNextCursor, setMineNextCursor] = useState<string | null>(null);
+  const [loadingMoreMine, setLoadingMoreMine] = useState(false);
+
   const [managerItems, setManagerItems] = useState<ReimbursementView[]>([]);
+  const [managerNextCursor, setManagerNextCursor] = useState<string | null>(null);
+  const [loadingMoreManager, setLoadingMoreManager] = useState(false);
+
   const [isManager, setIsManager] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,53 +114,107 @@ export function useReimbursements(): UseReimbursementsResult {
     };
   }, []);
 
+  // Descarta respuestas de `loadMore*` en vuelo cuando una recarga de página 1
+  // (refetch/mutación) ya las volvió obsoletas.
+  const genRef = useRef(0);
+
   /** Probe silencioso de la lista global: 403 = no gestor (sin error). */
-  const loadManager = useCallback(async () => {
-    try {
-      const list = await listAllReimbursements({});
-      if (mountedRef.current) {
-        setManagerItems(list);
+  const loadManager = useCallback(
+    async (gen: number) => {
+      try {
+        const page = await listAllReimbursements({ limit });
+        if (!mountedRef.current || genRef.current !== gen) return;
+        setManagerItems(page.items);
+        setManagerNextCursor(page.nextCursor);
         setIsManager(true);
+      } catch (err) {
+        if (mountedRef.current && genRef.current === gen) {
+          setManagerItems([]);
+          setManagerNextCursor(null);
+          setIsManager(false);
+        }
+        // 403 es esperado (no soy gestor). Otros errores se ignoran a propósito:
+        // la sección de gestión simplemente no aparece; "lo mío" sigue vivo.
+        if (!(err instanceof ApiError) || err.status !== 403) {
+          // Silencioso por diseño; ver doc del hook.
+        }
       }
-    } catch (err) {
-      if (mountedRef.current) {
-        setManagerItems([]);
-        setIsManager(false);
-      }
-      // 403 es esperado (no soy gestor). Otros errores se ignoran a propósito:
-      // la sección de gestión simplemente no aparece; "lo mío" sigue vivo.
-      if (!(err instanceof ApiError) || err.status !== 403) {
-        // Silencioso por diseño; ver doc del hook.
-      }
-    }
-  }, []);
+    },
+    [limit],
+  );
 
   const load = useCallback(async () => {
+    const gen = ++genRef.current;
     setLoading(true);
     setError(null);
     try {
-      const list = await listMyReimbursements();
-      if (mountedRef.current) setMine(list);
+      const page = await listMyReimbursements({ limit });
+      if (mountedRef.current && genRef.current === gen) {
+        setMine(page.items);
+        setMineNextCursor(page.nextCursor);
+      }
     } catch (err) {
-      if (mountedRef.current) {
+      if (mountedRef.current && genRef.current === gen) {
         setError(toMessage(err, 'No se pudieron cargar tus reembolsos.'));
       }
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current && genRef.current === gen) setLoading(false);
     }
-    await loadManager();
-  }, [loadManager]);
+    await loadManager(gen);
+  }, [limit, loadManager]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  /** Refresca "lo mío" y, si soy gestor, la lista global. */
+  /** Carga la siguiente página de "lo mío" y la agrega al final. */
+  const loadMoreMine = useCallback(async () => {
+    if (!mineNextCursor || loadingMoreMine) return;
+    const gen = genRef.current;
+    setLoadingMoreMine(true);
+    try {
+      const page = await listMyReimbursements({ limit, cursor: mineNextCursor });
+      if (!mountedRef.current || genRef.current !== gen) return;
+      setMine((prev) => [...prev, ...page.items]);
+      setMineNextCursor(page.nextCursor);
+    } catch (err) {
+      if (mountedRef.current && genRef.current === gen) {
+        setError(toMessage(err, 'No se pudieron cargar más reembolsos.'));
+      }
+    } finally {
+      if (mountedRef.current && genRef.current === gen) setLoadingMoreMine(false);
+    }
+  }, [mineNextCursor, loadingMoreMine, limit]);
+
+  /** Carga la siguiente página de la lista global (gestor) y la agrega al final. */
+  const loadMoreManager = useCallback(async () => {
+    if (!managerNextCursor || loadingMoreManager) return;
+    const gen = genRef.current;
+    setLoadingMoreManager(true);
+    try {
+      const page = await listAllReimbursements({ limit, cursor: managerNextCursor });
+      if (!mountedRef.current || genRef.current !== gen) return;
+      setManagerItems((prev) => [...prev, ...page.items]);
+      setManagerNextCursor(page.nextCursor);
+    } catch (err) {
+      if (mountedRef.current && genRef.current === gen) {
+        setError(toMessage(err, 'No se pudieron cargar más reembolsos.'));
+      }
+    } finally {
+      if (mountedRef.current && genRef.current === gen) setLoadingMoreManager(false);
+    }
+  }, [managerNextCursor, loadingMoreManager, limit]);
+
+  /** Refresca la página 1 de "lo mío" y, si soy gestor, de la lista global. */
   const refreshAll = useCallback(async () => {
-    const list = await listMyReimbursements();
-    if (mountedRef.current) setMine(list);
-    if (isManager) await loadManager();
-  }, [isManager, loadManager]);
+    const gen = ++genRef.current;
+    const page = await listMyReimbursements({ limit });
+    if (mountedRef.current && genRef.current === gen) {
+      setMine(page.items);
+      setMineNextCursor(page.nextCursor);
+    }
+    if (isManager) await loadManager(gen);
+  }, [isManager, loadManager, limit]);
 
   const create = useCallback(
     async (input: CreateReimbursementInput, file: File) => {
@@ -170,7 +259,13 @@ export function useReimbursements(): UseReimbursementsResult {
 
   return {
     mine,
+    mineHasMore: mineNextCursor !== null,
+    loadingMoreMine,
+    loadMoreMine,
     managerItems,
+    managerHasMore: managerNextCursor !== null,
+    loadingMoreManager,
+    loadMoreManager,
     isManager,
     loading,
     error,

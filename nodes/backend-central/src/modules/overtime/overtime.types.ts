@@ -1,4 +1,7 @@
 import type { FinanceStatus } from '@prisma/client';
+import type { Paginated } from '@gmt-platform/contracts';
+
+export type { Paginated };
 
 /**
  * Vista pública de una solicitud de horas extra (§6-3.3). Fechas en ISO-8601

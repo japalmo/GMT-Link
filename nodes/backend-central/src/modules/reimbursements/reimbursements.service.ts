@@ -17,7 +17,7 @@ import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
 import { CreateReimbursementDto } from './dto/reimbursements.dto';
-import type { ReimbursementView } from './reimbursements.types';
+import type { Paginated, ReimbursementView } from './reimbursements.types';
 import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
 import type { ReceiptForPdf, ComposeOptions } from './reimbursements-pdf.util';
 import { buildReceiptOcrMessages, parseReceiptOcr } from './receipt-ocr.util';
@@ -67,6 +67,10 @@ export interface ListReimbursementsFilters {
   month?: string;
   order?: 'asc' | 'desc';
   printed?: boolean;
+  /** Tope de filas de la página (default 30, máx. 100). */
+  limit?: number;
+  /** Cursor keyset opaco (página siguiente); ver doc de `listAll`. */
+  cursor?: string;
 }
 
 /**
@@ -186,33 +190,80 @@ export class ReimbursementsService {
   }
 
   /**
-   * Lista los reembolsos propios (orden createdAt desc). Filtro opcional por
-   * `status`.
+   * Lista los reembolsos propios con paginación KEYSET estable. El orden es
+   * `createdAt desc` — NO único — así que se desempata por `id desc`: el cursor
+   * de la página siguiente es `${createdAt.toISOString()}_${id}` del último item
+   * de la página previa, y la siguiente pide `createdAt < cursor.createdAt` OR
+   * (`createdAt = cursor.createdAt` AND `id < cursor.id`). Se trae `limit + 1`
+   * filas para saber si hay más páginas sin un `count` adicional. `limit`
+   * default 30, máximo 100. Filtro opcional por `status`.
    */
-  async listMine(userId: string, status?: FinanceStatus): Promise<ReimbursementView[]> {
+  async listMine(
+    userId: string,
+    opts: { status?: FinanceStatus; limit?: number; cursor?: string } = {},
+  ): Promise<Paginated<ReimbursementView>> {
+    const { status, cursor } = opts;
+    const limit = normalizeLimit(opts.limit);
+
     const where: Prisma.ReimbursementWhereInput = { userId };
     if (status !== undefined) {
       where.status = status;
     }
+    if (cursor) {
+      const decoded = decodeKeysetCursor(cursor);
+      if (decoded) {
+        where.AND = createdAtKeysetWhere(decoded);
+      }
+    }
+
     const rows = await this.prisma.reimbursement.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
     });
-    return rows.map(toView);
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
+
+    return { items: pageRows.map(toView), nextCursor };
   }
 
   /**
-   * Lista TODOS los reembolsos (vista del gestor — RoleScopedList). El permiso lo
-   * verifica el guard en el controller. Filtros opcionales `status` y `userId`.
-   * Incluye datos del solicitante (nombre/email).
+   * Lista TODOS los reembolsos (vista del gestor — RoleScopedList) con
+   * paginación KEYSET estable. El orden es `date` (fecha del gasto), configurable
+   * asc/desc vía `filters.order` (default desc) — NO único — así que se
+   * desempata por `id` en la MISMA dirección: el cursor de la página siguiente es
+   * `${date.toISOString()}_${id}` del último item de la página previa. El
+   * permiso lo verifica el guard en el controller. Filtros opcionales `status` /
+   * `userId` / rango de fecha / mes / impresión. Incluye datos del solicitante.
    */
-  async listAll(filters: ListReimbursementsFilters): Promise<ReimbursementView[]> {
+  async listAll(filters: ListReimbursementsFilters): Promise<Paginated<ReimbursementView>> {
+    const limit = normalizeLimit(filters.limit);
+    const order = filters.order ?? 'desc';
+    const where = buildReimbursementWhere(filters);
+
+    if (filters.cursor) {
+      const decoded = decodeKeysetCursor(filters.cursor);
+      if (decoded) {
+        where.AND = dateKeysetWhere(decoded, order);
+      }
+    }
+
     const rows = await this.prisma.reimbursement.findMany({
-      where: buildReimbursementWhere(filters),
+      where,
       include: { user: REQUESTER_SELECT },
-      orderBy: { date: filters.order ?? 'desc' },
+      orderBy: [{ date: order }, { id: order }],
+      take: limit + 1,
     });
-    return rows.map(toViewWithRequester);
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.date, lastRow.id) : null;
+
+    return { items: pageRows.map(toViewWithRequester), nextCursor };
   }
 
   /**
@@ -504,6 +555,53 @@ const CLP_FORMAT = new Intl.NumberFormat('es-CL', {
 /** Formatea un monto CLP entero (ej. 15000 → "$15.000"). */
 function formatClp(amount: number): string {
   return CLP_FORMAT.format(amount);
+}
+
+/**
+ * Normaliza el `limit` de paginación: default 30, tope 100, mínimo 1. Ignora
+ * valores no numéricos (p. ej. un `?limit=` mal formado que llega como NaN).
+ */
+function normalizeLimit(requested: number | undefined): number {
+  return requested !== undefined && Number.isFinite(requested) && requested > 0
+    ? Math.min(Math.floor(requested), 100)
+    : 30;
+}
+
+/** Codifica el cursor keyset compuesto (fecha, `id`) de `listMine`/`listAll`. */
+function encodeKeysetCursor(date: Date, id: string): string {
+  return `${date.toISOString()}_${id}`;
+}
+
+/**
+ * Decodifica un cursor de `listMine`/`listAll`. `null` si el formato es
+ * inválido (cursor corrupto o mal formado): en ese caso se ignora en vez de
+ * romper la página, igual que un `limit` no numérico.
+ */
+function decodeKeysetCursor(raw: string): { date: Date; id: string } | null {
+  const separatorIndex = raw.indexOf('_');
+  if (separatorIndex === -1) return null;
+  const isoPart = raw.slice(0, separatorIndex);
+  const idPart = raw.slice(separatorIndex + 1);
+  const date = new Date(isoPart);
+  if (Number.isNaN(date.getTime()) || idPart.length === 0) return null;
+  return { date, id: idPart };
+}
+
+/** OR de keyset para `listMine` (orden fijo `createdAt desc`). */
+function createdAtKeysetWhere(cursor: { date: Date; id: string }): Prisma.ReimbursementWhereInput {
+  return {
+    OR: [{ createdAt: { lt: cursor.date } }, { createdAt: cursor.date, id: { lt: cursor.id } }],
+  };
+}
+
+/** OR de keyset para `listAll` (orden `date`, configurable asc/desc vía `order`). */
+function dateKeysetWhere(
+  cursor: { date: Date; id: string },
+  order: 'asc' | 'desc',
+): Prisma.ReimbursementWhereInput {
+  return order === 'desc'
+    ? { OR: [{ date: { lt: cursor.date } }, { date: cursor.date, id: { lt: cursor.id } }] }
+    : { OR: [{ date: { gt: cursor.date } }, { date: cursor.date, id: { gt: cursor.id } }] };
 }
 
 /** Construye el `where` de reembolsos desde los filtros (trabajador/fecha/mes/orden/impresa). */

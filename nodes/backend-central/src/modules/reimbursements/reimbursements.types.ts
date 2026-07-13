@@ -1,4 +1,7 @@
 import type { FinanceStatus } from '@prisma/client';
+import type { Paginated } from '@gmt-platform/contracts';
+
+export type { Paginated };
 
 /**
  * Vista pública de un reembolso (§6-3.1). Fechas en ISO-8601 (string) para el

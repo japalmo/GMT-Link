@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Ban, KeyRound, LogOut, Plus, Upload, UserCog, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { SearchInput } from '@/components/ui/search-input';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -31,9 +32,13 @@ function formatDate(iso: string): string {
  */
 export default function UsuariosPage(): ReactNode {
   const {
-    users,
+    items: users,
     loading,
+    loadingMore,
     error,
+    hasMore,
+    loadMore,
+    setSearch,
     refetch,
     create,
     importRows,
@@ -44,6 +49,7 @@ export default function UsuariosPage(): ReactNode {
     revokeSessions,
   } = useUsers();
 
+  const [searchTerm, setSearchTerm] = useState('');
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [rolesUser, setRolesUser] = useState<UserListItem | null>(null);
@@ -198,12 +204,25 @@ export default function UsuariosPage(): ReactNode {
         </Alert>
       )}
 
+      {/* Búsqueda SERVER-SIDE: el término se manda al hook, que lo debouncea (~300ms)
+          y consulta al servidor (no filtra en memoria). Reemplaza la búsqueda
+          client-side de RoleScopedList (`searchable={false}` abajo). */}
+      <SearchInput
+        label="Buscar usuarios"
+        placeholder="Buscar por nombre, usuario o email…"
+        value={searchTerm}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setSearch(e.target.value);
+        }}
+        disabled={loading && users.length === 0}
+      />
+
       <RoleScopedList<UserListItem>
         items={users}
         columns={columns}
         getRowId={(u) => u.id}
-        searchable
-        searchPlaceholder="Buscar por nombre, usuario o email…"
+        searchable={false}
         loading={loading}
         error={error}
         onRetry={() => void refetch()}
@@ -263,6 +282,15 @@ export default function UsuariosPage(): ReactNode {
         }}
         caption="Directorio de usuarios"
       />
+
+      {/* Paginación server-side: carga la siguiente página al final del directorio. */}
+      {!loading && !error && hasMore && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? 'Cargando…' : 'Cargar más'}
+          </Button>
+        </div>
+      )}
 
       <NewUserDialog open={newUserOpen} onOpenChange={setNewUserOpen} onCreate={handleCreate} />
 

@@ -35,8 +35,15 @@ function initialFilters(): OverviewFilters {
  * Arranca filtrada al mes contable en curso.
  */
 export function VistaGeneralTab(): ReactNode {
-  const reimb = useReimbursements();
-  const ot = useOvertime();
+  // La Vista general agrega client-side sobre TODO lo cargado (cards, ranking,
+  // tabla histórica con su propia paginación interna): a diferencia de las
+  // pestañas de Reembolsos/Horas extra (que solo necesitan una página con
+  // "Cargar más"), acá se pide la página más grande permitida (tope 100) para
+  // acercarse al comportamiento previo de "cargar todo". Con más de 100
+  // solicitudes de un mismo tipo, la Vista general queda acotada a las 100 más
+  // recientes hasta que se implemente agregación server-side.
+  const reimb = useReimbursements({ limit: 100 });
+  const ot = useOvertime({ limit: 100 });
   const { projects } = useFinanceProjects();
 
   const canViewAll = useHasPermission('finance:request:view:all');

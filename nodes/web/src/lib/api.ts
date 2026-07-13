@@ -334,12 +334,21 @@ export interface UserRolesResponse {
   memberships: UserMembership[];
 }
 
-/** `GET /users?search=` — directorio de usuarios. Orden createdAt desc. */
-export function listUsers(search?: string): Promise<UserListItem[]> {
-  const query = search && search.trim().length > 0
-    ? `?search=${encodeURIComponent(search.trim())}`
-    : '';
-  return request<UserListItem[]>(`/users${query}`);
+/**
+ * `GET /users` — página del directorio de usuarios con paginación keyset
+ * (server-side). Devuelve `{ items, nextCursor }`: para la siguiente página se
+ * reenvía `nextCursor` como `cursor`. `search` filtra server-side por nombre /
+ * apellido / email / username. `limit` default 30, máx. 100.
+ */
+export function listUsers(
+  params: { search?: string; limit?: number; cursor?: string } = {},
+): Promise<Paginated<UserListItem>> {
+  const query = new URLSearchParams();
+  if (params.search && params.search.trim().length > 0) query.append('search', params.search.trim());
+  if (params.limit !== undefined) query.append('limit', String(params.limit));
+  if (params.cursor) query.append('cursor', params.cursor);
+  const qs = query.toString();
+  return request<Paginated<UserListItem>>(`/users${qs ? `?${qs}` : ''}`);
 }
 
 /** `POST /users` — crea un usuario y devuelve su clave provisoria (única vez). */
@@ -942,18 +951,29 @@ export function createReimbursement(
   return uploadRequest<ReimbursementView>('/reimbursements', formData);
 }
 
-/** `GET /reimbursements/me?status=` — reembolsos propios. Filtro de estado opcional. */
+/**
+ * `GET /reimbursements/me` — página de reembolsos propios con paginación keyset
+ * (server-side, orden `createdAt desc`). Devuelve `{ items, nextCursor }`: para
+ * la siguiente página se reenvía `nextCursor` como `cursor`. Filtro opcional de
+ * estado. `limit` default 30, máx. 100.
+ */
 export function listMyReimbursements(
-  status?: FinanceStatus,
-): Promise<ReimbursementView[]> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return request<ReimbursementView[]>(`/reimbursements/me${query}`);
+  params: { status?: FinanceStatus; limit?: number; cursor?: string } = {},
+): Promise<Paginated<ReimbursementView>> {
+  const query = new URLSearchParams();
+  if (params.status) query.append('status', params.status);
+  if (params.limit !== undefined) query.append('limit', String(params.limit));
+  if (params.cursor) query.append('cursor', params.cursor);
+  const qs = query.toString();
+  return request<Paginated<ReimbursementView>>(`/reimbursements/me${qs ? `?${qs}` : ''}`);
 }
 
 /**
- * `GET /reimbursements?status=&userId=` — TODOS los reembolsos (gestor). Devuelve
- * 403 si no se tiene `can_manage_finance` (el llamador lo trata como "no gestor"
- * sin romper la UI). Las filas incluyen `requester`.
+ * `GET /reimbursements?status=&userId=` — página de TODOS los reembolsos
+ * (gestor) con paginación keyset (server-side, orden `date` configurable
+ * asc/desc vía `order`). Devuelve 403 si no se tiene `can_manage_finance` (el
+ * llamador lo trata como "no gestor" sin romper la UI). Las filas incluyen
+ * `requester`. `limit` default 30, máx. 100.
  */
 export interface ReimbursementListFilters {
   status?: FinanceStatus;
@@ -969,11 +989,15 @@ export interface ReimbursementListFilters {
   order?: 'asc' | 'desc';
   /** Selector "pendientes de impresión". */
   printed?: boolean;
+  /** Tope de filas de la página (default 30, máx. 100). */
+  limit?: number;
+  /** Cursor keyset opaco de la página siguiente (`Paginated.nextCursor`). */
+  cursor?: string;
 }
 
 export function listAllReimbursements(
   filters: ReimbursementListFilters,
-): Promise<ReimbursementView[]> {
+): Promise<Paginated<ReimbursementView>> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.userId) params.set('userId', filters.userId);
@@ -983,8 +1007,10 @@ export function listAllReimbursements(
   if (filters.month) params.set('month', filters.month);
   if (filters.order) params.set('order', filters.order);
   if (filters.printed !== undefined) params.set('printed', String(filters.printed));
+  if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+  if (filters.cursor) params.set('cursor', filters.cursor);
   const query = params.toString();
-  return request<ReimbursementView[]>(`/reimbursements${query ? `?${query}` : ''}`);
+  return request<Paginated<ReimbursementView>>(`/reimbursements${query ? `?${query}` : ''}`);
 }
 
 /**
@@ -1139,16 +1165,29 @@ export function createOvertime(input: CreateOvertimeInput): Promise<OvertimeView
   });
 }
 
-/** `GET /overtime/me?status=` — solicitudes propias. Filtro de estado opcional. */
-export function listMyOvertime(status?: FinanceStatus): Promise<OvertimeView[]> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return request<OvertimeView[]>(`/overtime/me${query}`);
+/**
+ * `GET /overtime/me` — página de solicitudes propias con paginación keyset
+ * (server-side, orden `createdAt desc`). Devuelve `{ items, nextCursor }`: para
+ * la siguiente página se reenvía `nextCursor` como `cursor`. Filtro opcional de
+ * estado. `limit` default 30, máx. 100.
+ */
+export function listMyOvertime(
+  params: { status?: FinanceStatus; limit?: number; cursor?: string } = {},
+): Promise<Paginated<OvertimeView>> {
+  const query = new URLSearchParams();
+  if (params.status) query.append('status', params.status);
+  if (params.limit !== undefined) query.append('limit', String(params.limit));
+  if (params.cursor) query.append('cursor', params.cursor);
+  const qs = query.toString();
+  return request<Paginated<OvertimeView>>(`/overtime/me${qs ? `?${qs}` : ''}`);
 }
 
 /**
- * `GET /overtime?status=&userId=` — TODAS las solicitudes (gestor). Devuelve 403
- * si no se tiene `can_manage_finance` (el llamador lo trata como "no gestor" sin
- * romper la UI). Las filas incluyen `requester`.
+ * `GET /overtime?status=&userId=` — página de TODAS las solicitudes (gestor)
+ * con paginación keyset (server-side, orden `date` configurable asc/desc vía
+ * `order`). Devuelve 403 si no se tiene `can_manage_finance` (el llamador lo
+ * trata como "no gestor" sin romper la UI). Las filas incluyen `requester`.
+ * `limit` default 30, máx. 100.
  */
 export interface OvertimeListFilters {
   status?: FinanceStatus;
@@ -1164,11 +1203,15 @@ export interface OvertimeListFilters {
   /** "YYYY-MM" (mes contable, cierre día 20). */
   month?: string;
   order?: 'asc' | 'desc';
+  /** Tope de filas de la página (default 30, máx. 100). */
+  limit?: number;
+  /** Cursor keyset opaco de la página siguiente (`Paginated.nextCursor`). */
+  cursor?: string;
 }
 
 export function listAllOvertime(
   filters: OvertimeListFilters,
-): Promise<OvertimeView[]> {
+): Promise<Paginated<OvertimeView>> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.userId) params.set('userId', filters.userId);
@@ -1179,8 +1222,10 @@ export function listAllOvertime(
   if (filters.date) params.set('date', filters.date);
   if (filters.month) params.set('month', filters.month);
   if (filters.order) params.set('order', filters.order);
+  if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+  if (filters.cursor) params.set('cursor', filters.cursor);
   const query = params.toString();
-  return request<OvertimeView[]>(`/overtime${query ? `?${query}` : ''}`);
+  return request<Paginated<OvertimeView>>(`/overtime${query ? `?${query}` : ''}`);
 }
 
 /**

@@ -240,11 +240,12 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const [actioning, setActioning] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  // Load directory users
+  // Load directory users. `listUsers` está paginado (keyset): para poblar el
+  // picker se pide la página más grande permitida (tope 100).
   useEffect(() => {
-    listUsers()
-      .then((res) => {
-        setUsers(res.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })));
+    listUsers({ limit: 100 })
+      .then((page) => {
+        setUsers(page.items.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })));
       })
       .catch(() => toast.error('No se pudieron cargar los usuarios del directorio.'));
   }, []);
@@ -967,9 +968,11 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
 
   useEffect(() => {
     void loadData();
-    listUsers()
-      .then((res) => {
-        setUsers(res.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })));
+    // `listUsers` está paginado (keyset): para poblar el picker se pide la
+    // página más grande permitida (tope 100).
+    listUsers({ limit: 100 })
+      .then((page) => {
+        setUsers(page.items.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName })));
       })
       .catch(() => toast.error('No se pudieron cargar los usuarios del directorio.'));
   }, [loadData]);

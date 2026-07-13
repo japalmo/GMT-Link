@@ -29,7 +29,7 @@ import {
   PrintReimbursementsDto,
   RejectReimbursementDto,
 } from './dto/reimbursements.dto';
-import type { ReceiptScanResult, ReimbursementView } from './reimbursements.types';
+import type { Paginated, ReceiptScanResult, ReimbursementView } from './reimbursements.types';
 import type { ReimbursementSummary } from './reimbursements-summary.util';
 
 /** Permisos funcionales de finanzas (spec §2.2). */
@@ -126,8 +126,12 @@ export class ReimbursementsController {
   listMine(
     @CurrentUser() authUser: AuthUser | undefined,
     @Query() query: ListReimbursementsQueryDto,
-  ): Promise<ReimbursementView[]> {
-    return this.reimbursements.listMine(this.requireUserId(authUser), query.status);
+  ): Promise<Paginated<ReimbursementView>> {
+    return this.reimbursements.listMine(this.requireUserId(authUser), {
+      status: query.status,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
   }
 
   @Get('summary')
@@ -143,7 +147,7 @@ export class ReimbursementsController {
   async listAll(
     @CurrentUser() authUser: AuthUser | undefined,
     @Query() query: ListReimbursementsQueryDto,
-  ): Promise<ReimbursementView[]> {
+  ): Promise<Paginated<ReimbursementView>> {
     await this.require(this.requireUserId(authUser), P_VIEW_ALL);
     return this.reimbursements.listAll(this.toFilters(query));
   }
@@ -214,6 +218,8 @@ export class ReimbursementsController {
     month?: string;
     order?: 'asc' | 'desc';
     printed?: boolean;
+    limit?: number;
+    cursor?: string;
   } {
     return {
       status: q.status,
@@ -224,6 +230,8 @@ export class ReimbursementsController {
       month: q.month,
       order: q.order,
       printed: q.printed,
+      limit: q.limit,
+      cursor: q.cursor,
     };
   }
 

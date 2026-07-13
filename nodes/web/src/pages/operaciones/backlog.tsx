@@ -53,7 +53,9 @@ const TASK_STATUS_META: Record<
 export function BacklogTab(): ReactNode {
   const { profile } = useProfile();
   const { projects } = useProjects();
-  const { users } = useUsers();
+  // Se pide la página más grande permitida (tope 100): este picker de
+  // responsables necesita "todos" los usuarios, no una página incremental.
+  const { items: users } = useUsers({ limit: 100 });
   
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [wizardStep, setWizardStep] = useState(1);

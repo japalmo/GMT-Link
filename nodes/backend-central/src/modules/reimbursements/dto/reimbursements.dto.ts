@@ -114,6 +114,20 @@ export class ListReimbursementsQueryDto {
   )
   @IsBoolean()
   printed?: boolean;
+
+  /**
+   * Tope de filas de la página. Sin validación de rango a propósito: el
+   * `service` normaliza (default 30, tope 100) e ignora valores no numéricos, en
+   * vez de responder 400 por un límite mal formado.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  limit?: number;
+
+  /** Cursor keyset opaco de la página siguiente (`Paginated.nextCursor`). */
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }
 
 /** Body opcional de `POST /reimbursements/:id/reject`. */

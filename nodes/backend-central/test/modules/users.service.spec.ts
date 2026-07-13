@@ -1093,3 +1093,157 @@ describe('UsersService — memberships en UserListItem (H13)', () => {
     ]);
   });
 });
+
+describe('UsersService.list — paginación keyset (createdAt desc, desempate id)', () => {
+  interface FakeListRow {
+    id: string;
+    firstName: string;
+    secondName: string | null;
+    lastName: string;
+    secondLastName: string | null;
+    email: string;
+    username: string;
+    emailInstitucional: string | null;
+    emailPersonal: string | null;
+    status: string;
+    isClientUser: boolean;
+    createdAt: Date;
+    memberships: Array<{ roleKey: string }>;
+  }
+
+  function buildRow(overrides: Partial<FakeListRow> = {}): FakeListRow {
+    return {
+      id: 'u-1',
+      firstName: 'Ana',
+      secondName: null,
+      lastName: 'Pérez',
+      secondLastName: null,
+      email: 'ana@gmt.cl',
+      username: 'ana.perez',
+      emailInstitucional: 'ana@gmt.cl',
+      emailPersonal: null,
+      status: 'ACTIVE',
+      isClientUser: false,
+      createdAt: new Date('2026-06-13T00:00:00.000Z'),
+      memberships: [],
+      ...overrides,
+    };
+  }
+
+  function makeService(userFindMany: ReturnType<typeof vi.fn>): UsersService {
+    const state: PrismaState = {
+      rolesInCatalog: new Set(),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
+    const { prisma } = buildPrismaMock(state);
+    (prisma as unknown as { user: { findMany: ReturnType<typeof vi.fn> } }).user.findMany = userFindMany;
+    const fga = buildFgaMock();
+    return new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock());
+  }
+
+  it('devuelve nextCursor=null cuando hay menos de limit+1 filas (orden createdAt desc + id desc, take=31)', async () => {
+    const userFindMany = vi.fn(() => Promise.resolve([buildRow()]));
+    const service = makeService(userFindMany);
+
+    const page = await service.list();
+
+    expect(page.items).toHaveLength(1);
+    expect(page.nextCursor).toBeNull();
+    expect(userFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {},
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 31,
+      }),
+    );
+  });
+
+  it('respeta el limit y calcula nextCursor (`createdAt_id`) trayendo limit+1 filas', async () => {
+    const userFindMany = vi.fn(() =>
+      Promise.resolve([
+        buildRow({ id: 'u-1', createdAt: new Date('2026-06-13T00:00:03.000Z') }),
+        buildRow({ id: 'u-2', createdAt: new Date('2026-06-13T00:00:02.000Z') }),
+        buildRow({ id: 'u-3', createdAt: new Date('2026-06-13T00:00:01.000Z') }),
+      ]),
+    );
+    const service = makeService(userFindMany);
+
+    const page = await service.list({ limit: 2 });
+
+    expect(userFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+    // Descarta el centinela: devuelve solo `limit` items.
+    expect(page.items).toHaveLength(2);
+    expect(page.items[0]?.id).toBe('u-1');
+    // nextCursor = `createdAt_id` del ÚLTIMO item real de la página (no el centinela).
+    expect(page.nextCursor).toBe('2026-06-13T00:00:02.000Z_u-2');
+  });
+
+  it('tope el limit en 100 aunque se pida más', async () => {
+    const userFindMany = vi.fn(() => Promise.resolve([]));
+    const service = makeService(userFindMany);
+
+    await service.list({ limit: 5000 });
+
+    expect(userFindMany).toHaveBeenCalledWith(expect.objectContaining({ take: 101 }));
+  });
+
+  it('search arma el OR case-insensitive sobre nombre/apellido/email/username', async () => {
+    const userFindMany = vi.fn<(args: { where: unknown }) => Promise<never[]>>(() =>
+      Promise.resolve([]),
+    );
+    const service = makeService(userFindMany);
+
+    await service.list({ search: 'ana' });
+
+    const call = userFindMany.mock.calls[0]?.[0] as { where: unknown };
+    expect(call.where).toEqual({
+      AND: [
+        {
+          OR: [
+            { firstName: { contains: 'ana', mode: 'insensitive' } },
+            { lastName: { contains: 'ana', mode: 'insensitive' } },
+            { secondName: { contains: 'ana', mode: 'insensitive' } },
+            { secondLastName: { contains: 'ana', mode: 'insensitive' } },
+            { email: { contains: 'ana', mode: 'insensitive' } },
+            { username: { contains: 'ana', mode: 'insensitive' } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('keyset: desempata por id cuando createdAt coincide con el cursor', async () => {
+    const userFindMany = vi.fn<(args: { where: unknown }) => Promise<never[]>>(() =>
+      Promise.resolve([]),
+    );
+    const service = makeService(userFindMany);
+
+    await service.list({ cursor: '2026-06-13T00:00:02.000Z_u-2' });
+
+    const call = userFindMany.mock.calls[0]?.[0] as { where: unknown };
+    expect(call.where).toEqual({
+      AND: [
+        {
+          OR: [
+            { createdAt: { lt: new Date('2026-06-13T00:00:02.000Z') } },
+            { createdAt: new Date('2026-06-13T00:00:02.000Z'), id: { lt: 'u-2' } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('cursor mal formado se ignora en vez de romper la página', async () => {
+    const userFindMany = vi.fn<(args: { where: unknown }) => Promise<never[]>>(() =>
+      Promise.resolve([]),
+    );
+    const service = makeService(userFindMany);
+
+    await service.list({ cursor: 'no-es-un-cursor-valido' });
+
+    const call = userFindMany.mock.calls[0]?.[0] as { where: unknown };
+    expect(call.where).toEqual({});
+  });
+});

@@ -18,7 +18,7 @@ import { startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
 import type { CreateOvertimeDto } from './dto/overtime.dto';
-import type { OvertimeView } from './overtime.types';
+import type { OvertimeView, Paginated } from './overtime.types';
 
 /** Tipo de notificación que recibe el solicitante en cada transición (§6-2.2). */
 const NOTIFICATION_TYPE = 'overtime.decided';
@@ -47,6 +47,10 @@ export interface ListOvertimeFilters {
   date?: string;
   month?: string;
   order?: 'asc' | 'desc';
+  /** Tope de filas de la página (default 30, máx. 100). */
+  limit?: number;
+  /** Cursor keyset opaco (página siguiente); ver doc de `listAll`. */
+  cursor?: string;
 }
 
 /**
@@ -123,31 +127,82 @@ export class OvertimeService {
     return toView(row);
   }
 
-  /** Lista las solicitudes propias (orden createdAt desc). Filtro opcional `status`. */
-  async listMine(userId: string, status?: FinanceStatus): Promise<OvertimeView[]> {
+  /**
+   * Lista las solicitudes propias con paginación KEYSET estable. El orden es
+   * `createdAt desc` — NO único — así que se desempata por `id desc`: el cursor
+   * de la página siguiente es `${createdAt.toISOString()}_${id}` del último item
+   * de la página previa, y la siguiente pide `createdAt < cursor.createdAt` OR
+   * (`createdAt = cursor.createdAt` AND `id < cursor.id`). Se trae `limit + 1`
+   * filas para saber si hay más páginas sin un `count` adicional. `limit`
+   * default 30, máximo 100. Filtro opcional `status`.
+   */
+  async listMine(
+    userId: string,
+    opts: { status?: FinanceStatus; limit?: number; cursor?: string } = {},
+  ): Promise<Paginated<OvertimeView>> {
+    const { status, cursor } = opts;
+    const limit = normalizeLimit(opts.limit);
+
     const where: Prisma.OvertimeRequestWhereInput = { userId };
     if (status !== undefined) {
       where.status = status;
     }
+    if (cursor) {
+      const decoded = decodeKeysetCursor(cursor);
+      if (decoded) {
+        where.AND = createdAtKeysetWhere(decoded);
+      }
+    }
+
     const rows = await this.prisma.overtimeRequest.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
     });
-    return rows.map(toView);
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
+
+    return { items: pageRows.map(toView), nextCursor };
   }
 
   /**
-   * Lista TODAS las solicitudes (vista del gestor — RoleScopedList). El permiso
-   * lo verifica el guard. Filtros opcionales `status` y `userId`. Incluye datos
-   * del solicitante.
+   * Lista TODAS las solicitudes (vista del gestor — RoleScopedList) con
+   * paginación KEYSET estable. El orden es `date` (fecha de las horas
+   * trabajadas), configurable asc/desc vía `filters.order` (default desc) — NO
+   * único — así que se desempata por `id` en la MISMA dirección: el cursor de la
+   * página siguiente es `${date.toISOString()}_${id}` del último item de la
+   * página previa. El permiso lo verifica el guard. Filtros opcionales `status` /
+   * `userId` / proyecto / cliente / rango de fecha / mes. Incluye datos del
+   * solicitante.
    */
-  async listAll(filters: ListOvertimeFilters): Promise<OvertimeView[]> {
+  async listAll(filters: ListOvertimeFilters): Promise<Paginated<OvertimeView>> {
+    const limit = normalizeLimit(filters.limit);
+    const order = filters.order ?? 'desc';
+    const where = buildOvertimeWhere(filters);
+
+    if (filters.cursor) {
+      const decoded = decodeKeysetCursor(filters.cursor);
+      if (decoded) {
+        where.AND = dateKeysetWhere(decoded, order);
+      }
+    }
+
     const rows = await this.prisma.overtimeRequest.findMany({
-      where: buildOvertimeWhere(filters),
+      where,
       include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
-      orderBy: { date: filters.order ?? 'desc' },
+      orderBy: [{ date: order }, { id: order }],
+      take: limit + 1,
     });
-    return rows.map(toViewWithRequester);
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.date, lastRow.id) : null;
+
+    return { items: pageRows.map(toViewWithRequester), nextCursor };
   }
 
   /**
@@ -375,6 +430,53 @@ function parseDate(value: string): Date {
     throw new BadRequestException('Fecha inválida.');
   }
   return date;
+}
+
+/**
+ * Normaliza el `limit` de paginación: default 30, tope 100, mínimo 1. Ignora
+ * valores no numéricos (p. ej. un `?limit=` mal formado que llega como NaN).
+ */
+function normalizeLimit(requested: number | undefined): number {
+  return requested !== undefined && Number.isFinite(requested) && requested > 0
+    ? Math.min(Math.floor(requested), 100)
+    : 30;
+}
+
+/** Codifica el cursor keyset compuesto (fecha, `id`) de `listMine`/`listAll`. */
+function encodeKeysetCursor(date: Date, id: string): string {
+  return `${date.toISOString()}_${id}`;
+}
+
+/**
+ * Decodifica un cursor de `listMine`/`listAll`. `null` si el formato es
+ * inválido (cursor corrupto o mal formado): en ese caso se ignora en vez de
+ * romper la página, igual que un `limit` no numérico.
+ */
+function decodeKeysetCursor(raw: string): { date: Date; id: string } | null {
+  const separatorIndex = raw.indexOf('_');
+  if (separatorIndex === -1) return null;
+  const isoPart = raw.slice(0, separatorIndex);
+  const idPart = raw.slice(separatorIndex + 1);
+  const date = new Date(isoPart);
+  if (Number.isNaN(date.getTime()) || idPart.length === 0) return null;
+  return { date, id: idPart };
+}
+
+/** OR de keyset para `listMine` (orden fijo `createdAt desc`). */
+function createdAtKeysetWhere(cursor: { date: Date; id: string }): Prisma.OvertimeRequestWhereInput {
+  return {
+    OR: [{ createdAt: { lt: cursor.date } }, { createdAt: cursor.date, id: { lt: cursor.id } }],
+  };
+}
+
+/** OR de keyset para `listAll` (orden `date`, configurable asc/desc vía `order`). */
+function dateKeysetWhere(
+  cursor: { date: Date; id: string },
+  order: 'asc' | 'desc',
+): Prisma.OvertimeRequestWhereInput {
+  return order === 'desc'
+    ? { OR: [{ date: { lt: cursor.date } }, { date: cursor.date, id: { lt: cursor.id } }] }
+    : { OR: [{ date: { gt: cursor.date } }, { date: cursor.date, id: { gt: cursor.id } }] };
 }
 
 /** Construye el `where` de HE desde los filtros (fecha/mes/proyecto/cliente/trabajador). */

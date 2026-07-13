@@ -21,7 +21,7 @@ import {
   ListOvertimeQueryDto,
   RejectOvertimeDto,
 } from './dto/overtime.dto';
-import type { OvertimeView } from './overtime.types';
+import type { OvertimeView, Paginated } from './overtime.types';
 import type { OvertimeSummary } from './overtime-summary.util';
 
 /** Permisos funcionales de finanzas (spec §2.2). */
@@ -63,8 +63,12 @@ export class OvertimeController {
   listMine(
     @CurrentUser() authUser: AuthUser | undefined,
     @Query() query: ListOvertimeQueryDto,
-  ): Promise<OvertimeView[]> {
-    return this.overtime.listMine(this.requireUserId(authUser), query.status);
+  ): Promise<Paginated<OvertimeView>> {
+    return this.overtime.listMine(this.requireUserId(authUser), {
+      status: query.status,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
   }
 
   @Get('summary')
@@ -80,7 +84,7 @@ export class OvertimeController {
   async listAll(
     @CurrentUser() authUser: AuthUser | undefined,
     @Query() query: ListOvertimeQueryDto,
-  ): Promise<OvertimeView[]> {
+  ): Promise<Paginated<OvertimeView>> {
     await this.requireViewAll(this.requireUserId(authUser));
     return this.overtime.listAll(this.toFilters(query));
   }
@@ -150,6 +154,8 @@ export class OvertimeController {
     date?: string;
     month?: string;
     order?: 'asc' | 'desc';
+    limit?: number;
+    cursor?: string;
   } {
     return {
       status: q.status,
@@ -161,6 +167,8 @@ export class OvertimeController {
       date: q.date,
       month: q.month,
       order: q.order,
+      limit: q.limit,
+      cursor: q.cursor,
     };
   }
 

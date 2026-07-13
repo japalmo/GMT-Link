@@ -34,7 +34,13 @@ import { BatchPrintDialog } from './batch-print-dialog';
 export function ReembolsosTab(): ReactNode {
   const {
     mine,
+    mineHasMore,
+    loadingMoreMine,
+    loadMoreMine,
     managerItems,
+    managerHasMore,
+    loadingMoreManager,
+    loadMoreManager,
     isManager,
     loading,
     error,
@@ -219,6 +225,15 @@ export function ReembolsosTab(): ReactNode {
             </Table>
           </div>
         )}
+
+        {/* Paginación server-side: carga la siguiente página al final de "Mis Reembolsos". */}
+        {mineHasMore && (
+          <div className="flex justify-center">
+            <Button variant="outline" onClick={() => void loadMoreMine()} disabled={loadingMoreMine}>
+              {loadingMoreMine ? 'Cargando…' : 'Cargar más'}
+            </Button>
+          </div>
+        )}
       </section>
 
       {/* Sección de Gestión */}
@@ -350,6 +365,19 @@ export function ReembolsosTab(): ReactNode {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+
+          {/* Paginación server-side: carga la siguiente página al final de la gestión. */}
+          {managerHasMore && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => void loadMoreManager()}
+                disabled={loadingMoreManager}
+              >
+                {loadingMoreManager ? 'Cargando…' : 'Cargar más'}
+              </Button>
             </div>
           )}
         </section>

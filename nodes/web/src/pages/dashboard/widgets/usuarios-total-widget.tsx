@@ -27,8 +27,16 @@ export function UsuariosTotalWidget(): ReactNode {
     setLoading(true);
     setError(null);
     try {
-      const users = await listUsers();
-      if (mountedRef.current) setCount(users.length);
+      // `listUsers` está paginado (keyset, tope 100/página): para un TOTAL exacto
+      // se recorren todas las páginas acumulando el conteo, no solo la primera.
+      let total = 0;
+      let cursor: string | undefined;
+      do {
+        const page = await listUsers({ limit: 100, cursor });
+        total += page.items.length;
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      if (mountedRef.current) setCount(total);
     } catch (err) {
       if (mountedRef.current) {
         setError(errorToMessage(err, 'No se pudo cargar el total de usuarios.'));

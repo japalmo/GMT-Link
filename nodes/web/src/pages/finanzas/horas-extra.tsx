@@ -27,7 +27,13 @@ import { HorasExtraFormDialog } from './horas-extra-form';
 export function HorasExtraTab(): ReactNode {
   const {
     mine,
+    mineHasMore,
+    loadingMoreMine,
+    loadMoreMine,
     managerItems,
+    managerHasMore,
+    loadingMoreManager,
+    loadMoreManager,
     isManager,
     loading,
     error,
@@ -133,6 +139,15 @@ export function HorasExtraTab(): ReactNode {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {/* Paginación server-side: carga la siguiente página al final de "Mis Horas Extra". */}
+        {mineHasMore && (
+          <div className="flex justify-center">
+            <Button variant="outline" onClick={() => void loadMoreMine()} disabled={loadingMoreMine}>
+              {loadingMoreMine ? 'Cargando…' : 'Cargar más'}
+            </Button>
           </div>
         )}
       </section>
@@ -245,6 +260,19 @@ export function HorasExtraTab(): ReactNode {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+
+          {/* Paginación server-side: carga la siguiente página al final de la gestión. */}
+          {managerHasMore && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => void loadMoreManager()}
+                disabled={loadingMoreManager}
+              >
+                {loadingMoreManager ? 'Cargando…' : 'Cargar más'}
+              </Button>
             </div>
           )}
         </section>

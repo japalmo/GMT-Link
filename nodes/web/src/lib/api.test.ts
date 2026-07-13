@@ -332,11 +332,11 @@ describe('api — UserRolesResponse/UserListItem extendidos con memberships (A4)
       memberships: [membership],
       createdAt: new Date().toISOString(),
     };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res([row])));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res({ items: [row], nextCursor: null })));
 
     const result = await listUsers();
 
-    expect(result[0]?.memberships).toEqual([membership]);
+    expect(result.items[0]?.memberships).toEqual([membership]);
   });
 });
 

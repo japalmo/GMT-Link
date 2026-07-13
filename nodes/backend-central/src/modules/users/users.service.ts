@@ -32,6 +32,7 @@ import type {
   CreateUserResponse,
   ImportErrorRow,
   ImportUsersResponse,
+  Paginated,
   ResendInviteResponse,
   UserListItem,
   UserRolesResponse,
@@ -272,30 +273,81 @@ export class UsersService {
     return { dto: instance };
   }
 
-  /** Lista usuarios con sus roleKeys (datos para RoleScopedList, §5). `search` opcional. */
-  async list(search?: string): Promise<UserListItem[]> {
-    const trimmed = search?.trim();
-    const where: Prisma.UserWhereInput | undefined =
-      trimmed && trimmed.length > 0
-        ? {
-            OR: [
-              { firstName: { contains: trimmed, mode: 'insensitive' } },
-              { lastName: { contains: trimmed, mode: 'insensitive' } },
-              { secondName: { contains: trimmed, mode: 'insensitive' } },
-              { secondLastName: { contains: trimmed, mode: 'insensitive' } },
-              { email: { contains: trimmed, mode: 'insensitive' } },
-              { username: { contains: trimmed, mode: 'insensitive' } },
-            ],
-          }
-        : undefined;
+  /**
+   * Lista usuarios con sus roleKeys (datos para `RoleScopedList`, §5) con
+   * paginación KEYSET estable. El orden es `createdAt desc` — NO único (dos
+   * usuarios pueden compartir el mismo timestamp) — así que se desempata por
+   * `id desc`: el cursor de la página siguiente es
+   * `${createdAt.toISOString()}_${id}` del último item de la página previa, y la
+   * siguiente página pide `createdAt < cursor.createdAt` OR (`createdAt =
+   * cursor.createdAt` AND `id < cursor.id`). Se trae `limit + 1` filas para saber
+   * si hay más páginas sin un `count` adicional; la fila centinela sobrante se
+   * descarta y su ausencia marca el fin (`nextCursor = null`). `limit` default
+   * 30, máximo 100. `search` (opcional) filtra server-side por nombre / apellido
+   * / email / username (case-insensitive).
+   */
+  async list(
+    opts: { search?: string; limit?: number; cursor?: string } = {},
+  ): Promise<Paginated<UserListItem>> {
+    const { search, cursor } = opts;
 
-    const users = await this.prisma.user.findMany({
+    // Normaliza el límite: default 30, tope 100, mínimo 1. Ignora valores no
+    // numéricos (p. ej. un `?limit=` mal formado que llega como NaN).
+    const requestedLimit = opts.limit;
+    const limit =
+      requestedLimit !== undefined && Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 100)
+        : 30;
+
+    // Cada condición viaja en su propio `AND` para no pisar el `OR` de la otra
+    // (búsqueda vs. keyset).
+    const conditions: Prisma.UserWhereInput[] = [];
+
+    const trimmedSearch = search?.trim();
+    if (trimmedSearch && trimmedSearch.length > 0) {
+      conditions.push({
+        OR: [
+          { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+          { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+          { secondName: { contains: trimmedSearch, mode: 'insensitive' } },
+          { secondLastName: { contains: trimmedSearch, mode: 'insensitive' } },
+          { email: { contains: trimmedSearch, mode: 'insensitive' } },
+          { username: { contains: trimmedSearch, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (cursor) {
+      const decoded = decodeUserCursor(cursor);
+      if (decoded) {
+        conditions.push({
+          OR: [
+            { createdAt: { lt: decoded.createdAt } },
+            { createdAt: decoded.createdAt, id: { lt: decoded.id } },
+          ],
+        });
+      }
+    }
+
+    const where: Prisma.UserWhereInput = conditions.length > 0 ? { AND: conditions } : {};
+
+    // limit + 1: la fila extra solo sirve para saber si hay página siguiente.
+    const rows = await this.prisma.user.findMany({
       where,
       include: { memberships: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
     });
 
-    return users.map((user) => this.toListItem(user));
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeUserCursor(lastRow.createdAt, lastRow.id) : null;
+
+    return {
+      items: pageRows.map((user) => this.toListItem(user)),
+      nextCursor,
+    };
   }
 
   /**
@@ -856,6 +908,26 @@ export class UsersService {
       object: `organization:${ORG_ID}`,
     });
   }
+}
+
+/** Codifica el cursor keyset compuesto (`createdAt`, `id`) de `UsersService.list`. */
+function encodeUserCursor(createdAt: Date, id: string): string {
+  return `${createdAt.toISOString()}_${id}`;
+}
+
+/**
+ * Decodifica un cursor de `UsersService.list`. `null` si el formato es inválido
+ * (cursor corrupto o mal formado): en ese caso `list` simplemente lo ignora en
+ * vez de romper la página, igual que un `limit` no numérico.
+ */
+function decodeUserCursor(raw: string): { createdAt: Date; id: string } | null {
+  const separatorIndex = raw.indexOf('_');
+  if (separatorIndex === -1) return null;
+  const isoPart = raw.slice(0, separatorIndex);
+  const idPart = raw.slice(separatorIndex + 1);
+  const createdAt = new Date(isoPart);
+  if (Number.isNaN(createdAt.getTime()) || idPart.length === 0) return null;
+  return { createdAt, id: idPart };
 }
 
 /** Etiqueta para errores de import: email institucional/personal/legacy o username (`''` si nada). */

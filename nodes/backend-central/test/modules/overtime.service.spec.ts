@@ -211,7 +211,7 @@ describe('OvertimeService', () => {
     const findMany = vi.fn<
       (args: {
         where: { date?: { gte: Date; lt: Date }; projectId?: string };
-        orderBy: { date: string };
+        orderBy: Array<{ date?: string; id?: string }>;
       }) => Promise<never[]>
     >(() => Promise.resolve([]));
     const { prisma } = buildPrisma({ findMany });
@@ -222,7 +222,7 @@ describe('OvertimeService', () => {
     const call = findMany.mock.calls[0]?.[0];
     expect(call?.where.projectId).toBe('p1');
     expect(call?.where.date?.gte.toISOString()).toBe('2026-06-21T00:00:00.000Z');
-    expect(call?.orderBy.date).toBe('asc');
+    expect(call?.orderBy).toEqual([{ date: 'asc' }, { id: 'asc' }]);
   });
 
   it('listMine filtra SOLO por el propio userId (más status opcional)', async () => {
@@ -232,11 +232,54 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ findMany });
     const service = makeService(prisma);
 
-    await service.listMine('u1', FinanceStatus.PAGADO);
+    await service.listMine('u1', { status: FinanceStatus.PAGADO });
 
     const where = findMany.mock.calls[0]?.[0]?.where;
     expect(where?.userId).toBe('u1');
     expect(where?.status).toBe(FinanceStatus.PAGADO);
+  });
+
+  it('listMine: nextCursor=null cuando hay menos de limit+1 filas (orden createdAt desc + id desc, take=31)', async () => {
+    const findMany = vi.fn(() => Promise.resolve([buildRow()]));
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    const page = await service.listMine('u1');
+
+    expect(page.items).toHaveLength(1);
+    expect(page.nextCursor).toBeNull();
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 31 }),
+    );
+  });
+
+  it('listMine: respeta el limit y calcula nextCursor (`createdAt_id`) trayendo limit+1 filas', async () => {
+    const findMany = vi.fn(() =>
+      Promise.resolve([
+        buildRow({ id: 'o-1', createdAt: new Date('2026-06-14T00:00:03.000Z') }),
+        buildRow({ id: 'o-2', createdAt: new Date('2026-06-14T00:00:02.000Z') }),
+        buildRow({ id: 'o-3', createdAt: new Date('2026-06-14T00:00:01.000Z') }),
+      ]),
+    );
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    const page = await service.listMine('u1', { limit: 2 });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+    expect(page.items).toHaveLength(2);
+    expect(page.items[0]?.id).toBe('o-1');
+    expect(page.nextCursor).toBe('2026-06-14T00:00:02.000Z_o-2');
+  });
+
+  it('listMine: tope el limit en 100 aunque se pida más', async () => {
+    const findMany = vi.fn(() => Promise.resolve([]));
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    await service.listMine('u1', { limit: 5000 });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 101 }));
   });
 
   it('listAll (gestor) aplica filtros e incluye al solicitante', async () => {
@@ -249,13 +292,53 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ findMany });
     const service = makeService(prisma);
 
-    const views = await service.listAll({ status: FinanceStatus.PENDIENTE, userId: 'u9' });
+    const page = await service.listAll({ status: FinanceStatus.PENDIENTE, userId: 'u9' });
 
     const call = findMany.mock.calls[0]?.[0];
     expect(call?.where.status).toBe(FinanceStatus.PENDIENTE);
     expect(call?.where.userId).toBe('u9');
     expect(call?.include).toBeDefined();
-    expect(views[0]?.requester?.email).toBe('ana@gmt.cl');
+    expect(page.items[0]?.requester?.email).toBe('ana@gmt.cl');
+  });
+
+  it('listAll: respeta el limit y calcula nextCursor (`date_id`) trayendo limit+1 filas, orden desc por default', async () => {
+    const findMany = vi.fn(() =>
+      Promise.resolve([
+        buildRowWithRequester({ id: 'o-1', date: new Date('2026-06-14T00:00:03.000Z') }),
+        buildRowWithRequester({ id: 'o-2', date: new Date('2026-06-14T00:00:02.000Z') }),
+        buildRowWithRequester({ id: 'o-3', date: new Date('2026-06-14T00:00:01.000Z') }),
+      ]),
+    );
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    const page = await service.listAll({ limit: 2 });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 3, orderBy: [{ date: 'desc' }, { id: 'desc' }] }),
+    );
+    expect(page.items).toHaveLength(2);
+    expect(page.items[0]?.id).toBe('o-1');
+    expect(page.nextCursor).toBe('2026-06-14T00:00:02.000Z_o-2');
+  });
+
+  it('listAll: keyset con cursor respeta la dirección de `order` (asc) en fecha e id', async () => {
+    const findMany = vi.fn<
+      (args: { where: { AND?: unknown }; orderBy: unknown }) => Promise<never[]>
+    >(() => Promise.resolve([]));
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    await service.listAll({ order: 'asc', cursor: '2026-06-14T00:00:02.000Z_o-2' });
+
+    const call = findMany.mock.calls[0]?.[0] as { where: { AND?: unknown }; orderBy: unknown };
+    expect(call.orderBy).toEqual([{ date: 'asc' }, { id: 'asc' }]);
+    expect(call.where.AND).toEqual({
+      OR: [
+        { date: { gt: new Date('2026-06-14T00:00:02.000Z') } },
+        { date: new Date('2026-06-14T00:00:02.000Z'), id: { gt: 'o-2' } },
+      ],
+    });
   });
 
   it('getById: el dueño lo ve (sin requester)', async () => {

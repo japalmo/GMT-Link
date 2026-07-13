@@ -1,6 +1,6 @@
-import type { ProvisionedUser, RoleKey, UserMembership } from '@gmt-platform/contracts';
+import type { Paginated, ProvisionedUser, RoleKey, UserMembership } from '@gmt-platform/contracts';
 
-export type { ProvisionedUser, RoleKey, UserMembership };
+export type { Paginated, ProvisionedUser, RoleKey, UserMembership };
 
 /**
  * Respuesta de `POST /users` (§1.1).
