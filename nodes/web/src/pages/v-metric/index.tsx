@@ -75,14 +75,6 @@ const TILE_LAYERS = {
   },
 };
 
-// Ortoimagen del salar reproyectada a WGS84 (servida desde public/). Bounds en orden
-// Leaflet [[sur,oeste],[norte,este]], derivados del GeoTIFF original (EPSG:32719 → 4326).
-const ORTHO_URL = '/ortho/atacama-ortho.png';
-const ORTHO_BOUNDS: [[number, number], [number, number]] = [
-  [-23.637719831634378, -68.37610589645944],
-  [-23.626245167464546, -68.36025673980627],
-];
-
 export default function MetricsDashboard(): ReactNode {
   const [LModule, setLModule] = useState<typeof L | null>(null);
 
@@ -137,7 +129,6 @@ export default function MetricsDashboard(): ReactNode {
   const [, setLoading] = useState(true);
   const [, setError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'satellite' | 'vector'>('satellite');
-  const [orthoVisible, setOrthoVisible] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Leaflet references
@@ -145,7 +136,6 @@ export default function MetricsDashboard(): ReactNode {
   const mapRef = useRef<L.Map | null>(null);
   const polygonsRef = useRef<Map<string, L.Polygon>>(new Map());
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const orthoOverlayRef = useRef<L.ImageOverlay | null>(null);
 
   // 1. Initial Load of Projects
   const loadProjects = async () => {
@@ -390,12 +380,6 @@ export default function MetricsDashboard(): ReactNode {
 
     LModule.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Pane dedicado a la ortoimagen: por encima del satélite (tilePane z200) y por
-    // debajo de los polígonos (overlayPane z400), para que no los tape.
-    map.createPane('ortho');
-    const orthoPane = map.getPane('ortho');
-    if (orthoPane) orthoPane.style.zIndex = '350';
-
     // Initial tile layer
     const config = TILE_LAYERS[mapType];
     const tileLayer = LModule.tileLayer(config.url, {
@@ -444,24 +428,6 @@ export default function MetricsDashboard(): ReactNode {
 
     tileLayerRef.current = newLayer;
   }, [LModule, mapType, selectedElementId]);
-
-  // Overlay de la ortoimagen (toggle). Se re-crea con el mapa (deps incluye
-  // selectedElementId, que lo recrea) y usa el pane 'ortho' (z350) para quedar sobre el
-  // satélite y bajo los polígonos.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!LModule || !map || !orthoVisible) return;
-    const overlay = LModule.imageOverlay(ORTHO_URL, ORTHO_BOUNDS, {
-      pane: 'ortho',
-      opacity: 1,
-      interactive: false,
-    }).addTo(map);
-    orthoOverlayRef.current = overlay;
-    return () => {
-      map.removeLayer(overlay);
-      orthoOverlayRef.current = null;
-    };
-  }, [LModule, orthoVisible, selectedElementId]);
 
   // Render/update Polygons on the Map
   useEffect(() => {
@@ -1374,40 +1340,27 @@ export default function MetricsDashboard(): ReactNode {
                 </CardDescription>
               </div>
 
-              {/* Switcher de capa base + toggle de ortoimagen */}
-              <div className="flex items-center gap-2">
-                <div className="flex border border-border/60 rounded-xl overflow-hidden text-xs">
-                  <button
-                    onClick={() => setMapType('satellite')}
-                    className={`px-3 py-1.5 font-bold transition-all ${
-                      mapType === 'satellite'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'hover:bg-accent/40 text-muted-foreground'
-                    }`}
-                  >
-                    Satelital
-                  </button>
-                  <button
-                    onClick={() => setMapType('vector')}
-                    className={`px-3 py-1.5 font-bold transition-all ${
-                      mapType === 'vector'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'hover:bg-accent/40 text-muted-foreground'
-                    }`}
-                  >
-                    Vectorial
-                  </button>
-                </div>
+              {/* Map Layer Switcher */}
+              <div className="flex border border-border/60 rounded-xl overflow-hidden text-xs">
                 <button
-                  onClick={() => setOrthoVisible((v) => !v)}
-                  title="Superponer la ortoimagen del vuelo sobre el satélite"
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                    orthoVisible
-                      ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                      : 'border-border/60 text-muted-foreground hover:bg-accent/40'
+                  onClick={() => setMapType('satellite')}
+                  className={`px-3 py-1.5 font-bold transition-all ${
+                    mapType === 'satellite'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'hover:bg-accent/40 text-muted-foreground'
                   }`}
                 >
-                  Ortoimagen
+                  Satelital
+                </button>
+                <button
+                  onClick={() => setMapType('vector')}
+                  className={`px-3 py-1.5 font-bold transition-all ${
+                    mapType === 'vector'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'hover:bg-accent/40 text-muted-foreground'
+                  }`}
+                >
+                  Vectorial
                 </button>
               </div>
             </CardHeader>
