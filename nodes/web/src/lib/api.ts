@@ -36,6 +36,7 @@ import type {
   DirectoryEntry,
   DirectoryEntryExtended,
   EmailKind,
+  Paginated,
   PermissionCatalogGroup,
   ProfileMe,
   RoleDetail,
@@ -1443,17 +1444,29 @@ export function deleteProjectDocument(id: string): Promise<void> {
 /* Recursos / Activos (§6-5.1) — primitiva AssetBase                         */
 /* -------------------------------------------------------------------------- */
 
-export function listAssets(filters: {
+/**
+ * `GET /assets` — página de activos con paginación keyset (server-side). Devuelve
+ * `{ items, nextCursor }`: para la siguiente página se reenvía `nextCursor` como
+ * `cursor`. `search` filtra server-side por código / nombre / descripción; `type`
+ * / `status` / `projectId` filtran por esos campos. `limit` default 30, máx. 100.
+ */
+export function listAssets(params: {
+  limit?: number;
+  cursor?: string;
+  search?: string;
   type?: AssetType;
   status?: AssetStatus;
   projectId?: string;
-} = {}): Promise<AssetView[]> {
+} = {}): Promise<Paginated<AssetView>> {
   const query = new URLSearchParams();
-  if (filters.type) query.append('type', filters.type);
-  if (filters.status) query.append('status', filters.status);
-  if (filters.projectId) query.append('projectId', filters.projectId);
+  if (params.limit !== undefined) query.append('limit', String(params.limit));
+  if (params.cursor) query.append('cursor', params.cursor);
+  if (params.search && params.search.trim().length > 0) query.append('search', params.search.trim());
+  if (params.type) query.append('type', params.type);
+  if (params.status) query.append('status', params.status);
+  if (params.projectId) query.append('projectId', params.projectId);
   const qs = query.toString();
-  return request<AssetView[]>(`/assets${qs ? `?${qs}` : ''}`);
+  return request<Paginated<AssetView>>(`/assets${qs ? `?${qs}` : ''}`);
 }
 
 export function createAsset(dto: CreateAssetInput): Promise<AssetView> {

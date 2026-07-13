@@ -14,6 +14,7 @@ export type {
   AssetIdentifierType,
   AssetView,
   AssetPublicView,
+  Paginated,
 } from '@gmt-platform/contracts';
 
 export interface AssetDocumentView {

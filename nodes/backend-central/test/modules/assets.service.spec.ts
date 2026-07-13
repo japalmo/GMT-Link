@@ -433,12 +433,14 @@ describe('AssetsService', () => {
         { ...buildAssetRow({ id: 'a-2', projectId: null }), project: null, assignedTo: null, inUseBy: null },
       ]);
 
-      const list = await service.listAll('u-admin');
+      const page = await service.listAll('u-admin');
 
-      expect(list.length).toBe(2);
-      // GLOBAL => sin restricción de projectId.
+      expect(page.items.length).toBe(2);
+      // Menos de limit+1 filas => no hay página siguiente.
+      expect(page.nextCursor).toBeNull();
+      // GLOBAL => sin restricción de projectId; orden estable code asc; limit+1 filas.
       expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: {} }),
+        expect.objectContaining({ where: {}, orderBy: { code: 'asc' }, take: 31 }),
       );
       // No se consultan membresías cuando el scope es GLOBAL.
       expect(prismaMock.membership.findMany).not.toHaveBeenCalled();
@@ -480,6 +482,73 @@ describe('AssetsService', () => {
               { projectId: null },
             ],
           },
+        }),
+      );
+    });
+
+    it('respeta el limit y calcula nextCursor trayendo limit+1 filas', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
+      // Con limit=2 se piden 3 filas; la 3ª es el centinela que indica "hay más".
+      prismaMock.asset.findMany.mockResolvedValueOnce([
+        { ...buildAssetRow({ id: 'a-1', code: 'GMT-EQ-0001' }), project: null, assignedTo: null, inUseBy: null },
+        { ...buildAssetRow({ id: 'a-2', code: 'GMT-EQ-0002' }), project: null, assignedTo: null, inUseBy: null },
+        { ...buildAssetRow({ id: 'a-3', code: 'GMT-EQ-0003' }), project: null, assignedTo: null, inUseBy: null },
+      ]);
+
+      const page = await service.listAll('u-admin', { limit: 2 });
+
+      expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 3, orderBy: { code: 'asc' } }),
+      );
+      // Descarta el centinela: devuelve solo `limit` items.
+      expect(page.items).toHaveLength(2);
+      expect(page.items[0]?.code).toBe('GMT-EQ-0001');
+      // nextCursor = code del ÚLTIMO item real de la página (no el centinela).
+      expect(page.nextCursor).toBe('GMT-EQ-0002');
+    });
+
+    it('tope el limit en 100 aunque se pida más', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
+      prismaMock.asset.findMany.mockResolvedValueOnce([]);
+
+      await service.listAll('u-admin', { limit: 5000 });
+
+      expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 101 }),
+      );
+    });
+
+    it('search arma el OR case-insensitive sobre code/name/description', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
+      prismaMock.asset.findMany.mockResolvedValueOnce([]);
+
+      await service.listAll('u-admin', { search: 'genera' });
+
+      expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: {
+              OR: [
+                { code: { contains: 'genera', mode: 'insensitive' } },
+                { name: { contains: 'genera', mode: 'insensitive' } },
+                { description: { contains: 'genera', mode: 'insensitive' } },
+              ],
+            },
+          }),
+        }),
+      );
+    });
+
+    it('keyset: usa code > cursor sobre el orden code asc', async () => {
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
+      prismaMock.asset.findMany.mockResolvedValueOnce([]);
+
+      await service.listAll('u-admin', { cursor: 'GMT-EQ-0005' });
+
+      expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ code: { gt: 'GMT-EQ-0005' } }),
+          orderBy: { code: 'asc' },
         }),
       );
     });

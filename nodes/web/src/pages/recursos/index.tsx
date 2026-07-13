@@ -190,7 +190,19 @@ interface ActivosCatalogViewProps {
 
 function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewProps): ReactNode {
   const { profile } = useProfile();
-  const { assets, loading, error, create, takeUse, releaseUse } = useAssets();
+  const {
+    items,
+    loading,
+    loadingMore,
+    error,
+    hasMore,
+    loadMore,
+    setSearch: setServerSearch,
+    setFilters: setServerFilters,
+    create,
+    takeUse,
+    releaseUse,
+  } = useAssets();
   const { projects } = useProjects();
   const [users, setUsers] = useState<UserOption[]>([]);
   // Tipo de activo real de la subsección: fija el filtro, el alta y el encabezado.
@@ -242,19 +254,24 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     profile?.roleKeys.includes('department_admin') ||
     profile?.roleKeys.includes('project_creator');
 
-  // Filter logic on frontend
-  const filteredAssets = assets.filter((asset) => {
-    const matchesSearch =
-      asset.name.toLowerCase().includes(search.toLowerCase()) ||
-      asset.code.toLowerCase().includes(search.toLowerCase()) ||
-      (asset.description && asset.description.toLowerCase().includes(search.toLowerCase()));
+  // Filtrado SERVER-SIDE: los filtros estructurales (tipo de la subsección +
+  // estado + proyecto) se envían al servidor, que reinicia a la página 1.
+  useEffect(() => {
+    setServerFilters({
+      type: subsectionType,
+      status: filterStatus === 'ALL' ? undefined : (filterStatus as AssetStatus),
+      projectId: filterProj === 'ALL' ? undefined : filterProj,
+    });
+  }, [subsectionType, filterStatus, filterProj, setServerFilters]);
 
-    const matchesTab = asset.type === subsectionType;
-    const matchesStatus = filterStatus === 'ALL' || asset.status === filterStatus;
-    const matchesProj = filterProj === 'ALL' || asset.projectId === filterProj;
+  // Búsqueda SERVER-SIDE: el término se manda al hook, que lo debouncea (~300ms)
+  // y consulta al servidor (no filtra en memoria).
+  useEffect(() => {
+    setServerSearch(search);
+  }, [search, setServerSearch]);
 
-    return matchesSearch && matchesTab && matchesStatus && matchesProj;
-  });
+  // El servidor ya entrega los activos filtrados y paginados; se renderizan tal cual.
+  const filteredAssets = items;
 
   const handleTakeUse = async (id: string) => {
     if (actioning) return;
@@ -601,6 +618,15 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
               })}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* Paginación server-side: carga la siguiente página al final de la lista. */}
+      {!loading && !error && hasMore && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? 'Cargando…' : 'Cargar más'}
+          </Button>
         </div>
       )}
 

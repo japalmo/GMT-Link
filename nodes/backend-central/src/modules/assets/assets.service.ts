@@ -18,6 +18,7 @@ import {
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
+  Paginated,
 } from './assets.types';
 
 /** Estados no operativos: un activo en cualquiera de ellos no puede tomarse en uso. */
@@ -393,9 +394,39 @@ export class AssetsService {
   }
 
   /**
-   * Lista todos los activos visibles por el usuario.
+   * Lista los activos visibles por el usuario con paginación KEYSET estable.
+   *
+   * El orden es `code asc` (único), por lo que el cursor de la página siguiente
+   * es el `code` del último item de la página previa: se piden los siguientes con
+   * `code > cursor`. Se trae `limit + 1` filas para saber si hay más páginas sin
+   * un `count` adicional; la fila centinela sobrante se descarta y su ausencia
+   * marca el fin (nextCursor = null). `limit` default 30, máximo 100.
+   *
+   * `search` (opcional) filtra server-side por código / nombre / descripción
+   * (case-insensitive). La lógica de scope (`asset:read` GLOBAL / projects, con
+   * respaldo por membresías) se combina con los filtros en el mismo `where`.
    */
-  async listAll(userId: string, type?: AssetType, status?: AssetStatus, projectId?: string): Promise<AssetView[]> {
+  async listAll(
+    userId: string,
+    opts: {
+      type?: AssetType;
+      status?: AssetStatus;
+      projectId?: string;
+      limit?: number;
+      cursor?: string;
+      search?: string;
+    } = {},
+  ): Promise<Paginated<AssetView>> {
+    const { type, status, projectId, cursor, search } = opts;
+
+    // Normaliza el límite: default 30, tope 100, mínimo 1. Ignora valores no
+    // numéricos (p. ej. un `?limit=` mal formado que llega como NaN).
+    const requestedLimit = opts.limit;
+    const limit =
+      requestedLimit !== undefined && Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.floor(requestedLimit), 100)
+        : 30;
+
     // Decisión funcional única (ADR-0001): quien tenga `asset:read` GLOBAL ve
     // TODO; con scope de proyectos, ve los suyos + globales; sin el permiso, se
     // cae al filtro estructural por membresías (retrocompatibilidad).
@@ -435,6 +466,26 @@ export class AssetsService {
       where.projectId = projectId;
     }
 
+    // Búsqueda server-side. Va en `AND` para no pisar el `OR` del scope de
+    // proyectos (ambos deben cumplirse a la vez).
+    const trimmedSearch = search?.trim();
+    if (trimmedSearch) {
+      where.AND = {
+        OR: [
+          { code: { contains: trimmedSearch, mode: 'insensitive' } },
+          { name: { contains: trimmedSearch, mode: 'insensitive' } },
+          { description: { contains: trimmedSearch, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    // Keyset sobre el orden `code asc` (único): la página siguiente es todo lo
+    // que venga después del cursor.
+    if (cursor) {
+      where.code = { gt: cursor };
+    }
+
+    // limit + 1: la fila extra solo sirve para saber si hay página siguiente.
     const rows = await this.prisma.asset.findMany({
       where,
       include: {
@@ -443,9 +494,18 @@ export class AssetsService {
         inUseBy: true,
       },
       orderBy: { code: 'asc' },
+      take: limit + 1,
     });
 
-    return rows.map((r) => this.toAssetView(r));
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? lastRow.code : null;
+
+    return {
+      items: pageRows.map((r) => this.toAssetView(r)),
+      nextCursor,
+    };
   }
 
   /**

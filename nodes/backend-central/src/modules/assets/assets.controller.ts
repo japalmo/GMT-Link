@@ -46,6 +46,7 @@ import {
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
+  Paginated,
 } from './assets.types';
 
 @Controller('assets')
@@ -91,7 +92,10 @@ export class AssetsController {
   }
 
   /**
-   * Lista todos los activos visibles por el usuario con filtros opcionales.
+   * Lista los activos visibles por el usuario con paginación keyset y filtros
+   * opcionales. Devuelve una página (`items` + `nextCursor`): el cliente pide la
+   * siguiente reenviando `nextCursor` como `cursor`. `search` filtra server-side
+   * por código / nombre / descripción.
    */
   @Get()
   listAll(
@@ -99,9 +103,19 @@ export class AssetsController {
     @Query('type') type?: AssetType,
     @Query('status') status?: AssetStatus,
     @Query('projectId') projectId?: string,
-  ): Promise<AssetView[]> {
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+    @Query('search') search?: string,
+  ): Promise<Paginated<AssetView>> {
     const userId = this.requireUserId(authUser);
-    return this.assets.listAll(userId, type, status, projectId);
+    return this.assets.listAll(userId, {
+      type,
+      status,
+      projectId,
+      limit: limit !== undefined ? Number(limit) : undefined,
+      cursor,
+      search,
+    });
   }
 
   /**

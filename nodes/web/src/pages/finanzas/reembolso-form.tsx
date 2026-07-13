@@ -126,8 +126,10 @@ export function ReembolsoFormDialog({
     if (category === 'VEHICULOS' && !vehiclesLoaded) {
       void (async () => {
         try {
-          const list = await listAssets({ type: 'VEHICULO' });
-          if (active) setVehicles(list);
+          // Solo se necesita poblar el selector de vehículos: pedimos una página
+          // amplia (tope 100) y usamos sus items (nuevo contrato paginado).
+          const page = await listAssets({ type: 'VEHICULO', limit: 100 });
+          if (active) setVehicles(page.items);
         } catch {
           if (active) setVehicles([]);
         } finally {

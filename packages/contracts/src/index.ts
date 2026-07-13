@@ -14,6 +14,17 @@ export interface HealthResponse {
 export type ScopeType = 'ORGANIZATION' | 'DEPARTMENT' | 'PROJECT' | 'SERVICE';
 
 /**
+ * Página de un listado con paginación keyset (cursor estable). `items` es la
+ * página actual; `nextCursor` es la clave opaca para pedir la siguiente página
+ * (null cuando no hay más). Genérico y reutilizable en cualquier listado
+ * paginado del servidor (activos, usuarios, finanzas, …).
+ */
+export interface Paginated<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+/**
  * Claves de rol válidas (semilla §6-0.2 / §4.3). Son los bundles asignables.
  * La fuente de verdad de autorización es OpenFGA; esta lista es el contrato
  * compartido back↔front para validar y pintar selects de roles.
