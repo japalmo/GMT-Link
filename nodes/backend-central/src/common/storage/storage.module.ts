@@ -22,7 +22,10 @@ import { StorageService } from './storage.service';
  */
 @Global()
 @Module({
-  controllers: [FilesController],
+  // Con R2 (prod) NO se monta: las descargas van por URL firmada de R2 y el endpoint
+  // anónimo /files deja de existir (hallazgo de auditoría: servía boletas y documentos
+  // personales SIN sesión). Solo en dev/local (LocalStorage) se monta para servir por HTTP.
+  controllers: isR2Configured() ? [] : [FilesController],
   providers: [
     {
       provide: StorageService,

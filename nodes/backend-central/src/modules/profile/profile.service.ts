@@ -269,15 +269,16 @@ export class ProfileService {
   }
 
   /**
-   * Exige que `email` no esté tomado por OTRO usuario como email primario ni como
-   * emailInstitucional (ambos `@unique`). 409 si colisiona. `emailPersonal` NO es
-   * único, así que no se chequea (la unicidad la impone el email primario recomputado).
+   * Exige que `email` no esté tomado por OTRO usuario como email primario,
+   * emailInstitucional o emailPersonal. 409 si colisiona. Chequeo a nivel app
+   * ("un correo = una persona"); el `@unique` de emailPersonal en BD queda como
+   * hardening futuro (requiere depurar duplicados existentes antes de la migración).
    */
   private async assertEmailAvailable(email: string, selfUserId: string): Promise<void> {
     const collision = await this.prisma.user.findFirst({
       where: {
         id: { not: selfUserId },
-        OR: [{ email }, { emailInstitucional: email }],
+        OR: [{ email }, { emailInstitucional: email }, { emailPersonal: email }],
       },
       select: { id: true },
     });

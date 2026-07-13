@@ -23,10 +23,11 @@ const CONTENT_TYPE_BY_EXT: Readonly<Record<string, string>> = {
 /**
  * Sirve archivos del storage LOCAL por su `key` (SOLO DEV).
  *
- * Público: SIN `@RequirePermission` — los archivos se referencian por URL
- * directa (igual que una URL firmada de R2). En PRODUCCIÓN este controller NO
- * existe: Cloudflare R2 entrega URLs firmadas con expiración y el acceso se
- * controla allí (Decisión §9).
+ * Público: SIN `@RequirePermission` — los archivos se referencian por URL directa
+ * (para que un <img src="/files/…"> del front cargue sin cabecera de auth). Por eso
+ * el `StorageModule` NO lo monta cuando R2 está configurado (prod): ahí Cloudflare R2
+ * entrega URLs firmadas con expiración y el acceso se controla en R2 (Decisión §9).
+ * Solo existe en dev/local (LocalStorage), donde el host no es internet-facing.
  *
  * Anti path-traversal: la ruta absoluta se resuelve y se verifica que quede
  * DENTRO de `var/uploads`; cualquier intento de escapar (../, ruta absoluta)
