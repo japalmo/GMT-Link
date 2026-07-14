@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
 import { PrismaService } from '../../prisma/prisma.service';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import type { DirectoryEntry, DirectoryEntryExtended } from './directory.types';
 
 /** Usuario con memberships y cliente, forma común de las consultas de este servicio. */
@@ -45,6 +47,43 @@ export class DirectoryService {
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
     return users.map((user) => this.toEntry(user));
+  }
+
+  /**
+   * Lista del directorio con el MOTOR de tablas server-side (offset). Aplica el
+   * MISMO aislamiento cliente/colaborador que `list` (según el `isClientUser` del
+   * solicitante) + un filtro `tipo` (colaborador/cliente) + búsqueda, con orden
+   * configurable (persona/email/cargo, default nombre asc). Lo consume la tabla de
+   * Colaboradores del directorio (filtro `tipo=colaborador`).
+   */
+  async listTable(requesterId: string, req: TableRequest): Promise<TablePage<DirectoryEntry>> {
+    const requesterIsClient = await this.resolveRequesterIsClient(requesterId);
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    const tipo = typeof req.filters?.tipo === 'string' ? req.filters.tipo.trim() : '';
+    const where = this.buildWhere(requesterIsClient, req.search, tipo) ?? {};
+
+    const orderBy = tableOrderBy<Prisma.UserOrderByWithRelationInput[]>(
+      req,
+      {
+        persona: (dir) => [{ firstName: dir }, { lastName: dir }, { id: 'asc' }],
+        email: (dir) => [{ email: dir }, { id: 'asc' }],
+        cargo: (dir) => [{ cargo: dir }, { firstName: 'asc' }],
+      },
+      [{ firstName: 'asc' }, { lastName: 'asc' }, { id: 'asc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        include: { memberships: true, client: true },
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return tablePage(rows.map((user) => this.toEntry(user)), total, page, pageSize);
   }
 
   /**
@@ -105,10 +144,15 @@ export class DirectoryService {
     return user;
   }
 
-  /** Arma el `where` de Prisma: aislamiento cliente + búsqueda server-side. */
+  /**
+   * Arma el `where` de Prisma: aislamiento cliente + filtro `tipo` opcional
+   * (colaborador/cliente) + búsqueda server-side. El aislamiento manda: un
+   * solicitante cliente nunca ve a otros clientes, aunque pida `tipo=cliente`.
+   */
   private buildWhere(
     requesterIsClient: boolean,
     search?: string,
+    tipo?: string,
   ): Prisma.UserWhereInput | undefined {
     const conditions: Prisma.UserWhereInput[] = [];
 
@@ -117,8 +161,17 @@ export class DirectoryService {
       conditions.push({ isClientUser: false });
     }
 
-    const trimmed = search?.trim();
-    if (trimmed && trimmed.length > 0) {
+    // Filtro por tipo (la tabla de Colaboradores usa `colaborador`).
+    if (tipo === 'colaborador') {
+      conditions.push({ isClientUser: false });
+    } else if (tipo === 'cliente') {
+      conditions.push({ isClientUser: true });
+    }
+
+    // El query string puede llegar anidado/repetido (qs) y no ser un string;
+    // se coacciona para no reventar con `.trim is not a function` (500).
+    const trimmed = typeof search === 'string' ? search.trim() : '';
+    if (trimmed.length > 0) {
       conditions.push({
         OR: [
           { firstName: { contains: trimmed, mode: 'insensitive' } },

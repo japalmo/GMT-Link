@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query, UnauthorizedException } from '@nestjs/common';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -30,6 +31,33 @@ export class DirectoryController {
     @Query('search') search?: string,
   ): Promise<DirectoryEntry[]> {
     return this.directoryService.list(this.requireUserId(authUser), search);
+  }
+
+  /**
+   * Lista con el MOTOR de tablas server-side (offset): búsqueda, filtro `tipo`
+   * (colaborador/cliente) y orden sobre TODO el directorio visible, con página +
+   * total. Lo consume la tabla de Colaboradores. Respeta el mismo aislamiento
+   * cliente que el resto. DEBE declararse antes de `@Get(':id')`.
+   */
+  @Get('table')
+  listTable(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<DirectoryEntry>> {
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      search,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    return this.directoryService.listTable(this.requireUserId(authUser), req);
   }
 
   /**

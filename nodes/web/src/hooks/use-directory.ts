@@ -17,17 +17,19 @@ export interface UseDirectoryResult {
   loading: boolean;
   /** Mensaje de error de la última carga, o `null` si fue exitosa. */
   error: string | null;
-  /** Vuelve a cargar el directorio (sin búsqueda; la búsqueda es client-side). */
+  /** Vuelve a cargar el directorio completo (sin búsqueda). */
   refetch: () => Promise<void>;
 }
 
 /**
  * Hook de datos del Directorio (§6-1.6).
  *
- * Trae todas las entradas visibles para el usuario (el scoping por permisos lo
- * resuelve el backend) y delega la búsqueda al cliente vía `RoleScopedList`, por
- * lo que no recibe `search`. Gestiona loading/error y expone `refetch`. El
- * cleanup ignora respuestas que llegan tras desmontar.
+ * Trae TODAS las entradas visibles para el usuario (el scoping por permisos lo
+ * resuelve el backend). Tras la migración al motor de tablas, alimenta solo la
+ * pestaña Clientes (agrupada por empresa, client-side) y el contador de Clientes;
+ * la tabla de Colaboradores usa el motor server-side (`GET /directory/table`).
+ * Gestiona loading/error y expone `refetch`. El cleanup ignora respuestas que
+ * llegan tras desmontar.
  */
 export function useDirectory(): UseDirectoryResult {
   const [entries, setEntries] = useState<DirectoryEntry[]>([]);

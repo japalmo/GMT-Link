@@ -661,6 +661,26 @@ export function listDirectory(search?: string): Promise<DirectoryEntry[]> {
   return request<DirectoryEntry[]>(`/directory${query}`);
 }
 
+/**
+ * `GET /directory/table` — MOTOR de tablas server-side (offset) para el directorio.
+ * Búsqueda, filtro `tipo` (colaborador/cliente) y orden sobre TODO el directorio
+ * visible. Los filtros viajan como `filters[clave]=valor`.
+ */
+export function fetchDirectoryTable(req: TableRequest): Promise<TablePage<DirectoryEntry>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<DirectoryEntry>>(`/directory/table?${query.toString()}`);
+}
+
 /** `GET /directory/:id` — detalle básico. 404 si la entrada no es visible. */
 export function getDirectoryEntry(id: string): Promise<DirectoryEntry> {
   return request<DirectoryEntry>(`/directory/${encodeURIComponent(id)}`);

@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Eye, Users, Building2 } from 'lucide-react';
-import type { DirectoryEntry } from '@gmt-platform/contracts';
+import type { DirectoryEntry, TableRequest } from '@gmt-platform/contracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, type TabItem } from '@/components/ui/tabs';
@@ -22,10 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  RoleScopedList,
-  type RoleScopedColumn,
-} from '@/components/primitives/role-scoped-list';
+import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
+import { useDataTable } from '@/hooks/use-data-table';
+import { fetchDirectoryTable } from '@/lib/api';
 import { useDirectory } from '@/hooks/use-directory';
 import { PersonAvatar } from './person-avatar';
 import { DirectoryDetailDialog } from './directory-detail-dialog';
@@ -38,25 +37,35 @@ import { DirectoryDetailDialog } from './directory-detail-dialog';
  * Clientes se agrupan visualmente por empresa (companyName).
  */
 export default function DirectorioPage(): ReactNode {
+  // `useDirectory` (carga completa) alimenta la pestaña Clientes (agrupada por
+  // empresa, client-side) y los contadores de las pestañas. La tabla de
+  // Colaboradores usa el MOTOR server-side (paginación/búsqueda/orden).
   const { entries, loading, error, refetch } = useDirectory();
   const [selected, setSelected] = useState<DirectoryEntry | null>(null);
   const [activeTab, setActiveTab] = useState<'colaboradores' | 'clientes'>('colaboradores');
   const [clientSearch, setClientSearch] = useState('');
 
-  // Columnas para colaboradores
-  const columns: ReadonlyArray<RoleScopedColumn<DirectoryEntry>> = [
+  // MOTOR de tablas de Colaboradores: el tipo se fija en `colaborador` en el fetcher.
+  const fetcher = useCallback(
+    (req: TableRequest) =>
+      fetchDirectoryTable({ ...req, filters: { ...(req.filters ?? {}), tipo: 'colaborador' } }),
+    [],
+  );
+  const table = useDataTable<DirectoryEntry>(fetcher, {
+    initialPageSize: 10,
+    initialSortBy: 'persona',
+    initialSortDir: 'asc',
+  });
+
+  // Columnas para colaboradores (motor server-side).
+  const columns: ReadonlyArray<DataTableColumn<DirectoryEntry>> = [
     {
       id: 'persona',
       header: 'Persona',
       sortable: true,
-      accessor: (e) => `${e.firstName} ${e.lastName}`,
       render: (e) => (
         <div className="flex items-center gap-3">
-          <PersonAvatar
-            firstName={e.firstName}
-            lastName={e.lastName}
-            avatarUrl={e.avatarUrl}
-          />
+          <PersonAvatar firstName={e.firstName} lastName={e.lastName} avatarUrl={e.avatarUrl} />
           <span className="font-medium">
             {e.firstName} {e.lastName}
           </span>
@@ -67,20 +76,19 @@ export default function DirectorioPage(): ReactNode {
       id: 'email',
       header: 'Correo',
       sortable: true,
-      accessor: (e) => e.email,
       render: (e) => <span className="text-muted-foreground">{e.email}</span>,
     },
     {
       id: 'cargo',
       header: 'Cargo',
       sortable: true,
-      accessor: (e) => e.cargo ?? '',
-      render: (e) => <span className="text-muted-foreground">{e.cargo ?? '—'}</span>,
+      render: (e) => <span className="text-muted-foreground">{e.cargo ?? 'Sin cargo'}</span>,
     },
   ];
 
-  // Separar datos
-  const colaboradores = entries.filter((e) => !e.isClientUser);
+  // Los clientes salen de la carga completa (pestaña agrupada + contador). El
+  // contador de Colaboradores sale del `total` del motor (misma consulta que la
+  // tabla), para no depender de un segundo fetch ni discrepar con ella.
   const clientes = entries.filter((e) => e.isClientUser);
 
   // Filtrar clientes por búsqueda
@@ -106,7 +114,7 @@ export default function DirectorioPage(): ReactNode {
   });
 
   const tabItems: TabItem<'colaboradores' | 'clientes'>[] = [
-    { value: 'colaboradores', label: `Colaboradores (${colaboradores.length})`, icon: Users },
+    { value: 'colaboradores', label: `Colaboradores (${table.total})`, icon: Users },
     { value: 'clientes', label: `Clientes (${clientes.length})`, icon: Building2 },
   ];
 
@@ -126,17 +134,15 @@ export default function DirectorioPage(): ReactNode {
       />
 
       {activeTab === 'colaboradores' ? (
-        <RoleScopedList<DirectoryEntry>
-          items={colaboradores}
+        <DataTable<DirectoryEntry>
+          table={table}
           columns={columns}
           getRowId={(e) => e.id}
           searchable
           searchPlaceholder="Buscar colaboradores por nombre o correo…"
-          loading={loading}
-          error={error}
-          onRetry={() => void refetch()}
+          onRowClick={(e) => setSelected(e)}
           emptyMessage="No hay colaboradores para mostrar."
-          rowActionsLabel="Acciones"
+          caption="Directorio de colaboradores"
           rowActions={(e) => (
             <Button
               variant="outline"
@@ -148,7 +154,6 @@ export default function DirectorioPage(): ReactNode {
               Ver
             </Button>
           )}
-          caption="Directorio de colaboradores"
         />
       ) : (
         <div className="flex flex-col gap-4">
@@ -210,7 +215,7 @@ export default function DirectorioPage(): ReactNode {
                               <span className="text-muted-foreground">{e.email}</span>
                             </TableCell>
                             <TableCell className="py-3">
-                              <span className="text-muted-foreground">{e.cargo ?? '—'}</span>
+                              <span className="text-muted-foreground">{e.cargo ?? 'Sin cargo'}</span>
                             </TableCell>
                             <TableCell className="text-right pr-4 py-3">
                               <Button
