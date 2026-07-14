@@ -1097,6 +1097,26 @@ export function listAllReimbursements(
 }
 
 /**
+ * `GET /reimbursements/table` — MOTOR de tablas server-side (offset) para la
+ * Gestión de reembolsos. Filtro por estado y orden sobre TODOS los reembolsos.
+ * Mismo gate que `listAllReimbursements` (403 si no es gestor). Los filtros viajan
+ * como `filters[clave]=valor`.
+ */
+export function fetchReimbursementsTable(req: TableRequest): Promise<TablePage<ReimbursementView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<ReimbursementView>>(`/reimbursements/table?${query.toString()}`);
+}
+
+/**
  * `GET /reimbursements/summary` — totales agregados por el servidor (§5.2). Solo
  * gestores (403 si no). C2 agrega client-side, pero el wrapper queda disponible.
  */

@@ -16,6 +16,8 @@ import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateReimbursementDto, UpdateReimbursementDto } from './dto/reimbursements.dto';
 import type { Paginated, ReimbursementView } from './reimbursements.types';
 import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
@@ -264,6 +266,46 @@ export class ReimbursementsService {
     const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.date, lastRow.id) : null;
 
     return { items: pageRows.map(toViewWithRequester), nextCursor };
+  }
+
+  /**
+   * Lista TODOS los reembolsos con el MOTOR de tablas server-side (offset). Reusa
+   * el MISMO `where` (`buildReimbursementWhere`) que el keyset `listAll` y las
+   * cards de `summary`, pero devuelve una página numerada + total con orden
+   * configurable (fecha/monto/estado/solicitante, default fecha desc). Lo consume
+   * la tabla de Gestión de reembolsos. La autorización (P_VIEW_ALL) la aplica el
+   * controller, igual que `listAll`.
+   */
+  async listAllTable(
+    filters: ListReimbursementsFilters,
+    req: TableRequest,
+  ): Promise<TablePage<ReimbursementView>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    const where = buildReimbursementWhere(filters);
+
+    const orderBy = tableOrderBy<Prisma.ReimbursementOrderByWithRelationInput[]>(
+      req,
+      {
+        fecha: (dir) => [{ date: dir }, { id: dir }],
+        monto: (dir) => [{ amount: dir }, { date: 'desc' }, { id: 'desc' }],
+        estado: (dir) => [{ status: dir }, { date: 'desc' }, { id: 'desc' }],
+        solicitante: (dir) => [{ user: { firstName: dir } }, { user: { lastName: dir } }, { id: 'desc' }],
+      },
+      [{ date: 'desc' }, { id: 'desc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.reimbursement.findMany({
+        where,
+        include: { user: REQUESTER_SELECT },
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.reimbursement.count({ where }),
+    ]);
+
+    return tablePage(rows.map(toViewWithRequester), total, page, pageSize);
   }
 
   /**

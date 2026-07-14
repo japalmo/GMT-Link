@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ArrowLeft, FileText, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,12 +16,26 @@ import {
 } from '@/components/ui/modal';
 import {
   downloadReimbursementsPdf,
+  listAllReimbursements,
   markReimbursementsPrinted,
   type PrintOrientation,
   type PrintPageSize,
 } from '@/lib/api';
 import { formatCLP, formatDate } from '@/lib/format';
 import type { ReimbursementView } from '@/types/finance';
+
+/** Trae TODOS los reembolsos de gestión (todas las páginas keyset), para poder
+ *  seleccionar boletas más allá de la página visible de la tabla paginada. */
+async function fetchAllManagerReimbursements(): Promise<ReimbursementView[]> {
+  const all: ReimbursementView[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listAllReimbursements({ limit: 100, cursor });
+    all.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return all;
+}
 
 type PerPage = 2 | 4 | 6;
 type SelectionMode = 'pending' | 'manual';
@@ -30,8 +44,6 @@ type Step = 'config' | 'preview';
 export interface BatchPrintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Reembolsos candidatos (vista de gestión). Solo los que tienen boleta se imprimen. */
-  items: ReimbursementView[];
   /** Se llama tras marcar impresas, para que el caller refresque la lista. */
   onPrinted: () => void;
 }
@@ -52,10 +64,22 @@ function isImageUrl(url: string): boolean {
 export function BatchPrintDialog({
   open,
   onOpenChange,
-  items,
   onPrinted,
 }: BatchPrintDialogProps): ReactNode {
+  // Se trae la lista COMPLETA de gestión al abrir (no la página visible de la
+  // tabla), para poder imprimir todas las boletas pendientes aunque estén en
+  // otras páginas del motor server-side.
+  const [items, setItems] = useState<ReimbursementView[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
   const printable = useMemo(() => items.filter((i) => i.receiptUrl), [items]);
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const [mode, setMode] = useState<SelectionMode>('pending');
   const [manual, setManual] = useState<Record<string, boolean>>({});
@@ -65,6 +89,20 @@ export function BatchPrintDialog({
   const [step, setStep] = useState<Step>('config');
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Trae la lista completa de gestión (reintentable desde el botón de error). */
+  const loadItems = useCallback(async () => {
+    setLoadingItems(true);
+    setError(null);
+    try {
+      const all = await fetchAllManagerReimbursements();
+      if (mountedRef.current) setItems(all);
+    } catch {
+      if (mountedRef.current) setError('No se pudieron cargar las boletas para imprimir.');
+    } finally {
+      if (mountedRef.current) setLoadingItems(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -76,8 +114,11 @@ export function BatchPrintDialog({
       setStep('config');
       setDownloading(false);
       setError(null);
+      setItems([]);
+      return;
     }
-  }, [open]);
+    void loadItems();
+  }, [open, loadItems]);
 
   /** Boletas efectivamente seleccionadas según el modo. */
   const selected = useMemo(() => {
@@ -135,7 +176,18 @@ export function BatchPrintDialog({
           </ModalDescription>
         </ModalHeader>
 
-        {printable.length === 0 ? (
+        {loadingItems ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">Cargando boletas…</div>
+        ) : error && printable.length === 0 ? (
+          <Alert variant="destructive" live>
+            <div className="flex flex-col items-start gap-2">
+              <span>{error}</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => void loadItems()}>
+                Reintentar
+              </Button>
+            </div>
+          </Alert>
+        ) : printable.length === 0 ? (
           <Alert variant="default">No hay reembolsos con boleta adjunta para imprimir.</Alert>
         ) : step === 'config' ? (
           <div className="flex flex-col gap-4">

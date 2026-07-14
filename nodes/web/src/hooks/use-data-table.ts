@@ -80,6 +80,9 @@ export function useDataTable<T>(
   const [sortDir, setSortDir] = useState<SortDir>(initialSortDir);
   const [filters, setFilters] = useState<Record<string, string>>(initialFilters);
   const [loading, setLoading] = useState(true);
+  // ¿Ya resolvió al menos una consulta con `enabled`? Evita el destello de "vacío"
+  // cuando `enabled` pasa de false a true (el efecto de fetch corre post-paint).
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -130,7 +133,10 @@ export function useDataTable<T>(
         setTotal(0);
       })
       .finally(() => {
-        if (gen === genRef.current) setLoading(false);
+        if (gen === genRef.current) {
+          setLoading(false);
+          setHasLoaded(true);
+        }
       });
   }, [page, pageSize, debouncedSearch, sortBy, sortDir, filters, reloadKey, enabled]);
 
@@ -182,8 +188,12 @@ export function useDataTable<T>(
 
   const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
 
+  // Con `enabled` activo pero sin la primera consulta resuelta, se reporta
+  // `loading` para que la tabla muestre skeleton en vez de un "vacío" fugaz.
+  const effectiveLoading = enabled ? loading || !hasLoaded : false;
+
   return {
-    items, total, page, pageSize, pageCount, loading, error,
+    items, total, page, pageSize, pageCount, loading: effectiveLoading, error,
     search, sortBy, sortDir, filters,
     setSearch, setPage, setPageSize, toggleSort, setFilter, refetch, patchRow,
   };

@@ -20,6 +20,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { FinanceStatus } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import { PermissionService } from '../../authz/permission.service';
@@ -153,6 +155,36 @@ export class ReimbursementsController {
   ): Promise<Paginated<ReimbursementView>> {
     await this.require(this.requireUserId(authUser), P_VIEW_ALL);
     return this.reimbursements.listAll(this.toFilters(query));
+  }
+
+  /**
+   * Lista con el MOTOR de tablas server-side (offset): filtro por estado y orden
+   * (fecha/monto/estado/solicitante) sobre TODOS los reembolsos, con página + total.
+   * Lo consume la tabla de Gestión. Mismo gate P_VIEW_ALL que `listAll`. DEBE
+   * declararse antes de `@Get(':id')`.
+   */
+  @Get('table')
+  async listTable(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<ReimbursementView>> {
+    await this.require(this.requireUserId(authUser), P_VIEW_ALL);
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    const rawStatus = typeof filters?.status === 'string' ? filters.status : '';
+    const status = (Object.values(FinanceStatus) as string[]).includes(rawStatus)
+      ? (rawStatus as FinanceStatus)
+      : undefined;
+    return this.reimbursements.listAllTable({ status }, req);
   }
 
   @Get(':id')
