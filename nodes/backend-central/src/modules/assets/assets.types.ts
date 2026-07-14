@@ -14,8 +14,12 @@ export type {
   AssetIdentifierType,
   AssetView,
   AssetPublicView,
+  ChecklistTemplateItem,
+  ChecklistAnswer,
   Paginated,
 } from '@gmt-platform/contracts';
+
+import type { ChecklistAnswer, ChecklistTemplateItem } from '@gmt-platform/contracts';
 
 export interface AssetDocumentView {
   id: string;
@@ -57,9 +61,9 @@ export interface ChecklistTemplateView {
   id: string;
   assetId: string;
   name: string;
-  items: Record<string, unknown>[];
+  items: ChecklistTemplateItem[];
   status: DocumentStatus;
-  previousItems: Record<string, unknown>[] | null;
+  previousItems: ChecklistTemplateItem[] | null;
   reviewedById: string | null;
   reviewedAt: string | null; // ISO-8601
   rejectionReason: string | null;
@@ -73,7 +77,7 @@ export interface ChecklistSubmissionView {
   assetId: string;
   templateId: string;
   userId: string;
-  answers: Record<string, unknown>[];
+  answers: ChecklistAnswer[];
   createdAt: string; // ISO-8601
   user?: { firstName: string; lastName: string } | null;
 }

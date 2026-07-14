@@ -31,6 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { SearchInput } from '@/components/ui/search-input';
 import { Tabs, type TabItem } from '@/components/ui/tabs';
@@ -66,6 +67,7 @@ import type {
   ChecklistTemplateView,
   ChecklistSubmissionView,
   ChecklistTemplateItem,
+  ChecklistItemConfig,
   ChecklistAnswer,
   VehicleSubtype,
   AssetIdentifierType,
@@ -85,6 +87,53 @@ interface UserOption {
 }
 
 type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria' | 'insumos' | 'proveedores' | 'bodegas';
+
+// Plantilla estándar de inspección de camioneta. Fuente única del front (mismo
+// contenido que el default del backend). Cada punto crítico es un ESTADO
+// Bueno/Regular/Malo con "Malo" = falla y un ítem TEXTO companion para la
+// observación exigida al fallar (vinculado por `obsItemId`).
+const VEHICLE_CHECKLIST_DEFAULT: ChecklistTemplateItem[] = [
+  {
+    id: 'motor',
+    label: 'Motor: nivel de aceite e inspección visual',
+    type: 'ESTADO',
+    required: true,
+    config: { options: ['Bueno', 'Regular', 'Malo'], failOptions: ['Malo'], requireObs: false, obsItemId: 'obs_motor' },
+  },
+  { id: 'obs_motor', label: 'Observación motor', type: 'TEXTO', required: false },
+  {
+    id: 'frenos',
+    label: 'Frenos: nivel de líquido e inspección visual',
+    type: 'ESTADO',
+    required: true,
+    config: { options: ['Bueno', 'Regular', 'Malo'], failOptions: ['Malo'], requireObs: false, obsItemId: 'obs_frenos' },
+  },
+  { id: 'obs_frenos', label: 'Observación frenos', type: 'TEXTO', required: false },
+  {
+    id: 'neumaticos',
+    label: 'Neumáticos: presión y estado general',
+    type: 'ESTADO',
+    required: true,
+    config: { options: ['Bueno', 'Regular', 'Malo'], failOptions: ['Malo'], requireObs: false, obsItemId: 'obs_neumaticos' },
+  },
+  { id: 'obs_neumaticos', label: 'Observación neumáticos', type: 'TEXTO', required: false },
+  {
+    id: 'luces',
+    label: 'Luces: altas, bajas, intermitentes y freno',
+    type: 'ESTADO',
+    required: true,
+    config: { options: ['Bueno', 'Regular', 'Malo'], failOptions: ['Malo'], requireObs: false, obsItemId: 'obs_luces' },
+  },
+  { id: 'obs_luces', label: 'Observación luces', type: 'TEXTO', required: false },
+  {
+    id: 'kilometraje',
+    label: 'Kilometraje actual (odómetro)',
+    type: 'ENTERO',
+    required: true,
+    config: { isOdometer: true },
+  },
+  { id: 'observaciones', label: 'Observaciones generales', type: 'TEXTO', required: false },
+];
 
 export default function RecursosPage(): ReactNode {
   // Proveedores y Bodegas solo son visibles para roles de gestión (§ gating de
@@ -1136,26 +1185,86 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     const newItem: ChecklistTemplateItem = {
       id: Math.random().toString(36).substring(2, 9),
       label: 'Nuevo Ítem',
-      type: 'YES_NO',
+      type: 'BOOLEAN',
       required: true,
     };
     setTplItems([...tplItems, newItem]);
   };
 
-  const handleUpdateItemInTpl = (itemId: string, field: string, value: unknown) => {
+  // Actualiza un campo simple del ítem (label/type/required). Al cambiar el tipo
+  // a ESTADO sin opciones definidas, siembra el set estándar Bueno/Regular/Malo
+  // con "Malo" = falla para que el diseñador arranque con algo usable.
+  const handleUpdateItemInTpl = (itemId: string, field: 'label' | 'type' | 'required', value: string | boolean) => {
     setTplItems(
       tplItems.map((item) => {
-        if (item.id === itemId) {
-          return { ...item, [field]: value } as ChecklistTemplateItem;
+        if (item.id !== itemId) return item;
+        const next = { ...item, [field]: value } as ChecklistTemplateItem;
+        if (field === 'type' && value === 'ESTADO' && (next.config?.options?.length ?? 0) === 0) {
+          next.config = { options: ['Bueno', 'Regular', 'Malo'], failOptions: ['Malo'], requireObs: false };
         }
-        return item;
+        return next;
       }),
     );
+  };
+
+  // Actualiza (merge) la configuración del ítem: opciones, opciones de falla y
+  // el flag requireObs del editor inline de ESTADO.
+  const handleUpdateItemConfig = (itemId: string, patch: Partial<ChecklistItemConfig>) => {
+    setTplItems(
+      tplItems.map((item) =>
+        item.id === itemId ? { ...item, config: { ...item.config, ...patch } } : item,
+      ),
+    );
+  };
+
+  // Alterna la exigencia de observación de un ítem. Al activarla, garantiza que
+  // exista el ítem TEXTO companion que el backend requiere: calcula obsItemId
+  // (config.obsItemId o `${id}__obs`), lo agrega a la plantilla si aún no existe
+  // y fija config { requireObs:true, obsItemId }. Al desactivarla solo baja el
+  // flag (conserva obsItemId por si se vuelve a activar).
+  const handleToggleRequireObs = (itemId: string, checked: boolean) => {
+    setTplItems((prev) => {
+      const target = prev.find((it) => it.id === itemId);
+      if (!target) return prev;
+
+      if (!checked) {
+        return prev.map((it) =>
+          it.id === itemId ? { ...it, config: { ...it.config, requireObs: false } } : it,
+        );
+      }
+
+      const obsId = target.config?.obsItemId ?? `${itemId}__obs`;
+      const withFlag = prev.map((it) =>
+        it.id === itemId
+          ? { ...it, config: { ...it.config, requireObs: true, obsItemId: obsId } }
+          : it,
+      );
+
+      const hasCompanion = prev.some((it) => it.id === obsId && it.type === 'TEXTO');
+      if (hasCompanion) return withFlag;
+
+      const companion: ChecklistTemplateItem = {
+        id: obsId,
+        label: `Observación ${target.label}`,
+        type: 'TEXTO',
+        required: false,
+      };
+      return [...withFlag, companion];
+    });
   };
 
   const handleRemoveItemFromTpl = (itemId: string) => {
     setTplItems(tplItems.filter((item) => item.id !== itemId));
   };
+
+  // Ítems companion (TEXTO referidos por el `obsItemId` de otro ítem) no se
+  // editan como filas sueltas en el diseñador: su valor se captura en la
+  // observación del ítem padre, igual que en la ejecución. Se ocultan de la
+  // lista editable para no exponerlos como preguntas independientes.
+  const designerObsItemIds = new Set(
+    tplItems.map((it) => it.config?.obsItemId).filter((v): v is string => Boolean(v)),
+  );
+  const visibleTplItems = tplItems.filter((item) => !designerObsItemIds.has(item.id));
 
   const handleSaveTpl = async () => {
     if (!tplName) {
@@ -1192,15 +1301,48 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
 
     try {
       const answers: ChecklistAnswer[] = template.items.map((item) => {
-        const val = executionAnswers[item.id];
-        if (item.required && (val === undefined || val === '')) {
+        const raw = executionAnswers[item.id];
+        const missing = raw === undefined || raw === null || raw === '';
+        if (item.required && missing) {
           throw new Error(`El ítem "${item.label}" es requerido.`);
         }
-        return {
-          itemId: item.id,
-          label: item.label,
-          value: val as string | number | boolean,
-        };
+
+        // Valor tipado según el tipo del ítem (null si quedó vacío).
+        let value: string | number | boolean | null;
+        switch (item.type) {
+          case 'BOOLEAN':
+            value = typeof raw === 'boolean' ? raw : null;
+            break;
+          case 'ENTERO':
+            value = missing ? null : Number(raw);
+            break;
+          default: // ESTADO, FECHA, TEXTO
+            value = missing ? null : String(raw);
+        }
+
+        const answer: ChecklistAnswer = { itemId: item.id, label: item.label, value };
+
+        // La observación companion de un ESTADO (textarea de falla) se guarda
+        // como `comment` de su respuesta, además de poblar el ítem TEXTO
+        // vinculado por `obsItemId`. El backend exige observación cuando el
+        // estado cae en falla O `requireObs` está activo (showObs): se valida
+        // aquí para dar la señal inline antes de enviar.
+        if (item.type === 'ESTADO') {
+          const obsKey = item.config?.obsItemId ?? `${item.id}__obs`;
+          const obs = executionAnswers[obsKey];
+          const obsText = typeof obs === 'string' ? obs.trim() : '';
+          const chosen = typeof value === 'string' ? value : '';
+          const isFail = item.config?.failOptions?.includes(chosen) ?? false;
+          const showObs = isFail || (item.config?.requireObs ?? false);
+          if (showObs && obsText === '') {
+            throw new Error(`Debes registrar una observación para "${item.label}".`);
+          }
+          if (obsText !== '') {
+            answer.comment = obsText;
+          }
+        }
+
+        return answer;
       });
 
       const submission = await submitChecklistAnswers(id, { templateId: template.id, answers });
@@ -1240,6 +1382,18 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     }
   };
 
+  // ¿La respuesta cuenta como falla? BOOLEAN "No" (false) o un ESTADO cuyo valor
+  // cae en las `failOptions` configuradas del ítem. Reemplaza el hardcode viejo
+  // (value === false | 'no' | 'failed').
+  const isAnswerFailure = (ans: ChecklistAnswer): boolean => {
+    if (ans.value === false) return true;
+    const item = template?.items.find((it) => it.id === ans.itemId);
+    if (item?.type === 'ESTADO' && typeof ans.value === 'string') {
+      return item.config?.failOptions?.includes(ans.value) ?? false;
+    }
+    return false;
+  };
+
   // "Reportar uso": lleva al operador al checklist de operación. Si es vehículo y
   // aún no hay plantilla configurada, precarga la plantilla estándar de camioneta.
   const goToChecklist = (loadVehicleTemplate = false) => {
@@ -1247,14 +1401,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
     setShowTplConfig(false);
     if (loadVehicleTemplate && (!template || template.items.length === 0)) {
       setShowTplConfig(true);
-      setTplItems([
-        { id: '1', label: 'Motor: Nivel de aceite e inspección visual', type: 'YES_NO', required: true },
-        { id: '2', label: 'Frenos: Nivel de líquido e inspección visual', type: 'YES_NO', required: true },
-        { id: '3', label: 'Neumáticos: Presión y estado general', type: 'YES_NO', required: true },
-        { id: '4', label: 'Luces: Altas, bajas, intermitentes y freno', type: 'YES_NO', required: true },
-        { id: 'kilometraje', label: 'Kilometraje actual del vehículo (odómetro)', type: 'NUMBER', required: true },
-        { id: '6', label: 'Observaciones generales o novedades', type: 'TEXT', required: false },
-      ]);
+      setTplItems(VEHICLE_CHECKLIST_DEFAULT);
     }
   };
 
@@ -1864,59 +2011,141 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      <p className="text-[11px] font-semibold text-muted-foreground">Preguntas y Puntos de Control ({tplItems.length})</p>
-                      
-                      {tplItems.length === 0 ? (
+                      <p className="text-[11px] font-semibold text-muted-foreground">Preguntas y Puntos de Control ({visibleTplItems.length})</p>
+
+                      {visibleTplItems.length === 0 ? (
                         <p className="text-center text-xs text-muted-foreground border border-dashed py-4 rounded">
                           No hay preguntas definidas. Haz clic en "Agregar Pregunta" para iniciar.
                         </p>
                       ) : (
                         <div className="space-y-3">
-                          {tplItems.map((item, index) => (
-                            <div key={item.id} className="flex flex-col md:flex-row md:items-center gap-3 p-3 border rounded bg-card/40 text-xs">
-                              <span className="font-bold text-muted-foreground">#{index + 1}</span>
-                              
-                              <div className="flex-1">
-                                <Input
-                                  value={item.label}
-                                  onChange={(e) => handleUpdateItemInTpl(item.id, 'label', e.target.value)}
-                                  placeholder="Ej. ¿Nivel de aceite correcto?"
-                                  className="h-8 text-xs w-full"
-                                />
-                              </div>
+                          {visibleTplItems.map((item, index) => (
+                            <div key={item.id} className="flex flex-col gap-3 p-3 border rounded bg-card/40 text-xs">
+                              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                <span className="font-bold text-muted-foreground">#{index + 1}</span>
 
-                              <div className="w-full md:w-32">
-                                <Select
-                                  aria-label={`Tipo de respuesta del ítem ${index + 1}`}
-                                  value={item.type}
-                                  onChange={(e) => handleUpdateItemInTpl(item.id, 'type', e.target.value)}
-                                  className="h-8 px-2 text-xs"
+                                <div className="flex-1">
+                                  <Input
+                                    value={item.label}
+                                    onChange={(e) => handleUpdateItemInTpl(item.id, 'label', e.target.value)}
+                                    placeholder="Ej. Nivel de aceite del motor"
+                                    className="h-8 text-xs w-full"
+                                  />
+                                </div>
+
+                                <div className="w-full md:w-36">
+                                  <Select
+                                    aria-label={`Tipo de respuesta del ítem ${index + 1}`}
+                                    value={item.type}
+                                    onChange={(e) => handleUpdateItemInTpl(item.id, 'type', e.target.value)}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    <option value="BOOLEAN">Sí / No</option>
+                                    <option value="ESTADO">Estado</option>
+                                    <option value="ENTERO">Número entero</option>
+                                    <option value="FECHA">Fecha</option>
+                                    <option value="TEXTO">Texto</option>
+                                  </Select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="checkbox"
+                                    id={`req-${item.id}`}
+                                    checked={item.required}
+                                    onChange={(e) => handleUpdateItemInTpl(item.id, 'required', e.target.checked)}
+                                    className="size-3.5 rounded border-gray-300"
+                                  />
+                                  <Label htmlFor={`req-${item.id}`} className="text-xs select-none">Obligatorio</Label>
+                                </div>
+
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-destructive hover:bg-destructive/10 h-8 px-2"
+                                  onClick={() => handleRemoveItemFromTpl(item.id)}
                                 >
-                                  <option value="YES_NO">Sí / No</option>
-                                  <option value="NUMBER">Número</option>
-                                  <option value="TEXT">Texto</option>
-                                </Select>
+                                  Eliminar
+                                </Button>
                               </div>
 
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="checkbox"
-                                  id={`req-${item.id}`}
-                                  checked={item.required}
-                                  onChange={(e) => handleUpdateItemInTpl(item.id, 'required', e.target.checked)}
-                                  className="size-3.5 rounded border-gray-300"
-                                />
-                                <Label htmlFor={`req-${item.id}`} className="text-xs select-none">Obligatorio</Label>
-                              </div>
-
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive hover:bg-destructive/10 h-8 px-2"
-                                onClick={() => handleRemoveItemFromTpl(item.id)}
-                              >
-                                Eliminar
-                              </Button>
+                              {/* Editor inline de opciones para ítems de tipo ESTADO */}
+                              {item.type === 'ESTADO' && (
+                                <div className="flex flex-col gap-2 border-t border-border/50 pt-2">
+                                  <p className="text-[11px] font-semibold text-muted-foreground">
+                                    Opciones del estado (marca cuáles cuentan como falla)
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {(item.config?.options ?? []).map((opt) => {
+                                      const isFail = item.config?.failOptions?.includes(opt) ?? false;
+                                      return (
+                                        <span
+                                          key={opt}
+                                          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 ${
+                                            isFail
+                                              ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+                                              : 'border-border bg-card text-foreground'
+                                          }`}
+                                        >
+                                          {opt}
+                                          <button
+                                            type="button"
+                                            title={isFail ? 'Quitar marca de falla' : 'Marcar como falla'}
+                                            onClick={() => {
+                                              const fails = item.config?.failOptions ?? [];
+                                              handleUpdateItemConfig(item.id, {
+                                                failOptions: isFail
+                                                  ? fails.filter((f) => f !== opt)
+                                                  : [...fails, opt],
+                                              });
+                                            }}
+                                            className="text-[10px] font-bold uppercase tracking-wide"
+                                          >
+                                            {isFail ? 'falla' : 'ok'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            title="Quitar opción"
+                                            onClick={() => {
+                                              const opts = (item.config?.options ?? []).filter((o) => o !== opt);
+                                              const fails = (item.config?.failOptions ?? []).filter((f) => f !== opt);
+                                              handleUpdateItemConfig(item.id, { options: opts, failOptions: fails });
+                                            }}
+                                            className="text-muted-foreground hover:text-destructive"
+                                          >
+                                            <X className="size-3" />
+                                          </button>
+                                        </span>
+                                      );
+                                    })}
+                                    <Input
+                                      aria-label={`Agregar opción al ítem ${index + 1}`}
+                                      placeholder="Escribe una opción y presiona Enter"
+                                      className="h-7 text-xs w-52"
+                                      onKeyDown={(e) => {
+                                        if (e.key !== 'Enter') return;
+                                        e.preventDefault();
+                                        const val = e.currentTarget.value.trim();
+                                        if (!val) return;
+                                        const opts = item.config?.options ?? [];
+                                        if (!opts.includes(val)) {
+                                          handleUpdateItemConfig(item.id, { options: [...opts, val] });
+                                        }
+                                        e.currentTarget.value = '';
+                                      }}
+                                    />
+                                  </div>
+                                  <label className="flex items-center gap-1.5 select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.config?.requireObs ?? false}
+                                      onChange={(e) => handleToggleRequireObs(item.id, e.target.checked)}
+                                      className="size-3.5 rounded border-gray-300"
+                                    />
+                                    <span>Mostrar campo de observación en cada inspección</span>
+                                  </label>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1932,16 +2161,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => {
-                                setTplItems([
-                                  { id: '1', label: 'Motor: Nivel de aceite e inspección visual', type: 'YES_NO', required: true },
-                                  { id: '2', label: 'Frenos: Nivel de líquido e inspección visual', type: 'YES_NO', required: true },
-                                  { id: '3', label: 'Neumáticos: Presión y estado general', type: 'YES_NO', required: true },
-                                  { id: '4', label: 'Luces: Altas, bajas, intermitentes y freno', type: 'YES_NO', required: true },
-                                  { id: 'kilometraje', label: 'Kilometraje actual del vehículo (odómetro)', type: 'NUMBER', required: true },
-                                  { id: '6', label: 'Observaciones generales o novedades', type: 'TEXT', required: false },
-                                ]);
-                              }}
+                              onClick={() => setTplItems(VEHICLE_CHECKLIST_DEFAULT)}
                             >
                               Cargar Plantilla Estándar Camioneta
                             </Button>
@@ -1965,75 +2185,132 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
 
                     {template.items.length === 0 ? (
                       <p className="text-center text-xs text-muted-foreground py-4">No hay preguntas de inspección configuradas en este checklist.</p>
-                    ) : (
-                      <>
-                        <div className="space-y-4">
-                          {template.items.map((item) => (
-                            <div key={item.id} className="flex flex-col gap-1.5 text-xs">
-                              <Label className="font-semibold text-foreground flex gap-1">
-                                {item.label}
-                                {item.required && <span className="text-rose-500">*</span>}
-                              </Label>
-                              
-                              {item.type === 'YES_NO' && (
-                                <div className="flex gap-4 mt-1">
-                                  <label className="flex items-center gap-1.5 cursor-pointer">
-                                    <input
-                                      type="radio"
-                                      name={`ans-${item.id}`}
+                    ) : (() => {
+                      // Los ítems TEXTO companion (referidos por `obsItemId` de un
+                      // ESTADO) no se muestran sueltos: su valor se captura en el
+                      // textarea de observación del ESTADO correspondiente.
+                      const obsItemIds = new Set(
+                        template.items
+                          .map((it) => it.config?.obsItemId)
+                          .filter((v): v is string => Boolean(v)),
+                      );
+                      return (
+                        <>
+                          <div className="space-y-4">
+                            {template.items.map((item) => {
+                              if (obsItemIds.has(item.id)) return null;
+                              return (
+                                <div key={item.id} className="flex flex-col gap-1.5 text-xs">
+                                  <Label className="font-semibold text-foreground flex gap-1">
+                                    {item.label}
+                                    {item.required && <span className="text-rose-500">*</span>}
+                                  </Label>
+
+                                  {item.type === 'BOOLEAN' && (
+                                    <div className="flex gap-4 mt-1">
+                                      <label className="flex items-center gap-1.5 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name={`ans-${item.id}`}
+                                          required={item.required}
+                                          checked={executionAnswers[item.id] === true}
+                                          onChange={() => setExecutionAnswers({ ...executionAnswers, [item.id]: true })}
+                                          className="size-4 text-primary"
+                                        />
+                                        <span>Sí</span>
+                                      </label>
+                                      <label className="flex items-center gap-1.5 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name={`ans-${item.id}`}
+                                          required={item.required}
+                                          checked={executionAnswers[item.id] === false}
+                                          onChange={() => setExecutionAnswers({ ...executionAnswers, [item.id]: false })}
+                                          className="size-4 text-rose-500"
+                                        />
+                                        <span className="text-rose-400 font-medium">No</span>
+                                      </label>
+                                    </div>
+                                  )}
+
+                                  {item.type === 'ESTADO' && (() => {
+                                    const chosen = executionAnswers[item.id];
+                                    const isFail = typeof chosen === 'string' && (item.config?.failOptions?.includes(chosen) ?? false);
+                                    const showObs = isFail || (item.config?.requireObs ?? false);
+                                    const obsKey = item.config?.obsItemId ?? `${item.id}__obs`;
+                                    return (
+                                      <>
+                                        <Select
+                                          aria-label={item.label}
+                                          required={item.required}
+                                          value={(chosen as string | undefined) ?? ''}
+                                          onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
+                                          className="h-8 px-2 text-xs w-full max-w-xs"
+                                        >
+                                          <option value="" disabled>Selecciona una opción</option>
+                                          {(item.config?.options ?? []).map((opt) => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                        </Select>
+                                        {showObs && (
+                                          <Textarea
+                                            required={showObs}
+                                            value={(executionAnswers[obsKey] as string | undefined) ?? ''}
+                                            onChange={(e) => setExecutionAnswers({ ...executionAnswers, [obsKey]: e.target.value })}
+                                            placeholder="Describe la observación o falla detectada"
+                                            className="text-xs mt-1"
+                                          />
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+
+                                  {item.type === 'ENTERO' && (
+                                    <Input
+                                      type="number"
                                       required={item.required}
-                                      checked={executionAnswers[item.id] === true}
-                                      onChange={() => setExecutionAnswers({ ...executionAnswers, [item.id]: true })}
-                                      className="size-4 text-primary"
+                                      min={item.config?.min}
+                                      max={item.config?.max}
+                                      value={(executionAnswers[item.id] as string | number | undefined) ?? ''}
+                                      onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value === '' ? '' : Number(e.target.value) })}
+                                      placeholder="Ingresa un valor numérico"
+                                      className="h-8 text-xs w-full max-w-xs"
                                     />
-                                    <span>Correcto / Sí</span>
-                                  </label>
-                                  <label className="flex items-center gap-1.5 cursor-pointer">
-                                    <input
-                                      type="radio"
-                                      name={`ans-${item.id}`}
+                                  )}
+
+                                  {item.type === 'FECHA' && (
+                                    <Input
+                                      type="date"
                                       required={item.required}
-                                      checked={executionAnswers[item.id] === false}
-                                      onChange={() => setExecutionAnswers({ ...executionAnswers, [item.id]: false })}
-                                      className="size-4 text-rose-500"
+                                      value={(executionAnswers[item.id] as string | undefined) ?? ''}
+                                      onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
+                                      className="h-8 text-xs w-full max-w-xs"
                                     />
-                                    <span className="text-rose-400 font-medium">Falla / No</span>
-                                  </label>
+                                  )}
+
+                                  {item.type === 'TEXTO' && (
+                                    <Input
+                                      type="text"
+                                      required={item.required}
+                                      value={(executionAnswers[item.id] as string | undefined) ?? ''}
+                                      onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
+                                      placeholder="Ingresa tus observaciones"
+                                      className="h-8 text-xs w-full"
+                                    />
+                                  )}
                                 </div>
-                              )}
+                              );
+                            })}
+                          </div>
 
-                              {item.type === 'NUMBER' && (
-                                <Input
-                                  type="number"
-                                  required={item.required}
-                                  value={(executionAnswers[item.id] as string | number | undefined) ?? ''}
-                                  onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value === '' ? '' : Number(e.target.value) })}
-                                  placeholder="Ingresa un valor numérico"
-                                  className="h-8 text-xs w-full max-w-xs"
-                                />
-                              )}
-
-                              {item.type === 'TEXT' && (
-                                <Input
-                                  type="text"
-                                  required={item.required}
-                                  value={(executionAnswers[item.id] as string | undefined) ?? ''}
-                                  onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
-                                  placeholder="Ingresa tus observaciones"
-                                  className="h-8 text-xs w-full"
-                                />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <div className="flex justify-end mt-2">
-                          <Button type="submit" size="sm">
-                            Firmar y Enviar Inspección
-                          </Button>
-                        </div>
-                      </>
-                    )}
+                          <div className="flex justify-end mt-2">
+                            <Button type="submit" size="sm">
+                              Firmar y Enviar Inspección
+                            </Button>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </form>
                 )}
 
@@ -2050,10 +2327,19 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                   ) : (
                     <div className="space-y-3">
                       {submissions.map((sub) => {
-                        const hasSubFailure = sub.answers.some(
-                          (ans) => ans.value === false || ans.value === 'no' || ans.value === 'failed'
+                        const hasSubFailure = sub.answers.some(isAnswerFailure);
+
+                        // Observaciones companion cuyo texto ya viaja como `comment`
+                        // del ESTADO padre (envíos nuevos); se ocultan para no
+                        // duplicar. Los envíos viejos que la guardaron como respuesta
+                        // propia se siguen mostrando.
+                        const redundantObsIds = new Set(
+                          sub.answers
+                            .filter((a) => typeof a.comment === 'string' && a.comment.trim() !== '')
+                            .map((a) => template?.items.find((it) => it.id === a.itemId)?.config?.obsItemId)
+                            .filter((v): v is string => Boolean(v)),
                         );
-                        
+
                         return (
                           <div
                             key={sub.id}
@@ -2078,18 +2364,31 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1 border-t pt-2 border-border/40">
-                              {sub.answers.map((ans, idx) => (
-                                <div key={idx} className="flex justify-between text-[11px] gap-2 border-b border-border/20 pb-1">
-                                  <span className="text-muted-foreground truncate">{ans.label || ans.itemId}:</span>
-                                  <span className={`font-semibold ${
-                                    ans.value === true ? 'text-emerald-500' :
-                                    ans.value === false ? 'text-rose-500' : 'text-foreground'
-                                  }`}>
-                                    {ans.value === true ? 'Correcto' :
-                                     ans.value === false ? 'Falla / Incorrecto' : String(ans.value)}
-                                  </span>
-                                </div>
-                              ))}
+                              {sub.answers.map((ans, idx) => {
+                                if (redundantObsIds.has(ans.itemId)) return null;
+                                const fail = isAnswerFailure(ans);
+                                const display =
+                                  ans.value === true ? 'Sí' :
+                                  ans.value === false ? 'No' :
+                                  ans.value === null || ans.value === '' ? '—' :
+                                  String(ans.value);
+                                return (
+                                  <div key={idx} className="flex flex-col gap-0.5 text-[11px] border-b border-border/20 pb-1">
+                                    <div className="flex justify-between gap-2">
+                                      <span className="text-muted-foreground truncate">{ans.label || ans.itemId}:</span>
+                                      <span className={`font-semibold ${
+                                        fail ? 'text-rose-500' :
+                                        ans.value === true ? 'text-emerald-500' : 'text-foreground'
+                                      }`}>
+                                        {display}
+                                      </span>
+                                    </div>
+                                    {typeof ans.comment === 'string' && ans.comment.trim() !== '' && (
+                                      <span className="text-muted-foreground italic break-words">Obs: {ans.comment}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
 
                             <div className="flex justify-end mt-1">

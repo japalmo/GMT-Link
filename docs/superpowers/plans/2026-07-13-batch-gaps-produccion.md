@@ -10,7 +10,12 @@
 2. Cargo: **texto libre** (`User.cargo String?`).
 3. Import histórico: **crear los trabajadores como usuarios SIN enviar credenciales**, deduplicando contra los ya existentes (nombres mal escritos/variantes → normalizar la tabla de usuarios). La dueña indicará después activos/inactivos y roles.
 4. Ejecución: **todo el plan, en orden** (tandas 1→5, deploy por tanda).
-5. (Pendientes menores: alcance de procedimientos-preset; borrado con hijos → bloquear si tiene dependencias.)
+5. Borrado con hijos → bloquear si tiene dependencias. (hecho en Tanda 2)
+6. (2026-07-14) **Procedimiento = preset CON checklist por defecto** → el modelo de checklist tipado (Tanda 5.1) va PRIMERO; luego Tanda 4 (ServiceType/Procedimiento con FK a un ChecklistTemplate por defecto) + rename copy rutinas→procedimientos.
+7. (2026-07-14) Import de vehículos: **globales** (sin proyecto; la dueña reasigna después). Trabajadores: crear como usuarios sin credenciales, deduplicando.
+8. (2026-07-14) Ejecución del import: **directo a producción** (con backup previo); la dueña revisa los usuarios creados después.
+
+Orden final del backlog restante: **5.1 checklist tipado → Tanda 4 procedimientos → 5.3 import → 5.2 reorg detalle**.
 
 ---
 

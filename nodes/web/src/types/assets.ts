@@ -13,6 +13,10 @@ import type {
   AssetIdentifierType,
   AssetView,
   AssetPublicView,
+  ChecklistItemType,
+  ChecklistItemConfig,
+  ChecklistTemplateItem,
+  ChecklistAnswer,
 } from '@gmt-platform/contracts';
 
 export type {
@@ -22,6 +26,10 @@ export type {
   AssetIdentifierType,
   AssetView,
   AssetPublicView,
+  ChecklistItemType,
+  ChecklistItemConfig,
+  ChecklistTemplateItem,
+  ChecklistAnswer,
 };
 
 /** Estado de un documento/checklist de activo (local; aún no en contracts). */
@@ -102,19 +110,6 @@ export interface AssetAccessoryView {
   serialNumber: string | null;
   createdAt: string; // ISO-8601
   updatedAt: string; // ISO-8601
-}
-
-export interface ChecklistTemplateItem {
-  id: string;
-  type: 'YES_NO' | 'NUMBER' | 'TEXT';
-  label: string;
-  required: boolean;
-}
-
-export interface ChecklistAnswer {
-  itemId: string;
-  label: string;
-  value: string | number | boolean;
 }
 
 export interface ChecklistTemplateView {

@@ -593,3 +593,45 @@ export interface AssetPublicView {
   status: AssetStatus;
   project?: { name: string } | null;
 }
+
+// ============ Checklist tipado de activos (Tanda 5) ============
+
+/**
+ * Tipos de campo de un ítem de checklist. Fuente única (antes duplicado en
+ * web/backend con el union viejo). Legacy al leer: YES_NO→BOOLEAN, NUMBER→ENTERO,
+ * TEXT→TEXTO (los históricos NO se migran; se normalizan al parsear).
+ */
+export type ChecklistItemType = 'BOOLEAN' | 'ESTADO' | 'ENTERO' | 'FECHA' | 'TEXTO';
+
+/**
+ * Configuración por ítem. `options`/`failOptions` aplican a ESTADO (opciones
+ * configurables por campo, p.ej. Bueno/Regular/Malo con Malo = falla);
+ * `isOdometer`/`min`/`max` a ENTERO; `requireObs`/`obsItemId` vinculan un ítem
+ * TEXTO companion (observación exigida cuando el estado cae en falla).
+ */
+export interface ChecklistItemConfig {
+  options?: string[];
+  failOptions?: string[];
+  requireObs?: boolean;
+  obsItemId?: string;
+  isOdometer?: boolean;
+  min?: number;
+  max?: number;
+}
+
+/** Definición tipada de un ítem de la plantilla de checklist. */
+export interface ChecklistTemplateItem {
+  id: string;
+  label: string;
+  type: ChecklistItemType;
+  required: boolean;
+  config?: ChecklistItemConfig;
+}
+
+/** Respuesta a un ítem en una ejecución de checklist. `comment` = observación companion. */
+export interface ChecklistAnswer {
+  itemId: string;
+  label: string;
+  value: string | number | boolean | null;
+  comment?: string;
+}

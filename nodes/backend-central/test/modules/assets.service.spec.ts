@@ -757,7 +757,7 @@ describe('AssetsService', () => {
       expect(res.status).toBe(DocumentStatus.APROBADO);
     });
 
-    it('inicializa una plantilla de checklist con ítems desde CSV para VEHICULO', async () => {
+    it('inicializa una plantilla de checklist con el default tipado para VEHICULO', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
 
@@ -767,7 +767,16 @@ describe('AssetsService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             items: expect.arrayContaining([
-              expect.objectContaining({ id: 'kilometraje', label: expect.any(String), type: 'NUMBER', required: true }),
+              // El odómetro ahora es ENTERO tipado con config.isOdometer (ya no 'NUMBER').
+              expect.objectContaining({
+                id: 'kilometraje',
+                label: expect.any(String),
+                type: 'ENTERO',
+                required: true,
+                config: expect.objectContaining({ isOdometer: true }),
+              }),
+              // Y trae ítems ESTADO con opciones configurables (Bueno/Regular/Malo).
+              expect.objectContaining({ id: 'motor', type: 'ESTADO' }),
             ]),
           }),
         }),
@@ -786,7 +795,7 @@ describe('AssetsService', () => {
       expect(res.status).toBe(DocumentStatus.EN_REVISION);
     });
 
-    it('envía un checklist y cambia estado a MANTENIMIENTO ante falla', async () => {
+    it('envía un checklist y cambia estado a MANTENIMIENTO ante falla (fallback legacy: bool false, plantilla vacía)', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow({ status: DocumentStatus.APROBADO }));
 
@@ -801,6 +810,126 @@ describe('AssetsService', () => {
       }));
       expect(txMock.assetHistoryEntry.create).toHaveBeenCalled();
       expect(res.userId).toBe('u-1');
+    });
+
+    it('ESTADO=Malo con observación gatilla falla y MANTENIMIENTO', async () => {
+      const estadoTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          {
+            id: 'motor',
+            label: 'Motor',
+            type: 'ESTADO',
+            required: true,
+            config: {
+              options: ['Bueno', 'Regular', 'Malo'],
+              failOptions: ['Malo'],
+              requireObs: true,
+              obsItemId: 'obs_motor',
+            },
+          },
+          { id: 'obs_motor', label: 'Observación motor', type: 'TEXTO', required: false },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(estadoTemplate);
+
+      const res = await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+        { itemId: 'motor', label: 'Motor', value: 'Malo' },
+        { itemId: 'obs_motor', label: 'Observación motor', value: 'Golpeteo al ralentí' },
+      ]);
+
+      expect(txMock.checklistSubmission.create).toHaveBeenCalled();
+      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'a-1' },
+        data: { status: AssetStatus.MANTENIMIENTO },
+      }));
+      expect(res.userId).toBe('u-1');
+    });
+
+    it('ESTADO=Malo sin observación rechaza (400) y no crea la submission', async () => {
+      const estadoTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          {
+            id: 'motor',
+            label: 'Motor',
+            type: 'ESTADO',
+            required: true,
+            config: {
+              options: ['Bueno', 'Regular', 'Malo'],
+              failOptions: ['Malo'],
+              requireObs: true,
+              obsItemId: 'obs_motor',
+            },
+          },
+          { id: 'obs_motor', label: 'Observación motor', type: 'TEXTO', required: false },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(estadoTemplate);
+
+      await expect(service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+        { itemId: 'motor', label: 'Motor', value: 'Malo' },
+        { itemId: 'obs_motor', label: 'Observación motor', value: '' },
+      ])).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+      expect(txMock.asset.update).not.toHaveBeenCalled();
+    });
+
+    it('BOOLEAN=No (string) gatilla falla y MANTENIMIENTO', async () => {
+      const booleanTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          { id: 'luces', label: '¿Luces operativas?', type: 'BOOLEAN', required: true },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(booleanTemplate);
+
+      await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+        { itemId: 'luces', label: '¿Luces operativas?', value: 'no' },
+      ]);
+
+      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'a-1' },
+        data: { status: AssetStatus.MANTENIMIENTO },
+      }));
+    });
+
+    it('legacy YES_NO=false se normaliza a BOOLEAN y sigue gatillando falla', async () => {
+      // La plantilla histórica guarda el tipo legacy 'YES_NO'; parseTemplateItems lo
+      // normaliza a BOOLEAN al leerla, e isFailure lo detecta como falla.
+      const legacyTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          { id: 'freno', label: 'Freno de mano', type: 'YES_NO', required: true },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(legacyTemplate);
+
+      await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+        { itemId: 'freno', label: 'Freno de mano', value: false },
+      ]);
+
+      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'a-1' },
+        data: { status: AssetStatus.MANTENIMIENTO },
+      }));
+    });
+
+    it('rechaza (400) al actualizar la plantilla con un ítem ESTADO sin opciones', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      await expect(
+        service.updateChecklistTemplate('a-1', 'u-1', 'Checklist Diario', [
+          { id: 'motor', label: 'Motor', type: 'ESTADO', required: true, config: { options: [] } },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistTemplate.update).not.toHaveBeenCalled();
     });
 
     it('permite ejecutar el checklist con el permiso funcional global (admin/gerencia)', async () => {
@@ -826,6 +955,99 @@ describe('AssetsService', () => {
         service.submitChecklist('a-1', 'tpl-1', 'u-x', [{ itemId: '1', value: true }]),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+    });
+
+    it('FIX3: un BOOLEAN con obsItemId que cae en falla sin observación rechaza (400)', async () => {
+      // La exigencia de observación companion es type-agnóstica: cualquier ítem
+      // que declare config.obsItemId (no solo ESTADO) debe traer la observación.
+      const boolObsTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          {
+            id: 'luces',
+            label: '¿Luces operativas?',
+            type: 'BOOLEAN',
+            required: true,
+            config: { obsItemId: 'obs_luces' },
+          },
+          { id: 'obs_luces', label: 'Observación luces', type: 'TEXTO', required: false },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(boolObsTemplate);
+
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+          { itemId: 'luces', label: '¿Luces operativas?', value: false },
+          { itemId: 'obs_luces', label: 'Observación luces', value: '' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+      expect(txMock.asset.update).not.toHaveBeenCalled();
+    });
+
+    it('FIX4: un ESTADO con un valor fuera de sus opciones rechaza (400)', async () => {
+      const estadoTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          {
+            id: 'motor',
+            label: 'Motor',
+            type: 'ESTADO',
+            required: true,
+            config: { options: ['Bueno', 'Regular', 'Malo'], failOptions: ['Malo'] },
+          },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(estadoTemplate);
+
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+          { itemId: 'motor', label: 'Motor', value: 'Excelente' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+    });
+
+    it('FIX5: un ítem obligatorio sin respuesta (valor vacío) rechaza (400)', async () => {
+      const requiredTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          { id: 'nota', label: 'Nota de inspección', type: 'TEXTO', required: true },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(requiredTemplate);
+
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+          { itemId: 'nota', label: 'Nota de inspección', value: '   ' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+    });
+
+    it('FIX2: toTemplateView normaliza ítems legacy (YES_NO→BOOLEAN) al leer la plantilla', async () => {
+      // Una plantilla histórica persiste el tipo legacy 'YES_NO'; la vista debe
+      // normalizarlo al union nuevo para que la ejecución dibuje el input correcto.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({
+          items: [
+            { id: 'freno', label: 'Freno de mano', type: 'YES_NO', required: true },
+          ] as unknown as ChecklistTemplate['items'],
+        }),
+      );
+
+      const res = await service.getChecklistTemplate('a-1', 'u-1');
+
+      expect(res.items).toEqual([
+        expect.objectContaining({ id: 'freno', label: 'Freno de mano', type: 'BOOLEAN', required: true }),
+      ]);
     });
   });
 
@@ -911,11 +1133,25 @@ describe('AssetsService', () => {
     });
 
     it('valida kilometraje no decreciente en checklists de vehículo', async () => {
+      // El odómetro se detecta por el ítem ENTERO con config.isOdometer en la plantilla.
+      const odometerTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          {
+            id: 'kilometraje',
+            label: 'Kilometraje actual (odómetro)',
+            type: 'ENTERO',
+            required: true,
+            config: { isOdometer: true },
+          },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({
         type: AssetType.VEHICULO,
         metadata: { odometerKm: 1000 }
       }));
-      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow({ status: DocumentStatus.APROBADO }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(odometerTemplate);
 
       // Kilometraje menor que el actual (debe fallar)
       await expect(service.submitChecklist('a-1', 'tpl-1', 'u-1', [
@@ -927,8 +1163,8 @@ describe('AssetsService', () => {
         type: AssetType.VEHICULO,
         metadata: { odometerKm: 1000 }
       }));
-      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow({ status: DocumentStatus.APROBADO }));
-      
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(odometerTemplate);
+
       await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
         { itemId: 'kilometraje', label: 'Kilometraje Actual', value: 1050 }
       ]);

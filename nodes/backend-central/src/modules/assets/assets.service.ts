@@ -1,6 +1,5 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ZodError } from 'zod';
 import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
@@ -18,8 +17,16 @@ import {
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
+  ChecklistTemplateItem,
+  ChecklistAnswer,
   Paginated,
 } from './assets.types';
+import {
+  DEFAULT_VEHICLE_CHECKLIST,
+  isFailure,
+  parseTemplateItems,
+  submitAnswersSchema,
+} from './checklist.schema';
 
 /** Estados no operativos: un activo en cualquiera de ellos no puede tomarse en uso. */
 const NON_OPERATIONAL_STATUSES: AssetStatus[] = [
@@ -1050,9 +1057,12 @@ export class AssetsService {
       id: row.id,
       assetId: row.assetId,
       name: row.name,
-      items: row.items as unknown as Record<string, unknown>[],
+      // Normaliza (legacy → union nuevo) con el mismo camino del submit para que
+      // una plantilla histórica (YES_NO/NUMBER/TEXT) llegue al front con tipos
+      // nuevos y la ejecución dibuje los inputs correctos. Es idempotente.
+      items: this.readTemplateItems(row.items),
       status: row.status,
-      previousItems: row.previousItems ? (row.previousItems as unknown as Record<string, unknown>[]) : null,
+      previousItems: row.previousItems ? this.readTemplateItems(row.previousItems) : null,
       reviewedById: row.reviewedById,
       reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
       rejectionReason: row.rejectionReason,
@@ -1064,51 +1074,62 @@ export class AssetsService {
     };
   }
 
-  private loadDefaultVehicleChecklist(): Record<string, unknown>[] {
+  /**
+   * Plantilla por defecto de camioneta como módulo TS tipado (Tanda 5). Antes se
+   * leía del CSV histórico; ahora la fuente del shape nuevo es
+   * `DEFAULT_VEHICLE_CHECKLIST` (misma definición en backend y front).
+   */
+  private loadDefaultVehicleChecklist(): ChecklistTemplateItem[] {
+    return DEFAULT_VEHICLE_CHECKLIST;
+  }
+
+  /**
+   * Normaliza (legacy → union nuevo) y valida los ítems de una plantilla con
+   * Zod. Traduce `ZodError` a `BadRequestException` con el primer mensaje claro.
+   */
+  private validateTemplateItems(items: Record<string, unknown>[]): ChecklistTemplateItem[] {
     try {
-      const pathsToTry = [
-        path.resolve(process.cwd(), '../../docs/checklist_camioneta.csv'),
-        path.resolve(process.cwd(), './docs/checklist_camioneta.csv'),
-        path.resolve(__dirname, '../../../../../docs/checklist_camioneta.csv'),
-      ];
-      
-      let csvPath = '';
-      for (const p of pathsToTry) {
-        if (fs.existsSync(p)) {
-          csvPath = p;
-          break;
-        }
-      }
-      
-      if (!csvPath) {
-        this.logger.warn(`Checklist CSV not found in search paths, returning empty items`);
-        return [];
-      }
-      
-      const content = fs.readFileSync(csvPath, 'utf8');
-      const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
-      // Skip header: id,label,type,required
-      const items: Record<string, unknown>[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) continue;
-        const parts = line.split(',');
-        const id = parts[0];
-        const label = parts[1];
-        const type = parts[2];
-        const requiredStr = parts[3];
-        if (id && label && type && requiredStr) {
-          items.push({
-            id: id.trim(),
-            label: label.trim(),
-            type: type.trim(),
-            required: requiredStr.trim().toLowerCase() === 'true',
-          });
-        }
-      }
-      return items;
+      return parseTemplateItems(items);
     } catch (error) {
-      this.logger.error('Error reading checklist_camioneta.csv', error);
+      if (error instanceof ZodError) {
+        const message = error.issues[0]?.message ?? 'Los ítems del checklist son inválidos.';
+        throw new BadRequestException(`Checklist inválido: ${message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Valida las respuestas de una ejecución de checklist con Zod. Traduce
+   * `ZodError` a `BadRequestException` con el primer mensaje claro.
+   */
+  private validateAnswers(answers: Record<string, unknown>[]): ChecklistAnswer[] {
+    try {
+      return submitAnswersSchema.parse(answers);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const message = error.issues[0]?.message ?? 'Las respuestas del checklist son inválidas.';
+        throw new BadRequestException(`Respuestas inválidas: ${message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Lee y normaliza (legacy → union nuevo) los ítems de una plantilla ya
+   * persistida para la lógica de falla/odómetro. Tolerante: si una plantilla
+   * histórica no valida, registra el aviso y devuelve `[]` en lugar de romper la
+   * ejecución (el fallback legacy sigue detectando un booleano `false`).
+   */
+  private readTemplateItems(raw: Prisma.JsonValue | null): ChecklistTemplateItem[] {
+    try {
+      return parseTemplateItems(raw);
+    } catch (error) {
+      this.logger.warn(
+        `Plantilla de checklist con shape inválido; se ignoran los ítems para la detección de falla. ${
+          error instanceof ZodError ? error.issues[0]?.message ?? '' : ''
+        }`,
+      );
       return [];
     }
   }
@@ -1154,12 +1175,16 @@ export class AssetsService {
       throw new NotFoundException('La plantilla de checklist no existe.');
     }
 
+    // Normaliza (legacy → union nuevo) y valida ANTES de persistir. Los ítems se
+    // guardan ya normalizados; así el shape nuevo se propaga sin migrar la BD.
+    const normalizedItems = this.validateTemplateItems(items);
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.checklistTemplate.update({
         where: { assetId },
         data: {
           name,
-          items: items as unknown as Prisma.InputJsonValue,
+          items: normalizedItems as unknown as Prisma.InputJsonValue,
           previousItems: template.items as Prisma.InputJsonValue,
           status: DocumentStatus.EN_REVISION,
           reviewedById: null,
@@ -1234,7 +1259,7 @@ export class AssetsService {
       assetId: row.assetId,
       templateId: row.templateId,
       userId: row.userId,
-      answers: row.answers as unknown as Record<string, unknown>[],
+      answers: row.answers as unknown as ChecklistAnswer[],
       createdAt: row.createdAt.toISOString(),
       user: row.user
         ? { firstName: row.user.firstName, lastName: row.user.lastName }
@@ -1264,49 +1289,103 @@ export class AssetsService {
       throw new BadRequestException('Solo se pueden enviar checklists basados en plantillas aprobadas.');
     }
 
-    // Validar y actualizar odómetro si es un Vehículo y tiene la pregunta de kilometraje
+    // Valida las respuestas con Zod ANTES de persistir. Los ítems de la plantilla
+    // se leen normalizados (legacy → union nuevo) para la lógica de falla/odómetro.
+    const parsedAnswers = this.validateAnswers(answers);
+    const templateItems = this.readTemplateItems(template.items);
+    const itemById = new Map(templateItems.map((item) => [item.id, item] as const));
+    const answerByItemId = new Map(parsedAnswers.map((answer) => [answer.itemId, answer] as const));
+
+    // Odómetro: detecta el ítem por (ENTERO && (isOdometer || id==='kilometraje'))
+    // en VEHICULO; conserva la regla monótona y la metadata.odometerKm.
     let updatedOdometerKm: number | null = null;
     if (asset.type === AssetType.VEHICULO) {
-      const odometerAns = answers.find(ans => ans.itemId === 'kilometraje' || String(ans.label).toLowerCase().includes('kilometraje'));
-      if (odometerAns && odometerAns.value !== undefined && odometerAns.value !== '') {
+      const odometerItem = templateItems.find(
+        (item) =>
+          item.type === 'ENTERO' &&
+          (item.config?.isOdometer === true ||
+            item.id === 'kilometraje' ||
+            /kil[oó]metraje|od[oó]metro/i.test(item.label ?? '')),
+      );
+      const odometerAns = odometerItem ? answerByItemId.get(odometerItem.id) : undefined;
+      if (odometerAns && odometerAns.value !== null && odometerAns.value !== '') {
         const reportedKm = Number(odometerAns.value);
-        if (isNaN(reportedKm)) {
+        if (Number.isNaN(reportedKm)) {
           throw new BadRequestException('El valor de kilometraje reportado debe ser un número.');
         }
-        
-        const currentMeta = (asset.metadata as Record<string, unknown> | null) || {};
+
+        const currentMeta = (asset.metadata as Record<string, unknown> | null) ?? {};
         const currentKm = Number(currentMeta.odometerKm ?? 0);
         if (reportedKm < currentKm) {
-          throw new BadRequestException(`El kilometraje reportado (${reportedKm} km) no puede ser menor al kilometraje actual (${currentKm} km).`);
+          throw new BadRequestException(
+            `El kilometraje reportado (${reportedKm} km) no puede ser menor al kilometraje actual (${currentKm} km).`,
+          );
         }
         updatedOdometerKm = reportedKm;
       }
     }
 
-    // Mapa itemId → tipo de la plantilla. Solo las preguntas SÍ/NO cuentan como
-    // falla; un campo de texto libre (p. ej. "Observaciones") cuyo texto sea "no"
-    // NO debe forzar el paso a MANTENIMIENTO ni un registro de falla.
-    const itemTypeById = new Map<string, string>();
-    for (const raw of (template.items as unknown as Array<Record<string, unknown>>) ?? []) {
-      if (raw && typeof raw.id === 'string' && typeof raw.type === 'string') {
-        itemTypeById.set(raw.id, raw.type);
-      }
-    }
+    // Detección de falla generalizada (isFailure) + observación companion.
     let hasFailure = false;
     let failureDetail = '';
-    for (const ans of answers) {
-      const itemId = typeof ans.itemId === 'string' ? ans.itemId : '';
-      const isYesNo = itemTypeById.get(itemId) === 'YES_NO';
-      // Un booleano `false` solo puede provenir de una pregunta SÍ/NO. Un string
-      // 'no'/'failed' solo cuenta como falla si el ítem es SÍ/NO (evita que un
-      // campo de texto libre con el texto "no" fuerce MANTENIMIENTO).
-      const negative =
-        ans.value === false ||
-        ((ans.value === 'no' || ans.value === 'failed') && isYesNo);
-      if (negative) {
+    for (const item of templateItems) {
+      const answer = answerByItemId.get(item.id);
+      const value = answer ? answer.value : null;
+      const valueMissing = value === null || (typeof value === 'string' && value.trim() === '');
+
+      // Obligatoriedad: un ítem `required` debe venir respondido con un valor no
+      // vacío. Los ítems TEXTO companion son `required:false`, así que no se ven
+      // afectados.
+      if (item.required && valueMissing) {
+        throw new BadRequestException(`Debes responder el ítem obligatorio "${item.label}".`);
+      }
+
+      // El valor de un ESTADO respondido debe pertenecer a `config.options`
+      // (case-insensitive). Se saltan las respuestas vacías (la obligatoriedad ya
+      // se validó arriba).
+      if (item.type === 'ESTADO' && !valueMissing) {
+        const options = item.config?.options ?? [];
+        const valueText = String(value).toLowerCase();
+        const isValidOption = options.some((option) => option.toLowerCase() === valueText);
+        if (!isValidOption) {
+          throw new BadRequestException(
+            `El valor "${value}" no es una opción válida para "${item.label}".`,
+          );
+        }
+      }
+
+      const failed = isFailure(item, value);
+
+      // Observación companion: si un ítem cae en falla o exige observación
+      // (config.requireObs), el answer del obsItemId debe traer un valor no vacío.
+      // Es type-agnóstico: aplica a cualquier ítem que declare `config.obsItemId`.
+      if (item.config?.obsItemId && (failed || item.config?.requireObs === true)) {
+        const obsAnswer = answerByItemId.get(item.config.obsItemId);
+        const obsValue = obsAnswer?.value;
+        const obsEmpty =
+          obsValue === null ||
+          obsValue === undefined ||
+          (typeof obsValue === 'string' && obsValue.trim() === '');
+        if (obsEmpty) {
+          throw new BadRequestException(`Debes registrar una observación para "${item.label}".`);
+        }
+      }
+
+      if (failed && !hasFailure) {
         hasFailure = true;
-        failureDetail = String(ans.label || ans.itemId || 'ítem sin nombre');
-        break;
+        failureDetail = item.label || item.id;
+      }
+    }
+
+    // Fallback legacy: un booleano `false` de una respuesta sin ítem en la
+    // plantilla (plantilla vacía / respuesta histórica) sigue contando como falla.
+    if (!hasFailure) {
+      for (const answer of parsedAnswers) {
+        if (!itemById.has(answer.itemId) && answer.value === false) {
+          hasFailure = true;
+          failureDetail = answer.label || answer.itemId;
+          break;
+        }
       }
     }
 
@@ -1316,7 +1395,7 @@ export class AssetsService {
           assetId,
           templateId,
           userId,
-          answers: answers as unknown as Prisma.InputJsonValue,
+          answers: parsedAnswers as unknown as Prisma.InputJsonValue,
         },
         include: {
           user: true,
