@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useId, useRef, type ReactNode } from 'react';
 import {
   Navigation,
   Globe,
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert } from '@/components/ui/alert';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, tabPanelId, tabTriggerId, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import {
@@ -37,6 +37,7 @@ import {
 export default function GisToolsPage(): ReactNode {
   // Navigation Tabs
   const [activeSubTab, setActiveSubTab] = useState<'convert' | 'shoreline'>('convert');
+  const idBase = useId();
 
   // Quota state
   const [quota, setQuota] = useState<{ used: number; remaining: number } | null>(null);
@@ -511,10 +512,17 @@ export default function GisToolsPage(): ReactNode {
         items={tabItems}
         value={activeSubTab}
         onValueChange={setActiveSubTab}
+        idBase={idBase}
       />
 
       {/* Tab Content */}
-      <div className="mt-2">
+      <div
+        role="tabpanel"
+        id={tabPanelId(idBase, activeSubTab)}
+        aria-labelledby={tabTriggerId(idBase, activeSubTab)}
+        tabIndex={0}
+        className="mt-2"
+      >
         {activeSubTab === 'convert' ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Formulars Left */}

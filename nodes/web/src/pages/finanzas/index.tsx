@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { LayoutDashboard, Clock, Receipt } from 'lucide-react';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, TabPanel, type TabItem } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageContainer } from '@/components/layout/page-container';
 import { ReembolsosTab } from './reembolsos';
@@ -30,6 +30,7 @@ const FINANZAS_TABS: ReadonlyArray<TabItem<FinanzasTab>> = [
 export default function FinanzasPage(): ReactNode {
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
+  const idBase = useId();
 
   const activeTab: FinanzasTab =
     tab === 'reembolsos' || tab === 'horas' || tab === 'general' ? tab : 'general';
@@ -54,11 +55,14 @@ export default function FinanzasPage(): ReactNode {
         value={activeTab}
         onValueChange={handleTabChange}
         aria-label="Secciones de finanzas"
+        idBase={idBase}
       />
 
-      {activeTab === 'general' && <VistaGeneralTab />}
-      {activeTab === 'reembolsos' && <ReembolsosTab />}
-      {activeTab === 'horas' && <HorasExtraTab />}
+      <TabPanel idBase={idBase} value={activeTab}>
+        {activeTab === 'general' && <VistaGeneralTab />}
+        {activeTab === 'reembolsos' && <ReembolsosTab />}
+        {activeTab === 'horas' && <HorasExtraTab />}
+      </TabPanel>
     </PageContainer>
   );
 }

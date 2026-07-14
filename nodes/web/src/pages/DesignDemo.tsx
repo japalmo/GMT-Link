@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { HealthResponse } from '@gmt-platform/contracts';
 import { Activity, FileWarning, Inbox, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, LoadingState, ErrorState } from '@/components/ui/states';
-import { Tabs, NavTabs } from '@/components/ui/tabs';
+import { Tabs, NavTabs, TabPanel } from '@/components/ui/tabs';
 import { RejectDialog } from '@/components/ui/reject-dialog';
 import { PageHeader } from '@/components/layout/page-header';
 import {
@@ -109,6 +109,7 @@ export default function DesignDemo() {
   const [demoTab, setDemoTab] = useState<'reembolsos' | 'horas' | 'liquidaciones'>(
     'reembolsos',
   );
+  const demoTabsId = useId();
   const [rejectOpen, setRejectOpen] = useState(false);
 
   useEffect(() => {
@@ -491,15 +492,18 @@ export default function DesignDemo() {
                 aria-label="Secciones de finanzas (demo)"
                 value={demoTab}
                 onValueChange={setDemoTab}
+                idBase={demoTabsId}
                 items={[
                   { value: 'reembolsos', label: 'Reembolsos' },
                   { value: 'horas', label: 'Horas extra' },
                   { value: 'liquidaciones', label: 'Liquidaciones' },
                 ]}
               />
-              <p className="text-sm text-muted-foreground">
-                Pestaña activa: <code>{demoTab}</code>
-              </p>
+              <TabPanel idBase={demoTabsId} value={demoTab}>
+                <p className="text-sm text-muted-foreground">
+                  Pestaña activa: <code>{demoTab}</code>
+                </p>
+              </TabPanel>
               <NavTabs
                 aria-label="Navegación de demo"
                 items={[

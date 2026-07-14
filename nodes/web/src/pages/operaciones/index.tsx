@@ -1,7 +1,7 @@
-import { type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { Kanban, Files } from 'lucide-react';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, TabPanel, type TabItem } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageContainer } from '@/components/layout/page-container';
 import { BacklogTab } from './backlog';
@@ -19,6 +19,7 @@ const OPERACIONES_TABS: ReadonlyArray<TabItem<OperacionesTab>> = [
 export default function OperacionesPage(): ReactNode {
   const { tab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
+  const idBase = useId();
 
   // La sección de Proyectos migró a su propio módulo `/proyectos` (jerarquía
   // A0 Cliente → Faena → Proyecto). Redirigimos el enlace legacy.
@@ -44,10 +45,13 @@ export default function OperacionesPage(): ReactNode {
         value={activeTab}
         onValueChange={handleTabChange}
         aria-label="Secciones de operaciones"
+        idBase={idBase}
       />
 
-      {activeTab === 'backlog' && <BacklogTab />}
-      {activeTab === 'documentos' && <DocumentosTab />}
+      <TabPanel idBase={idBase} value={activeTab}>
+        {activeTab === 'backlog' && <BacklogTab />}
+        {activeTab === 'documentos' && <DocumentosTab />}
+      </TabPanel>
     </PageContainer>
   );
 }

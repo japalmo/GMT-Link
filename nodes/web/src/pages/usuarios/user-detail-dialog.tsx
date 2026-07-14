@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, tabPanelId, tabTriggerId, type TabItem } from '@/components/ui/tabs';
 import {
   deleteUser,
   errorToMessage,
@@ -224,11 +224,19 @@ export function UserDetailDialog({
             onValueChange={setActiveTab}
             aria-label="Secciones del trabajador"
             className="mb-1"
+            idBase={baseId}
           />
         )}
 
         {user && activeTab === 'datos' && (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4"
+            role="tabpanel"
+            id={tabPanelId(baseId, 'datos')}
+            aria-labelledby={tabTriggerId(baseId, 'datos')}
+            tabIndex={0}
+          >
             {/* Metadatos de solo lectura. */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-sm">
               <span className="flex items-center gap-2">
@@ -380,17 +388,17 @@ export function UserDetailDialog({
         )}
 
         {user && activeTab === 'cv' && (
-          <TabPanel onClose={() => onOpenChange(false)}>
+          <TabPanel idBase={baseId} value="cv" onClose={() => onOpenChange(false)}>
             <UserCvTab userId={user.id} />
           </TabPanel>
         )}
         {user && activeTab === 'horario' && (
-          <TabPanel onClose={() => onOpenChange(false)}>
+          <TabPanel idBase={baseId} value="horario" onClose={() => onOpenChange(false)}>
             <UserScheduleTab userId={user.id} />
           </TabPanel>
         )}
         {user && activeTab === 'documentos' && (
-          <TabPanel onClose={() => onOpenChange(false)}>
+          <TabPanel idBase={baseId} value="documentos" onClose={() => onOpenChange(false)}>
             <UserDocumentsTab userId={user.id} />
           </TabPanel>
         )}
@@ -412,11 +420,29 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 /**
  * Envoltura de una pestaña con contenido propio (CV / Horario / Documentos):
  * renderiza el contenido y un footer con "Cerrar". Guardar/Borrar viven solo en
- * la pestaña Datos; cada pestaña maneja sus propias acciones internamente.
+ * la pestaña Datos; cada pestaña maneja sus propias acciones internamente. Cierra
+ * el patrón WAI-ARIA: `role="tabpanel"` enlazado al botón de su pestaña vía
+ * `id`/`aria-labelledby` y `tabIndex={0}` para recibir foco al navegar por teclado.
  */
-function TabPanel({ children, onClose }: { children: ReactNode; onClose: () => void }): ReactNode {
+function TabPanel({
+  idBase,
+  value,
+  children,
+  onClose,
+}: {
+  idBase: string;
+  value: DetailTab;
+  children: ReactNode;
+  onClose: () => void;
+}): ReactNode {
   return (
-    <div className="flex flex-col gap-4">
+    <div
+      role="tabpanel"
+      id={tabPanelId(idBase, value)}
+      aria-labelledby={tabTriggerId(idBase, value)}
+      tabIndex={0}
+      className="flex flex-col gap-4"
+    >
       {children}
       <ModalFooter>
         <Button type="button" variant="outline" onClick={onClose}>

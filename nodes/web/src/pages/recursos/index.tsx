@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useId, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useAssets } from '@/hooks/use-assets';
 import { useDataTable } from '@/hooks/use-data-table';
@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, tabPanelId, tabTriggerId, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import {
@@ -140,6 +140,7 @@ export default function RecursosPage(): ReactNode {
 
   const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const idBase = useId();
 
   // Si el usuario pierde el rol estando en una pestaña restringida, lo devolvemos
   // a una pestaña pública (fail-closed) para no dejar contenido gateado a la vista.
@@ -179,10 +180,17 @@ export default function RecursosPage(): ReactNode {
           setActiveTab(tab);
           setSelectedAssetId(null);
         }}
+        idBase={idBase}
       />
 
       {/* Tab Content */}
-      <div className="mt-4">
+      <div
+        role="tabpanel"
+        id={tabPanelId(idBase, activeTab)}
+        aria-labelledby={tabTriggerId(idBase, activeTab)}
+        tabIndex={0}
+        className="mt-4"
+      >
         {isAssetTab && (
           selectedAssetId ? (
             <AssetDetailView id={selectedAssetId} onBack={() => setSelectedAssetId(null)} />

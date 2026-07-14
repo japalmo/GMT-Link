@@ -1,9 +1,9 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import { Eye, Users, Building2 } from 'lucide-react';
 import type { DirectoryEntry, TableRequest } from '@gmt-platform/contracts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, TabPanel, type TabItem } from '@/components/ui/tabs';
 import { SearchInput } from '@/components/ui/search-input';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { PageContainer } from '@/components/layout/page-container';
@@ -41,6 +41,7 @@ export default function DirectorioPage(): ReactNode {
   // empresa, client-side) y los contadores de las pestañas. La tabla de
   // Colaboradores usa el MOTOR server-side (paginación/búsqueda/orden).
   const { entries, loading, error, refetch } = useDirectory();
+  const idBase = useId();
   const [selected, setSelected] = useState<DirectoryEntry | null>(null);
   const [activeTab, setActiveTab] = useState<'colaboradores' | 'clientes'>('colaboradores');
   const [clientSearch, setClientSearch] = useState('');
@@ -131,8 +132,10 @@ export default function DirectorioPage(): ReactNode {
         items={tabItems}
         value={activeTab}
         onValueChange={setActiveTab}
+        idBase={idBase}
       />
 
+      <TabPanel idBase={idBase} value={activeTab}>
       {activeTab === 'colaboradores' ? (
         <DataTable<DirectoryEntry>
           table={table}
@@ -239,6 +242,7 @@ export default function DirectorioPage(): ReactNode {
           )}
         </div>
       )}
+      </TabPanel>
 
       <DirectoryDetailDialog
         entryId={selected?.id ?? null}

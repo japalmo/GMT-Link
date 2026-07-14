@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { Alert } from '@/components/ui/alert';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, TabPanel, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
 import {
   Card,
@@ -201,6 +201,7 @@ export default function VistaProyectoPage(): ReactNode {
 
   // El tab Trabajadores solo es visible con rol; si no, arrancamos en Documentación.
   const [tab, setTab] = useState<TabKey>('documentacion');
+  const idBase = useId();
   useEffect(() => {
     if (canManageTeam) setTab('trabajadores');
   }, [canManageTeam]);
@@ -393,29 +394,32 @@ export default function VistaProyectoPage(): ReactNode {
         value={tab}
         onValueChange={setTab}
         aria-label="Secciones del proyecto"
+        idBase={idBase}
       />
 
       {/* Contenido del tab */}
-      {tab === 'trabajadores' && canManageTeam && (
-        <TrabajadoresTab projectId={project.id} />
-      )}
-      {tab === 'documentacion' && (
-        <DocumentacionTab
-          projectId={project.id}
-          services={project.services ?? []}
-          canManage={canManageTeam}
-        />
-      )}
-      {tab === 'fases' && (
-        <FasesTab
-          projectId={project.id}
-          services={(project.services ?? []) as ServiceWithFrequency[]}
-          isRoutine={isRoutine}
-          canManage={canManageTeam}
-          canCreateService={canCreateService}
-          onServiceChanged={refetch}
-        />
-      )}
+      <TabPanel idBase={idBase} value={tab}>
+        {tab === 'trabajadores' && canManageTeam && (
+          <TrabajadoresTab projectId={project.id} />
+        )}
+        {tab === 'documentacion' && (
+          <DocumentacionTab
+            projectId={project.id}
+            services={project.services ?? []}
+            canManage={canManageTeam}
+          />
+        )}
+        {tab === 'fases' && (
+          <FasesTab
+            projectId={project.id}
+            services={(project.services ?? []) as ServiceWithFrequency[]}
+            isRoutine={isRoutine}
+            canManage={canManageTeam}
+            canCreateService={canCreateService}
+            onServiceChanged={refetch}
+          />
+        )}
+      </TabPanel>
 
       {/* Diálogo editar proyecto */}
       <Modal open={editOpen} onOpenChange={setEditOpen}>

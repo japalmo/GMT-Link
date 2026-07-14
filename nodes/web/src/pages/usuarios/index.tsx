@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { Ban, KeyRound, LogOut, Plus, ShieldCheck, Upload, UserCog, Users, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Tabs, type TabItem } from '@/components/ui/tabs';
+import { Tabs, tabPanelId, tabTriggerId, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import {
@@ -361,6 +361,7 @@ export default function UsuariosPage(): ReactNode {
   const { user } = useAuth();
   const canManageRoles = user?.canManageRoles ?? false;
   const [activeTab, setActiveTab] = useState<UsuariosTab>('usuarios');
+  const idBase = useId();
 
   // Fail-closed: si el usuario no puede gestionar roles, no dejamos la pestaña
   // "Roles" activa (p. ej. si pierde el permiso estando en ella).
@@ -389,9 +390,16 @@ export default function UsuariosPage(): ReactNode {
         value={activeTab}
         onValueChange={setActiveTab}
         aria-label="Secciones de usuarios"
+        idBase={idBase}
       />
 
-      <div className="mt-4">
+      <div
+        role="tabpanel"
+        id={tabPanelId(idBase, activeTab)}
+        aria-labelledby={tabTriggerId(idBase, activeTab)}
+        tabIndex={0}
+        className="mt-4"
+      >
         {activeTab === 'usuarios' && <UsuariosDirectorioTab />}
         {activeTab === 'roles' && canManageRoles && <RolesPage embedded />}
       </div>
