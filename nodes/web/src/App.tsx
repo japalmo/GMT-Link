@@ -90,8 +90,10 @@ const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: '/', element: <DashboardPage /> },
-          // Inicio, Perfil, Config, Notificaciones y Roles no se gatean por módulo:
-          // son siempre visibles (`/roles` ya se gatea por `canManageRoles` en el nav).
+          // Usuarios muestra 2 pestañas (Usuarios + Roles). Roles se fusionó ahí
+          // como pestaña (gateada por `canManageRoles` en la página). La ruta
+          // `/roles` se conserva para acceso directo: renderiza la misma página
+          // en modo standalone.
           { path: '/usuarios', element: <RequireModule module="usuarios">{lazyRoute(<UsuariosPage />)}</RequireModule> },
           { path: '/roles', element: lazyRoute(<RolesPage />) },
           { path: '/perfil', element: lazyRoute(<PerfilPage />) },

@@ -7,7 +7,6 @@ import {
   Package,
   Wrench,
   Gauge,
-  ShieldCheck,
   FolderKanban,
   type LucideIcon,
 } from 'lucide-react';
@@ -32,8 +31,10 @@ export interface NavItem {
  */
 export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Inicio', to: '/', icon: LayoutDashboard, module: 'dashboard' },
+  // "Roles" ya no es un ítem de menú propio: vive como pestaña dentro de
+  // Usuarios (gateada por `canManageRoles` en esa página). Se mantiene la ruta
+  // `/roles` accesible directamente (ver App.tsx).
   { label: 'Usuarios', to: '/usuarios', icon: Users, module: 'usuarios' },
-  { label: 'Roles', to: '/roles', icon: ShieldCheck, module: 'usuarios', requiresManageRoles: true },
   { label: 'Directorio', to: '/directorio', icon: Contact, module: 'directorio' },
   { label: 'Proyectos', to: '/proyectos', icon: FolderKanban, module: 'proyectos' },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },

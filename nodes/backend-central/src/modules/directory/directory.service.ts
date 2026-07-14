@@ -6,7 +6,7 @@ import type { RoleKey } from '../../common/role-keys';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { DirectoryEntry, DirectoryEntryExtended } from './directory.types';
 
-/** Usuario con memberships, forma común de las consultas de este servicio. */
+/** Usuario con memberships y cliente, forma común de las consultas de este servicio. */
 type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true; client: true } }>;
 
 /**
@@ -144,6 +144,7 @@ export class DirectoryService {
       lastName: user.lastName,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      cargo: user.cargo,
       roleKeys: this.collectRoleKeys(user.memberships),
       isClientUser: user.isClientUser,
       companyName: user.client?.name ?? null,
@@ -161,7 +162,9 @@ export class DirectoryService {
     };
   }
 
-  /** roleKeys ORGANIZATION del usuario, filtradas a claves conocidas (defensivo). */
+  /** roleKeys ORGANIZATION del usuario, filtradas a claves conocidas (defensivo).
+      El directorio no las muestra, pero otros flujos (p.ej. filtrar autorizadores
+      de horas extra) las consumen. */
   private collectRoleKeys(
     memberships: ReadonlyArray<{ roleKey: string; scopeType: string; scopeId: string }>,
   ): RoleKey[] {

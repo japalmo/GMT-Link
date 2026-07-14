@@ -27,7 +27,6 @@ import {
   type RoleScopedColumn,
 } from '@/components/primitives/role-scoped-list';
 import { useDirectory } from '@/hooks/use-directory';
-import { RoleChips } from '@/pages/usuarios/role-chips';
 import { PersonAvatar } from './person-avatar';
 import { DirectoryDetailDialog } from './directory-detail-dialog';
 
@@ -72,9 +71,11 @@ export default function DirectorioPage(): ReactNode {
       render: (e) => <span className="text-muted-foreground">{e.email}</span>,
     },
     {
-      id: 'roles',
-      header: 'Roles',
-      render: (e) => <RoleChips roleKeys={e.roleKeys} />,
+      id: 'cargo',
+      header: 'Cargo',
+      sortable: true,
+      accessor: (e) => e.cargo ?? '',
+      render: (e) => <span className="text-muted-foreground">{e.cargo ?? '—'}</span>,
     },
   ];
 
@@ -186,7 +187,7 @@ export default function DirectorioPage(): ReactNode {
                         <TableRow>
                           <TableHead className="pl-4">Persona</TableHead>
                           <TableHead>Correo</TableHead>
-                          <TableHead>Roles</TableHead>
+                          <TableHead>Cargo</TableHead>
                           <TableHead className="text-right pr-4">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -209,7 +210,7 @@ export default function DirectorioPage(): ReactNode {
                               <span className="text-muted-foreground">{e.email}</span>
                             </TableCell>
                             <TableCell className="py-3">
-                              <RoleChips roleKeys={e.roleKeys} />
+                              <span className="text-muted-foreground">{e.cargo ?? '—'}</span>
                             </TableCell>
                             <TableCell className="text-right pr-4 py-3">
                               <Button

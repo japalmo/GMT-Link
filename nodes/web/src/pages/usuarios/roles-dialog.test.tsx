@@ -38,6 +38,7 @@ const user: UserListItem = {
   secondName: null,
   lastName: 'Lovelace',
   secondLastName: null,
+  cargo: null,
   email: 'ada@gmt.cl',
   username: 'ada',
   emailInstitucional: 'ada@gmt.cl',

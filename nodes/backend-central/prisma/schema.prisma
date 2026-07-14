@@ -31,6 +31,7 @@ model User {
   pendingEmail               String?
   pendingEmailKind           EmailKind?
   avatarUrl              String?
+  cargo                  String? // cargo/puesto declarado (texto libre, opcional); se muestra en el directorio
   passwordHash           String? // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
   status                 UserStatus                @default(PENDING_FIRST_LOGIN)
   tokenVersion           Int                       @default(0) // época de sesión (A3): incrementar invalida todos los JWT previos del usuario

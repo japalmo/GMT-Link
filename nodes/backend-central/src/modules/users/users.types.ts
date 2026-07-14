@@ -46,6 +46,7 @@ export interface UserListItem {
   emailPersonal: string | null;
   status: string;
   isClientUser: boolean;
+  cargo: string | null;
   roleKeys: RoleKey[];
   memberships: UserMembership[];
   createdAt: string;

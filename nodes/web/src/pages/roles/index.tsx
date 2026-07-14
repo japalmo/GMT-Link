@@ -35,14 +35,28 @@ function RoleRow({
   );
 }
 
+/** Props del default export de Roles. */
+export interface RolesPageProps {
+  /**
+   * Si es `true`, se renderiza embebido dentro de otra página (la pestaña
+   * "Roles" de Usuarios): omite el `PageContainer` y el `PageHeader` propios
+   * para no duplicar el encabezado, y muestra la acción "Nuevo rol" en una
+   * barra dentro del contenido. Por defecto `false` (uso standalone en `/roles`).
+   */
+  readonly embedded?: boolean;
+}
+
 /**
  * Página de administración de Roles (§Fase 5 — matriz RBAC). Ensambla
  * `useRoles` + `RoleEditor`: a la izquierda la lista separada en "Del
  * sistema" (candado, solo lectura + clonar) y "Personalizados" (CRUD); a la
- * derecha el editor del rol seleccionado. Gateada en el nav por
- * `canManageRoles`.
+ * derecha el editor del rol seleccionado. Gateada por `canManageRoles`.
+ *
+ * Es reutilizable tanto standalone (ruta `/roles`) como embebida en la pestaña
+ * "Roles" de Usuarios (`embedded`), donde el `PageContainer`/`PageHeader` los
+ * aporta la página anfitriona.
  */
-export default function RolesPage(): ReactNode {
+export default function RolesPage({ embedded = false }: RolesPageProps): ReactNode {
   const { catalog, systemRoles, customRoles, loading, error, refetch, getRole, createRole, updateRole, deleteRole, cloneRole } =
     useRoles();
   const [selected, setSelected] = useState<RoleDetail | null>(null);
@@ -103,35 +117,23 @@ export default function RolesPage(): ReactNode {
     toast.success('Rol eliminado.');
   }
 
+  const newRoleButton = (
+    <Button onClick={() => setNewRoleOpen(true)}>
+      <Plus aria-hidden />
+      Nuevo rol
+    </Button>
+  );
+
+  // Cuerpo reutilizable: estados de carga/error o la matriz de roles. Se
+  // renderiza sin `PageContainer` para que la página anfitriona (standalone o
+  // la pestaña de Usuarios) aporte el contenedor.
+  let body: ReactNode;
   if (loading) {
-    return (
-      <PageContainer maxWidth="7xl">
-        <LoadingState label="Cargando roles…" />
-      </PageContainer>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageContainer maxWidth="7xl">
-        <ErrorState message={error} onRetry={() => void refetch()} />
-      </PageContainer>
-    );
-  }
-
-  return (
-    <PageContainer maxWidth="7xl">
-      <PageHeader
-        title="Roles"
-        description="Crea roles a medida componiendo permisos del catálogo por módulo."
-        actions={
-          <Button onClick={() => setNewRoleOpen(true)}>
-            <Plus aria-hidden />
-            Nuevo rol
-          </Button>
-        }
-      />
-
+    body = <LoadingState label="Cargando roles…" />;
+  } else if (error) {
+    body = <ErrorState message={error} onRetry={() => void refetch()} />;
+  } else {
+    body = (
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
         <aside className="flex flex-col gap-4">
           <div>
@@ -183,6 +185,16 @@ export default function RolesPage(): ReactNode {
           )}
         </section>
       </div>
+    );
+  }
+
+  const content = (
+    <>
+      {/* Embebido: la acción "Nuevo rol" vive en una barra dentro del contenido
+          porque el `PageHeader` (que la porta en standalone) lo aporta Usuarios. */}
+      {embedded && <div className="flex justify-end">{newRoleButton}</div>}
+
+      {body}
 
       <NewRoleDialog open={newRoleOpen} onOpenChange={setNewRoleOpen} onCreate={handleCreate} />
 
@@ -203,6 +215,23 @@ export default function RolesPage(): ReactNode {
         confirmLabel="Eliminar rol"
         onConfirm={confirmDelete}
       />
+    </>
+  );
+
+  // Embebido en la pestaña de Usuarios: sin contenedor ni encabezado propios.
+  if (embedded) {
+    return content;
+  }
+
+  // Standalone (`/roles`): contenedor + encabezado con la acción "Nuevo rol".
+  return (
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title="Roles"
+        description="Crea roles a medida componiendo permisos del catálogo por módulo."
+        actions={newRoleButton}
+      />
+      {content}
     </PageContainer>
   );
 }

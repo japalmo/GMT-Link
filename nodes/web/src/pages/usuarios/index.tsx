@@ -1,22 +1,28 @@
-import { useState, type ReactNode } from 'react';
-import { Ban, KeyRound, LogOut, Plus, Upload, UserCog, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Ban, KeyRound, LogOut, Plus, ShieldCheck, Upload, UserCog, Users, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
+import { useAuth } from '@/context/auth-context';
 import { useUsers } from '@/hooks/use-users';
 import type { CreateUserDto, ImportUsersResponse, UserListItem } from '@/lib/api';
 import { errorToMessage, uploadUserAvatar } from '@/lib/api';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
+import RolesPage from '@/pages/roles';
 import { RoleChips } from './role-chips';
 import { NewUserDialog } from './new-user-dialog';
 import { ImportUsersDialog } from './import-users-dialog';
 import { RolesDialog } from './roles-dialog';
 import { CredentialDialog, type ProvisionalCredential } from './credential-dialog';
+
+/** Pestaña activa de la página de Usuarios. */
+type UsuariosTab = 'usuarios' | 'roles';
 
 /** Fecha corta es-CL a partir de un ISO string. */
 function formatDate(iso: string): string {
@@ -25,12 +31,14 @@ function formatDate(iso: string): string {
 }
 
 /**
- * Página de administración de Usuarios (§6-1.1). Ensambla la primitiva
- * `RoleScopedList` (§5) para el directorio y orquesta los diálogos de creación,
- * importación CSV y gestión de roles. La clave provisoria se muestra una sola vez
- * tras crear/importar (decisión §9: sin email).
+ * Pestaña "Usuarios" (§6-1.1). Ensambla la primitiva `RoleScopedList` (§5)
+ * para el directorio y orquesta los diálogos de creación, importación CSV y
+ * gestión de roles. La clave provisoria se muestra una sola vez tras
+ * crear/importar (decisión §9: sin email). Vive como panel de la pestaña
+ * "Usuarios" dentro de {@link UsuariosPage}, por eso no aporta
+ * `PageContainer`/`PageHeader` (los pone la página anfitriona).
  */
-export default function UsuariosPage(): ReactNode {
+function UsuariosDirectorioTab(): ReactNode {
   const {
     items: users,
     loading,
@@ -158,23 +166,19 @@ export default function UsuariosPage(): ReactNode {
   ];
 
   return (
-    <PageContainer maxWidth="7xl">
-      <PageHeader
-        title="Usuarios"
-        description="Provisiona colaboradores y clientes, y gestiona sus roles."
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload aria-hidden />
-              Importar CSV
-            </Button>
-            <Button onClick={() => setNewUserOpen(true)}>
-              <Plus aria-hidden />
-              Nuevo usuario
-            </Button>
-          </>
-        }
-      />
+    <div className="flex flex-col gap-6">
+      {/* Acciones del directorio: viven en el panel de la pestaña (el
+          `PageHeader` compartido de Usuarios no las porta). */}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload aria-hidden />
+          Importar CSV
+        </Button>
+        <Button onClick={() => setNewUserOpen(true)}>
+          <Plus aria-hidden />
+          Nuevo usuario
+        </Button>
+      </div>
 
       {importErrors.length > 0 && (
         <Alert variant="warning" live>
@@ -341,6 +345,55 @@ export default function UsuariosPage(): ReactNode {
           toast.success('Sesiones cerradas.');
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Página de administración de Usuarios. Cáscara con dos pestañas (patrón de
+ * Finanzas/Recursos): "Usuarios" (el directorio y sus diálogos) y "Roles" (la
+ * matriz RBAC reutilizada de la página de Roles, embebida). La pestaña "Roles"
+ * solo aparece cuando el usuario puede gestionar roles (`canManageRoles`); el
+ * mismo permiso que gateaba el ítem de menú "Roles" antes de fusionarlo aquí.
+ */
+export default function UsuariosPage(): ReactNode {
+  const { user } = useAuth();
+  const canManageRoles = user?.canManageRoles ?? false;
+  const [activeTab, setActiveTab] = useState<UsuariosTab>('usuarios');
+
+  // Fail-closed: si el usuario no puede gestionar roles, no dejamos la pestaña
+  // "Roles" activa (p. ej. si pierde el permiso estando en ella).
+  useEffect(() => {
+    if (!canManageRoles && activeTab === 'roles') {
+      setActiveTab('usuarios');
+    }
+  }, [canManageRoles, activeTab]);
+
+  const tabItems: ReadonlyArray<TabItem<UsuariosTab>> = [
+    { value: 'usuarios', label: 'Usuarios', icon: Users },
+    ...(canManageRoles
+      ? ([{ value: 'roles', label: 'Roles', icon: ShieldCheck }] as const)
+      : []),
+  ];
+
+  return (
+    <PageContainer maxWidth="7xl">
+      <PageHeader
+        title="Usuarios"
+        description="Provisiona colaboradores y clientes, y gestiona sus roles y permisos."
+      />
+
+      <Tabs<UsuariosTab>
+        items={tabItems}
+        value={activeTab}
+        onValueChange={setActiveTab}
+        aria-label="Secciones de usuarios"
+      />
+
+      <div className="mt-4">
+        {activeTab === 'usuarios' && <UsuariosDirectorioTab />}
+        {activeTab === 'roles' && canManageRoles && <RolesPage embedded />}
+      </div>
     </PageContainer>
   );
 }

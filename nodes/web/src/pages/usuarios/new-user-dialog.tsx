@@ -16,6 +16,7 @@ interface FormState {
   username: string;
   emailInstitucional: string;
   emailPersonal: string;
+  cargo: string;
   /** Flag: el admin editó el username a mano → dejar de autosugerirlo. */
   usernameTouched: boolean;
   roleKeys: RoleKey[];
@@ -30,6 +31,7 @@ const EMPTY: FormState = {
   username: '',
   emailInstitucional: '',
   emailPersonal: '',
+  cargo: '',
   usernameTouched: false,
   roleKeys: [],
   isClientUser: false,
@@ -56,6 +58,7 @@ function toDto(form: FormState): CreateUserDto {
     username: form.username.trim(),
     emailInstitucional: form.emailInstitucional.trim() || undefined,
     emailPersonal: form.emailPersonal.trim() || undefined,
+    cargo: form.cargo.trim() || undefined,
     roleKeys: form.roleKeys,
     isClientUser: form.isClientUser,
   };
@@ -260,6 +263,15 @@ export function NewUserDialog({
               value={form.emailPersonal}
               onChange={(e) => update('emailPersonal', e.target.value)}
               autoComplete="off"
+            />
+          </Field>
+
+          <Field label="Cargo">
+            <Input
+              value={form.cargo}
+              onChange={(e) => update('cargo', e.target.value)}
+              autoComplete="off"
+              placeholder="Ej. Jefe de terreno"
             />
           </Field>
 

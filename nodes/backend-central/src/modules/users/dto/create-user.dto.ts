@@ -72,4 +72,9 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   isClientUser?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  cargo?: string;
 }

@@ -24,6 +24,7 @@ interface FormState {
   secondName: string;
   lastName: string;
   secondLastName: string;
+  cargo: string;
   avatarUrl: string;
 }
 
@@ -34,6 +35,7 @@ function toFormState(profile: ProfileMe): FormState {
     secondName: profile.secondName ?? '',
     lastName: profile.lastName ?? '',
     secondLastName: profile.secondLastName ?? '',
+    cargo: profile.cargo ?? '',
     avatarUrl: profile.avatarUrl ?? '',
   };
 }
@@ -407,6 +409,7 @@ export function ProfileForm({
         secondName: trimmedOrUndefined(form.secondName),
         lastName: form.lastName.trim(),
         secondLastName: trimmedOrUndefined(form.secondLastName),
+        cargo: form.cargo.trim() || null,
         avatarUrl: trimmedOrUndefined(form.avatarUrl),
       });
       setSuccess(true);
@@ -487,6 +490,17 @@ export function ProfileForm({
               id="profile-secondLastName"
               value={form.secondLastName}
               onChange={(e) => update('secondLastName', e.target.value)}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="profile-cargo">Cargo</Label>
+            <Input
+              id="profile-cargo"
+              value={form.cargo}
+              onChange={(e) => update('cargo', e.target.value)}
+              placeholder="Ej. Jefe de terreno"
               disabled={saving}
             />
           </div>

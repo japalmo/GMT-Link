@@ -735,6 +735,7 @@ export class UsersService {
           emailPersonal: dto.emailPersonal ?? null,
           passwordHash,
           isClientUser: dto.isClientUser ?? false,
+          cargo: dto.cargo?.trim() || null,
           status: 'PENDING_FIRST_LOGIN',
           memberships: {
             create: roleKeys.map((roleKey) => ({
@@ -824,6 +825,7 @@ export class UsersService {
       firstName: user.firstName,
       lastName: user.lastName,
       status: user.status,
+      cargo: user.cargo,
       roleKeys,
     };
   }
@@ -841,6 +843,7 @@ export class UsersService {
       emailPersonal: user.emailPersonal,
       status: user.status,
       isClientUser: user.isClientUser,
+      cargo: user.cargo,
       roleKeys: this.collectRoleKeys(user.memberships.map((m) => m.roleKey)),
       memberships: user.memberships.map((m) => this.toUserMembership(m)),
       createdAt: user.createdAt.toISOString(),

@@ -79,6 +79,7 @@ export interface ProvisionedUser {
   emailPersonal: string | null;
   firstName: string;
   lastName: string;
+  cargo: string | null;
   status: UserStatus;
   roleKeys: RoleKey[];
 }
@@ -109,6 +110,8 @@ export interface ProfileMe {
   /** A qué campo aplica el cambio pendiente; null si no hay cambio en curso. */
   pendingEmailKind: EmailKind | null;
   avatarUrl: string | null;
+  /** Cargo/puesto declarado (texto libre, editable por el propio usuario). */
+  cargo: string | null;
   status: UserStatus;
   isClientUser: boolean;
   roleKeys: RoleKey[];
@@ -121,6 +124,8 @@ export interface UpdateProfileInput {
   lastName?: string;
   secondLastName?: string;
   avatarUrl?: string;
+  /** Cargo/puesto; `null`/'' lo limpia. */
+  cargo?: string | null;
 }
 
 /** Respuesta de POST /profile/change-password. Incluye el JWT re-emitido de la
@@ -178,6 +183,12 @@ export interface DirectoryEntry {
   lastName: string;
   email: string;
   avatarUrl: string | null;
+  /** Cargo/puesto declarado; el directorio muestra el cargo, no los roles. */
+  cargo: string | null;
+  /**
+   * Roles org del usuario. El directorio NO los muestra (muestra el cargo), pero
+   * otros flujos los consumen (p.ej. filtrar autorizadores de horas extra).
+   */
   roleKeys: RoleKey[];
   isClientUser: boolean;
   companyName?: string | null;

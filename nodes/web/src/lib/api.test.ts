@@ -321,6 +321,7 @@ describe('api — UserRolesResponse/UserListItem extendidos con memberships (A4)
       secondName: null,
       lastName: 'Lovelace',
       secondLastName: null,
+      cargo: null,
       email: 'ada@gmt.cl',
       username: 'ada',
       emailInstitucional: 'ada@gmt.cl',

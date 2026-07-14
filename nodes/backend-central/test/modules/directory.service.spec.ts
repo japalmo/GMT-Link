@@ -16,6 +16,7 @@ interface FakeUserRow {
   status: string;
   points: number;
   isClientUser: boolean;
+  cargo: string | null;
   memberships: Array<{ roleKey: string; scopeType: string; scopeId: string }>;
 }
 
@@ -30,7 +31,8 @@ function makeUser(overrides: Partial<FakeUserRow> & Pick<FakeUserRow, 'id'>): Fa
     status: 'ACTIVE',
     points: 0,
     isClientUser: false,
-    memberships: [{ roleKey: 'operator', scopeType: 'ORGANIZATION', scopeId: 'gmt' }],
+    cargo: 'Operador',
+    memberships: [],
     ...overrides,
   };
 }
@@ -49,7 +51,7 @@ const DB: FakeUserRow[] = [
     lastName: 'Ruiz',
     email: 'carla@acme.cl',
     isClientUser: true,
-    memberships: [{ roleKey: 'client_ito', scopeType: 'ORGANIZATION', scopeId: 'gmt' }],
+    cargo: 'ITO',
   }),
   makeUser({
     id: 'cli-dario',
@@ -57,7 +59,7 @@ const DB: FakeUserRow[] = [
     lastName: 'Mena',
     email: 'dario@acme.cl',
     isClientUser: true,
-    memberships: [{ roleKey: 'client_ito', scopeType: 'ORGANIZATION', scopeId: 'gmt' }],
+    cargo: 'ITO',
   }),
 ];
 
@@ -128,7 +130,7 @@ describe('DirectoryService.list — aislamiento cliente/colaborador (§3.4)', ()
     const [entry] = await service.list('colab-ana');
     expect(entry).toBeDefined();
     expect(Object.keys(entry ?? {}).sort()).toEqual(
-      ['avatarUrl', 'companyName', 'email', 'firstName', 'id', 'isClientUser', 'lastName', 'roleKeys'].sort(),
+      ['avatarUrl', 'cargo', 'companyName', 'email', 'firstName', 'id', 'isClientUser', 'lastName', 'roleKeys'].sort(),
     );
   });
 });

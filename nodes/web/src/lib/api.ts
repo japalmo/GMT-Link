@@ -267,6 +267,7 @@ export interface CreateUserDto {
   username: string;
   emailInstitucional?: string;
   emailPersonal?: string;
+  cargo?: string;
   roleKeys: RoleKey[];
   isClientUser?: boolean;
 }
@@ -282,6 +283,7 @@ export interface UserListItem {
   username: string;
   emailInstitucional: string | null;
   emailPersonal: string | null;
+  cargo: string | null;
   status: UserStatus;
   /** ISO del primer ingreso completado; `null` = invitación aún no usada. */
   firstLoginAt: string | null;

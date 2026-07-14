@@ -55,4 +55,9 @@ export class UpdateProfileDto {
   @IsUrl({ require_protocol: true }, { message: 'El avatar debe ser una URL válida.' })
   @MaxLength(2048)
   avatarUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  cargo?: string | null;
 }

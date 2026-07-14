@@ -80,6 +80,9 @@ export class ProfileService {
     if (dto.avatarUrl !== undefined) {
       data.avatarUrl = normalizeOptional(dto.avatarUrl);
     }
+    if (dto.cargo !== undefined) {
+      data.cargo = dto.cargo?.trim() || null;
+    }
 
     try {
       const user = await this.prisma.user.update({
@@ -306,6 +309,7 @@ export class ProfileService {
       avatarUrl: user.avatarUrl,
       status: user.status,
       isClientUser: user.isClientUser,
+      cargo: user.cargo,
       roleKeys: this.collectRoleKeys(user.memberships),
     };
   }

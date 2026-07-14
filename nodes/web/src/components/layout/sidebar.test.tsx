@@ -26,20 +26,20 @@ function baseUser(overrides: Partial<{ modules: string[]; canManageRoles: boolea
   };
 }
 
-describe('SidebarContent — gating de "Roles" por canManageRoles', () => {
+describe('SidebarContent — Usuarios (Roles vive como pestaña dentro de Usuarios)', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('no muestra "Roles" si canManageRoles=false', () => {
-    mockUseAuth.mockReturnValue({ user: baseUser({ canManageRoles: false }), logout: vi.fn() });
-    render(<MemoryRouter><SidebarContent /></MemoryRouter>);
-
-    expect(screen.queryByRole('link', { name: /Roles/i })).not.toBeInTheDocument();
-  });
-
-  it('muestra "Roles" si canManageRoles=true', () => {
+  it('muestra "Usuarios" cuando el módulo está disponible', () => {
     mockUseAuth.mockReturnValue({ user: baseUser({ canManageRoles: true }), logout: vi.fn() });
     render(<MemoryRouter><SidebarContent /></MemoryRouter>);
 
-    expect(screen.getByRole('link', { name: /Roles/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Usuarios/i })).toBeInTheDocument();
+  });
+
+  it('ya no existe un enlace de menú "Roles" separado (es una pestaña dentro de Usuarios)', () => {
+    mockUseAuth.mockReturnValue({ user: baseUser({ canManageRoles: true }), logout: vi.fn() });
+    render(<MemoryRouter><SidebarContent /></MemoryRouter>);
+
+    expect(screen.queryByRole('link', { name: /^Roles$/i })).not.toBeInTheDocument();
   });
 });

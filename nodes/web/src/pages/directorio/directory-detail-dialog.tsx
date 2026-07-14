@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { RoleChips } from '@/pages/usuarios/role-chips';
 import { PersonAvatar } from './person-avatar';
 import { TypeBadge } from './type-badge';
 
@@ -172,7 +171,7 @@ export function DirectoryDetailDialog({
                     </a>
                   }
                 />
-                <DetailRow label="Roles" value={<RoleChips roleKeys={entry.roleKeys} />} />
+                <DetailRow label="Cargo" value={entry.cargo ?? '—'} />
                 {extended && (
                   <DetailRow
                     label="Puntos"
