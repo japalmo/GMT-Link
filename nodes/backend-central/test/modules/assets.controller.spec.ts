@@ -115,15 +115,16 @@ describe('AssetsController — gate FGA propio de activos (can_manage_assets)', 
 });
 
 describe('AssetsController — GET de lectura sin guard can_view_list', () => {
-  // Los GET de lectura pura ya no llevan @RequirePermission: la autorización
-  // (asset:read con respaldo estructural) la resuelve el servicio. El controller
-  // solo pasa el userId; nunca hace fga.check propio en estas rutas.
-  it('getById delega en el servicio con el userId, sin gate FGA en el controller', async () => {
+  // Los GET de lectura pura no llevan @RequirePermission: la autorización
+  // (asset:read con respaldo estructural) la resuelve el servicio. getById es la
+  // única excepción: además consulta can_manage_assets para exponer
+  // `canManageAssets` (no es un gate, no bloquea la lectura).
+  it('getById delega en el servicio y adjunta canManageAssets (consulta FGA, no gatea)', async () => {
     const { controller, check, service } = buildController();
     const res = await controller.getById(USER, 'a-1');
     expect(service.getById).toHaveBeenCalledWith('a-1', 'u1');
-    expect(res).toEqual({ id: 'a-1', projectId: 'p1' });
-    expect(check).not.toHaveBeenCalled();
+    expect(check).toHaveBeenCalledWith(MANAGE_GATE);
+    expect(res).toEqual({ id: 'a-1', projectId: 'p1', canManageAssets: true });
   });
 
   it('listDocuments delega con userId sin gate FGA', async () => {

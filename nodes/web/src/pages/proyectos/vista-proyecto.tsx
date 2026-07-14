@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -149,6 +149,7 @@ type ProjectDetail = ProjectView & {
   faenaId?: string | null;
   contractNumber?: string | null;
   frequency?: ServiceFrequency | null;
+  description?: string | null;
 };
 
 type ServiceWithFrequency = ServiceView & { frequency?: ServiceFrequency | null };
@@ -178,21 +179,18 @@ type TabKey = 'trabajadores' | 'documentacion' | 'fases';
 
 export default function VistaProyectoPage(): ReactNode {
   const { projectId } = useParams<{ projectId: string }>();
-  const { project, loading, error, refetch } = useProject(projectId);
+  const navigate = useNavigate();
+  const { project, loading, error, refetch, update, remove } = useProject(projectId);
 
   const canManageTeam = useHasPermission('project:manage');
   const canCreateService = useHasPermission('project:manage');
+  const canEditProject = useHasPermission('project:update');
+  const canDeleteProject = useHasPermission('project:delete');
 
   const detail = project as ProjectDetail | null;
   const projectType = detail?.projectType ?? null;
   // RUTINARIO → panel "Servicios" (con frecuencia); SPOT/OBRAS_CIVILES → "Fases".
   const isRoutine = projectType === 'RUTINARIO';
-
-  // El tab Trabajadores solo es visible con rol; si no, arrancamos en Documentación.
-  const [tab, setTab] = useState<TabKey>('documentacion');
-  useEffect(() => {
-    if (canManageTeam) setTab('trabajadores');
-  }, [canManageTeam]);
 
   const backToFaena =
     detail?.faenaId && detail?.clientId
@@ -200,6 +198,69 @@ export default function VistaProyectoPage(): ReactNode {
       : detail?.clientId
         ? `/proyectos/cliente/${detail.clientId}`
         : '/proyectos';
+
+  // El tab Trabajadores solo es visible con rol; si no, arrancamos en Documentación.
+  const [tab, setTab] = useState<TabKey>('documentacion');
+  useEffect(() => {
+    if (canManageTeam) setTab('trabajadores');
+  }, [canManageTeam]);
+
+  // Editar proyecto (name/description).
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Eliminar proyecto.
+  const [deleting, setDeleting] = useState(false);
+
+  const openEditProject = () => {
+    setEditName(project?.name ?? '');
+    setEditDescription(detail?.description ?? '');
+    setEditError(null);
+    setEditOpen(true);
+  };
+
+  const handleEditProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      setEditError('Ingresa el nombre del proyecto.');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await update({
+        name: trimmedName,
+        description: editDescription.trim() || null,
+      });
+      toast.success('Proyecto actualizado.');
+      setEditOpen(false);
+    } catch (err) {
+      setEditError(errorToMessage(err, 'No se pudo actualizar el proyecto.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!project) return;
+    if (!window.confirm(`¿Eliminar el proyecto "${project.name}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await remove();
+      toast.success('Proyecto eliminado.');
+      navigate(backToFaena);
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo eliminar el proyecto.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -270,13 +331,32 @@ export default function VistaProyectoPage(): ReactNode {
                 </CardDescription>
               </div>
             </div>
-            <Link
-              to={backToFaena}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              <ArrowLeft className="mr-2 size-4" />
-              Volver a la faena
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              {canEditProject && (
+                <Button variant="outline" size="sm" onClick={openEditProject}>
+                  <Pencil className="mr-2 size-4" />
+                  Editar
+                </Button>
+              )}
+              {canDeleteProject && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleDeleteProject()}
+                  disabled={deleting}
+                >
+                  <Trash2 className="mr-2 size-4 text-destructive" />
+                  {deleting ? 'Eliminando…' : 'Eliminar'}
+                </Button>
+              )}
+              <Link
+                to={backToFaena}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                <ArrowLeft className="mr-2 size-4" />
+                Volver a la faena
+              </Link>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -336,6 +416,60 @@ export default function VistaProyectoPage(): ReactNode {
           onServiceChanged={refetch}
         />
       )}
+
+      {/* Diálogo editar proyecto */}
+      <Modal open={editOpen} onOpenChange={setEditOpen}>
+        <ModalContent>
+          <form onSubmit={handleEditProject} className="flex flex-col gap-4">
+            <ModalHeader>
+              <ModalTitle>Editar proyecto</ModalTitle>
+              <ModalDescription>
+                Actualiza el nombre y la descripción del proyecto.
+              </ModalDescription>
+            </ModalHeader>
+
+            {editError && (
+              <Alert variant="destructive" live>
+                {editError}
+              </Alert>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-project-name">Nombre</Label>
+              <Input
+                id="edit-project-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nombre del proyecto"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-project-description">Descripción</Label>
+              <Textarea
+                id="edit-project-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                rows={3}
+                placeholder="Descripción del proyecto (opcional)"
+              />
+            </div>
+
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditOpen(false)}
+                disabled={savingEdit}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingEdit}>
+                {savingEdit ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
     </PageContainer>
   );
 }

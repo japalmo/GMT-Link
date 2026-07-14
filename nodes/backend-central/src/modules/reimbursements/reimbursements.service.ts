@@ -16,7 +16,7 @@ import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
-import { CreateReimbursementDto } from './dto/reimbursements.dto';
+import { CreateReimbursementDto, UpdateReimbursementDto } from './dto/reimbursements.dto';
 import type { Paginated, ReimbursementView } from './reimbursements.types';
 import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
 import type { ReceiptForPdf, ComposeOptions } from './reimbursements-pdf.util';
@@ -411,6 +411,68 @@ export class ReimbursementsService {
       data: { receiptUrl: saved.url, receiptKey: saved.key },
     });
     return toView(row);
+  }
+
+  /**
+   * Edita un reembolso propio (JSON, §5). SOLO el dueño y SOLO mientras sigue
+   * PENDIENTE (no se toca uno ya resuelto). La BOLETA no se modifica aquí (va por
+   * `attachReceipt`). 404 si no existe o es ajeno; 409 si ya no está PENDIENTE.
+   */
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateReimbursementDto,
+  ): Promise<ReimbursementView> {
+    const current = await this.prisma.reimbursement.findFirst({ where: { id, userId } });
+    if (!current) {
+      throw new NotFoundException('El reembolso no existe o no te pertenece.');
+    }
+    if (current.status !== FinanceStatus.PENDIENTE) {
+      throw new ConflictException('Solo puedes editar un reembolso mientras está pendiente.');
+    }
+
+    const row = await this.prisma.reimbursement.update({
+      where: { id },
+      data: {
+        amount: dto.amount,
+        date: parseDate(dto.date),
+        concept: dto.concept,
+        category: dto.category ?? null,
+        subcategory: dto.subcategory ?? null,
+        vehicle: dto.vehicle ?? null,
+        observations: dto.observations ?? null,
+      },
+    });
+    return toView(row);
+  }
+
+  /**
+   * Elimina un reembolso propio (§5). SOLO el dueño y SOLO mientras sigue
+   * PENDIENTE. Tras borrar la fila, elimina la boleta del storage best-effort
+   * (la `key` estable vive en `receiptKey`; para filas viejas/local se deriva de
+   * la URL). Si ese borrado falla, se registra y se ignora: la fila ya no existe.
+   * 404 si no existe o es ajeno; 409 si ya no está PENDIENTE.
+   */
+  async remove(userId: string, id: string): Promise<void> {
+    const current = await this.prisma.reimbursement.findFirst({ where: { id, userId } });
+    if (!current) {
+      throw new NotFoundException('El reembolso no existe o no te pertenece.');
+    }
+    if (current.status !== FinanceStatus.PENDIENTE) {
+      throw new ConflictException('Solo puedes eliminar un reembolso mientras está pendiente.');
+    }
+
+    await this.prisma.reimbursement.delete({ where: { id } });
+
+    const key =
+      current.receiptKey ?? (current.receiptUrl ? extractStorageKey(current.receiptUrl) : null);
+    if (key) {
+      try {
+        await this.storage.delete(key);
+      } catch (err) {
+        this.logger.warn(`No se pudo borrar la boleta ${key} del reembolso ${id}: ${String(err)}`);
+      }
+    }
   }
 
   /** Aprueba un reembolso (gestor; gating por permiso inline en el controller). PENDIENTE→APROBADO. */

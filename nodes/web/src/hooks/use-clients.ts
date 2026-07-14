@@ -17,6 +17,7 @@ export interface UseClientsResult {
   refetch: () => Promise<void>;
   create: (dto: CreateClientInput) => Promise<ClientView>;
   update: (id: string, dto: UpdateClientInput) => Promise<ClientView>;
+  remove: (id: string) => Promise<void>;
 }
 
 /**
@@ -74,5 +75,13 @@ export function useClients(): UseClientsResult {
     [load],
   );
 
-  return { clients, loading, error, refetch: load, create, update };
+  const remove = useCallback(
+    async (id: string) => {
+      await api.deleteClient(id);
+      await load();
+    },
+    [load],
+  );
+
+  return { clients, loading, error, refetch: load, create, update, remove };
 }

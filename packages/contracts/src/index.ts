@@ -440,6 +440,21 @@ export interface CreateFaenaInput {
 }
 
 /**
+ * Body de `PATCH /faenas/:id`. Espejo de `UpdateFaenaDto` del backend: los
+ * campos editables de una faena (supervisor/estado/fechas se fijan acá, no al
+ * crear). Todos opcionales; el `code` NO es editable (se autogenera server-side).
+ */
+export interface UpdateFaenaInput {
+  name?: string;
+  supervisorId?: string;
+  status?: FaenaStatus;
+  /** ISO-8601. */
+  startDate?: string;
+  /** ISO-8601. */
+  endDate?: string;
+}
+
+/**
  * Body de `POST /projects`. El `code` se autogenera server-side
  * (`${faena.code}-${n correlativo}`), por eso `faenaId` es OBLIGATORIO. El
  * departamento ya no se pide en la creación (jerarquía Cliente→Faena→Proyecto).
@@ -453,6 +468,16 @@ export interface CreateProjectInput {
   projectAdminId?: string;
   startDate?: string;
   endDate?: string;
+}
+
+/**
+ * Body de `PATCH /projects/:id`. En este corte SOLO se editan `name` y
+ * `description`; el cambio de faena queda fuera por el churn de clientId/code/FGA.
+ * Todos opcionales.
+ */
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string | null;
 }
 
 /**

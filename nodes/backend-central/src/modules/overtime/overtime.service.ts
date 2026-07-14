@@ -17,7 +17,7 @@ import { monthRange } from '../finance/finance-month.util';
 import { startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
-import type { CreateOvertimeDto } from './dto/overtime.dto';
+import type { CreateOvertimeDto, UpdateOvertimeDto } from './dto/overtime.dto';
 import type { OvertimeView, Paginated } from './overtime.types';
 
 /** Tipo de notificación que recibe el solicitante en cada transición (§6-2.2). */
@@ -125,6 +125,55 @@ export class OvertimeService {
       data: { endTime, hours: computeHours(current.startTime, endTime), isDraft: false },
     });
     return toView(row);
+  }
+
+  /**
+   * Edita una solicitud PROPIA aún PENDIENTE (spec §5.6). Solo el dueño
+   * (`findFirst` acota por `userId`) y solo mientras no esté resuelta. Recomputa
+   * `hours`/`isDraft` desde `startTime`/`endTime` (endTime ausente => vuelve a
+   * borrador con `hours=null`), igual que `create`/`close`.
+   */
+  async update(userId: string, id: string, dto: UpdateOvertimeDto): Promise<OvertimeView> {
+    const current = await this.prisma.overtimeRequest.findFirst({ where: { id, userId } });
+    if (!current) {
+      throw new NotFoundException('La solicitud de horas extra no existe o no te pertenece.');
+    }
+    if (current.status !== FinanceStatus.PENDIENTE) {
+      throw new ConflictException('No se puede editar una solicitud ya resuelta.');
+    }
+    const isDraft = dto.endTime === undefined;
+    const hours = isDraft ? null : computeHours(dto.startTime, dto.endTime as string);
+
+    const row = await this.prisma.overtimeRequest.update({
+      where: { id },
+      data: {
+        startTime: dto.startTime,
+        endTime: dto.endTime ?? null,
+        hours,
+        isDraft,
+        reason: dto.reason ?? null,
+        projectId: dto.projectId ?? null,
+        projectOther: dto.projectOther ?? null,
+        authorizedById: dto.authorizedById ?? null,
+      },
+    });
+    return toView(row);
+  }
+
+  /**
+   * Elimina una solicitud PROPIA aún PENDIENTE (spec §5.6). Mismo guard que
+   * `update` (solo dueño, solo pendiente). `OvertimeRequest` no tiene hijos, así
+   * que el hard delete es seguro.
+   */
+  async remove(userId: string, id: string): Promise<void> {
+    const current = await this.prisma.overtimeRequest.findFirst({ where: { id, userId } });
+    if (!current) {
+      throw new NotFoundException('La solicitud de horas extra no existe o no te pertenece.');
+    }
+    if (current.status !== FinanceStatus.PENDIENTE) {
+      throw new ConflictException('No se puede eliminar una solicitud ya resuelta.');
+    }
+    await this.prisma.overtimeRequest.delete({ where: { id } });
   }
 
   /**

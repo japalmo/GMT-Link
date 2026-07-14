@@ -23,6 +23,7 @@ import {
   CreateProjectDto,
   CreateServiceDto,
   UpdateAssignmentDto,
+  UpdateProjectDto,
   UpdateProjectKpisDto,
   UpdateServiceFrequencyDto,
 } from './dto/projects.dto';
@@ -102,6 +103,43 @@ export class ProjectsController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.projects.getById(id, userId);
+  }
+
+  /**
+   * Actualización GENERAL del proyecto (solo `name`/`description` en este corte).
+   * Gate: permiso FUNCTIONAL `project:update` (project-scope) resuelto INLINE con
+   * `PermissionService.can` (no es STRUCTURAL FGA, así que no usa `@RequirePermission`).
+   */
+  @Patch(':id')
+  async updateGeneral(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    const decision = await this.permissions.can(userId, 'project:update', { projectId: id });
+    if (decision.effect !== 'allow') {
+      throw new ForbiddenException('No tienes el permiso "project:update".');
+    }
+    return this.projects.updateGeneral(id, dto);
+  }
+
+  /**
+   * Elimina el proyecto (solo si está vacío).
+   * Gate: permiso FUNCTIONAL `project:delete` (project-scope) resuelto INLINE con
+   * `PermissionService.can`.
+   */
+  @Delete(':id')
+  async remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    const decision = await this.permissions.can(userId, 'project:delete', { projectId: id });
+    if (decision.effect !== 'allow') {
+      throw new ForbiddenException('No tienes el permiso "project:delete".');
+    }
+    return this.projects.remove(id);
   }
 
   /**

@@ -13,6 +13,7 @@ import {
   CreateProjectDto,
   CreateServiceDto,
   UpdateAssignmentDto,
+  UpdateProjectDto,
   UpdateProjectKpisDto,
   UpdateServiceFrequencyDto,
 } from './dto/projects.dto';
@@ -316,6 +317,140 @@ export class ProjectsService {
       data: { kpis: dto.kpis },
     });
     return this.injectCurrentKpi(updated);
+  }
+
+  /**
+   * Actualización GENERAL del proyecto (solo `name`/`description` en este corte).
+   * NO toca la faena ni las claves estructurales (clientId/code/FGA). El gate de
+   * `project:update` lo pone el controller.
+   */
+  async updateGeneral(projectId: string, dto: UpdateProjectDto) {
+    const existing = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!existing) {
+      throw new NotFoundException('El proyecto no existe.');
+    }
+
+    const updated = await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        name: dto.name,
+        description: dto.description,
+      },
+    });
+    return this.injectCurrentKpi(updated);
+  }
+
+  /**
+   * Elimina un proyecto. Solo procede si está "limpio": sin servicios, tareas,
+   * documentos, elementos, trabajadores asignados ni activos. Si tiene contenido,
+   * responde 409 con el detalle de lo que bloquea. La membresía `project_creator`
+   * autocreada NO cuenta como bloqueante (se limpia junto al proyecto).
+   * Al borrar: sincroniza la baja en OpenFGA (membresías de proyecto + tuplas
+   * estructurales de cliente/departamento), borra las membresías de scope PROJECT
+   * y el proyecto en una sola transacción. El gate de `project:delete` lo pone el
+   * controller.
+   */
+  async remove(projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        _count: {
+          select: { services: true, tasks: true, documents: true, elements: true, workers: true, overtimeRequests: true },
+        },
+      },
+    });
+    if (!project) {
+      throw new NotFoundException('El proyecto no existe.');
+    }
+
+    // Los activos tienen `projectId` opcional (onDelete: SetNull), así que no
+    // vienen en el _count por relación: se cuentan aparte.
+    const assetCount = await this.prisma.asset.count({ where: { projectId } });
+
+    const blockers: string[] = [];
+    if (project._count.services > 0) blockers.push(`${project._count.services} servicio(s)`);
+    if (project._count.tasks > 0) blockers.push(`${project._count.tasks} tarea(s)`);
+    if (project._count.documents > 0) blockers.push(`${project._count.documents} documento(s)`);
+    if (project._count.elements > 0) blockers.push(`${project._count.elements} elemento(s)`);
+    if (project._count.workers > 0)
+      blockers.push(`${project._count.workers} trabajador(es) asignado(s)`);
+    if (project._count.overtimeRequests > 0)
+      blockers.push(`${project._count.overtimeRequests} solicitud(es) de horas extra`);
+    if (assetCount > 0) blockers.push(`${assetCount} activo(s)`);
+
+    if (blockers.length > 0) {
+      throw new ConflictException(
+        `No puedes eliminar el proyecto: tiene ${blockers.join(', ')}.`,
+      );
+    }
+
+    // Membresías de scope PROJECT del proyecto (incluye la autocreada
+    // `project_creator`): se sincroniza su baja en FGA y se borran en la misma
+    // transacción. Los errores de FGA no deben abortar el borrado local.
+    const memberships = await this.prisma.membership.findMany({
+      where: { scopeType: ScopeType.PROJECT, scopeId: projectId },
+    });
+
+    // Tuplas estructurales escritas al crear (cliente + departamento si lo hubiera).
+    const structuralTuples = [
+      { user: `client:${project.clientId}`, relation: 'client', object: `project:${projectId}` },
+    ];
+    if (project.departmentId) {
+      structuralTuples.push({
+        user: `department:${project.departmentId}`,
+        relation: 'department',
+        object: `project:${projectId}`,
+      });
+    }
+
+    // Solo Postgres dentro de la transacción. Si entre el conteo y el delete se
+    // agregó un hijo con FK Restrict (p.ej. un servicio), Postgres lanza P2003:
+    // se mapea al mismo 409 que clientes/faenas (carrera TOCTOU).
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.membership.deleteMany({ where: { scopeType: ScopeType.PROJECT, scopeId: projectId } });
+        await tx.project.delete({ where: { id: projectId } });
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new ConflictException(
+          'No puedes eliminar el proyecto: se le agregó contenido mientras se eliminaba. Vuelve a intentarlo.',
+        );
+      }
+      throw error;
+    }
+
+    // La sincronización de la baja en FGA va DESPUÉS del commit (OpenFGA no es
+    // transaccional ni idempotente): si el borrado local falla, FGA no se toca.
+    // Los fallos se registran, no abortan (el proyecto ya no existe en Postgres).
+    for (const membership of memberships) {
+      await this.fga
+        .syncMembershipToFGA(
+          {
+            userId: membership.userId,
+            roleKey: membership.roleKey,
+            scopeType: ScopeType.PROJECT,
+            scopeId: projectId,
+          },
+          'delete',
+        )
+        .catch((error: unknown) =>
+          this.logger.error(
+            `No se pudo sincronizar la baja FGA de la membresía del proyecto ${projectId} (usuario ${membership.userId}).`,
+            error instanceof Error ? error.stack : String(error),
+          ),
+        );
+    }
+    await this.fga
+      .deleteTuples(structuralTuples)
+      .catch((error: unknown) =>
+        this.logger.error(
+          `No se pudieron borrar las tuplas estructurales FGA del proyecto ${projectId}.`,
+          error instanceof Error ? error.stack : String(error),
+        ),
+      );
+
+    return { success: true };
   }
 
   /**

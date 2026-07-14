@@ -72,6 +72,53 @@ export class CreateReimbursementDto {
   observations?: string;
 }
 
+/**
+ * Body de `PUT /reimbursements/:id` (editar un reembolso propio, §5). Espejo de
+ * `CreateReimbursementDto` SIN la boleta: la boleta NO se toca aquí (se reemplaza
+ * por `POST /reimbursements/:id/receipt`). Solo el dueño y solo mientras el
+ * reembolso sigue PENDIENTE (lo valida el service). `userId` NUNCA viene del body.
+ */
+export class UpdateReimbursementDto {
+  @Type(() => Number)
+  @IsInt({ message: 'amount debe ser un entero (CLP, sin decimales).' })
+  @Min(1, { message: 'amount debe ser mayor a 0.' })
+  @Max(MAX_AMOUNT_CLP, { message: `amount no puede superar ${MAX_AMOUNT_CLP} (CLP).` })
+  amount!: number;
+
+  @IsISO8601({ strict: true }, { message: 'date debe ser una fecha ISO-8601.' })
+  date!: string;
+
+  @trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  concept!: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(80)
+  category?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(80)
+  subcategory?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(120)
+  vehicle?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(1000)
+  observations?: string;
+}
+
 /** Filtros opcionales de `GET /reimbursements/me` y `GET /reimbursements`. */
 export class ListReimbursementsQueryDto {
   @IsOptional()

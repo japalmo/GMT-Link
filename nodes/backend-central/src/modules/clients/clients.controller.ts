@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
@@ -82,6 +83,25 @@ export class ClientsController {
     }
 
     return this.clients.update(id, dto);
+  }
+
+  /**
+   * Elimina un cliente. Bloquea si tiene faenas o proyectos asociados (409).
+   * Gateado con el permiso FUNCTIONAL 'client:create'.
+   */
+  @Delete(':id')
+  async remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+
+    const decision = await this.permissions.can(userId, 'client:create');
+    if (decision.effect !== 'allow') {
+      throw new ForbiddenException('No tienes permiso para eliminar clientes.');
+    }
+
+    return this.clients.remove(id);
   }
 
   private requireUserId(authUser: AuthUser | undefined): string {

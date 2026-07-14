@@ -28,6 +28,7 @@ import {
   VEHICLE_SUBCATEGORY_LABELS,
   type CreateReimbursementInput,
   type ReimbursementCategory,
+  type ReimbursementView,
   type VehicleSubcategory,
 } from '@/types/finance';
 import { todaySantiagoString } from '@/lib/santiago-time';
@@ -62,14 +63,36 @@ function normalizeCategory(raw: string | undefined): ReimbursementCategory | '' 
   return 'OTROS';
 }
 
+/** Invierte {@link REIMBURSEMENT_CATEGORY_LABELS} (etiqueta legible → enum). */
+const LABEL_TO_CATEGORY: Record<string, ReimbursementCategory> = Object.fromEntries(
+  (Object.keys(REIMBURSEMENT_CATEGORY_LABELS) as ReimbursementCategory[]).map((c) => [
+    REIMBURSEMENT_CATEGORY_LABELS[c],
+    c,
+  ]),
+);
+
+/** Invierte {@link VEHICLE_SUBCATEGORY_LABELS} (etiqueta legible → enum). */
+const LABEL_TO_SUBCAT: Record<string, VehicleSubcategory> = Object.fromEntries(
+  (Object.keys(VEHICLE_SUBCATEGORY_LABELS) as VehicleSubcategory[]).map((s) => [
+    VEHICLE_SUBCATEGORY_LABELS[s],
+    s,
+  ]),
+);
+
 export interface ReembolsoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /**
-   * Crea el reembolso con su boleta OBLIGATORIA (un solo paso). Debe propagar el
-   * error (el diálogo lo muestra y no se cierra).
+   * Reembolso a editar. Si viene, el diálogo entra en modo EDICIÓN: precarga los
+   * campos y NO exige boleta (ya existe). Si es `undefined`, es modo CREACIÓN.
    */
-  onSubmit: (input: CreateReimbursementInput, receiptFile: File) => Promise<void>;
+  initial?: ReimbursementView;
+  /**
+   * En creación, adjunta la boleta OBLIGATORIA (un solo paso) y `receiptFile`
+   * siempre viene. En edición la boleta es opcional (`undefined`). Debe propagar
+   * el error (el diálogo lo muestra y no se cierra).
+   */
+  onSubmit: (input: CreateReimbursementInput, receiptFile?: File) => Promise<void>;
 }
 
 /**
@@ -84,8 +107,11 @@ export interface ReembolsoFormDialogProps {
 export function ReembolsoFormDialog({
   open,
   onOpenChange,
+  initial,
   onSubmit,
 }: ReembolsoFormDialogProps): ReactNode {
+  const isEdit = initial !== undefined;
+
   const [concept, setConcept] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(getTodayString());
@@ -106,19 +132,36 @@ export function ReembolsoFormDialog({
   const cameraRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!open) {
-      setConcept('');
-      setAmount('');
-      setDate(getTodayString());
-      setCategory('');
-      setVehicle('');
-      setVehicleSubcategory('');
-      setObservations('');
-      setReceiptFile(null);
-      setError(null);
-      setScanning(false);
+    if (open) {
+      // Al abrir en modo edición, precarga los campos desde el reembolso. La
+      // categoría/subcategoría llegan como etiqueta legible: se remapean al enum.
+      if (initial) {
+        setConcept(initial.concept);
+        setAmount(String(initial.amount));
+        setDate(initial.date.slice(0, 10));
+        setCategory(initial.category ? LABEL_TO_CATEGORY[initial.category] ?? '' : '');
+        setVehicle(initial.vehicle ?? '');
+        setVehicleSubcategory(
+          initial.subcategory ? LABEL_TO_SUBCAT[initial.subcategory] ?? '' : '',
+        );
+        setObservations(initial.observations ?? '');
+        setReceiptFile(null);
+        setError(null);
+        setScanning(false);
+      }
+      return;
     }
-  }, [open]);
+    setConcept('');
+    setAmount('');
+    setDate(getTodayString());
+    setCategory('');
+    setVehicle('');
+    setVehicleSubcategory('');
+    setObservations('');
+    setReceiptFile(null);
+    setError(null);
+    setScanning(false);
+  }, [open, initial]);
 
   // Carga perezosa de vehículos la primera vez que se selecciona la categoría.
   useEffect(() => {
@@ -191,7 +234,8 @@ export function ReembolsoFormDialog({
     if (category === 'VEHICULOS' && !vehicleSubcategory) {
       return setError('Selecciona la subcategoría del vehículo.');
     }
-    if (!receiptFile) return setError('La boleta es obligatoria.');
+    // En edición la boleta ya existe: no se exige volver a subirla.
+    if (!isEdit && !receiptFile) return setError('La boleta es obligatoria.');
 
     setSubmitting(true);
     try {
@@ -208,11 +252,17 @@ export function ReembolsoFormDialog({
               : undefined,
           observations: observations.trim() || undefined,
         },
-        receiptFile,
+        receiptFile ?? undefined,
       );
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo crear el reembolso.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : isEdit
+            ? 'No se pudo editar el reembolso.'
+            : 'No se pudo crear el reembolso.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -224,14 +274,20 @@ export function ReembolsoFormDialog({
     <Modal open={open} onOpenChange={(next) => (submitting ? undefined : onOpenChange(next))}>
       <ModalContent>
         <ModalHeader>
-          <ModalTitle>Solicitar reembolso</ModalTitle>
+          <ModalTitle>{isEdit ? 'Editar reembolso' : 'Solicitar reembolso'}</ModalTitle>
           <ModalDescription>
-            Sube o fotografía la boleta para autocompletar los datos, y revísalos antes de enviar.
+            {isEdit
+              ? 'Ajusta los datos del reembolso y guarda los cambios.'
+              : 'Sube o fotografía la boleta para autocompletar los datos, y revísalos antes de enviar.'}
           </ModalDescription>
         </ModalHeader>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4" noValidate>
-          {/* Boleta → OCR + adjunto */}
+          {/* Boleta → OCR + adjunto. En EDICIÓN no se muestra: la boleta no se
+              reemplaza por PUT (evita que el OCR pise los campos ya corregidos y
+              que un archivo nuevo se descarte en silencio). La boleta se cambia
+              con su propio flujo desde la lista. */}
+          {!isEdit && (
           <div className="flex flex-col gap-1.5">
             <Label>Boleta</Label>
             <div className="flex flex-wrap items-center gap-2">
@@ -298,6 +354,7 @@ export function ReembolsoFormDialog({
               onChange={handleFileChange}
             />
           </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="reim-concept">Concepto</Label>
@@ -439,7 +496,7 @@ export function ReembolsoFormDialog({
               </Button>
             </ModalClose>
             <Button type="submit" loading={submitting} disabled={scanning}>
-              Crear solicitud
+              {isEdit ? 'Guardar cambios' : 'Crear solicitud'}
             </Button>
           </ModalFooter>
         </form>

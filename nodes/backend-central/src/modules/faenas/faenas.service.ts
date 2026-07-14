@@ -146,6 +146,39 @@ export class FaenasService {
     });
   }
 
+  /**
+   * Elimina una faena. Se bloquea con 409 si la faena tiene proyectos
+   * asociados: primero hay que eliminar o reasignar esos proyectos.
+   */
+  async remove(id: string) {
+    const faena = await this.prisma.faena.findUnique({ where: { id } });
+    if (!faena) {
+      throw new NotFoundException('La faena no existe.');
+    }
+
+    const projectsCount = await this.prisma.project.count({ where: { faenaId: id } });
+    if (projectsCount > 0) {
+      throw new ConflictException({
+        code: 'FAENA_HAS_PROJECTS',
+        message: `No puedes eliminar la faena "${faena.code}" porque tiene ${projectsCount} proyecto(s) asociado(s). Elimina o reasigna los proyectos primero.`,
+      });
+    }
+
+    try {
+      await this.prisma.faena.delete({ where: { id } });
+    } catch (error) {
+      // Red de seguridad ante concurrencia: un proyecto creado entre el conteo
+      // y el delete dispara una violación de FK (P2003) → mismo 409.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new ConflictException({
+          code: 'FAENA_HAS_PROJECTS',
+          message: `No puedes eliminar la faena "${faena.code}" porque tiene proyecto(s) asociado(s). Elimina o reasigna los proyectos primero.`,
+        });
+      }
+      throw error;
+    }
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   private async withMetrics<T extends { projects: { id: string }[] }>(faena: T) {

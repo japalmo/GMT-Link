@@ -63,6 +63,43 @@ export class CreateOvertimeDto {
   reason?: string;
 }
 
+/**
+ * Body de `PUT /overtime/:id` — edita una solicitud PROPIA aún PENDIENTE (spec §5.6).
+ * Subconjunto editable: NO incluye `userId`/`date`/`onBehalfOfUserId` (el
+ * ValidationPipe con whitelist los descarta). Las horas se RECOMPUTAN de
+ * `startTime`/`endTime` en el service; `endTime` ausente => vuelve a borrador.
+ */
+export class UpdateOvertimeDto {
+  @IsString()
+  @Matches(HHMM, { message: 'startTime debe tener formato HH:mm.' })
+  startTime!: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(HHMM, { message: 'endTime debe tener formato HH:mm.' })
+  endTime?: string;
+
+  @IsOptional()
+  @IsString()
+  projectId?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(200)
+  projectOther?: string;
+
+  @IsOptional()
+  @IsString()
+  authorizedById?: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
+
 /** Body de `POST /overtime/:id/close` — cierra un borrador con la hora de término. */
 export class CloseOvertimeDto {
   @IsString()

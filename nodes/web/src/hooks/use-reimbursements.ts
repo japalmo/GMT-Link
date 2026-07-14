@@ -4,10 +4,12 @@ import {
   approveReimbursement,
   attachReimbursementReceipt,
   createReimbursement,
+  deleteReimbursement,
   listAllReimbursements,
   listMyReimbursements,
   payReimbursement,
   rejectReimbursement,
+  updateReimbursement,
 } from '@/lib/api';
 import type { CreateReimbursementInput, ReimbursementView } from '@/types/finance';
 
@@ -67,6 +69,10 @@ export interface UseReimbursementsResult {
    * refresca. Devuelve la vista creada. Propaga el error al llamador.
    */
   create: (input: CreateReimbursementInput, file: File) => Promise<ReimbursementView>;
+  /** Edita un reembolso propio (solo dueño, solo si PENDIENTE) y refresca. */
+  update: (id: string, input: CreateReimbursementInput) => Promise<void>;
+  /** Elimina un reembolso propio (solo dueño, solo si PENDIENTE) y refresca. */
+  remove: (id: string) => Promise<void>;
   /** Adjunta/actualiza la boleta (solo dueño, solo si PENDIENTE) y refresca. */
   attachReceipt: (id: string, file: File) => Promise<void>;
   /** Aprueba un reembolso (gestor) y refresca. */
@@ -225,6 +231,22 @@ export function useReimbursements(opts: UseReimbursementsOptions = {}): UseReimb
     [refreshAll],
   );
 
+  const update = useCallback(
+    async (id: string, input: CreateReimbursementInput) => {
+      await updateReimbursement(id, input);
+      await refreshAll();
+    },
+    [refreshAll],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      await deleteReimbursement(id);
+      await refreshAll();
+    },
+    [refreshAll],
+  );
+
   const attachReceipt = useCallback(
     async (id: string, file: File) => {
       await attachReimbursementReceipt(id, file);
@@ -271,6 +293,8 @@ export function useReimbursements(opts: UseReimbursementsOptions = {}): UseReimb
     error,
     refetch: load,
     create,
+    update,
+    remove,
     attachReceipt,
     approve,
     reject,

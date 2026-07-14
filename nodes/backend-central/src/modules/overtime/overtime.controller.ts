@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   UnauthorizedException,
   UsePipes,
@@ -20,6 +22,7 @@ import {
   CreateOvertimeDto,
   ListOvertimeQueryDto,
   RejectOvertimeDto,
+  UpdateOvertimeDto,
 } from './dto/overtime.dto';
 import type { OvertimeView, Paginated } from './overtime.types';
 import type { OvertimeSummary } from './overtime-summary.util';
@@ -108,6 +111,26 @@ export class OvertimeController {
     @Body() dto: CloseOvertimeDto,
   ): Promise<OvertimeView> {
     return this.overtime.close(this.requireUserId(authUser), id, dto.endTime);
+  }
+
+  /** Edita una solicitud propia aún PENDIENTE (solo dueño; el service valida). */
+  @Put(':id')
+  update(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateOvertimeDto,
+  ): Promise<OvertimeView> {
+    return this.overtime.update(this.requireUserId(authUser), id, dto);
+  }
+
+  /** Elimina una solicitud propia aún PENDIENTE (solo dueño; el service valida). */
+  @Delete(':id')
+  @HttpCode(204)
+  remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.overtime.remove(this.requireUserId(authUser), id);
   }
 
   @Post(':id/approve')

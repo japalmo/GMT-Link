@@ -24,7 +24,11 @@ import { useDirectory } from '@/hooks/use-directory';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { useFinanceProjects } from './use-finance-projects';
 import { todaySantiagoString } from '@/lib/santiago-time';
-import type { CreateOvertimeInput } from '@/types/finance';
+import type {
+  CreateOvertimeInput,
+  OvertimeView,
+  UpdateOvertimeInput,
+} from '@/types/finance';
 
 /** Roles habilitados como "Autorizado por" (admin de contrato / gerencias). */
 const AUTHORIZER_ROLES: ReadonlySet<string> = new Set([
@@ -45,8 +49,15 @@ function getTodayString(): string {
 export interface HorasExtraFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Crea la solicitud. Debe propagar el error (el diálogo lo muestra). */
+  /** Crea la solicitud (modo creación). Debe propagar el error (el diálogo lo muestra). */
   onSubmit: (input: CreateOvertimeInput) => Promise<void>;
+  /**
+   * HE a editar. Su presencia activa el modo edición: precarga los campos, oculta
+   * "a nombre de" y la fecha, cambia el título y el botón, y envía vía `onUpdate`.
+   */
+  initial?: OvertimeView;
+  /** Edita la solicitud (modo edición). Debe propagar el error (el diálogo lo muestra). */
+  onUpdate?: (id: string, input: UpdateOvertimeInput) => Promise<void>;
 }
 
 /**
@@ -57,12 +68,19 @@ export interface HorasExtraFormDialogProps {
  * crear a nombre de otro trabajador y con fecha libre. Proyecto: los asignados
  * más "Otro" (texto libre). "Autorizado por": usuarios con rol admin_contrato o
  * gerencias. El botón que lo abre es visible para todos (resolución #2).
+ *
+ * En modo edición (`initial` presente) precarga inicio/término/proyecto/
+ * autorizado/motivo, oculta "a nombre de" y la fecha (no editables), y envía
+ * los cambios con `onUpdate`.
  */
 export function HorasExtraFormDialog({
   open,
   onOpenChange,
   onSubmit,
+  initial,
+  onUpdate,
 }: HorasExtraFormDialogProps): ReactNode {
+  const isEdit = initial != null;
   const canOnBehalf = useHasPermission('finance:overtime:create:onbehalf');
   const { projects } = useFinanceProjects();
   const { entries } = useDirectory();
@@ -89,8 +107,25 @@ export function HorasExtraFormDialog({
       setOnBehalfOfUserId('');
       setReason('');
       setError(null);
+      return;
     }
-  }, [open]);
+    // Modo edición: precarga los campos desde la HE al abrir.
+    if (initial) {
+      setDate(initial.date.slice(0, 10));
+      setStartTime(initial.startTime ?? '');
+      setEndTime(initial.endTime ?? '');
+      if (initial.projectOther) {
+        setProjectValue(OTHER_PROJECT);
+        setProjectOther(initial.projectOther);
+      } else {
+        setProjectValue(initial.projectId ?? '');
+        setProjectOther('');
+      }
+      setAuthorizedById(initial.authorizedById ?? '');
+      setReason(initial.reason ?? '');
+      setError(null);
+    }
+  }, [open, initial]);
 
   /** Usuarios que pueden autorizar (admin_contrato / gerencias). */
   const authorizers = useMemo(
@@ -115,7 +150,7 @@ export function HorasExtraFormDialog({
     e.preventDefault();
     setError(null);
 
-    if (!date) return setError('La fecha es obligatoria.');
+    if (!isEdit && !date) return setError('La fecha es obligatoria.');
     if (!startTime) return setError('La hora de inicio es obligatoria.');
     if (endTime && endTime <= startTime) {
       return setError('La hora de término debe ser posterior a la de inicio.');
@@ -125,23 +160,41 @@ export function HorasExtraFormDialog({
     }
 
     const isOther = projectValue === OTHER_PROJECT;
-    const input: CreateOvertimeInput = {
-      date,
-      startTime,
-      endTime: endTime || undefined,
-      projectId: !isOther && projectValue ? projectValue : undefined,
-      projectOther: isOther ? projectOther.trim() : undefined,
-      authorizedById: authorizedById || undefined,
-      onBehalfOfUserId: canOnBehalf && onBehalfOfUserId ? onBehalfOfUserId : undefined,
-      reason: reason.trim() || undefined,
-    };
 
     setSubmitting(true);
     try {
-      await onSubmit(input);
+      if (isEdit && initial && onUpdate) {
+        const update: UpdateOvertimeInput = {
+          startTime,
+          endTime: endTime || undefined,
+          projectId: !isOther && projectValue ? projectValue : undefined,
+          projectOther: isOther ? projectOther.trim() : undefined,
+          authorizedById: authorizedById || undefined,
+          reason: reason.trim() || undefined,
+        };
+        await onUpdate(initial.id, update);
+      } else {
+        const input: CreateOvertimeInput = {
+          date,
+          startTime,
+          endTime: endTime || undefined,
+          projectId: !isOther && projectValue ? projectValue : undefined,
+          projectOther: isOther ? projectOther.trim() : undefined,
+          authorizedById: authorizedById || undefined,
+          onBehalfOfUserId: canOnBehalf && onBehalfOfUserId ? onBehalfOfUserId : undefined,
+          reason: reason.trim() || undefined,
+        };
+        await onSubmit(input);
+      }
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar la solicitud.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : isEdit
+            ? 'No se pudieron guardar los cambios.'
+            : 'No se pudo registrar la solicitud.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -153,7 +206,7 @@ export function HorasExtraFormDialog({
     <Modal open={open} onOpenChange={(next) => (submitting ? undefined : onOpenChange(next))}>
       <ModalContent>
         <ModalHeader>
-          <ModalTitle>Reportar horas extra</ModalTitle>
+          <ModalTitle>{isEdit ? 'Editar horas extra' : 'Reportar horas extra'}</ModalTitle>
           <ModalDescription>
             Ingresa la hora de inicio. Si aún no terminas, deja la hora de término vacía y la
             solicitud quedará como borrador.
@@ -161,7 +214,7 @@ export function HorasExtraFormDialog({
         </ModalHeader>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-4" noValidate>
-          {canOnBehalf && (
+          {!isEdit && canOnBehalf && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ot-onbehalf">A nombre de</Label>
               <Select
@@ -181,20 +234,22 @@ export function HorasExtraFormDialog({
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="ot-date">Fecha de trabajo</Label>
-            <Input
-              id="ot-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              required
-              disabled={submitting || !canOnBehalf}
-            />
-            {!canOnBehalf && (
-              <p className="text-xs text-muted-foreground">Solo puedes registrar horas extra de hoy.</p>
-            )}
-          </div>
+          {!isEdit && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ot-date">Fecha de trabajo</Label>
+              <Input
+                id="ot-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+                disabled={submitting || !canOnBehalf}
+              />
+              {!canOnBehalf && (
+                <p className="text-xs text-muted-foreground">Solo puedes registrar horas extra de hoy.</p>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
@@ -305,7 +360,7 @@ export function HorasExtraFormDialog({
               </Button>
             </ModalClose>
             <Button type="submit" loading={submitting}>
-              {isDraft ? 'Guardar borrador' : 'Enviar solicitud'}
+              {isEdit ? 'Guardar cambios' : isDraft ? 'Guardar borrador' : 'Enviar solicitud'}
             </Button>
           </ModalFooter>
         </form>

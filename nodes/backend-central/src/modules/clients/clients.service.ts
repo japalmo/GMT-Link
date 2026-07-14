@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { FaenaStatus, TaskStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { FaenaStatus, Prisma, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -93,6 +99,46 @@ export class ClientsService {
         rut: dto.rut ?? undefined,
       },
     });
+  }
+
+  /**
+   * Elimina un cliente. Bloquea el borrado si tiene faenas o proyectos
+   * asociados: el cliente es la raíz de la jerarquía Cliente→Faena→Proyecto
+   * (§7) y arrastrar esos registros dejaría huérfanos códigos y documentos.
+   * El count previo da el mensaje con las cantidades, pero es TOCTOU; el cierre
+   * real es la FK (Faena/Project.clientId → Client.id): si la carrera ocurre,
+   * el delete revienta con P2003 y se mapea al mismo 409.
+   */
+  async remove(id: string) {
+    await this.getById(id);
+
+    const [faenasCount, projectsCount, usersCount] = await Promise.all([
+      this.prisma.faena.count({ where: { clientId: id } }),
+      this.prisma.project.count({ where: { clientId: id } }),
+      this.prisma.user.count({ where: { clientId: id } }),
+    ]);
+
+    // Faena/Project.clientId son FK Restrict (la BD respalda el bloqueo), pero
+    // User.clientId es SetNull: sin este conteo, borrar un cliente con usuarios
+    // asociados los dejaría huérfanos (clientId=null) en silencio.
+    if (faenasCount > 0 || projectsCount > 0 || usersCount > 0) {
+      throw new ConflictException(
+        `No puedes eliminar el cliente: tiene ${faenasCount} faena(s), ${projectsCount} proyecto(s) y ${usersCount} usuario(s) asociados. Elimina o reasigna esos registros primero.`,
+      );
+    }
+
+    try {
+      await this.prisma.client.delete({ where: { id } });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new ConflictException(
+          'No puedes eliminar el cliente: tiene faenas o proyectos asociados. Elimina o reasigna esos registros primero.',
+        );
+      }
+      throw error;
+    }
+
+    return { success: true };
   }
 
   /**

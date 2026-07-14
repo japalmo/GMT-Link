@@ -10,6 +10,7 @@ import {
   FolderOpen,
   MapPin,
   Plus,
+  Trash2,
   TrendingUp,
 } from 'lucide-react';
 import { Metric } from './index';
@@ -26,6 +27,7 @@ import { LocationPicker, type LocationValue } from '@/components/maps/location-p
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import {
   Card,
   CardContent,
@@ -73,8 +75,8 @@ export default function ProyectosFaenasPage() {
   const { clientId } = useParams<{ clientId: string }>();
 
   const { clients } = useClients();
-  const { faenas, loading, error, create } = useFaenas(clientId);
-  const canCreate = useHasPermission('project:manage');
+  const { faenas, loading, error, create, remove } = useFaenas(clientId);
+  const canManage = useHasPermission('project:manage');
 
   const client = useMemo(
     () => clients.find((c) => c.id === clientId) ?? null,
@@ -82,6 +84,9 @@ export default function ProyectosFaenasPage() {
   );
 
   const [query, setQuery] = useState('');
+
+  // Faena en confirmación de borrado (null = diálogo cerrado).
+  const [toDelete, setToDelete] = useState<FaenaView | null>(null);
 
   // Estado del dialog de creación. El código, estado, supervisor y fechas ya no
   // se piden aquí: el código se autogenera server-side y el resto se edita luego.
@@ -171,7 +176,7 @@ export default function ProyectosFaenasPage() {
               <ArrowLeft className="mr-2 size-4" />
               Volver
             </Button>
-            {canCreate && (
+            {canManage && (
               <Button onClick={openModal}>
                 <Plus className="mr-2 size-4" />
                 Nueva faena
@@ -221,9 +226,11 @@ export default function ProyectosFaenasPage() {
             <FaenaCard
               key={faena.id}
               faena={faena}
+              canDelete={canManage}
               onOpen={() =>
                 navigate(`/proyectos/cliente/${clientId}/faena/${faena.id}`)
               }
+              onDelete={() => setToDelete(faena)}
             />
           ))}
         </div>
@@ -287,6 +294,25 @@ export default function ProyectosFaenasPage() {
           </form>
         </ModalContent>
       </Modal>
+
+      {/* Dialog eliminar faena */}
+      <ConfirmDialog
+        open={toDelete !== null}
+        onOpenChange={(next) => {
+          if (!next) setToDelete(null);
+        }}
+        title="Elimina la faena"
+        description={
+          toDelete
+            ? `Esta acción elimina la faena "${toDelete.name}" (${toDelete.code}) de forma permanente. No podrás deshacerla.`
+            : ''
+        }
+        onConfirm={async () => {
+          if (!toDelete) return;
+          await remove(toDelete.id);
+          toast.success(`Faena "${toDelete.name}" eliminada.`);
+        }}
+      />
     </PageContainer>
   );
 }
@@ -304,7 +330,17 @@ function fmtDate(iso: string | null): string | null {
 }
 
 /** Card de una faena con estado, métrica de proyectos y rango de fechas. */
-function FaenaCard({ faena, onOpen }: { faena: FaenaView; onOpen: () => void }) {
+function FaenaCard({
+  faena,
+  canDelete,
+  onOpen,
+  onDelete,
+}: {
+  faena: FaenaView;
+  canDelete: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
   // `status`/fechas ya no se fijan en la creación pero siguen en el modelo:
   // toleramos que vengan nulos sin romper la card.
   const meta = faena.status ? STATUS_META[faena.status] : null;
@@ -368,7 +404,24 @@ function FaenaCard({ faena, onOpen }: { faena: FaenaView; onOpen: () => void }) 
           </p>
         )}
       </CardContent>
-      <CardFooter className="flex justify-end pb-3 pt-0">
+      <CardFooter className="flex items-center justify-between pb-3 pt-0">
+        {canDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-destructive"
+            aria-label={`Elimina la faena ${faena.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        ) : (
+          <span />
+        )}
         <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
           Ver proyectos
           <ArrowRight className="size-3" />

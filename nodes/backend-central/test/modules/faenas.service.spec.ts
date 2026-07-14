@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import {
   FaenasService,
@@ -13,8 +14,11 @@ interface FaenaMock {
   client: { findUnique: ReturnType<typeof vi.fn> };
   faena: {
     findMany: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
+  project: { count: ReturnType<typeof vi.fn> };
 }
 
 function build(): { service: FaenasService; mock: FaenaMock } {
@@ -22,10 +26,13 @@ function build(): { service: FaenasService; mock: FaenaMock } {
     client: { findUnique: vi.fn() },
     faena: {
       findMany: vi.fn(() => Promise.resolve([])),
+      findUnique: vi.fn(() => Promise.resolve(null)),
       create: vi.fn((args: { data: Record<string, unknown> }) =>
         Promise.resolve({ id: 'fa1', ...args.data }),
       ),
+      delete: vi.fn(() => Promise.resolve({ id: 'fa1' })),
     },
+    project: { count: vi.fn(() => Promise.resolve(0)) },
   };
   return { service: new FaenasService(mock as unknown as PrismaService), mock };
 }
@@ -129,6 +136,62 @@ describe('FaenasService.create — autocódigo por cliente', () => {
     expect(args.data.latitude).toBeNull();
     expect(args.data.longitude).toBeNull();
     expect(args.data.address).toBeNull();
+  });
+});
+
+describe('FaenasService.remove — borrado con bloqueo por proyectos', () => {
+  let service: FaenasService;
+  let mock: FaenaMock;
+
+  beforeEach(() => {
+    const bits = build();
+    service = bits.service;
+    mock = bits.mock;
+  });
+
+  it('404 si la faena no existe', async () => {
+    mock.faena.findUnique.mockResolvedValue(null);
+    await expect(service.remove('fa1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(mock.faena.delete).not.toHaveBeenCalled();
+  });
+
+  it('409 FAENA_HAS_PROJECTS si la faena tiene proyectos (no elimina)', async () => {
+    mock.faena.findUnique.mockResolvedValue({ id: 'fa1', code: 'CLI-A' });
+    mock.project.count.mockResolvedValue(3);
+
+    await expect(service.remove('fa1')).rejects.toMatchObject({
+      response: {
+        code: 'FAENA_HAS_PROJECTS',
+        message: expect.stringContaining('3'),
+      },
+    });
+    await expect(service.remove('fa1')).rejects.toBeInstanceOf(ConflictException);
+    expect(mock.faena.delete).not.toHaveBeenCalled();
+  });
+
+  it('elimina la faena cuando no tiene proyectos', async () => {
+    mock.faena.findUnique.mockResolvedValue({ id: 'fa1', code: 'CLI-A' });
+    mock.project.count.mockResolvedValue(0);
+
+    await service.remove('fa1');
+
+    expect(mock.faena.delete).toHaveBeenCalledWith({ where: { id: 'fa1' } });
+  });
+
+  it('P2003 en el delete → 409 FAENA_HAS_PROJECTS (carrera con creación de proyecto)', async () => {
+    mock.faena.findUnique.mockResolvedValue({ id: 'fa1', code: 'CLI-A' });
+    mock.project.count.mockResolvedValue(0);
+    mock.faena.delete.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('FK', {
+        code: 'P2003',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(service.remove('fa1')).rejects.toMatchObject({
+      response: { code: 'FAENA_HAS_PROJECTS' },
+    });
+    await expect(service.remove('fa1')).rejects.toBeInstanceOf(ConflictException);
   });
 });
 

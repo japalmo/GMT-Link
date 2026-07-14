@@ -5,12 +5,15 @@ import {
   Check,
   Clock,
   DollarSign,
+  Pencil,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { RejectDialog } from '@/components/ui/reject-dialog';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import {
   Table,
   TableBody,
@@ -22,6 +25,7 @@ import {
 import { useOvertime } from '@/hooks/use-overtime';
 import { errorToMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import type { OvertimeView } from '@/types/finance';
 import { HorasExtraFormDialog } from './horas-extra-form';
 
 export function HorasExtraTab(): ReactNode {
@@ -39,12 +43,16 @@ export function HorasExtraTab(): ReactNode {
     error,
     refetch,
     create,
+    update,
+    remove,
     approve,
     reject,
     pay,
   } = useOvertime();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<OvertimeView | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OvertimeView | null>(null);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
 
@@ -114,6 +122,7 @@ export function HorasExtraTab(): ReactNode {
                   <TableHead>Horas</TableHead>
                   <TableHead>Motivo</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -134,6 +143,34 @@ export function HorasExtraTab(): ReactNode {
                       ) : (
                         <StatusBadge type="finance" status={item.status} />
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {item.status === 'PENDIENTE' ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 text-xs"
+                              onClick={() => setEditTarget(item)}
+                            >
+                              <Pencil className="size-3.5" aria-hidden />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
+                              onClick={() => setDeleteTarget(item)}
+                            >
+                              <Trash2 className="size-3.5" aria-hidden />
+                              Borrar
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -282,6 +319,30 @@ export function HorasExtraTab(): ReactNode {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSubmit={create}
+      />
+
+      <HorasExtraFormDialog
+        open={editTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+        onSubmit={create}
+        initial={editTarget ?? undefined}
+        onUpdate={update}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Borrar horas extra"
+        description="Se eliminará esta solicitud de horas extra de forma permanente. Esta acción no se puede deshacer."
+        confirmLabel="Borrar"
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await remove(deleteTarget.id);
+        }}
       />
 
       <RejectDialog

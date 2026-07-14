@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -74,6 +76,21 @@ export class FaenasController {
     const userId = this.requireUserId(authUser);
     await this.requireFunctional(userId, 'faena:create');
     return this.faenas.update(id, dto);
+  }
+
+  /**
+   * Elimina una faena. Se bloquea con 409 si tiene proyectos asociados.
+   * Gate: mismo permiso FUNCTIONAL `faena:create` que la actualización.
+   */
+  @Delete('faenas/:id')
+  @HttpCode(204)
+  async remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    await this.requireFunctional(userId, 'faena:create');
+    await this.faenas.remove(id);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

@@ -50,6 +50,7 @@ interface PrismaParts {
   findFirst: ReturnType<typeof vi.fn>;
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
 }
 
 function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
@@ -59,6 +60,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     findFirst: parts.findFirst ?? vi.fn(() => Promise.resolve(null)),
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
+    delete: parts.delete ?? vi.fn(),
   };
   const prisma = { overtimeRequest: resolved } as unknown as PrismaService;
   return { prisma, parts: resolved };
@@ -191,6 +193,112 @@ describe('OvertimeService', () => {
     expect(data.hours).toBe(3.5);
     expect(data.isDraft).toBe(false);
     expect(view).toBeDefined();
+  });
+
+  it('update: recomputa hours/isDraft y persiste los campos editables', async () => {
+    const findFirst = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, startTime: '09:00' })),
+    );
+    const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    const view = await service.update('u1', 'o-1', {
+      startTime: '08:00',
+      endTime: '10:30',
+      projectOther: 'Faena Norte',
+      reason: 'Cierre mensual',
+    });
+
+    expect(findFirst).toHaveBeenCalledWith({ where: { id: 'o-1', userId: 'u1' } });
+    const data = update.mock.calls[0]?.[0]?.data as {
+      startTime: string;
+      endTime: string | null;
+      hours: number | null;
+      isDraft: boolean;
+      projectOther: string | null;
+      reason: string | null;
+    };
+    expect(data.startTime).toBe('08:00');
+    expect(data.endTime).toBe('10:30');
+    expect(data.hours).toBe(2.5);
+    expect(data.isDraft).toBe(false);
+    expect(data.projectOther).toBe('Faena Norte');
+    expect(data.reason).toBe('Cierre mensual');
+    expect(view).toBeDefined();
+  });
+
+  it('update sin endTime => vuelve a borrador (isDraft, hours null)', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    await service.update('u1', 'o-1', { startTime: '09:00' });
+
+    const data = update.mock.calls[0]?.[0]?.data as { isDraft: boolean; hours: number | null };
+    expect(data.isDraft).toBe(true);
+    expect(data.hours).toBeNull();
+  });
+
+  it('update de una solicitud ajena => 404 y no actualiza', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(null));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update('intruso', 'o-1', { startTime: '09:00' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('update de una solicitud ya resuelta (no PENDIENTE) => 409 y no actualiza', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO })));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update('u1', 'o-1', { startTime: '09:00' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('remove: elimina una solicitud propia PENDIENTE (hard delete por id)', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const del = vi.fn(() => Promise.resolve(buildRow()));
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+
+    await service.remove('u1', 'o-1');
+
+    expect(findFirst).toHaveBeenCalledWith({ where: { id: 'o-1', userId: 'u1' } });
+    expect(del).toHaveBeenCalledWith({ where: { id: 'o-1' } });
+  });
+
+  it('remove de una solicitud ajena => 404 y no borra', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(null));
+    const del = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+
+    await expect(service.remove('intruso', 'o-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('remove de una solicitud ya resuelta (no PENDIENTE) => 409 y no borra', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PAGADO })));
+    const del = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+
+    await expect(service.remove('u1', 'o-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(del).not.toHaveBeenCalled();
   });
 
   it('reject persiste rejectionReason en la fila', async () => {

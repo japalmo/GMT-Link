@@ -17,6 +17,7 @@ export interface UseFaenasResult {
   refetch: () => Promise<void>;
   create: (dto: CreateFaenaInput) => Promise<FaenaView>;
   update: (faenaId: string, dto: Partial<CreateFaenaInput>) => Promise<FaenaView>;
+  remove: (faenaId: string) => Promise<void>;
 }
 
 /**
@@ -81,5 +82,13 @@ export function useFaenas(clientId: string | undefined): UseFaenasResult {
     [load],
   );
 
-  return { faenas, loading, error, refetch: load, create, update };
+  const remove = useCallback(
+    async (faenaId: string) => {
+      await api.deleteFaena(faenaId);
+      await load();
+    },
+    [load],
+  );
+
+  return { faenas, loading, error, refetch: load, create, update, remove };
 }

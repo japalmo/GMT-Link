@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import * as api from '@/lib/api';
 import type { ProjectView } from '@/types/operations';
+import type { UpdateProjectInput } from '@gmt-platform/contracts';
 import type {
   CreateProjectInput,
   ProjectWorkerAssignmentView,
@@ -91,6 +92,8 @@ export interface UseProjectResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  update: (dto: UpdateProjectInput) => Promise<ProjectView>;
+  remove: () => Promise<void>;
 }
 
 /** Hook de detalle de un proyecto (`GET /projects/:id`). */
@@ -131,7 +134,22 @@ export function useProject(projectId: string | undefined): UseProjectResult {
     void load();
   }, [load]);
 
-  return { project, loading, error, refetch: load };
+  const update = useCallback(
+    async (dto: UpdateProjectInput) => {
+      if (!projectId) throw new Error('No hay proyecto seleccionado.');
+      const p = await api.updateProject(projectId, dto);
+      await load();
+      return p;
+    },
+    [projectId, load],
+  );
+
+  const remove = useCallback(async () => {
+    if (!projectId) throw new Error('No hay proyecto seleccionado.');
+    await api.deleteProject(projectId);
+  }, [projectId]);
+
+  return { project, loading, error, refetch: load, update, remove };
 }
 
 /* ==========================================================================

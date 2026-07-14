@@ -21,6 +21,7 @@ import type {
   FinanceStatus,
   OvertimeView,
   ReimbursementView,
+  UpdateOvertimeInput,
 } from '@/types/finance';
 import type { NotificationView } from '@/types/notifications';
 import type {
@@ -42,6 +43,7 @@ import type {
   RoleDetail,
   RoleKey,
   UpdateProfileInput,
+  UpdateProjectInput,
   UpdateRoleInput,
   UserMembership,
   UserStatus,
@@ -1080,6 +1082,31 @@ export function payReimbursement(id: string): Promise<ReimbursementView> {
   );
 }
 
+/**
+ * `PUT /reimbursements/:id` — edita un reembolso propio (SOLO el dueño y solo si
+ * está PENDIENTE). Reutiliza el DTO de creación (la boleta se cambia aparte con
+ * {@link attachReimbursementReceipt}). Devuelve el reembolso actualizado.
+ */
+export function updateReimbursement(
+  id: string,
+  input: CreateReimbursementInput,
+): Promise<ReimbursementView> {
+  return request<ReimbursementView>(`/reimbursements/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * `DELETE /reimbursements/:id` — elimina un reembolso propio (SOLO el dueño y
+ * solo si está PENDIENTE). No devuelve cuerpo.
+ */
+export function deleteReimbursement(id: string): Promise<void> {
+  return request<void>(`/reimbursements/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 /** Orientación de página del PDF de impresión en lote (espeja el DTO del backend). */
 export type PrintOrientation = 'portrait' | 'landscape';
 /** Tamaño de hoja del PDF de impresión en lote (espeja el DTO del backend). */
@@ -1287,6 +1314,31 @@ export function payOvertime(id: string): Promise<OvertimeView> {
     `/overtime/${encodeURIComponent(id)}/pay`,
     { method: 'POST' },
   );
+}
+
+/**
+ * `PUT /overtime/:id` — edita una HE propia (SOLO el dueño y solo si está
+ * PENDIENTE). Las horas se recomputan de `startTime`/`endTime` server-side.
+ * Devuelve la solicitud actualizada.
+ */
+export function updateOvertime(
+  id: string,
+  input: UpdateOvertimeInput,
+): Promise<OvertimeView> {
+  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * `DELETE /overtime/:id` — elimina una HE propia (SOLO el dueño y solo si está
+ * PENDIENTE). No devuelve cuerpo.
+ */
+export function deleteOvertime(id: string): Promise<void> {
+  return request<void>(`/overtime/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 /* --- Proyectos --- */
@@ -2209,6 +2261,13 @@ export function updateClient(id: string, dto: UpdateClientInput): Promise<Client
   });
 }
 
+/** `DELETE /clients/:id` — elimina un cliente. Gate `client:create` (403 si falta). */
+export function deleteClient(id: string): Promise<{ success: true }> {
+  return request<{ success: true }>(`/clients/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 /* --- Capa 2: Faenas (GET /clients/:id/faenas — lectura abierta) --- */
 
 /** `GET /clients/:clientId/faenas` — faenas de un cliente con métricas (lectura abierta). */
@@ -2232,6 +2291,13 @@ export function updateFaena(id: string, dto: Partial<CreateFaenaInput>): Promise
   });
 }
 
+/** `DELETE /faenas/:id` — elimina una faena. Gate `faena:create` (403 si falta). */
+export function deleteFaena(id: string): Promise<void> {
+  return request<void>(`/faenas/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 /* --- Capa 3: Proyectos por faena --- */
 /*
  * La lista/creación de proyectos usan {@link listProjects}(faenaId) y
@@ -2242,6 +2308,24 @@ export function updateFaena(id: string, dto: Partial<CreateFaenaInput>): Promise
 /** `GET /projects/:id` — detalle de un proyecto. 404 si no existe. */
 export function getProject(id: string): Promise<ProjectView> {
   return request<ProjectView>(`/projects/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `PATCH /projects/:id` — edita un proyecto. En este corte SOLO `name`/
+ * `description` ({@link UpdateProjectInput}). Devuelve el proyecto actualizado.
+ */
+export function updateProject(id: string, dto: UpdateProjectInput): Promise<ProjectView> {
+  return request<ProjectView>(`/projects/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `DELETE /projects/:id` — elimina un proyecto. No devuelve cuerpo. */
+export function deleteProject(id: string): Promise<void> {
+  return request<void>(`/projects/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   FolderKanban,
   FolderOpen,
   Plus,
+  Trash2,
   TrendingUp,
 } from 'lucide-react';
 import { useClients } from '@/hooks/use-clients';
@@ -37,6 +38,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/components/ui/modal';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import type { ClientView } from '@/types/projects';
 
 /** Filtros del catálogo por estado de actividad del cliente. */
@@ -56,8 +58,8 @@ const ACTIVITY_FILTERS: Array<{ value: ActivityFilter; label: string }> = [
  */
 export default function ProyectosClientesPage() {
   const navigate = useNavigate();
-  const { clients, loading, error, create } = useClients();
-  const canCreate = useHasPermission('project:manage');
+  const { clients, loading, error, create, remove } = useClients();
+  const canManage = useHasPermission('project:manage');
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ActivityFilter>('todos');
@@ -69,6 +71,9 @@ export default function ProyectosClientesPage() {
   const [rut, setRut] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Estado del dialog de eliminación.
+  const [clientToDelete, setClientToDelete] = useState<ClientView | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -132,7 +137,7 @@ export default function ProyectosClientesPage() {
         title="Clientes"
         description="Catálogo de clientes mandantes. Selecciona uno para ver sus faenas."
         actions={
-          canCreate ? (
+          canManage ? (
             <Button onClick={openModal}>
               <Plus className="mr-2 size-4" />
               Nuevo cliente
@@ -196,7 +201,9 @@ export default function ProyectosClientesPage() {
             <ClientCard
               key={client.id}
               client={client}
+              canManage={canManage}
               onOpen={() => navigate(`/proyectos/cliente/${client.id}`)}
+              onDelete={() => setClientToDelete(client)}
             />
           ))}
         </div>
@@ -267,6 +274,25 @@ export default function ProyectosClientesPage() {
           </form>
         </ModalContent>
       </Modal>
+
+      {/* Dialog eliminar cliente */}
+      <ConfirmDialog
+        open={clientToDelete !== null}
+        onOpenChange={(next) => (next ? undefined : setClientToDelete(null))}
+        title="Eliminar cliente"
+        description={
+          <>
+            ¿Seguro que quieres eliminar{' '}
+            <span className="font-medium text-foreground">{clientToDelete?.name}</span>? Esta
+            acción no se puede deshacer.
+          </>
+        }
+        onConfirm={async () => {
+          if (!clientToDelete) return;
+          await remove(clientToDelete.id);
+          toast.success(`Cliente "${clientToDelete.name}" eliminado.`);
+        }}
+      />
     </PageContainer>
   );
 }
@@ -309,7 +335,17 @@ export function Metric({
 }
 
 /** Card de un cliente con su fila de métricas. */
-function ClientCard({ client, onOpen }: { client: ClientView; onOpen: () => void }) {
+function ClientCard({
+  client,
+  canManage,
+  onOpen,
+  onDelete,
+}: {
+  client: ClientView;
+  canManage: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
   return (
     <Card
       className="cursor-pointer bg-card/60 transition-all hover:border-primary/30 hover:shadow-xs"
@@ -329,7 +365,24 @@ function ClientCard({ client, onOpen }: { client: ClientView; onOpen: () => void
             <Building2 className="size-4 shrink-0 text-primary" />
             <CardTitle className="line-clamp-1 text-md">{client.name}</CardTitle>
           </div>
-          <Badge variant="outline">{client.code}</Badge>
+          <div className="flex shrink-0 items-center gap-1">
+            <Badge variant="outline">{client.code}</Badge>
+            {canManage && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                aria-label={`Eliminar ${client.name}`}
+                title="Eliminar"
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            )}
+          </div>
         </div>
         {client.rut && (
           <CardDescription className="text-xs">RUT: {client.rut}</CardDescription>

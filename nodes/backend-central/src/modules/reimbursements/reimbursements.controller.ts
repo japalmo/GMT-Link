@@ -2,11 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   Res,
   UnauthorizedException,
@@ -28,6 +30,7 @@ import {
   MarkPrintedDto,
   PrintReimbursementsDto,
   RejectReimbursementDto,
+  UpdateReimbursementDto,
 } from './dto/reimbursements.dto';
 import type { Paginated, ReceiptScanResult, ReimbursementView } from './reimbursements.types';
 import type { ReimbursementSummary } from './reimbursements-summary.util';
@@ -173,6 +176,30 @@ export class ReimbursementsController {
     await this.require(userId, P_CREATE);
     const checked = this.requireValidFile(file);
     return this.reimbursements.attachReceipt(userId, id, checked);
+  }
+
+  /** Edita un reembolso propio (JSON). Solo el dueño y solo mientras sigue PENDIENTE. */
+  @Put(':id')
+  async update(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateReimbursementDto,
+  ): Promise<ReimbursementView> {
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
+    return this.reimbursements.update(userId, id, dto);
+  }
+
+  /** Elimina un reembolso propio. Solo el dueño y solo mientras sigue PENDIENTE. */
+  @Delete(':id')
+  @HttpCode(204)
+  async remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<void> {
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_CREATE);
+    await this.reimbursements.remove(userId, id);
   }
 
   @Post(':id/approve')

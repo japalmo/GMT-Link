@@ -182,6 +182,27 @@ export interface CreateOvertimeInput {
   reason?: string;
 }
 
+/**
+ * Cuerpo de `PUT /overtime/:id` (edición de una HE propia PENDIENTE). Las horas
+ * se COMPUTAN de `startTime`/`endTime` (no las envía el cliente); `startTime` es
+ * obligatoria, `endTime` ausente ⇒ borrador. `projectId` y `projectOther` son
+ * excluyentes. `onBehalfOfUserId` no se edita acá (se fija al crear).
+ */
+export interface UpdateOvertimeInput {
+  /** "HH:mm" — obligatoria. */
+  startTime: string;
+  /** "HH:mm" — opcional: si falta, la solicitud queda borrador. */
+  endTime?: string;
+  /** Proyecto asignado; excluyente con `projectOther`. */
+  projectId?: string;
+  /** Texto libre cuando el proyecto es "Otro"; excluyente con `projectId`. */
+  projectOther?: string;
+  /** "Autorizado por" (admin_contrato / gerencias). */
+  authorizedById?: string;
+  /** Motivo/descripción opcional (≤ 500 caracteres). */
+  reason?: string;
+}
+
 /* ─────────────────────────── Vista general (§5.2/§5.3) ─────────────────────── */
 
 /** Referencia mínima de proyecto para hidratar nombre/cliente en la fila unificada.

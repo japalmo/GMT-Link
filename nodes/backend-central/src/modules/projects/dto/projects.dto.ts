@@ -59,6 +59,22 @@ export class CreateServiceDto {
   docCodingConfig!: Prisma.InputJsonValue;
 }
 
+/**
+ * Actualización GENERAL del proyecto. En este corte solo se editan `name` y
+ * `description`; la faena (y demás claves estructurales: clientId/code/FGA) NO
+ * se cambian aquí.
+ */
+export class UpdateProjectDto {
+  @IsString()
+  @IsOptional()
+  @IsNotEmpty()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string | null;
+}
+
 export class UpdateProjectKpisDto {
   @IsObject()
   @IsNotEmpty()

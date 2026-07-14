@@ -56,6 +56,7 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // propias por recurso (deuda post-MVP).
   { key: 'project:read', label: 'Ver proyectos', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
   { key: 'project:update', label: 'Editar proyecto', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: true },
+  { key: 'project:delete', label: 'Eliminar proyecto', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: true },
   { key: 'project:kpi:define', label: 'Definir KPIs', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_define_kpi', scopeable: true },
   { key: 'service:read', label: 'Ver servicios', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_view', scopeable: true },
   // ⚠️ Acople conocido (review Task 1.5): en el modelo FGA `asset.can_create =
@@ -149,7 +150,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
-    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('provider:access', 'GLOBAL'), g('warehouse:access', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
+    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('provider:access', 'GLOBAL'), g('warehouse:access', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:delete'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
   },
   {
     key: 'project_creator',

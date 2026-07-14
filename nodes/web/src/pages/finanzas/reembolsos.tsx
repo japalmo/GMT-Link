@@ -6,8 +6,10 @@ import {
   DollarSign,
   FileText,
   Loader2,
+  Pencil,
   Plus,
   Printer,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,8 +28,9 @@ import { useReimbursements } from '@/hooks/use-reimbursements';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { errorToMessage } from '@/lib/api';
 import { formatCLP, formatDate } from '@/lib/format';
-import type { CreateReimbursementInput } from '@/types/finance';
+import type { CreateReimbursementInput, ReimbursementView } from '@/types/finance';
 import { DOC_ACCEPT, validateFile } from '../perfil/file-field';
+import { ConfirmDialog } from '../perfil/confirm-dialog';
 import { ReembolsoFormDialog } from './reembolso-form';
 import { BatchPrintDialog } from './batch-print-dialog';
 
@@ -46,6 +49,8 @@ export function ReembolsosTab(): ReactNode {
     error,
     refetch,
     create,
+    update,
+    remove,
     attachReceipt,
     approve,
     reject,
@@ -55,6 +60,8 @@ export function ReembolsosTab(): ReactNode {
   const canPrintBatch = useHasPermission('finance:print:batch');
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ReimbursementView | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ReimbursementView | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -65,9 +72,18 @@ export function ReembolsosTab(): ReactNode {
   /** Crea el reembolso con su boleta obligatoria en un solo paso (multipart). */
   const handleCreate = async (
     input: CreateReimbursementInput,
-    receiptFile: File,
+    receiptFile?: File,
   ): Promise<void> => {
+    // En creación el formulario garantiza la boleta (guard interno); si faltara,
+    // el propio diálogo bloquea el envío antes de llegar acá.
+    if (!receiptFile) return;
     await create(input, receiptFile);
+  };
+
+  /** Edita un reembolso propio PENDIENTE (sin tocar la boleta). */
+  const handleEdit = async (input: CreateReimbursementInput): Promise<void> => {
+    if (!editTarget) return;
+    await update(editTarget.id, input);
   };
 
   const handleApprove = async (id: string): Promise<void> => {
@@ -170,6 +186,7 @@ export function ReembolsosTab(): ReactNode {
                   <TableHead>Monto</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Boleta</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -216,6 +233,34 @@ export function ReembolsosTab(): ReactNode {
                           </Button>
                         ) : (
                           <span className="text-xs text-muted-foreground">Sin boleta</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {item.status === 'PENDIENTE' ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-xs"
+                              onClick={() => setEditTarget(item)}
+                            >
+                              <Pencil className="size-3.5" aria-hidden />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
+                              onClick={() => setDeleteTarget(item)}
+                            >
+                              <Trash2 className="size-3.5" aria-hidden />
+                              Borrar
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </div>
                     </TableCell>
@@ -393,6 +438,30 @@ export function ReembolsosTab(): ReactNode {
       />
 
       <ReembolsoFormDialog open={createOpen} onOpenChange={setCreateOpen} onSubmit={handleCreate} />
+
+      {/* Edición de un reembolso propio PENDIENTE (reusa el formulario en modo edición). */}
+      <ReembolsoFormDialog
+        open={editTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditTarget(null);
+        }}
+        initial={editTarget ?? undefined}
+        onSubmit={handleEdit}
+      />
+
+      {/* Confirmación de borrado de un reembolso propio PENDIENTE. */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Eliminar reembolso"
+        description="Se eliminará esta solicitud de reembolso de forma permanente. Esta acción no se puede deshacer."
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          await remove(deleteTarget.id);
+        }}
+      />
 
       {canPrintBatch && (
         <BatchPrintDialog

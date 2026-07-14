@@ -60,6 +60,7 @@ interface PrismaParts {
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   updateMany: ReturnType<typeof vi.fn>;
+  delete: ReturnType<typeof vi.fn>;
   geminiCount: ReturnType<typeof vi.fn>;
   geminiCreate: ReturnType<typeof vi.fn>;
 }
@@ -72,6 +73,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
     updateMany: parts.updateMany ?? vi.fn(() => Promise.resolve({ count: 0 })),
+    delete: parts.delete ?? vi.fn(() => Promise.resolve(undefined)),
     geminiCount: parts.geminiCount ?? vi.fn(() => Promise.resolve(0)),
     geminiCreate: parts.geminiCreate ?? vi.fn(() => Promise.resolve(undefined)),
   };
@@ -83,6 +85,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
       findUnique: resolved.findUnique,
       update: resolved.update,
       updateMany: resolved.updateMany,
+      delete: resolved.delete,
     },
     geminiUsage: { count: resolved.geminiCount, create: resolved.geminiCreate },
   } as unknown as PrismaService;
@@ -92,6 +95,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
 function buildStorage(): {
   storage: StorageService;
   save: ReturnType<typeof vi.fn>;
+  del: ReturnType<typeof vi.fn>;
 } {
   const save = vi.fn(() =>
     Promise.resolve({
@@ -100,7 +104,7 @@ function buildStorage(): {
     }),
   );
   const del = vi.fn(() => Promise.resolve(undefined));
-  return { storage: { save, delete: del } as unknown as StorageService, save };
+  return { storage: { save, delete: del } as unknown as StorageService, save, del };
 }
 
 function buildNotifications(): {
@@ -389,6 +393,127 @@ describe('ReimbursementsService', () => {
       ConflictException,
     );
     expect(storageBits.save).not.toHaveBeenCalled();
+  });
+
+  it('update: el dueño edita un reembolso PENDIENTE (campos editables, sin tocar la boleta)', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    const view = await service.update('u1', 'r-1', {
+      amount: 20000,
+      date: '2026-06-12T00:00:00.000Z',
+      concept: 'Taxi de vuelta',
+      category: 'transporte',
+    });
+
+    const data = update.mock.calls[0]?.[0]?.data as {
+      amount: number;
+      concept: string;
+      category: string | null;
+      subcategory: string | null;
+      receiptUrl?: string;
+      receiptKey?: string;
+    };
+    expect(data.amount).toBe(20000);
+    expect(data.concept).toBe('Taxi de vuelta');
+    expect(data.category).toBe('transporte');
+    expect(data.subcategory).toBeNull();
+    // La boleta NO se toca en un PUT.
+    expect(data.receiptUrl).toBeUndefined();
+    expect(data.receiptKey).toBeUndefined();
+    expect(storageBits.save).not.toHaveBeenCalled();
+    expect(view.amount).toBe(20000);
+  });
+
+  it('update: ajeno o inexistente → 404 y NO actualiza', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(null));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update('u1', 'ajeno', {
+        amount: 100,
+        date: '2026-06-12T00:00:00.000Z',
+        concept: 'X',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('update: reembolso ya resuelto (no PENDIENTE) → 409 y NO actualiza', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO })));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update('u1', 'r-1', {
+        amount: 100,
+        date: '2026-06-12T00:00:00.000Z',
+        concept: 'X',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('remove: el dueño elimina un reembolso PENDIENTE (delete + borra la boleta del storage)', async () => {
+    const findFirst = vi.fn(() =>
+      Promise.resolve(
+        buildRow({ status: FinanceStatus.PENDIENTE, receiptKey: 'reimbursements/boleta.pdf' }),
+      ),
+    );
+    const del = vi.fn(() => Promise.resolve(undefined));
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+
+    await service.remove('u1', 'r-1');
+
+    expect(del).toHaveBeenCalledWith({ where: { id: 'r-1' } });
+    expect(storageBits.del).toHaveBeenCalledTimes(1);
+    expect(storageBits.del).toHaveBeenCalledWith('reimbursements/boleta.pdf');
+  });
+
+  it('remove: ajeno o inexistente → 404 y NO borra fila ni boleta', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(null));
+    const del = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+
+    await expect(service.remove('u1', 'ajeno')).rejects.toBeInstanceOf(NotFoundException);
+    expect(del).not.toHaveBeenCalled();
+    expect(storageBits.del).not.toHaveBeenCalled();
+  });
+
+  it('remove: reembolso ya resuelto (no PENDIENTE) → 409 y NO borra fila ni boleta', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PAGADO })));
+    const del = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+
+    await expect(service.remove('u1', 'r-1')).rejects.toBeInstanceOf(ConflictException);
+    expect(del).not.toHaveBeenCalled();
+    expect(storageBits.del).not.toHaveBeenCalled();
+  });
+
+  it('remove: si el borrado de la boleta en storage rechaza, igual resuelve (best-effort)', async () => {
+    const findFirst = vi.fn(() =>
+      Promise.resolve(
+        buildRow({ status: FinanceStatus.PENDIENTE, receiptKey: 'reimbursements/boleta.pdf' }),
+      ),
+    );
+    const del = vi.fn(() => Promise.resolve(undefined));
+    const { prisma } = buildPrisma({ findFirst, delete: del });
+    const service = makeService(prisma);
+    storageBits.del.mockRejectedValueOnce(new Error('storage caído'));
+
+    await expect(service.remove('u1', 'r-1')).resolves.toBeUndefined();
+    expect(del).toHaveBeenCalledWith({ where: { id: 'r-1' } });
+    expect(storageBits.del).toHaveBeenCalledTimes(1);
   });
 
   it('approve: PENDIENTE→APROBADO, fija decisor y notifica al solicitante', async () => {

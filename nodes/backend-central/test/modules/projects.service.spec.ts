@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ScopeType } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FgaService } from '../../src/fga/fga.service';
@@ -8,6 +8,7 @@ import { ProjectsService } from '../../src/modules/projects/projects.service';
 import type {
   CreateProjectDto,
   CreateServiceDto,
+  UpdateProjectDto,
   UpdateProjectKpisDto,
 } from '../../src/modules/projects/dto/projects.dto';
 
@@ -18,6 +19,7 @@ interface PrismaMock {
     findUnique: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
   faena: {
     findUnique: ReturnType<typeof vi.fn>;
@@ -26,11 +28,13 @@ interface PrismaMock {
     findFirst: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    deleteMany: ReturnType<typeof vi.fn>;
   };
   service: {
     findFirst: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
   };
+  asset: { count: ReturnType<typeof vi.fn> };
   task: { aggregate: ReturnType<typeof vi.fn>; groupBy: ReturnType<typeof vi.fn> };
   department: { findMany: ReturnType<typeof vi.fn> };
   client: { findMany: ReturnType<typeof vi.fn> };
@@ -46,10 +50,12 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     },
     faena: { findUnique: vi.fn() },
-    membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
     service: { findFirst: vi.fn(), create: vi.fn() },
+    asset: { count: vi.fn(() => Promise.resolve(0)) },
     task: {
       aggregate: vi.fn(() => Promise.resolve({ _sum: { actualPoints: 0 } })),
       groupBy: vi.fn(() => Promise.resolve([])),
@@ -72,6 +78,7 @@ describe('ProjectsService', () => {
     check: ReturnType<typeof vi.fn>;
     syncMembershipToFGA: ReturnType<typeof vi.fn>;
     writeTuples: ReturnType<typeof vi.fn>;
+    deleteTuples: ReturnType<typeof vi.fn>;
   };
   let service: ProjectsService;
 
@@ -83,6 +90,7 @@ describe('ProjectsService', () => {
       check: vi.fn(() => Promise.resolve(true)),
       syncMembershipToFGA: vi.fn(() => Promise.resolve()),
       writeTuples: vi.fn(() => Promise.resolve()),
+      deleteTuples: vi.fn(() => Promise.resolve()),
     };
     service = new ProjectsService(prisma, fga as unknown as FgaService);
   });
@@ -308,6 +316,103 @@ describe('ProjectsService', () => {
       const kpis = result.kpis as { current: number; meta: number };
       expect(kpis.current).toBe(3);
       expect(kpis.meta).toBe(50);
+    });
+  });
+
+  describe('updateGeneral', () => {
+    const upd = (over: Partial<UpdateProjectDto> = {}): UpdateProjectDto =>
+      ({ name: 'Nuevo nombre', ...over }) as UpdateProjectDto;
+
+    it('404 si el proyecto no existe', async () => {
+      mock.project.findUnique.mockResolvedValue(null);
+      await expect(service.updateGeneral('p1', upd())).rejects.toBeInstanceOf(NotFoundException);
+      expect(mock.project.update).not.toHaveBeenCalled();
+    });
+
+    it('actualiza name/description y reinyecta el current', async () => {
+      mock.project.findUnique.mockResolvedValue({ id: 'p1', name: 'Viejo', kpis: {} });
+      mock.project.update.mockResolvedValue({
+        id: 'p1',
+        name: 'Nuevo nombre',
+        description: 'Desc',
+        kpis: { meta: 10 },
+      });
+      mock.task.aggregate.mockResolvedValue({ _sum: { actualPoints: 4 } });
+
+      const result = await service.updateGeneral('p1', upd({ description: 'Desc' }));
+
+      expect(mock.project.update).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { name: 'Nuevo nombre', description: 'Desc' },
+      });
+      const kpis = result.kpis as { current: number; meta: number };
+      expect(kpis.current).toBe(4);
+      expect(kpis.meta).toBe(10);
+    });
+  });
+
+  describe('remove', () => {
+    const cleanProject = () => ({
+      id: 'p1',
+      clientId: 'c1',
+      departmentId: null,
+      _count: { services: 0, tasks: 0, documents: 0, elements: 0, workers: 0 },
+    });
+
+    it('404 si el proyecto no existe', async () => {
+      mock.project.findUnique.mockResolvedValue(null);
+      await expect(service.remove('p1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(mock.project.delete).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['services', { services: 2 }],
+      ['tasks', { tasks: 1 }],
+      ['documents', { documents: 3 }],
+      ['elements', { elements: 5 }],
+      ['workers', { workers: 1 }],
+    ])('bloquea 409 si _count.%s > 0', async (_label, overrides) => {
+      mock.project.findUnique.mockResolvedValue({
+        ...cleanProject(),
+        _count: { ...cleanProject()._count, ...overrides },
+      });
+      mock.asset.count.mockResolvedValue(0);
+
+      await expect(service.remove('p1')).rejects.toBeInstanceOf(ConflictException);
+      expect(mock.project.delete).not.toHaveBeenCalled();
+    });
+
+    it('bloquea 409 si hay activos (asset.count > 0)', async () => {
+      mock.project.findUnique.mockResolvedValue(cleanProject());
+      mock.asset.count.mockResolvedValue(2);
+
+      await expect(service.remove('p1')).rejects.toBeInstanceOf(ConflictException);
+      expect(mock.project.delete).not.toHaveBeenCalled();
+    });
+
+    it('proyecto limpio: borra memberships + project.delete y sincroniza la baja FGA', async () => {
+      mock.project.findUnique.mockResolvedValue(cleanProject());
+      mock.asset.count.mockResolvedValue(0);
+      mock.membership.findMany.mockResolvedValue([
+        { userId: 'u1', roleKey: 'project_creator', scopeType: ScopeType.PROJECT, scopeId: 'p1' },
+      ]);
+      mock.membership.deleteMany.mockResolvedValue({ count: 1 });
+      mock.project.delete.mockResolvedValue({ id: 'p1' });
+
+      const result = await service.remove('p1');
+
+      expect(fga.syncMembershipToFGA).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'u1', roleKey: 'project_creator', scopeId: 'p1' }),
+        'delete',
+      );
+      expect(fga.deleteTuples).toHaveBeenCalledWith([
+        { user: 'client:c1', relation: 'client', object: 'project:p1' },
+      ]);
+      expect(mock.membership.deleteMany).toHaveBeenCalledWith({
+        where: { scopeType: ScopeType.PROJECT, scopeId: 'p1' },
+      });
+      expect(mock.project.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
+      expect(result).toEqual({ success: true });
     });
   });
 

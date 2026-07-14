@@ -3,12 +3,18 @@ import {
   ApiError,
   approveOvertime,
   createOvertime,
+  deleteOvertime,
   listAllOvertime,
   listMyOvertime,
   payOvertime,
   rejectOvertime,
+  updateOvertime,
 } from '@/lib/api';
-import type { CreateOvertimeInput, OvertimeView } from '@/types/finance';
+import type {
+  CreateOvertimeInput,
+  OvertimeView,
+  UpdateOvertimeInput,
+} from '@/types/finance';
 
 /** Mensaje legible a partir de un error desconocido (ApiError o genérico). */
 function toMessage(error: unknown, fallback: string): string {
@@ -63,6 +69,10 @@ export interface UseOvertimeResult {
   refetch: () => Promise<void>;
   /** Crea una solicitud propia y refresca. Propaga el error al llamador. */
   create: (input: CreateOvertimeInput) => Promise<void>;
+  /** Edita una solicitud propia PENDIENTE y refresca. Propaga el error al llamador. */
+  update: (id: string, input: UpdateOvertimeInput) => Promise<void>;
+  /** Elimina una solicitud propia PENDIENTE y refresca. Propaga el error al llamador. */
+  remove: (id: string) => Promise<void>;
   /** Aprueba una solicitud (gestor) y refresca. */
   approve: (id: string) => Promise<void>;
   /** Rechaza una solicitud (gestor), con motivo opcional, y refresca. */
@@ -217,6 +227,22 @@ export function useOvertime(opts: UseOvertimeOptions = {}): UseOvertimeResult {
     [refreshAll],
   );
 
+  const update = useCallback(
+    async (id: string, input: UpdateOvertimeInput) => {
+      await updateOvertime(id, input);
+      await refreshAll();
+    },
+    [refreshAll],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      await deleteOvertime(id);
+      await refreshAll();
+    },
+    [refreshAll],
+  );
+
   const approve = useCallback(
     async (id: string) => {
       await approveOvertime(id);
@@ -255,6 +281,8 @@ export function useOvertime(opts: UseOvertimeOptions = {}): UseOvertimeResult {
     error,
     refetch: load,
     create,
+    update,
+    remove,
     approve,
     reject,
     pay,
