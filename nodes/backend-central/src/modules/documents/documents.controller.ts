@@ -16,6 +16,8 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { DocumentStatus } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -67,6 +69,37 @@ export class DocumentsController {
       status: query.status,
       expiring: query.expiring === undefined ? undefined : query.expiring === 'true',
     });
+  }
+
+  /**
+   * Lista los documentos propios con el MOTOR de tablas server-side (offset): filtro
+   * por estado y "por vencer", orden y paginación con total. Lo consume la tabla de
+   * "Mis documentos". DEBE declararse antes de `@Get(':id')`.
+   */
+  @Get('me/table')
+  listMineTable(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<PersonalDocumentView>> {
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    const rawStatus = typeof filters?.status === 'string' ? filters.status : '';
+    const status = (Object.values(DocumentStatus) as string[]).includes(rawStatus)
+      ? (rawStatus as DocumentStatus)
+      : undefined;
+    return this.documentsService.listMineTable(this.requireUserId(authUser), {
+      status,
+      expiring: filters?.expiring === 'true',
+    }, req);
   }
 
   /**

@@ -38,12 +38,16 @@ import {
   ImportWizard,
   type ImportTemplateColumn,
 } from '@/components/primitives/import-wizard';
+import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
+import { useDataTable } from '@/hooks/use-data-table';
+import type { TableRequest } from '@gmt-platform/contracts';
 import {
   listWarehouses,
   getWarehouseById,
   createWarehouse,
   listSupplies,
   registerWarehouseTransaction,
+  fetchWarehouseTransactionsTable,
   importSupplies,
   createSupply,
   type WarehouseView,
@@ -157,6 +161,21 @@ export default function InsumosPage(): ReactNode {
       fetchWarehouseDetail(selectedWarehouseId);
     }
   }, [selectedWarehouseId, fetchWarehouseDetail]);
+
+  // MOTOR de tablas de MOVIMIENTOS (offset). Reemplaza el corte a 50: pagina todos
+  // los movimientos de la bodega activa. El stock se sigue trayendo por
+  // getWarehouseById (acotado + lo usa el formulario para validar el stock actual).
+  const txFetcher = useCallback(
+    (req: TableRequest) => fetchWarehouseTransactionsTable(selectedWarehouseId ?? '', req),
+    [selectedWarehouseId],
+  );
+  const txTable = useDataTable<WarehouseTransactionView>(txFetcher, {
+    enabled: selectedWarehouseId != null,
+    resetKey: selectedWarehouseId,
+    initialSortBy: 'fecha',
+    initialSortDir: 'desc',
+  });
+  const { refetch: refetchTx } = txTable;
 
   // Handle Autocomplete search
   useEffect(() => {
@@ -279,8 +298,9 @@ export default function InsumosPage(): ReactNode {
         quantity: txQuantity,
         reason: txReason || undefined,
       });
-      // Refresh details
+      // Refresh details (stock para el formulario) y la tabla de movimientos.
       await fetchWarehouseDetail(selectedWarehouseId);
+      refetchTx();
       // Reset form
       setSelectedSupply(null);
       setSearchSupplyQuery('');
@@ -380,6 +400,7 @@ export default function InsumosPage(): ReactNode {
 
     await importSupplies({ items });
     await fetchWarehouseDetail(selectedWarehouseId);
+    refetchTx();
     setImportOpen(false);
   };
 
@@ -413,6 +434,84 @@ export default function InsumosPage(): ReactNode {
     .slice(0, 5);
 
   const maxStockQty = topStocks.length > 0 ? Math.max(...topStocks.map((s) => s.quantity)) : 1;
+
+  // Columnas de la tabla de MOVIMIENTOS (motor server-side).
+  const txColumns: ReadonlyArray<DataTableColumn<WarehouseTransactionView>> = [
+    {
+      id: 'fecha',
+      header: 'Fecha',
+      sortable: true,
+      render: (tx) => (
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {new Date(tx.createdAt).toLocaleString('es-CL', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </span>
+      ),
+    },
+    {
+      id: 'insumo',
+      header: 'Insumo',
+      render: (tx) => (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold">{tx.supply?.name}</span>
+          <Badge variant="outline" className="h-4 font-mono text-[9px]">
+            {tx.supply?.code}
+          </Badge>
+        </div>
+      ),
+    },
+    {
+      id: 'tipo',
+      header: 'Movimiento',
+      sortable: true,
+      render: (tx) =>
+        tx.type === 'ENTRY' ? (
+          <Badge variant="success" className="px-2 text-[10px] font-bold">
+            Ingreso (ENTRY)
+          </Badge>
+        ) : (
+          <Badge variant="warning" className="px-2 text-[10px] font-bold">
+            Egreso (EXIT)
+          </Badge>
+        ),
+    },
+    {
+      id: 'cantidad',
+      header: 'Cantidad',
+      sortable: true,
+      className: 'text-right',
+      render: (tx) => (
+        <span className="font-mono text-xs font-bold">
+          {tx.type === 'ENTRY' ? '+' : '-'}
+          {tx.quantity}{' '}
+          <span className="text-[10px] font-normal text-muted-foreground">{tx.supply?.unit}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'operador',
+      header: 'Operador / Responsable',
+      render: (tx) => (
+        <span className="text-xs font-medium text-foreground/80">
+          {tx.actor ? `${tx.actor.firstName} ${tx.actor.lastName}` : 'Sistema'}
+        </span>
+      ),
+    },
+    {
+      id: 'motivo',
+      header: 'Motivo',
+      className: 'max-w-[200px] truncate',
+      render: (tx) => (
+        <span className="text-xs text-muted-foreground" title={tx.reason || ''}>
+          {tx.reason || 'Sin motivo'}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -877,75 +976,20 @@ export default function InsumosPage(): ReactNode {
                 <CardHeader>
                   <CardTitle className="text-md font-bold flex items-center gap-2">
                     <History className="size-4 text-primary" />
-                    Historial de Movimientos Recientes
+                    Historial de Movimientos
                   </CardTitle>
                   <CardDescription>
-                    Registro cronológico de los últimos 50 ingresos y egresos de esta bodega.
+                    Registro cronológico de todos los ingresos y egresos de esta bodega.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {loadingDetail ? (
-                    <LoadingState rows={4} label="Cargando movimientos…" />
-                  ) : !warehouseDetail?.transactions || warehouseDetail.transactions.length === 0 ? (
-                    <EmptyState message="No hay transacciones registradas históricamente." />
-                  ) : (
-                    <div className="max-h-[300px] overflow-y-auto rounded-md border border-border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Fecha</TableHead>
-                            <TableHead>Insumo</TableHead>
-                            <TableHead>Movimiento</TableHead>
-                            <TableHead className="text-right">Cantidad</TableHead>
-                            <TableHead>Operador / Responsable</TableHead>
-                            <TableHead>Motivo</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {warehouseDetail.transactions.map((tx) => (
-                            <TableRow key={tx.id} className="hover:bg-muted/30">
-                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                                {new Date(tx.createdAt).toLocaleString('es-CL', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-xs">{tx.supply?.name}</span>
-                                  <Badge variant="outline" className="font-mono text-[9px] h-4">
-                                    {tx.supply?.code}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {tx.type === 'ENTRY' ? (
-                                  <Badge variant="success" className="text-[10px] font-bold px-2">
-                                    Ingreso (ENTRY)
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="warning" className="text-[10px] font-bold px-2">
-                                    Egreso (EXIT)
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right font-mono font-bold text-xs">
-                                {tx.type === 'ENTRY' ? '+' : '-'}{tx.quantity} <span className="text-[10px] text-muted-foreground font-normal">{tx.supply?.unit}</span>
-                              </TableCell>
-                              <TableCell className="text-xs font-medium text-foreground/80">
-                                {tx.actor ? `${tx.actor.firstName} ${tx.actor.lastName}` : 'Sistema'}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]" title={tx.reason || ''}>
-                                {tx.reason || '—'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                  <DataTable<WarehouseTransactionView>
+                    table={txTable}
+                    columns={txColumns}
+                    getRowId={(tx) => tx.id}
+                    emptyMessage="No hay transacciones registradas históricamente."
+                    caption="Historial de movimientos de la bodega"
+                  />
                 </CardContent>
               </Card>
             </>

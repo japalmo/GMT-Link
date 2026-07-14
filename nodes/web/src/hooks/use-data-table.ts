@@ -25,6 +25,13 @@ export interface UseDataTableOptions {
    * el estado vigente. Default `true`.
    */
   enabled?: boolean;
+  /**
+   * Clave de reinicio: cuando cambia (p. ej. la bodega seleccionada, con un fetcher
+   * scopeado por id), la tabla se reinicia — limpia las filas, vuelve a la página 1
+   * y muestra skeleton de inmediato — antes de recargar, evitando el destello de las
+   * filas anteriores. No dispara reinicio en el primer render.
+   */
+  resetKey?: string | number | null;
 }
 
 export interface UseDataTableResult<T> {
@@ -68,6 +75,7 @@ export function useDataTable<T>(
     initialFilters = {},
     searchDebounceMs = 300,
     enabled = true,
+    resetKey = null,
   } = opts;
 
   const [items, setItems] = useState<T[]>([]);
@@ -96,6 +104,21 @@ export function useDataTable<T>(
     const id = setTimeout(() => setDebouncedSearch(search), searchDebounceMs);
     return () => clearTimeout(id);
   }, [search, searchDebounceMs]);
+
+  // Reinicio por clave: al cambiar `resetKey` (p. ej. la bodega), limpia las filas y
+  // muestra skeleton en el mismo render, sin destello de las filas anteriores.
+  const prevResetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (prevResetKeyRef.current === resetKey) return;
+    prevResetKeyRef.current = resetKey;
+    setItems([]);
+    setTotal(0);
+    setError(null);
+    setPageState(1);
+    setHasLoaded(false);
+    setLoading(enabled);
+    setReloadKey((k) => k + 1);
+  }, [resetKey, enabled]);
 
   const genRef = useRef(0);
   useEffect(() => {

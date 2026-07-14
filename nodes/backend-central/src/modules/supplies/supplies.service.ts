@@ -14,6 +14,9 @@ import {
   WarehouseView,
 } from './supplies.types';
 import { WarehouseTransaction, Warehouse, Supply, Provider, User } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 
 @Injectable()
 export class SuppliesService {
@@ -92,6 +95,43 @@ export class SuppliesService {
       })),
       transactions: txsRaw.map((t) => this.toTxView(t)),
     };
+  }
+
+  /**
+   * Movimientos de una bodega con el MOTOR de tablas server-side (offset). Reemplaza
+   * el corte a 50 de `getWarehouseById` por paginación real (los movimientos crecen
+   * sin techo). Orden configurable (fecha/cantidad/tipo, default fecha desc). El
+   * stock queda en `getWarehouseById` (acotado + lo consume el formulario de movimiento).
+   */
+  async listWarehouseTransactionsTable(
+    warehouseId: string,
+    req: TableRequest,
+  ): Promise<TablePage<WarehouseTransactionView>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    const where: Prisma.WarehouseTransactionWhereInput = { warehouseId };
+
+    const orderBy = tableOrderBy<Prisma.WarehouseTransactionOrderByWithRelationInput[]>(
+      req,
+      {
+        fecha: (dir) => [{ createdAt: dir }, { id: 'desc' }],
+        cantidad: (dir) => [{ quantity: dir }, { createdAt: 'desc' }, { id: 'desc' }],
+        tipo: (dir) => [{ type: dir }, { createdAt: 'desc' }, { id: 'desc' }],
+      },
+      [{ createdAt: 'desc' }, { id: 'desc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.warehouseTransaction.findMany({
+        where,
+        include: { supply: true, actor: true },
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.warehouseTransaction.count({ where }),
+    ]);
+
+    return tablePage(rows.map((t) => this.toTxView(t)), total, page, pageSize);
   }
 
   async createSupply(dto: CreateSupplyDto): Promise<SupplyView> {

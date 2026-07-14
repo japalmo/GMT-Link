@@ -10,6 +10,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import type { CreatePersonalDocumentDto } from './dto/documents.dto';
 import type { PersonalDocumentView } from './documents.types';
 
@@ -85,6 +87,49 @@ export class DocumentsService {
       orderBy: [{ expiresAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
     });
     return rows.map((row) => this.toView(row));
+  }
+
+  /**
+   * Lista los documentos propios con el MOTOR de tablas server-side (offset). Mismo
+   * filtrado (userId + estado + por-vencer) que `listMine`, pero devuelve una página
+   * numerada + total con orden configurable (documento/tipo/estado/vencimiento/creado,
+   * default vencimiento asc con los sin fecha al final). Lo consume la tabla de
+   * "Mis documentos".
+   */
+  async listMineTable(
+    userId: string,
+    filters: ListDocumentsFilters,
+    req: TableRequest,
+  ): Promise<TablePage<PersonalDocumentView>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+
+    const where: Prisma.PersonalDocumentWhereInput = { userId };
+    if (filters.status !== undefined) {
+      where.status = filters.status;
+    }
+    if (filters.expiring === true) {
+      const now = new Date();
+      where.expiresAt = { gte: now, lte: this.addDays(now, EXPIRING_WINDOW_DAYS) };
+    }
+
+    const orderBy = tableOrderBy<Prisma.PersonalDocumentOrderByWithRelationInput[]>(
+      req,
+      {
+        documento: (dir) => [{ name: dir }, { id: 'desc' }],
+        tipo: (dir) => [{ type: dir }, { id: 'desc' }],
+        estado: (dir) => [{ status: dir }, { id: 'desc' }],
+        vencimiento: (dir) => [{ expiresAt: { sort: dir, nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+        creado: (dir) => [{ createdAt: dir }, { id: 'desc' }],
+      },
+      [{ expiresAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.personalDocument.findMany({ where, orderBy, skip, take }),
+      this.prisma.personalDocument.count({ where }),
+    ]);
+
+    return tablePage(rows.map((row) => this.toView(row)), total, page, pageSize);
   }
 
   /**

@@ -9,6 +9,8 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { Query } from '@nestjs/common';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { PermissionService } from '../../authz/permission.service';
@@ -57,6 +59,31 @@ export class WarehousesController {
     const userId = this.requireUserId(user);
     await this.requireAccess(userId);
     return this.service.getWarehouseById(id);
+  }
+
+  /**
+   * Movimientos de la bodega con el MOTOR de tablas server-side (offset): orden
+   * y paginación con total, reemplazando el corte a 50 de `getById`. Mismo gate
+   * `warehouse:access`.
+   */
+  @Get(':id/transactions')
+  async listTransactions(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+  ): Promise<TablePage<WarehouseTransactionView>> {
+    const userId = this.requireUserId(user);
+    await this.requireAccess(userId);
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+    };
+    return this.service.listWarehouseTransactionsTable(id, req);
   }
 
   @Post(':id/transactions')

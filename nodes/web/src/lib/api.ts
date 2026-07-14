@@ -829,6 +829,25 @@ export function listDocuments(
 }
 
 /**
+ * `GET /documents/me/table` — MOTOR de tablas server-side (offset) para "Mis
+ * documentos". Filtro por estado y "por vencer", orden y paginación con total.
+ * Los filtros viajan como `filters[clave]=valor`.
+ */
+export function fetchDocumentsTable(req: TableRequest): Promise<TablePage<PersonalDocumentView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<PersonalDocumentView>>(`/documents/me/table?${query.toString()}`);
+}
+
+/**
  * `POST /documents/me` — sube un documento nuevo (PDF o imagen) vía multipart
  * (campo `file`) junto con sus metadatos. Queda en estado `EN_REVISION`.
  */
@@ -2034,6 +2053,25 @@ export function getWarehouseById(id: string): Promise<{
     stocks: WarehouseStockView[];
     transactions: WarehouseTransactionView[];
   }>(`/warehouses/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `GET /warehouses/:id/transactions` — MOTOR de tablas server-side (offset) para
+ * los movimientos de una bodega. Reemplaza el corte a 50 de `getWarehouseById`:
+ * orden y paginación con total sobre todos los movimientos.
+ */
+export function fetchWarehouseTransactionsTable(
+  warehouseId: string,
+  req: TableRequest,
+): Promise<TablePage<WarehouseTransactionView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  return request<TablePage<WarehouseTransactionView>>(
+    `/warehouses/${encodeURIComponent(warehouseId)}/transactions?${query.toString()}`,
+  );
 }
 
 export function createSupply(dto: {
