@@ -13,6 +13,8 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FinanceStatus } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import { PermissionService } from '../../authz/permission.service';
@@ -90,6 +92,36 @@ export class OvertimeController {
   ): Promise<Paginated<OvertimeView>> {
     await this.requireViewAll(this.requireUserId(authUser));
     return this.overtime.listAll(this.toFilters(query));
+  }
+
+  /**
+   * Lista con el MOTOR de tablas server-side (offset): filtro por estado y orden
+   * (fecha/horas/estado/solicitante) sobre TODAS las horas extra, con página + total.
+   * Lo consume la tabla de Gestión. Mismo gate "ver todo" que `listAll`. DEBE
+   * declararse antes de `@Get(':id')`.
+   */
+  @Get('table')
+  async listTable(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<OvertimeView>> {
+    await this.requireViewAll(this.requireUserId(authUser));
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    const rawStatus = typeof filters?.status === 'string' ? filters.status : '';
+    const status = (Object.values(FinanceStatus) as string[]).includes(rawStatus)
+      ? (rawStatus as FinanceStatus)
+      : undefined;
+    return this.overtime.listAllTable({ status }, req);
   }
 
   @Get(':id')

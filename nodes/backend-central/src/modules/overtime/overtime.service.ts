@@ -17,6 +17,8 @@ import { monthRange } from '../finance/finance-month.util';
 import { startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import type { CreateOvertimeDto, UpdateOvertimeDto } from './dto/overtime.dto';
 import type { OvertimeView, Paginated } from './overtime.types';
 
@@ -252,6 +254,45 @@ export class OvertimeService {
     const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.date, lastRow.id) : null;
 
     return { items: pageRows.map(toViewWithRequester), nextCursor };
+  }
+
+  /**
+   * Lista TODAS las horas extra con el MOTOR de tablas server-side (offset). Reusa
+   * el MISMO `where` (`buildOvertimeWhere`) que el keyset `listAll` y las cards de
+   * `summary`, pero devuelve una página numerada + total con orden configurable
+   * (fecha/horas/estado/solicitante, default fecha desc). Lo consume la tabla de
+   * Gestión de horas extra. La autorización (view:all) la aplica el controller.
+   */
+  async listAllTable(
+    filters: ListOvertimeFilters,
+    req: TableRequest,
+  ): Promise<TablePage<OvertimeView>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    const where = buildOvertimeWhere(filters);
+
+    const orderBy = tableOrderBy<Prisma.OvertimeRequestOrderByWithRelationInput[]>(
+      req,
+      {
+        fecha: (dir) => [{ date: dir }, { id: dir }],
+        horas: (dir) => [{ hours: dir }, { date: 'desc' }, { id: 'desc' }],
+        estado: (dir) => [{ status: dir }, { date: 'desc' }, { id: 'desc' }],
+        solicitante: (dir) => [{ user: { firstName: dir } }, { user: { lastName: dir } }, { id: 'desc' }],
+      },
+      [{ date: 'desc' }, { id: 'desc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.overtimeRequest.findMany({
+        where,
+        include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.overtimeRequest.count({ where }),
+    ]);
+
+    return tablePage(rows.map(toViewWithRequester), total, page, pageSize);
   }
 
   /**

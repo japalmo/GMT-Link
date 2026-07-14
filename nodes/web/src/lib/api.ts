@@ -1357,6 +1357,26 @@ export function listAllOvertime(
 }
 
 /**
+ * `GET /overtime/table` — MOTOR de tablas server-side (offset) para la Gestión de
+ * horas extra. Filtro por estado y orden sobre TODAS las horas extra. Mismo gate
+ * que `listAllOvertime` (403 si no es gestor). Los filtros viajan como
+ * `filters[clave]=valor`.
+ */
+export function fetchOvertimeTable(req: TableRequest): Promise<TablePage<OvertimeView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<OvertimeView>>(`/overtime/table?${query.toString()}`);
+}
+
+/**
  * `GET /overtime/summary` — totales agregados por el servidor (§5.2). Solo gestores
  * (403 si no). C2 agrega client-side, pero el wrapper queda disponible.
  */

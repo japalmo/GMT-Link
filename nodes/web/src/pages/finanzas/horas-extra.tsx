@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
   Ban,
@@ -22,8 +22,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from '@/components/primitives/data-table/data-table';
+import { useDataTable } from '@/hooks/use-data-table';
 import { useOvertime } from '@/hooks/use-overtime';
-import { errorToMessage } from '@/lib/api';
+import { errorToMessage, fetchOvertimeTable } from '@/lib/api';
+import type { TableRequest } from '@gmt-platform/contracts';
 import { formatDate } from '@/lib/format';
 import type { OvertimeView } from '@/types/finance';
 import { HorasExtraFormDialog } from './horas-extra-form';
@@ -34,10 +41,6 @@ export function HorasExtraTab(): ReactNode {
     mineHasMore,
     loadingMoreMine,
     loadMoreMine,
-    managerItems,
-    managerHasMore,
-    loadingMoreManager,
-    loadMoreManager,
     isManager,
     loading,
     error,
@@ -50,6 +53,15 @@ export function HorasExtraTab(): ReactNode {
     pay,
   } = useOvertime();
 
+  // MOTOR de tablas de Gestión (offset). Solo consulta si el usuario es gestor
+  // (enabled=isManager); un no-gestor nunca dispara el 403 del endpoint.
+  const managerFetcher = useCallback((req: TableRequest) => fetchOvertimeTable(req), []);
+  const managerTable = useDataTable<OvertimeView>(managerFetcher, {
+    enabled: isManager,
+    initialSortBy: 'fecha',
+    initialSortDir: 'desc',
+  });
+
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<OvertimeView | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OvertimeView | null>(null);
@@ -61,6 +73,7 @@ export function HorasExtraTab(): ReactNode {
     setActioning(id);
     try {
       await approve(id);
+      managerTable.refetch();
       toast.success('Horas extra aprobadas con éxito.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al aprobar horas extra.');
@@ -74,6 +87,7 @@ export function HorasExtraTab(): ReactNode {
     setActioning(id);
     try {
       await pay(id);
+      managerTable.refetch();
       toast.success('Pago registrado con éxito.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al registrar pago.');
@@ -81,6 +95,119 @@ export function HorasExtraTab(): ReactNode {
       setActioning(null);
     }
   };
+
+  // Columnas / filtro / acciones de la tabla de Gestión (motor server-side).
+  const managerColumns: ReadonlyArray<DataTableColumn<OvertimeView>> = [
+    {
+      id: 'solicitante',
+      header: 'Solicitante',
+      sortable: true,
+      render: (item) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-foreground">
+            {item.requester ? `${item.requester.firstName} ${item.requester.lastName}` : 'Sin solicitante'}
+          </span>
+          <span className="text-xs text-muted-foreground">{item.requester?.email}</span>
+        </div>
+      ),
+    },
+    { id: 'fecha', header: 'Fecha', sortable: true, render: (item) => formatDate(item.date) },
+    {
+      id: 'horas',
+      header: 'Horas',
+      sortable: true,
+      render: (item) => (
+        <span className="font-semibold">{item.hours != null ? `${item.hours} hrs` : 'Sin cierre'}</span>
+      ),
+    },
+    {
+      id: 'motivo',
+      header: 'Motivo',
+      className: 'max-w-xs truncate',
+      render: (item) => <span title={item.reason ?? undefined}>{item.reason ?? 'Sin motivo'}</span>,
+    },
+    {
+      id: 'estado',
+      header: 'Estado',
+      sortable: true,
+      render: (item) =>
+        item.isDraft ? (
+          <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            Borrador
+          </span>
+        ) : (
+          <StatusBadge type="finance" status={item.status} />
+        ),
+    },
+  ];
+
+  const managerStatusFilter: DataTableFilter = {
+    id: 'status',
+    label: 'Estado',
+    allLabel: 'Todos los estados',
+    options: [
+      { value: 'PENDIENTE', label: 'Pendiente' },
+      { value: 'APROBADO', label: 'Aprobado' },
+      { value: 'PAGADO', label: 'Pagado' },
+      { value: 'RECHAZADO', label: 'Rechazado' },
+    ],
+  };
+
+  const managerRowActions = (item: OvertimeView): ReactNode => (
+    <>
+      {item.status === 'PENDIENTE' && !item.isDraft && (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-500/10"
+            onClick={() => void handleApprove(item.id)}
+            disabled={actioning !== null}
+          >
+            {actioning === item.id ? (
+              'Procesando...'
+            ) : (
+              <>
+                <Check className="size-3.5" aria-hidden />
+                Aprobar
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
+            onClick={() => setRejectTargetId(item.id)}
+            disabled={actioning !== null}
+          >
+            <Ban className="size-3.5" aria-hidden />
+            Rechazar
+          </Button>
+        </>
+      )}
+      {item.status === 'APROBADO' && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-500/10"
+          onClick={() => void handlePay(item.id)}
+          disabled={actioning !== null}
+        >
+          {actioning === item.id ? (
+            'Procesando...'
+          ) : (
+            <>
+              <DollarSign className="size-3.5" aria-hidden />
+              Registrar Pago
+            </>
+          )}
+        </Button>
+      )}
+      {(item.status === 'PAGADO' || item.status === 'RECHAZADO') && (
+        <span className="text-xs italic text-muted-foreground">Completado</span>
+      )}
+    </>
+  );
 
   if (loading) {
     return <LoadingState rows={4} />;
@@ -197,121 +324,15 @@ export function HorasExtraTab(): ReactNode {
             <p className="text-sm text-muted-foreground">Aprobación, rechazo y pago de horas extra de la organización.</p>
           </div>
 
-          {managerItems.length === 0 ? (
-            <EmptyState message="No hay solicitudes de horas extra pendientes ni registradas en el sistema." />
-          ) : (
-            <div className="overflow-x-auto rounded-md border border-border bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Solicitante</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Horas</TableHead>
-                    <TableHead>Motivo</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {managerItems.map((item) => {
-                    const name = item.requester
-                      ? `${item.requester.firstName} ${item.requester.lastName}`
-                      : '—';
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{name}</span>
-                            <span className="text-xs text-muted-foreground">{item.requester?.email}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{formatDate(item.date)}</TableCell>
-                        <TableCell className="font-semibold">
-                          {item.hours != null ? `${item.hours} hrs` : '—'}
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate" title={item.reason ?? undefined}>
-                          {item.reason ?? '—'}
-                        </TableCell>
-                        <TableCell>
-                          {item.isDraft ? (
-                            <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                              Borrador
-                            </span>
-                          ) : (
-                            <StatusBadge type="finance" status={item.status} />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1.5">
-                            {item.status === 'PENDIENTE' && !item.isDraft && (
-                              <>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-2 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-                                  onClick={() => void handleApprove(item.id)}
-                                  disabled={actioning !== null}
-                                >
-                                  {actioning === item.id ? 'Procesando...' : (
-                                    <>
-                                      <Check className="size-3.5" aria-hidden />
-                                      Aprobar
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
-                                  onClick={() => setRejectTargetId(item.id)}
-                                  disabled={actioning !== null}
-                                >
-                                  <Ban className="size-3.5" aria-hidden />
-                                  Rechazar
-                                </Button>
-                              </>
-                            )}
-                            {item.status === 'APROBADO' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                                onClick={() => void handlePay(item.id)}
-                                disabled={actioning !== null}
-                              >
-                                {actioning === item.id ? 'Procesando...' : (
-                                  <>
-                                    <DollarSign className="size-3.5" aria-hidden />
-                                    Registrar Pago
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {(item.status === 'PAGADO' || item.status === 'RECHAZADO') && (
-                              <span className="text-xs text-muted-foreground italic">Completado</span>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          {/* Paginación server-side: carga la siguiente página al final de la gestión. */}
-          {managerHasMore && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                onClick={() => void loadMoreManager()}
-                disabled={loadingMoreManager}
-              >
-                {loadingMoreManager ? 'Cargando…' : 'Cargar más'}
-              </Button>
-            </div>
-          )}
+          <DataTable<OvertimeView>
+            table={managerTable}
+            columns={managerColumns}
+            getRowId={(item) => item.id}
+            filters={[managerStatusFilter]}
+            rowActions={managerRowActions}
+            emptyMessage="No hay solicitudes de horas extra pendientes ni registradas en el sistema."
+            caption="Gestión de horas extra"
+          />
         </section>
       )}
 
@@ -357,6 +378,7 @@ export function HorasExtraTab(): ReactNode {
           setActioning(rejectTargetId);
           try {
             await reject(rejectTargetId, reason);
+            managerTable.refetch();
             toast.success('Solicitud rechazada.');
           } catch (err) {
             throw new Error(errorToMessage(err, 'Error al rechazar solicitud.'));
