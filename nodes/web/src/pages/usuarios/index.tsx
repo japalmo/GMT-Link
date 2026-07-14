@@ -1,17 +1,32 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Ban, KeyRound, LogOut, Plus, ShieldCheck, Upload, UserCog, Users, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { SearchInput } from '@/components/ui/search-input';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
-import { RoleScopedList, type RoleScopedColumn } from '@/components/primitives/role-scoped-list';
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableFilter,
+} from '@/components/primitives/data-table/data-table';
+import { useDataTable } from '@/hooks/use-data-table';
 import { useAuth } from '@/context/auth-context';
-import { useUsers } from '@/hooks/use-users';
-import type { CreateUserDto, ImportUsersResponse, UserListItem } from '@/lib/api';
-import { errorToMessage, uploadUserAvatar } from '@/lib/api';
+import type { AssignRoleInput, TableRequest, UserMembership } from '@gmt-platform/contracts';
+import {
+  assignUserRole,
+  createUser,
+  fetchUsersTable,
+  importUsers,
+  removeUserRole,
+  revokeUserInvite,
+  revokeUserSessions,
+  uploadUserAvatar,
+  type CreateUserDto,
+  type ImportUsersResponse,
+  type UserListItem,
+} from '@/lib/api';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import RolesPage from '@/pages/roles';
@@ -20,76 +35,70 @@ import { NewUserDialog } from './new-user-dialog';
 import { ImportUsersDialog } from './import-users-dialog';
 import { RolesDialog } from './roles-dialog';
 import { CredentialDialog, type ProvisionalCredential } from './credential-dialog';
+import { UserDetailDialog } from './user-detail-dialog';
+import { ResendClaveDialog } from './resend-clave-dialog';
 
 /** Pestaña activa de la página de Usuarios. */
 type UsuariosTab = 'usuarios' | 'roles';
 
+/** Opciones del filtro por estado (server-side). */
+const STATUS_FILTER: DataTableFilter = {
+  id: 'status',
+  label: 'Estado',
+  allLabel: 'Todos los estados',
+  options: [
+    { value: 'ACTIVE', label: 'Activo' },
+    { value: 'PENDING_FIRST_LOGIN', label: 'Pendiente' },
+    { value: 'SUSPENDED', label: 'Suspendido' },
+  ],
+};
+
+/** Opciones del filtro por tipo (interno / cliente). */
+const TIPO_FILTER: DataTableFilter = {
+  id: 'tipo',
+  label: 'Tipo',
+  allLabel: 'Todos',
+  options: [
+    { value: 'interno', label: 'Internos' },
+    { value: 'cliente', label: 'Clientes (ITO)' },
+  ],
+};
+
 /** Fecha corta es-CL a partir de un ISO string. */
 function formatDate(iso: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('es-CL');
+  return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleDateString('es-CL');
 }
 
 /**
- * Pestaña "Usuarios" (§6-1.1). Ensambla la primitiva `RoleScopedList` (§5)
- * para el directorio y orquesta los diálogos de creación, importación CSV y
- * gestión de roles. La clave provisoria se muestra una sola vez tras
- * crear/importar (decisión §9: sin email). Vive como panel de la pestaña
- * "Usuarios" dentro de {@link UsuariosPage}, por eso no aporta
- * `PageContainer`/`PageHeader` (los pone la página anfitriona).
+ * Pestaña "Usuarios" (§6-1.1). Ensambla el MOTOR de tablas unificado
+ * (`useDataTable` + `DataTable`, server-side offset): búsqueda, filtro por
+ * estado/tipo y orden se resuelven en el servidor sobre TODOS los usuarios, con
+ * páginas numeradas y selector de filas por página. La fila es clickeable y abre
+ * el detalle editable (o borrar); los botones de acción gestionan roles, reenvío
+ * de clave (con vista previa editable del correo), revocación y cierre de sesiones.
  */
 function UsuariosDirectorioTab(): ReactNode {
-  const {
-    items: users,
-    loading,
-    loadingMore,
-    error,
-    hasMore,
-    loadMore,
-    setSearch,
-    refetch,
-    create,
-    importRows,
-    assignRole,
-    removeRole,
-    resendInvite,
-    revokeInvite,
-    revokeSessions,
-  } = useUsers();
+  const fetcher = useCallback((req: TableRequest) => fetchUsersTable(req), []);
+  const table = useDataTable<UserListItem>(fetcher, {
+    initialPageSize: 10,
+    initialSortBy: 'creado',
+    initialSortDir: 'desc',
+  });
 
-  const [searchTerm, setSearchTerm] = useState('');
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [rolesUser, setRolesUser] = useState<UserListItem | null>(null);
   const [revokeUser, setRevokeUser] = useState<UserListItem | null>(null);
   const [sessionsUser, setSessionsUser] = useState<UserListItem | null>(null);
+  const [detailUser, setDetailUser] = useState<UserListItem | null>(null);
+  const [resendUser, setResendUser] = useState<UserListItem | null>(null);
   const [credentials, setCredentials] = useState<readonly ProvisionalCredential[] | null>(null);
   const [credentialsTitle, setCredentialsTitle] = useState('Credencial provisoria');
   const [importErrors, setImportErrors] = useState<ImportUsersResponse['errors']>([]);
 
-  /**
-   * Reenvía la invitación de un usuario pendiente y muestra la nueva clave
-   * provisoria en el {@link CredentialDialog} (mismo mecanismo que al crear). El
-   * hook ya refresca la lista tras el reenvío.
-   */
-  async function handleResend(u: UserListItem): Promise<void> {
-    try {
-      const { provisionalPassword } = await resendInvite(u.id);
-      setCredentialsTitle('Clave provisoria reenviada');
-      setCredentials([
-        {
-          username: u.username,
-          email: u.emailInstitucional ?? u.emailPersonal ?? u.email,
-          provisionalPassword,
-        },
-      ]);
-    } catch (err) {
-      toast.error(errorToMessage(err, 'No se pudo reenviar la clave.'));
-    }
-  }
-
   async function handleCreate(dto: CreateUserDto, avatarFile: File | null): Promise<void> {
-    const res = await create(dto);
+    const res = await createUser(dto);
     if (avatarFile) {
       try {
         await uploadUserAvatar(res.user.id, avatarFile);
@@ -101,7 +110,7 @@ function UsuariosDirectorioTab(): ReactNode {
     setCredentials([
       { username: res.user.username, email: res.user.email, provisionalPassword: res.provisionalPassword },
     ]);
-    await refetch();
+    table.refetch();
   }
 
   function handleImported(result: ImportUsersResponse): void {
@@ -113,15 +122,14 @@ function UsuariosDirectorioTab(): ReactNode {
         result.created.map((c) => ({ username: c.username, email: c.email, provisionalPassword: c.provisionalPassword })),
       );
     }
-    void refetch();
+    table.refetch();
   }
 
-  const columns: ReadonlyArray<RoleScopedColumn<UserListItem>> = [
+  const columns: ReadonlyArray<DataTableColumn<UserListItem>> = [
     {
       id: 'nombre',
       header: 'Nombre',
       sortable: true,
-      accessor: (u) => `${u.firstName} ${u.lastName}`,
       render: (u) => (
         <span className="font-medium">
           {u.firstName} {u.lastName}
@@ -132,14 +140,12 @@ function UsuariosDirectorioTab(): ReactNode {
       id: 'usuario',
       header: 'Usuario',
       sortable: true,
-      accessor: (u) => u.username,
       render: (u) => <span className="font-medium">{u.username}</span>,
     },
     {
       id: 'email',
       header: 'Email',
       sortable: true,
-      accessor: (u) => u.emailInstitucional ?? u.emailPersonal ?? u.email,
       render: (u) => (
         <span className="text-muted-foreground">
           {u.emailInstitucional ?? u.emailPersonal ?? u.email}
@@ -154,21 +160,20 @@ function UsuariosDirectorioTab(): ReactNode {
     {
       id: 'estado',
       header: 'Estado',
+      sortable: true,
       render: (u) => <StatusBadge type="user" status={u.status} />,
     },
     {
       id: 'creado',
       header: 'Creado',
       sortable: true,
-      accessor: (u) => u.createdAt,
       render: (u) => <span className="text-sm text-muted-foreground">{formatDate(u.createdAt)}</span>,
     },
   ];
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Acciones del directorio: viven en el panel de la pestaña (el
-          `PageHeader` compartido de Usuarios no las porta). */}
+      {/* Acciones del directorio: viven en el panel de la pestaña. */}
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={() => setImportOpen(true)}>
           <Upload aria-hidden />
@@ -184,9 +189,7 @@ function UsuariosDirectorioTab(): ReactNode {
         <Alert variant="warning" live>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">
-                {importErrors.length} fila(s) no se importaron
-              </span>
+              <span className="font-medium">{importErrors.length} fila(s) no se importaron</span>
               <button
                 type="button"
                 onClick={() => setImportErrors([])}
@@ -208,35 +211,21 @@ function UsuariosDirectorioTab(): ReactNode {
         </Alert>
       )}
 
-      {/* Búsqueda SERVER-SIDE: el término se manda al hook, que lo debouncea (~300ms)
-          y consulta al servidor (no filtra en memoria). Reemplaza la búsqueda
-          client-side de RoleScopedList (`searchable={false}` abajo). */}
-      <SearchInput
-        label="Buscar usuarios"
-        placeholder="Buscar por nombre, usuario o email…"
-        value={searchTerm}
-        onChange={(e) => {
-          setSearchTerm(e.target.value);
-          setSearch(e.target.value);
-        }}
-        disabled={loading && users.length === 0}
-      />
-
-      <RoleScopedList<UserListItem>
-        items={users}
+      <DataTable<UserListItem>
+        table={table}
         columns={columns}
         getRowId={(u) => u.id}
-        searchable={false}
-        loading={loading}
-        error={error}
-        onRetry={() => void refetch()}
-        emptyMessage="No hay usuarios todavía. Crea el primero o importa un CSV."
-        rowActionsLabel="Acciones"
+        searchable
+        searchPlaceholder="Buscar por nombre, usuario o email…"
+        filters={[STATUS_FILTER, TIPO_FILTER]}
+        onRowClick={(u) => setDetailUser(u)}
+        emptyMessage="No hay usuarios que coincidan. Crea el primero o importa un CSV."
+        caption="Directorio de usuarios"
         rowActions={(u) => {
-          // Invitación pendiente: token enviado y aún no usado.
-          const invitePending =
-            u.status === 'PENDING_FIRST_LOGIN' ||
-            (u.status === 'SUSPENDED' && u.firstLoginAt === null);
+          // Solo PENDING_FIRST_LOGIN admite reenviar clave. Un usuario revocado
+          // (SUSPENDED) NO reaparece aquí: re-otorgar acceso es una acción
+          // explícita, no un efecto colateral del reenvío (ver assertInviteUnused).
+          const invitePending = u.status === 'PENDING_FIRST_LOGIN';
           return (
             <>
               <Button
@@ -252,7 +241,7 @@ function UsuariosDirectorioTab(): ReactNode {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void handleResend(u)}
+                  onClick={() => setResendUser(u)}
                   aria-label={`Reenviar clave de ${u.firstName} ${u.lastName}`}
                 >
                   <KeyRound aria-hidden />
@@ -284,33 +273,44 @@ function UsuariosDirectorioTab(): ReactNode {
             </>
           );
         }}
-        caption="Directorio de usuarios"
       />
-
-      {/* Paginación server-side: carga la siguiente página al final del directorio. */}
-      {!loading && !error && hasMore && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
-            {loadingMore ? 'Cargando…' : 'Cargar más'}
-          </Button>
-        </div>
-      )}
 
       <NewUserDialog open={newUserOpen} onOpenChange={setNewUserOpen} onCreate={handleCreate} />
 
       <ImportUsersDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        onImport={(rows: CreateUserDto[]) => importRows(rows)}
+        onImport={(rows: CreateUserDto[]) => importUsers(rows)}
         onImported={handleImported}
       />
 
       <RolesDialog
         user={rolesUser}
         onOpenChange={(open) => (open ? undefined : setRolesUser(null))}
-        onAssign={(id, input) => assignRole(id, input)}
-        onRemove={(id, membership) => removeRole(id, membership)}
-        onChanged={() => void refetch()}
+        onAssign={(id: string, input: AssignRoleInput) => assignUserRole(id, input)}
+        onRemove={(id: string, membership: UserMembership) => removeUserRole(id, membership)}
+        onChanged={() => table.refetch()}
+      />
+
+      <UserDetailDialog
+        user={detailUser}
+        onOpenChange={(open) => (open ? undefined : setDetailUser(null))}
+        onSaved={() => table.refetch()}
+        onDeleted={() => table.refetch()}
+      />
+
+      <ResendClaveDialog
+        user={resendUser}
+        onOpenChange={(open) => (open ? undefined : setResendUser(null))}
+        onSent={(to) => {
+          toast.success(to ? `Correo enviado a ${to}.` : 'Correo enviado.');
+          table.refetch();
+        }}
+        onManualCredential={(cred) => {
+          setCredentialsTitle('Clave provisoria reenviada');
+          setCredentials([cred]);
+          table.refetch();
+        }}
       />
 
       <CredentialDialog
@@ -328,8 +328,9 @@ function UsuariosDirectorioTab(): ReactNode {
         confirmLabel="Revocar acceso"
         onConfirm={async () => {
           if (!revokeUser) return;
-          await revokeInvite(revokeUser.id);
+          await revokeUserInvite(revokeUser.id);
           toast.success('Acceso revocado.');
+          table.refetch();
         }}
       />
 
@@ -341,8 +342,9 @@ function UsuariosDirectorioTab(): ReactNode {
         confirmLabel="Cerrar sesiones"
         onConfirm={async () => {
           if (!sessionsUser) return;
-          await revokeSessions(sessionsUser.id);
+          await revokeUserSessions(sessionsUser.id);
           toast.success('Sesiones cerradas.');
+          table.refetch();
         }}
       />
     </div>
@@ -353,8 +355,7 @@ function UsuariosDirectorioTab(): ReactNode {
  * Página de administración de Usuarios. Cáscara con dos pestañas (patrón de
  * Finanzas/Recursos): "Usuarios" (el directorio y sus diálogos) y "Roles" (la
  * matriz RBAC reutilizada de la página de Roles, embebida). La pestaña "Roles"
- * solo aparece cuando el usuario puede gestionar roles (`canManageRoles`); el
- * mismo permiso que gateaba el ítem de menú "Roles" antes de fusionarlo aquí.
+ * solo aparece cuando el usuario puede gestionar roles (`canManageRoles`).
  */
 export default function UsuariosPage(): ReactNode {
   const { user } = useAuth();

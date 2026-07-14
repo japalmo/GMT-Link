@@ -24,13 +24,22 @@ import type { AuthUser } from '../../authz/auth-user.types';
 import { AssignRoleScopedDto } from './dto/assign-role-scoped.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
+import { ResendInviteDto } from './dto/resend-invite.dto';
+import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import { UsersService } from './users.service';
-import type { AssignRoleInput, ProjectAdminOption, ScopeType } from '@gmt-platform/contracts';
+import type {
+  AssignRoleInput,
+  ProjectAdminOption,
+  ResendInvitePreview,
+  ResendInviteResult,
+  ScopeType,
+  TablePage,
+  TableRequest,
+} from '@gmt-platform/contracts';
 import type {
   CreateUserResponse,
   ImportUsersResponse,
   Paginated,
-  ResendInviteResponse,
   UserListItem,
   UserRolesResponse,
 } from './users.types';
@@ -115,11 +124,58 @@ export class UsersController {
     return this.usersService.listProjectAdmins();
   }
 
+  /**
+   * Lista con el MOTOR de tablas server-side (offset): búsqueda, filtro y orden se
+   * resuelven sobre el dataset completo y se devuelve una página numerada + total.
+   * Lo consume la tabla del directorio (`useDataTable`). DEBE declararse antes de
+   * `@Get(':id')` para que el segmento estático "table" no lo capture el param.
+   */
+  @Get('table')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  listTable(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<UserListItem>> {
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      search,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    return this.usersService.listTable(req);
+  }
+
   /** Detalle de un usuario. */
   @Get(':id')
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
   getById(@Param('id') id: string): Promise<UserListItem> {
     return this.usersService.getById(id);
+  }
+
+  /** Edita el detalle de un usuario (nombres, correos, usuario, cargo, tipo). */
+  @Patch(':id')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  adminUpdate(@Param('id') id: string, @Body() dto: UpdateUserAdminDto): Promise<UserListItem> {
+    return this.usersService.adminUpdate(id, dto);
+  }
+
+  /** Borra un usuario (hard delete; 409 si tiene registros asociados). */
+  @Delete(':id')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  adminDelete(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<void> {
+    if (!authUser) {
+      throw new UnauthorizedException('Se requiere un usuario autenticado.');
+    }
+    return this.usersService.adminDelete(id, authUser.id);
   }
 
   /**
@@ -187,13 +243,26 @@ export class UsersController {
   }
 
   /**
-   * Reenvía la invitación: regenera la clave provisoria y deja al usuario en
-   * PENDING_FIRST_LOGIN. 409 si la invitación ya fue usada.
+   * Vista previa del correo de reenvío de clave (sin efectos): asunto y mensaje por
+   * defecto (editables), destinatario y si se puede enviar server-side. 409 si la
+   * invitación ya fue usada. La clave NO se genera ni viaja aquí.
+   */
+  @Get(':id/resend-invite/preview')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  resendInvitePreview(@Param('id') id: string): Promise<ResendInvitePreview> {
+    return this.usersService.resendInvitePreview(id);
+  }
+
+  /**
+   * Reenvía la clave: regenera la clave provisoria y deja al usuario en
+   * PENDING_FIRST_LOGIN. 409 si la invitación ya fue usada. Con `sendEmail` el
+   * servidor envía el correo (asunto/mensaje editados, clave inyectada allí y NO
+   * retornada); sin él, retorna la clave una vez para compartirla a mano.
    */
   @Post(':id/resend-invite')
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
-  resendInvite(@Param('id') id: string): Promise<ResendInviteResponse> {
-    return this.usersService.resendInvite(id);
+  resendInvite(@Param('id') id: string, @Body() dto: ResendInviteDto): Promise<ResendInviteResult> {
+    return this.usersService.resendInvite(id, dto);
   }
 
   /** Completa un scope parcial con el default org (ORGANIZATION/ORG_ID) para el `AssignRoleInput`. */

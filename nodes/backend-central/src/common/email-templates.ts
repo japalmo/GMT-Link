@@ -152,6 +152,81 @@ Por seguridad, cambia tu contraseña en tu primer ingreso.`,
   };
 }
 
+/** Convierte texto plano (con saltos de línea) en párrafos HTML escapados. */
+function messageToHtml(message: string): string {
+  return message
+    .split(/\n{2,}/)
+    .map((para) => para.trim())
+    .filter((para) => para.length > 0)
+    .map(
+      (para) =>
+        `<p style="margin:0 0 14px;color:#475569;">${escapeHtml(para).replace(/\n/g, '<br />')}</p>`,
+    )
+    .join('');
+}
+
+/**
+ * Correo de REENVÍO de clave con asunto y mensaje EDITABLES por el admin. El
+ * cuerpo del mensaje (intro) lo redacta el admin en la UI; la caja de credenciales
+ * (usuario + clave provisoria) y el botón de ingreso los arma el servidor con la
+ * clave recién regenerada — la clave nunca pasa por el front. Reutiliza el shell
+ * branded. `message` cae a un texto por defecto si el admin lo deja vacío.
+ */
+export function resendCredentialsEmail(params: {
+  nombre: string;
+  username: string;
+  provisionalPassword: string;
+  loginUrl: string;
+  subject: string;
+  message: string;
+}): EmailContent {
+  const { nombre, username, provisionalPassword, loginUrl, subject, message } = params;
+  const safeLoginUrl = escapeHtml(loginUrl);
+  const trimmedMessage = message.trim();
+  const introHtml =
+    trimmedMessage.length > 0
+      ? messageToHtml(trimmedMessage)
+      : `<p style="margin:0;color:#475569;">Te reenviamos tus credenciales de acceso a GMT Link.</p>`;
+
+  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
+              ${introHtml}
+              <div style="margin:24px 0;padding:22px 20px;background-color:#f4f6fb;border:1px solid #e2e8f0;border-radius:10px;">
+                ${credentialRow('Usuario', username)}
+                ${credentialRow('Clave provisoria', provisionalPassword)}
+              </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                <tr>
+                  <td style="background-color:${BRAND_NAVY};border-radius:8px;">
+                    <a href="${safeLoginUrl}" style="display:inline-block;padding:13px 30px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Ingresar a GMT Link</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 6px;color:#475569;font-size:14px;">O copia este enlace en tu navegador:</p>
+              <p style="margin:0 0 20px;"><a href="${safeLoginUrl}" style="color:${BRAND_NAVY};font-size:13px;word-break:break-all;">${safeLoginUrl}</a></p>
+              <p style="margin:0;color:#b45309;font-size:13px;background-color:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">Por seguridad, cambia tu contraseña en tu primer ingreso.</p>`);
+
+  const bodyIntro = trimmedMessage.length > 0 ? trimmedMessage : 'Te reenviamos tus credenciales de acceso a GMT Link.';
+  return {
+    subject: subject.trim().length > 0 ? subject.trim() : 'Tus credenciales de acceso a GMT Link',
+    body: `Hola ${nombre}:
+
+${bodyIntro}
+
+Usuario: ${username}
+Clave provisoria: ${provisionalPassword}
+
+Ingresa en: ${loginUrl}
+
+Por seguridad, cambia tu contraseña en tu primer ingreso.`,
+    html,
+  };
+}
+
+/** Texto por defecto del mensaje de reenvío de clave (editable por el admin en la UI). */
+export function defaultResendMessage(): string {
+  return 'Te reenviamos tus credenciales de acceso a GMT Link. Usa el usuario y la clave provisoria que aparecen más abajo para ingresar. Por seguridad, deberás cambiar tu clave en el primer ingreso.';
+}
+
 /**
  * Credenciales + aviso de que son los PRIMEROS usuarios de prueba (piloto): invita a
  * dar feedback y aclara que pueden existir errores aún no detectados. Reutiliza el

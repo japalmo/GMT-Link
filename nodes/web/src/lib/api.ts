@@ -40,18 +40,34 @@ import type {
   Paginated,
   PermissionCatalogGroup,
   ProfileMe,
+  ResendInviteInput,
+  ResendInvitePreview,
+  ResendInviteResult,
   RoleDetail,
   RoleKey,
+  TablePage,
+  TableRequest,
   UpdateProfileInput,
   UpdateProjectInput,
   UpdateRoleInput,
+  UpdateUserAdminInput,
   UserMembership,
   UserStatus,
 } from '@gmt-platform/contracts';
 
 // Re-export para consumidores del front (enmienda A15: los tipos viven en
 // @gmt-platform/contracts; api.ts solo los re-exporta para no duplicar imports).
-export type { AssignRoleInput, CloneRoleResponse, UserMembership } from '@gmt-platform/contracts';
+export type {
+  AssignRoleInput,
+  CloneRoleResponse,
+  ResendInviteInput,
+  ResendInvitePreview,
+  ResendInviteResult,
+  TablePage,
+  TableRequest,
+  UpdateUserAdminInput,
+  UserMembership,
+} from '@gmt-platform/contracts';
 import type {
   ProjectView,
   ServiceView,
@@ -355,6 +371,27 @@ export function listUsers(
   return request<Paginated<UserListItem>>(`/users${qs ? `?${qs}` : ''}`);
 }
 
+/**
+ * `GET /users/table` — MOTOR de tablas server-side (offset). Búsqueda, filtro y
+ * orden se resuelven en el servidor sobre el dataset COMPLETO; devuelve una página
+ * numerada + total. Lo consume la tabla del directorio (`useDataTable`). Los
+ * filtros viajan como `filters[clave]=valor`.
+ */
+export function fetchUsersTable(req: TableRequest): Promise<TablePage<UserListItem>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<UserListItem>>(`/users/table?${query.toString()}`);
+}
+
 /** `POST /users` — crea un usuario y devuelve su clave provisoria (única vez). */
 export function createUser(dto: CreateUserDto): Promise<CreateUserResponse> {
   return request<CreateUserResponse>('/users', {
@@ -424,11 +461,33 @@ export function getProjectAdmins(): Promise<ProjectAdminOption[]> {
  * invitación NO usada y la devuelve (única vez, igual que al crear). 409 si la
  * invitación ya fue usada (el usuario ya completó su primer ingreso).
  */
-export function resendUserInvite(id: string): Promise<{ provisionalPassword: string }> {
-  return request<{ provisionalPassword: string }>(
+export function resendUserInvitePreview(id: string): Promise<ResendInvitePreview> {
+  return request<ResendInvitePreview>(`/users/${encodeURIComponent(id)}/resend-invite/preview`);
+}
+
+/**
+ * `POST /users/:id/resend-invite` — regenera la clave provisoria. Con
+ * `sendEmail: true` el servidor envía el correo (clave inyectada allí, NO
+ * retornada); si no, retorna la clave una vez para compartirla a mano.
+ */
+export function resendUserInvite(id: string, input: ResendInviteInput): Promise<ResendInviteResult> {
+  return request<ResendInviteResult>(
     `/users/${encodeURIComponent(id)}/resend-invite`,
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify(input) },
   );
+}
+
+/** `PATCH /users/:id` — edita el detalle de un usuario (admin). */
+export function updateUserAdmin(id: string, input: UpdateUserAdminInput): Promise<UserListItem> {
+  return request<UserListItem>(`/users/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `DELETE /users/:id` — borra un usuario (admin). 409 si tiene registros asociados. */
+export function deleteUser(id: string): Promise<void> {
+  return request<void>(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 /**

@@ -9,7 +9,17 @@ import {
 import type { Prisma, User } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import type { AssignRoleInput, ProjectAdminOption, ScopeType, UserMembership } from '@gmt-platform/contracts';
+import type {
+  AssignRoleInput,
+  ProjectAdminOption,
+  ResendInvitePreview,
+  ResendInviteResult,
+  ScopeType,
+  TablePage,
+  TableRequest,
+  UpdateUserAdminInput,
+  UserMembership,
+} from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
 import { hashPassword } from '../../common/password';
@@ -19,21 +29,31 @@ import type { TupleKey } from '../../fga/fga.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import type { ResendInviteDto } from './dto/resend-invite.dto';
+import type { UpdateUserAdminDto } from './dto/update-user-admin.dto';
+import {
+  tableAndWhere,
+  tableOrderBy,
+  tablePage,
+  tableSearchWhere,
+  tableSkipTake,
+} from '../../common/table-pagination.util';
 
 import { StorageService } from '../../common/storage/storage.service';
 import { EmailService, NoopEmailService } from '../../common/email.service';
-import { credentialsEmail } from '../../common/email-templates';
+import { credentialsEmail, resendCredentialsEmail, defaultResendMessage } from '../../common/email-templates';
 
 /** Rol cuya asignación org-scope sí confiere acceso de admin en OpenFGA (§4.3). */
 const ORG_ADMIN_ROLE: RoleKey = 'org_admin';
 /** Permiso que define quién puede ser administrador de proyecto (dropdown filtrado). */
 const PROJECT_MANAGE_PERMISSION = 'project:manage';
+/** Estados válidos de `User.status` (enum Prisma) — whitelist del filtro de la tabla. */
+const VALID_USER_STATUSES: readonly string[] = ['PENDING_FIRST_LOGIN', 'ACTIVE', 'SUSPENDED'];
 import type {
   CreateUserResponse,
   ImportErrorRow,
   ImportUsersResponse,
   Paginated,
-  ResendInviteResponse,
   UserListItem,
   UserRolesResponse,
 } from './users.types';
@@ -150,23 +170,77 @@ export class UsersService {
   }
 
   /**
-   * Reenvía la invitación: regenera la clave provisoria y deja al usuario en
-   * PENDING_FIRST_LOGIN (reactivándolo si estaba suspendido sin haber ingresado).
-   * 409 si la invitación YA fue usada (firstLoginAt no null o cuenta ACTIVA), para
-   * no pisar la clave de alguien que ya definió la suya. Retorna la nueva clave
-   * provisoria (se muestra una vez en la UI, igual que al crear).
+   * Vista previa del correo de reenvío de clave (sin efectos). Valida que la
+   * invitación NO haya sido usada (409 si ya definió su contraseña) y devuelve el
+   * asunto y mensaje POR DEFECTO (editables por el admin), el destinatario y si se
+   * puede enviar desde el servidor (`canEmail`). La clave NO se genera aquí ni
+   * viaja al front: se regenera y se inyecta recién al enviar.
    */
-  async resendInvite(userId: string): Promise<ResendInviteResponse> {
+  async resendInvitePreview(userId: string): Promise<ResendInvitePreview> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { firstLoginAt: true, status: true },
+      select: {
+        firstName: true,
+        username: true,
+        email: true,
+        emailInstitucional: true,
+        emailPersonal: true,
+        firstLoginAt: true,
+        status: true,
+      },
     });
     if (!user) {
       throw new NotFoundException(`No existe un usuario con id "${userId}".`);
     }
-    if (user.firstLoginAt !== null || user.status === 'ACTIVE') {
-      throw new ConflictException('La invitación ya fue usada: el usuario ya definió su contraseña.');
+    this.assertInviteUnused(user.firstLoginAt, user.status);
+
+    const to = this.primaryEmail(user);
+    return {
+      to,
+      canEmail: to.length > 0 && this.isRealEmailProvider(),
+      username: user.username,
+      nombre: user.firstName,
+      subject: 'Tus credenciales de acceso a GMT Link',
+      message: defaultResendMessage(),
+    };
+  }
+
+  /**
+   * Reenvía la clave provisoria. Regenera la clave (invalida la anterior + bump de
+   * tokenVersion) y deja al usuario en PENDING_FIRST_LOGIN. 409 si la invitación YA
+   * fue usada. Dos caminos según `sendEmail`:
+   *  - CON correo (`sendEmail` y hay destinatario + proveedor real): el servidor
+   *    arma el correo con el asunto/mensaje editados por el admin, inyecta la clave
+   *    y lo envía. NO retorna la clave (`provisionalPassword: null`). Un fallo de
+   *    envío revierte a 502 para que el admin lo sepa (la clave ya fue rotada).
+   *  - SIN correo (camino manual): retorna la clave una vez para compartirla a mano.
+   */
+  async resendInvite(userId: string, input: ResendInviteDto): Promise<ResendInviteResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        firstName: true,
+        username: true,
+        email: true,
+        emailInstitucional: true,
+        emailPersonal: true,
+        firstLoginAt: true,
+        status: true,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException(`No existe un usuario con id "${userId}".`);
     }
+    this.assertInviteUnused(user.firstLoginAt, user.status);
+
+    const to = this.primaryEmail(user);
+    const wantsEmail = input.sendEmail === true;
+    if (wantsEmail && (to.length === 0 || !this.isRealEmailProvider())) {
+      throw new ConflictException(
+        'No se puede enviar el correo: el usuario no tiene correo o no hay un proveedor de correo configurado.',
+      );
+    }
+
     const provisionalPassword = generateProvisionalPassword();
     const passwordHash = await hashPassword(provisionalPassword);
     await this.prisma.user.update({
@@ -175,7 +249,63 @@ export class UsersService {
       // tokenVersion invalida cualquier token que hubiese quedado dando vueltas.
       data: { passwordHash, status: 'PENDING_FIRST_LOGIN', tokenVersion: { increment: 1 } },
     });
-    return { provisionalPassword };
+
+    if (!wantsEmail) {
+      // Camino manual: la clave se retorna una vez para compartirla a mano.
+      return { sent: false, to: null, provisionalPassword };
+    }
+
+    try {
+      await this.emailService.send({
+        to,
+        ...resendCredentialsEmail({
+          nombre: user.firstName,
+          username: user.username,
+          provisionalPassword,
+          loginUrl: this.loginUrl(),
+          subject: input.subject ?? '',
+          message: input.message ?? '',
+        }),
+      });
+    } catch (error: unknown) {
+      // La clave ya se rotó; avisar del fallo de envío (no dejarlo silencioso como
+      // en la creación, porque aquí el admin espera que el correo salga).
+      this.logger.error(`No se pudo reenviar el correo de credenciales a ${to}: ${this.errorMessage(error)}`);
+      throw new HttpException(
+        { code: 'EMAIL_SEND_FAILED', message: 'La clave se regeneró, pero no se pudo enviar el correo.' },
+        502,
+      );
+    }
+    return { sent: true, to, provisionalPassword: null };
+  }
+
+  /**
+   * 409 si el usuario no está en un estado apto para reenviar clave. Se EXIGE
+   * `PENDING_FIRST_LOGIN` (y sin primer ingreso): así reenviar clave nunca
+   * reactiva de forma implícita una cuenta ACTIVA (ya tiene su clave) ni una
+   * SUSPENDED (acceso revocado a propósito). Re-otorgar acceso a un usuario
+   * revocado debe ser una acción explícita, no un efecto colateral del reenvío.
+   */
+  private assertInviteUnused(firstLoginAt: Date | null, status: string): void {
+    if (firstLoginAt !== null || status !== 'PENDING_FIRST_LOGIN') {
+      throw new ConflictException(
+        'No se puede reenviar la clave: la invitación ya fue usada o el acceso está revocado.',
+      );
+    }
+  }
+
+  /** Email primario del usuario (institucional > personal > compat), o '' si no tiene. */
+  private primaryEmail(user: {
+    email: string | null;
+    emailInstitucional: string | null;
+    emailPersonal: string | null;
+  }): string {
+    return (user.emailInstitucional ?? user.emailPersonal ?? user.email ?? '').trim();
+  }
+
+  /** URL de login del frontend para los correos (configurable por env). */
+  private loginUrl(): string {
+    return process.env.APP_WEB_URL || 'https://web-dev-production-05f2.up.railway.app';
   }
 
   /**
@@ -351,6 +481,65 @@ export class UsersService {
   }
 
   /**
+   * Lista usuarios con el MOTOR de tablas server-side (offset). A diferencia de
+   * `list` (keyset, para selects que cargan "casi todo"), aquí la búsqueda, el
+   * filtro por estado/tipo y el orden se resuelven en el servidor sobre el dataset
+   * COMPLETO y se devuelve una página numerada con el total. Lo consume la tabla
+   * del directorio (`useDataTable` + `DataTable`). Columnas ordenables: nombre
+   * (firstName), usuario, email, estado, creado. Filtros: `status`, `tipo`
+   * (interno/cliente). Orden por defecto: más nuevos primero (createdAt desc, id desc).
+   */
+  async listTable(req: TableRequest): Promise<TablePage<UserListItem>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+
+    const searchWhere = tableSearchWhere<Prisma.UserWhereInput>(req.search, [
+      'firstName',
+      'secondName',
+      'lastName',
+      'secondLastName',
+      'email',
+      'username',
+      'emailInstitucional',
+      'emailPersonal',
+    ]);
+
+    const filters = req.filters ?? {};
+    const filterParts: Prisma.UserWhereInput[] = [];
+    // Los valores de `filters` llegan crudos del query string (qs puede anidarlos):
+    // se coaccionan a string y el `status` se valida contra el enum, para degradar a
+    // "filtro ignorado" en vez de reventar la consulta de Prisma con un 500.
+    const status = typeof filters.status === 'string' ? filters.status.trim() : '';
+    if (VALID_USER_STATUSES.includes(status)) {
+      filterParts.push({ status: status as User['status'] });
+    }
+    const tipo = typeof filters.tipo === 'string' ? filters.tipo.trim() : '';
+    if (tipo === 'cliente') filterParts.push({ isClientUser: true });
+    else if (tipo === 'interno') filterParts.push({ isClientUser: false });
+
+    const where =
+      tableAndWhere<Prisma.UserWhereInput>(searchWhere, ...filterParts) ?? {};
+
+    const orderBy = tableOrderBy<Prisma.UserOrderByWithRelationInput[]>(
+      req,
+      {
+        nombre: (dir) => [{ firstName: dir }, { lastName: dir }, { id: 'desc' }],
+        usuario: (dir) => [{ username: dir }, { id: 'desc' }],
+        email: (dir) => [{ email: dir }, { id: 'desc' }],
+        estado: (dir) => [{ status: dir }, { id: 'desc' }],
+        creado: (dir) => [{ createdAt: dir }, { id: 'desc' }],
+      },
+      [{ createdAt: 'desc' }, { id: 'desc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({ where, include: { memberships: true }, orderBy, skip, take }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return tablePage(rows.map((user) => this.toListItem(user)), total, page, pageSize);
+  }
+
+  /**
    * Usuarios elegibles como administrador de proyecto: aquellos cuyo rol otorga
    * el permiso `project:manage`. El set de roleKeys se DERIVA de `RolePermission`
    * (no se hardcodea): se consultan los grants del permiso y se listan los
@@ -402,6 +591,125 @@ export class UsersService {
       throw new NotFoundException(`No existe un usuario con id "${id}".`);
     }
     return this.toListItem(user);
+  }
+
+  /**
+   * Edición del detalle de un usuario por un administrador (`PATCH /users/:id`).
+   * Aplica solo los campos presentes. Al tocar cualquier email re-deriva el `email`
+   * legacy (= institucional ?? personal) y exige que quede al menos un correo. 409
+   * si el nuevo username/email choca (P2002). No cambia clave, estado ni roles.
+   */
+  async adminUpdate(id: string, dto: UpdateUserAdminInput): Promise<UserListItem> {
+    const current = await this.prisma.user.findUnique({
+      where: { id },
+      select: { email: true, emailInstitucional: true, emailPersonal: true },
+    });
+    if (!current) {
+      throw new NotFoundException(`No existe un usuario con id "${id}".`);
+    }
+
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.firstName !== undefined) data.firstName = dto.firstName.trim();
+    if (dto.lastName !== undefined) data.lastName = dto.lastName.trim();
+    if (dto.secondName !== undefined) data.secondName = dto.secondName?.trim() || null;
+    if (dto.secondLastName !== undefined) data.secondLastName = dto.secondLastName?.trim() || null;
+    if (dto.username !== undefined) data.username = dto.username;
+    if (dto.cargo !== undefined) data.cargo = dto.cargo?.trim() || null;
+    if (dto.isClientUser !== undefined) data.isClientUser = dto.isClientUser;
+
+    // Emails: recomputa el `email` compat (D1) y valida que quede al menos uno.
+    if (dto.emailInstitucional !== undefined || dto.emailPersonal !== undefined) {
+      const nextInstitucional =
+        dto.emailInstitucional !== undefined
+          ? dto.emailInstitucional?.trim() || null
+          : current.emailInstitucional;
+      const nextPersonal =
+        dto.emailPersonal !== undefined ? dto.emailPersonal?.trim() || null : current.emailPersonal;
+      const nextEmail = nextInstitucional ?? nextPersonal;
+      if (!nextEmail) {
+        throw new BadRequestException('El usuario debe conservar al menos un correo (institucional o personal).');
+      }
+      data.emailInstitucional = nextInstitucional;
+      data.emailPersonal = nextPersonal;
+      data.email = nextEmail;
+    }
+
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id },
+        data,
+        include: { memberships: true },
+      });
+      return this.toListItem(updated);
+    } catch (error: unknown) {
+      const conflict = this.uniqueConflictField(error);
+      if (conflict) {
+        throw new ConflictException(conflict);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Borra un usuario (hard delete) por un administrador. Guarda de auto-borrado
+   * (no puedes borrarte a ti mismo). Borra sus Memberships y el User en una
+   * transacción; si un FK lo impide (P2003 — el usuario tiene reembolsos,
+   * checklists, proyectos u otros registros), responde 409 sugiriendo revocar el
+   * acceso en su lugar. Tras el borrado limpia sus tuplas de acceso org en FGA
+   * (best-effort). Pensado para depurar duplicados de la importación.
+   */
+  async adminDelete(id: string, actingUserId: string): Promise<void> {
+    if (id === actingUserId) {
+      throw new ConflictException('No puedes borrar tu propia cuenta.');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, memberships: { select: { roleKey: true, scopeType: true, scopeId: true } } },
+    });
+    if (!user) {
+      throw new NotFoundException(`No existe un usuario con id "${id}".`);
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.membership.deleteMany({ where: { userId: id } });
+        await tx.user.delete({ where: { id } });
+      });
+    } catch (error: unknown) {
+      if (this.isForeignKeyError(error)) {
+        throw new ConflictException(
+          'No se puede borrar: el usuario tiene registros asociados (reembolsos, checklists, proyectos, etc.). Revoca su acceso en lugar de borrarlo.',
+        );
+      }
+      throw error;
+    }
+
+    // Limpieza FGA best-effort. Solo se borran tuplas que EXISTEN: member siempre
+    // (se escribe al aprovisionar) y admin solo si tenía el rol org_admin org-scope.
+    const hadAdmin = user.memberships.some(
+      (m) => m.roleKey === ORG_ADMIN_ROLE && m.scopeType === 'ORGANIZATION' && m.scopeId === ORG_ID,
+    );
+    const tuples: TupleKey[] = [this.orgAccessTuple(id, 'member')];
+    if (hadAdmin) {
+      tuples.push(this.orgAccessTuple(id, 'admin'));
+    }
+    try {
+      await this.fga.deleteTuples(tuples);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Usuario ${id} borrado, pero no se pudieron limpiar sus tuplas FGA de acceso: ${this.errorMessage(error)}`,
+      );
+    }
+  }
+
+  /** ¿El error es una violación de llave foránea de Prisma (P2003)? */
+  private isForeignKeyError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2003'
+    );
   }
 
   /** Asigna un rol org-scope a un usuario (Membership + tupla FGA). 409 si ya lo tiene. */

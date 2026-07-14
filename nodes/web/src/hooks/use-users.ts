@@ -13,6 +13,7 @@ import {
   type CreateUserDto,
   type CreateUserResponse,
   type ImportUsersResponse,
+  type ResendInviteResult,
   type UserListItem,
   type UserRolesResponse,
 } from '@/lib/api';
@@ -51,10 +52,11 @@ export interface UseUsersResult {
   /** Quita la membership exacta (rol + alcance) de un usuario. */
   removeRole: (id: string, membership: UserMembership) => Promise<UserRolesResponse>;
   /**
-   * Reenvía la invitación (regenera la clave provisoria) y recarga la lista.
-   * Devuelve la nueva clave para mostrarla una única vez.
+   * Reenvía la invitación por el camino MANUAL (regenera la clave y la retorna
+   * una vez) y recarga la lista. La página de Usuarios usa el flujo con preview
+   * editable aparte; este atajo queda para consumidores simples.
    */
-  resendInvite: (id: string) => Promise<{ provisionalPassword: string }>;
+  resendInvite: (id: string) => Promise<ResendInviteResult>;
   /** Revoca el acceso del usuario (suspende / revoca invitación) y recarga la lista. */
   revokeInvite: (id: string) => Promise<UserListItem>;
   /** Cierra las sesiones vivas del usuario (no cambia su estado). */
@@ -195,8 +197,8 @@ export function useUsers(opts: UseUsersOptions = {}): UseUsersResult {
   );
 
   const resendInvite = useCallback(
-    async (id: string): Promise<{ provisionalPassword: string }> => {
-      const result = await resendUserInvite(id);
+    async (id: string): Promise<ResendInviteResult> => {
+      const result = await resendUserInvite(id, { sendEmail: false });
       await loadFirstPage();
       return result;
     },

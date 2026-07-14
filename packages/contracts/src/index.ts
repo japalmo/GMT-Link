@@ -24,6 +24,99 @@ export interface Paginated<T> {
   nextCursor: string | null;
 }
 
+// ============ Motor de tablas unificado (server-side, offset) ============
+
+/** Dirección de orden de una columna. */
+export type SortDir = 'asc' | 'desc';
+
+/**
+ * Request genérico de una tabla server-side (paginación por offset). Todo el
+ * filtrado, la búsqueda y el orden se resuelven en el servidor sobre el dataset
+ * completo (no solo la página cargada). Lo consume el hook `useDataTable` del
+ * front y lo procesa el helper `paginateTable` del backend.
+ */
+export interface TableRequest {
+  /** Página 1-based. */
+  page: number;
+  /** Filas por página. El backend la acota a un máximo. */
+  pageSize: number;
+  /** Búsqueda de texto libre (el endpoint define en qué columnas busca). */
+  search?: string;
+  /** Clave de columna por la que ordenar (el endpoint define las permitidas). */
+  sortBy?: string;
+  /** Dirección del orden. */
+  sortDir?: SortDir;
+  /** Filtros estructurados por columna (valor único; multivalor como CSV). */
+  filters?: Record<string, string>;
+}
+
+/** Página de resultados de una tabla server-side (offset). */
+export interface TablePage<T> {
+  items: T[];
+  /** Total de filas que matchean el filtro/búsqueda (para "de Z" y el nº de páginas). */
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ============ Administración de usuarios (detalle: editar / borrar / reenviar clave) ============
+
+/**
+ * Campos editables por un administrador en el detalle de un usuario
+ * (`PATCH /users/:id`). Todos opcionales: se aplican solo los presentes. El
+ * `email` legacy lo re-deriva el backend (= institucional ?? personal). No
+ * incluye clave, estado ni roles (se gestionan por sus propios flujos).
+ */
+export interface UpdateUserAdminInput {
+  firstName?: string;
+  secondName?: string | null;
+  lastName?: string;
+  secondLastName?: string | null;
+  emailInstitucional?: string | null;
+  emailPersonal?: string | null;
+  username?: string;
+  cargo?: string | null;
+  isClientUser?: boolean;
+}
+
+/**
+ * Vista previa del correo de reenvío de clave. La clave provisoria NUNCA viaja
+ * al front: se regenera y se inyecta en el servidor al enviar. El admin ve el
+ * asunto y el mensaje (editables) y una representación enmascarada de la clave.
+ */
+export interface ResendInvitePreview {
+  /** Destinatario (email institucional o personal). Vacío si el usuario no tiene correo. */
+  to: string;
+  /** ¿Se puede enviar el correo desde el servidor? (hay proveedor real + destinatario). */
+  canEmail: boolean;
+  username: string;
+  nombre: string;
+  /** Asunto por defecto (editable). */
+  subject: string;
+  /** Mensaje/intro por defecto (editable). La clave se inyecta aparte, server-side. */
+  message: string;
+}
+
+/** Cuerpo de `POST /users/:id/resend-invite`. */
+export interface ResendInviteInput {
+  /** Si `true` y hay correo, el servidor envía el correo con la clave inyectada. */
+  sendEmail: boolean;
+  /** Asunto editado por el admin (solo se usa si `sendEmail`). */
+  subject?: string;
+  /** Mensaje/intro editado por el admin (solo se usa si `sendEmail`). */
+  message?: string;
+}
+
+/** Resultado de reenviar la clave (`POST /users/:id/resend-invite`). */
+export interface ResendInviteResult {
+  /** `true` si el servidor envió el correo (clave inyectada allí, nunca retornada). */
+  sent: boolean;
+  /** Destinatario al que se envió, o `null` en el camino manual. */
+  to: string | null;
+  /** Clave provisoria — SOLO en el camino manual (`sent=false`); `null` si se envió por correo. */
+  provisionalPassword: string | null;
+}
+
 /**
  * Claves de rol válidas (semilla §6-0.2 / §4.3). Son los bundles asignables.
  * La fuente de verdad de autorización es OpenFGA; esta lista es el contrato
