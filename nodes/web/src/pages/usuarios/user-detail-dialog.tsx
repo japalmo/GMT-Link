@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import { Trash2, Loader2 } from 'lucide-react';
+import { CalendarClock, FileText, FolderOpen, Trash2, Loader2, User } from 'lucide-react';
 import {
   Modal,
   ModalContent,
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Tabs, type TabItem } from '@/components/ui/tabs';
 import {
   deleteUser,
   errorToMessage,
@@ -22,6 +23,19 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { RoleChips } from './role-chips';
+import { UserCvTab } from './user-cv-tab';
+import { UserScheduleTab } from './user-schedule-tab';
+import { UserDocumentsTab } from './user-documents-tab';
+
+/** Pestañas del detalle del trabajador. */
+type DetailTab = 'datos' | 'cv' | 'horario' | 'documentos';
+
+const DETAIL_TABS: ReadonlyArray<TabItem<DetailTab>> = [
+  { value: 'datos', label: 'Datos', icon: User },
+  { value: 'cv', label: 'CV', icon: FileText },
+  { value: 'horario', label: 'Horario', icon: CalendarClock },
+  { value: 'documentos', label: 'Documentos', icon: FolderOpen },
+];
 
 /** Estado editable del detalle (opcionales como string vacío para inputs controlados). */
 interface FormState {
@@ -94,6 +108,7 @@ export function UserDetailDialog({
   const baseId = useId();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [seededId, setSeededId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<DetailTab>('datos');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -102,12 +117,19 @@ export function UserDetailDialog({
   // Re-siembra SÍNCRONA al abrir con otro usuario (patrón "ajustar estado en
   // cambio de prop"): corre durante el render, así no hay frame con datos del
   // usuario anterior ni warning de input no controlado. El guard por id evita
-  // el bucle.
+  // el bucle. También vuelve a la pestaña Datos al cambiar de usuario.
   if (user && user.id !== seededId) {
     setForm(seed(user));
     setSeededId(user.id);
+    setActiveTab('datos');
     setError(null);
     setConfirmingDelete(false);
+  }
+
+  // Al cerrar (user null) olvida el usuario sembrado: así la próxima apertura
+  // —incluso del MISMO trabajador— re-siembra el form y vuelve a la pestaña Datos.
+  if (!user && seededId !== null) {
+    setSeededId(null);
   }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
@@ -186,16 +208,26 @@ export function UserDetailDialog({
 
   return (
     <Modal open={user !== null} onOpenChange={onOpenChange}>
-      <ModalContent className="sm:max-w-2xl">
+      <ModalContent className="sm:max-w-3xl">
         <ModalHeader>
-          <ModalTitle>Detalle de usuario</ModalTitle>
+          <ModalTitle>Detalle del trabajador</ModalTitle>
           <ModalDescription>
-            Edita los datos de {fullName || 'este usuario'}. Los roles y el estado se
-            gestionan con los botones de la fila.
+            {fullName || 'Trabajador'}: datos, CV, horario y documentos. Los roles y el
+            estado se gestionan con los botones de la fila.
           </ModalDescription>
         </ModalHeader>
 
         {user && (
+          <Tabs
+            items={DETAIL_TABS}
+            value={activeTab}
+            onValueChange={setActiveTab}
+            aria-label="Secciones del trabajador"
+            className="mb-1"
+          />
+        )}
+
+        {user && activeTab === 'datos' && (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Metadatos de solo lectura. */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-sm">
@@ -346,6 +378,22 @@ export function UserDetailDialog({
             </ModalFooter>
           </form>
         )}
+
+        {user && activeTab === 'cv' && (
+          <TabPanel onClose={() => onOpenChange(false)}>
+            <UserCvTab userId={user.id} />
+          </TabPanel>
+        )}
+        {user && activeTab === 'horario' && (
+          <TabPanel onClose={() => onOpenChange(false)}>
+            <UserScheduleTab userId={user.id} />
+          </TabPanel>
+        )}
+        {user && activeTab === 'documentos' && (
+          <TabPanel onClose={() => onOpenChange(false)}>
+            <UserDocumentsTab userId={user.id} />
+          </TabPanel>
+        )}
       </ModalContent>
     </Modal>
   );
@@ -357,6 +405,24 @@ function Field({ id, label, children }: { id: string; label: string; children: R
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Envoltura de una pestaña con contenido propio (CV / Horario / Documentos):
+ * renderiza el contenido y un footer con "Cerrar". Guardar/Borrar viven solo en
+ * la pestaña Datos; cada pestaña maneja sus propias acciones internamente.
+ */
+function TabPanel({ children, onClose }: { children: ReactNode; onClose: () => void }): ReactNode {
+  return (
+    <div className="flex flex-col gap-4">
+      {children}
+      <ModalFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cerrar
+        </Button>
+      </ModalFooter>
     </div>
   );
 }

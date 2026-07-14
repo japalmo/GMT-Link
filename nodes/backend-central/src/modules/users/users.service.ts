@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, User } from '@prisma/client';
+import type { Prisma, User, WorkSchedule } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import type {
@@ -18,8 +18,11 @@ import type {
   TablePage,
   TableRequest,
   UpdateUserAdminInput,
+  UpsertWorkScheduleInput,
   UserMembership,
+  WorkScheduleView,
 } from '@gmt-platform/contracts';
+import { SHIFT_PATTERN_CYCLE } from '@gmt-platform/contracts';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
 import { hashPassword } from '../../common/password';
@@ -30,7 +33,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import type { ResendInviteDto } from './dto/resend-invite.dto';
-import type { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import {
   tableAndWhere,
   tableOrderBy,
@@ -591,6 +593,112 @@ export class UsersService {
       throw new NotFoundException(`No existe un usuario con id "${id}".`);
     }
     return this.toListItem(user);
+  }
+
+  // ============ Horario / turnos del trabajador ============
+
+  /**
+   * Jornada/turnos de un trabajador (`GET /users/:id/schedule`). 404 si el usuario
+   * no existe; `null` si todavía no tiene jornada configurada. Solo lectura del admin.
+   */
+  async getSchedule(id: string): Promise<WorkScheduleView | null> {
+    await this.assertUserExists(id);
+    const row = await this.prisma.workSchedule.findUnique({ where: { userId: id } });
+    return row ? this.toScheduleView(row) : null;
+  }
+
+  /**
+   * Upsert de la jornada de un trabajador (`PUT /users/:id/schedule`). Reemplazo
+   * completo. Normaliza los días de ciclo según el patrón: ADMINISTRATIVO no rota
+   * (workDays/restDays/cycleStart quedan en null); los preset cíclicos derivan
+   * workDays/restDays de la tabla; PERSONALIZADO exige workDays/restDays (≥1). 404
+   * si el usuario no existe.
+   */
+  async upsertSchedule(id: string, input: UpsertWorkScheduleInput): Promise<WorkScheduleView> {
+    await this.assertUserExists(id);
+
+    let workDays: number | null;
+    let restDays: number | null;
+    let cycleStart: Date | null;
+
+    if (input.shiftPattern === 'ADMINISTRATIVO') {
+      // Jornada administrativa: lunes a viernes, sin ciclo rotativo.
+      workDays = null;
+      restDays = null;
+      cycleStart = null;
+    } else {
+      const preset = SHIFT_PATTERN_CYCLE[input.shiftPattern];
+      if (preset) {
+        workDays = preset.workDays;
+        restDays = preset.restDays;
+      } else {
+        // PERSONALIZADO: el admin fija los días a mano (obligatorios y ≥1).
+        workDays = input.workDays ?? null;
+        restDays = input.restDays ?? null;
+        if (workDays === null || restDays === null || workDays < 1 || restDays < 1) {
+          throw new BadRequestException(
+            'El turno personalizado requiere días de faena y de descanso (al menos 1 de cada uno).',
+          );
+        }
+      }
+      cycleStart = this.parseScheduleDate(input.cycleStart);
+      // Un turno cíclico sin fecha de inicio no permite computar faena/descanso:
+      // se exige el ancla del ciclo (día 1 en faena).
+      if (cycleStart === null) {
+        throw new BadRequestException('Los turnos cíclicos requieren una fecha de inicio de ciclo.');
+      }
+    }
+
+    const data = {
+      shiftPattern: input.shiftPattern,
+      workDays,
+      restDays,
+      cycleStart,
+      dayNight: input.dayNight,
+      startTime: this.normalizeTime(input.startTime),
+      endTime: this.normalizeTime(input.endTime),
+      notes: input.notes?.trim() || null,
+    };
+
+    const row = await this.prisma.workSchedule.upsert({
+      where: { userId: id },
+      create: { userId: id, ...data },
+      update: data,
+    });
+    return this.toScheduleView(row);
+  }
+
+  /** Mapea la fila WorkSchedule a la vista de contrato (fechas en ISO). */
+  private toScheduleView(row: WorkSchedule): WorkScheduleView {
+    return {
+      shiftPattern: row.shiftPattern,
+      workDays: row.workDays,
+      restDays: row.restDays,
+      // cycleStart es date-only en el contrato: la columna guarda medianoche UTC
+      // (new Date("YYYY-MM-DD")), así que la porción de fecha del ISO es la fecha
+      // calendario correcta sin drift de zona horaria.
+      cycleStart: row.cycleStart ? row.cycleStart.toISOString().slice(0, 10) : null,
+      dayNight: row.dayNight,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      notes: row.notes,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  /** ISO date/datetime opcional → Date; null si vacío; 400 si inválido. */
+  private parseScheduleDate(value: string | null | undefined): Date | null {
+    if (value === undefined || value === null || value.trim() === '') return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException('La fecha de inicio de ciclo no es válida.');
+    }
+    return date;
+  }
+
+  /** "HH:mm" opcional: '' / undefined / null → null; resto se recorta. */
+  private normalizeTime(value: string | null | undefined): string | null {
+    return value === undefined || value === null || value.trim() === '' ? null : value.trim();
   }
 
   /**

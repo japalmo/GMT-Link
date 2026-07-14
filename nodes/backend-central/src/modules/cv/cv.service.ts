@@ -59,6 +59,20 @@ export class CvService {
     return this.toView(cv);
   }
 
+  /**
+   * CV de OTRO usuario, en solo lectura, para el detalle del trabajador (admin).
+   * A diferencia de `getMe`, NO crea el CV de forma perezosa: devuelve `null` si el
+   * trabajador aún no tiene CV (la UI muestra un estado vacío). El control de acceso
+   * (`can_manage_users`) lo aplica el controller que la invoca.
+   */
+  async getForUser(userId: string): Promise<CvView | null> {
+    const cv = await this.prisma.cV.findUnique({
+      where: { userId },
+      include: { experiences: true, education: true, certifications: true },
+    });
+    return cv ? this.toView(cv) : null;
+  }
+
   /** Actualiza el resumen del CV propio. '' → null (limpiar). */
   async updateMe(userId: string, dto: UpdateCvDto): Promise<CvView> {
     const cv = await this.ensureCv(userId);

@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Patch,
+  Put,
   Query,
   UsePipes,
   ValidationPipe,
@@ -26,7 +27,10 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
 import { ResendInviteDto } from './dto/resend-invite.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
+import { UpsertWorkScheduleDto } from './dto/upsert-work-schedule.dto';
 import { UsersService } from './users.service';
+import { CvService } from '../cv/cv.service';
+import type { CvView } from '../cv/cv.types';
 import type {
   AssignRoleInput,
   ProjectAdminOption,
@@ -35,6 +39,7 @@ import type {
   ScopeType,
   TablePage,
   TableRequest,
+  WorkScheduleView,
 } from '@gmt-platform/contracts';
 import type {
   CreateUserResponse,
@@ -57,6 +62,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly permissions: PermissionService,
+    private readonly cvService: CvService,
   ) {}
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
@@ -156,6 +162,35 @@ export class UsersController {
   @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
   getById(@Param('id') id: string): Promise<UserListItem> {
     return this.usersService.getById(id);
+  }
+
+  /**
+   * CV del trabajador en SOLO LECTURA (pestaña CV del detalle). 404 si el usuario
+   * no existe; `null` si aún no tiene CV. La edición del CV sigue siendo del propio
+   * usuario (`/cv/me`); aquí el admin solo lo consulta.
+   */
+  @Get(':id/cv')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  async getUserCv(@Param('id') id: string): Promise<CvView | null> {
+    await this.usersService.getById(id); // 404 si el usuario no existe
+    return this.cvService.getForUser(id);
+  }
+
+  /** Jornada/turnos del trabajador (pestaña Horario). `null` si sin configurar. */
+  @Get(':id/schedule')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  getUserSchedule(@Param('id') id: string): Promise<WorkScheduleView | null> {
+    return this.usersService.getSchedule(id);
+  }
+
+  /** Configura/actualiza la jornada del trabajador (upsert completo). */
+  @Put(':id/schedule')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  upsertUserSchedule(
+    @Param('id') id: string,
+    @Body() dto: UpsertWorkScheduleDto,
+  ): Promise<WorkScheduleView> {
+    return this.usersService.upsertSchedule(id, dto);
   }
 
   /** Edita el detalle de un usuario (nombres, correos, usuario, cargo, tipo). */

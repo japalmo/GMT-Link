@@ -90,6 +90,20 @@ export class DocumentsService {
   }
 
   /**
+   * Lista TODOS los documentos de un trabajador para la pestaña Documentos del
+   * detalle de usuario (admin). Mismo orden que `listMine`. El control de acceso
+   * (`can_manage_users`) lo aplica el controller; la aprobación/rechazo sigue en
+   * los endpoints de revisión (`:id/approve|reject`).
+   */
+  async listForUser(userId: string): Promise<PersonalDocumentView[]> {
+    const rows = await this.prisma.personalDocument.findMany({
+      where: { userId },
+      orderBy: [{ expiresAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+    });
+    return rows.map((row) => this.toView(row));
+  }
+
+  /**
    * Lista los documentos propios con el MOTOR de tablas server-side (offset). Mismo
    * filtrado (userId + estado + por-vencer) que `listMine`, pero devuelve una página
    * numerada + total con orden configurable (documento/tipo/estado/vencimiento/creado,

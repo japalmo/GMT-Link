@@ -103,6 +103,18 @@ export class DocumentsController {
   }
 
   /**
+   * Lista TODOS los documentos de un trabajador (pestaña Documentos del detalle de
+   * usuario). Requiere `can_manage_users` sobre organization:gmt — es una lectura de
+   * gestión de personas. La aprobación/rechazo se hace con `:id/approve|reject`
+   * (revisor). El literal `user` se declara antes de `:id/*` para no ser capturado.
+   */
+  @Get('user/:userId')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  listForUser(@Param('userId') userId: string): Promise<PersonalDocumentView[]> {
+    return this.documentsService.listForUser(userId);
+  }
+
+  /**
    * Sube un documento propio (multipart, campo `file` PDF/imagen + metadatos).
    * Queda en `EN_REVISION` (pendiente).
    */

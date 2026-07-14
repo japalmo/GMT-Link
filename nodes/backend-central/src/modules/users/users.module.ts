@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { RolesModule } from '../roles/roles.module';
+import { CvModule } from '../cv/cv.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -13,7 +14,7 @@ import { UsersService } from './users.service';
  * `@RequirePermission` de este controller se aplican sin registrar nada extra aquí.
  */
 @Module({
-  imports: [PrismaModule, RolesModule],
+  imports: [PrismaModule, RolesModule, CvModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

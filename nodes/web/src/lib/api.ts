@@ -51,8 +51,10 @@ import type {
   UpdateProjectInput,
   UpdateRoleInput,
   UpdateUserAdminInput,
+  UpsertWorkScheduleInput,
   UserMembership,
   UserStatus,
+  WorkScheduleView,
 } from '@gmt-platform/contracts';
 
 // Re-export para consumidores del front (enmienda A15: los tipos viven en
@@ -66,7 +68,9 @@ export type {
   TablePage,
   TableRequest,
   UpdateUserAdminInput,
+  UpsertWorkScheduleInput,
   UserMembership,
+  WorkScheduleView,
 } from '@gmt-platform/contracts';
 import type {
   ProjectView,
@@ -488,6 +492,51 @@ export function updateUserAdmin(id: string, input: UpdateUserAdminInput): Promis
 /** `DELETE /users/:id` — borra un usuario (admin). 409 si tiene registros asociados. */
 export function deleteUser(id: string): Promise<void> {
   return request<void>(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Detalle del trabajador (admin): CV (lectura), Horario/turnos, Documentos    */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /users/:id/cv` — CV del trabajador en solo lectura. `null` si aún no tiene. */
+export function fetchUserCv(id: string): Promise<CvView | null> {
+  return request<CvView | null>(`/users/${encodeURIComponent(id)}/cv`);
+}
+
+/** `GET /users/:id/schedule` — jornada/turnos del trabajador. `null` si sin configurar. */
+export function fetchUserSchedule(id: string): Promise<WorkScheduleView | null> {
+  return request<WorkScheduleView | null>(`/users/${encodeURIComponent(id)}/schedule`);
+}
+
+/** `PUT /users/:id/schedule` — upsert de la jornada del trabajador (admin). */
+export function upsertUserSchedule(
+  id: string,
+  input: UpsertWorkScheduleInput,
+): Promise<WorkScheduleView> {
+  return request<WorkScheduleView>(`/users/${encodeURIComponent(id)}/schedule`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `GET /documents/user/:userId` — documentos de un trabajador (admin). */
+export function fetchUserDocuments(userId: string): Promise<PersonalDocumentView[]> {
+  return request<PersonalDocumentView[]>(`/documents/user/${encodeURIComponent(userId)}`);
+}
+
+/** `POST /documents/:id/approve` — aprueba un documento (revisor). */
+export function approveDocument(id: string): Promise<PersonalDocumentView> {
+  return request<PersonalDocumentView>(`/documents/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+  });
+}
+
+/** `POST /documents/:id/reject` — rechaza un documento (revisor). `reason` opcional. */
+export function rejectDocument(id: string, reason?: string): Promise<PersonalDocumentView> {
+  return request<PersonalDocumentView>(`/documents/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: reason ?? undefined }),
+  });
 }
 
 /**

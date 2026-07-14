@@ -117,6 +117,73 @@ export interface ResendInviteResult {
   provisionalPassword: string | null;
 }
 
+// ============ Horario / turnos del trabajador (detalle de usuario) ============
+
+/**
+ * Patrón de turno de un trabajador. Los preset cíclicos definen días de faena y
+ * descanso; `PERSONALIZADO` deja que el admin fije esos días a mano;
+ * `ADMINISTRATIVO` no rota (lunes a viernes).
+ */
+export type ShiftPattern =
+  | 'ADMINISTRATIVO'
+  | 'SIETE_POR_SIETE'
+  | 'CUATRO_POR_TRES'
+  | 'CATORCE_POR_CATORCE'
+  | 'PERSONALIZADO';
+
+/** Turno diurno o nocturno. */
+export type DayNight = 'DIA' | 'NOCHE';
+
+/** Días de faena/descanso por preset cíclico. `null` = no aplica (administrativo/personalizado). */
+export const SHIFT_PATTERN_CYCLE: Record<ShiftPattern, { workDays: number; restDays: number } | null> = {
+  ADMINISTRATIVO: null,
+  SIETE_POR_SIETE: { workDays: 7, restDays: 7 },
+  CUATRO_POR_TRES: { workDays: 4, restDays: 3 },
+  CATORCE_POR_CATORCE: { workDays: 14, restDays: 14 },
+  PERSONALIZADO: null,
+};
+
+/**
+ * Jornada/turnos de un trabajador (`GET /users/:id/schedule`). `null` en el
+ * endpoint cuando el trabajador aún no tiene jornada configurada.
+ */
+export interface WorkScheduleView {
+  shiftPattern: ShiftPattern;
+  /** Días de faena del ciclo (solo patrones cíclicos); null en administrativo. */
+  workDays: number | null;
+  /** Días de descanso del ciclo; null en administrativo. */
+  restDays: number | null;
+  /** Día 1 del ciclo (primer día en faena), ISO-8601 date-only; null si sin definir. */
+  cycleStart: string | null;
+  dayNight: DayNight;
+  /** Jornada diaria "HH:mm"; null si sin definir. */
+  startTime: string | null;
+  /** Jornada diaria "HH:mm"; null si sin definir. */
+  endTime: string | null;
+  notes: string | null;
+  /** ISO-8601. */
+  updatedAt: string;
+}
+
+/**
+ * Cuerpo de `PUT /users/:id/schedule` (upsert completo). `shiftPattern` y
+ * `dayNight` son obligatorios. Los patrones cíclicos (7x7, 4x3, 14x14 y
+ * `PERSONALIZADO`) exigen `cycleStart`; además `PERSONALIZADO` exige
+ * `workDays`/`restDays` (>=1), mientras los preset los derivan de
+ * `SHIFT_PATTERN_CYCLE`. `ADMINISTRATIVO` ignora los días de ciclo y la fecha de
+ * inicio. `startTime`/`endTime` en "HH:mm".
+ */
+export interface UpsertWorkScheduleInput {
+  shiftPattern: ShiftPattern;
+  workDays?: number | null;
+  restDays?: number | null;
+  cycleStart?: string | null;
+  dayNight: DayNight;
+  startTime?: string | null;
+  endTime?: string | null;
+  notes?: string | null;
+}
+
 /**
  * Claves de rol válidas (semilla §6-0.2 / §4.3). Son los bundles asignables.
  * La fuente de verdad de autorización es OpenFGA; esta lista es el contrato

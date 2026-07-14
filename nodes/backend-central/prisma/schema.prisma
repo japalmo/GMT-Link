@@ -42,6 +42,7 @@ model User {
   client                 Client?                   @relation(fields: [clientId], references: [id])
   memberships            Membership[]
   cv                     CV?
+  workSchedule           WorkSchedule?
   documents              PersonalDocument[]        @relation("UserDocuments")
   reviewedDocs           PersonalDocument[]        @relation("DocumentReviewer")
   dashboard              DashboardConfig?
@@ -326,6 +327,49 @@ model CVCertification {
   createdAt DateTime  @default(now())
 
   @@map("cv_certifications")
+}
+
+// ============ PERFIL — Horario / turnos (jornada del trabajador) ============
+// Jornada de un trabajador 1:1 con User. Los patrones cíclicos de faena (7x7, 4x3,
+// 14x14, personalizado) se modelan con workDays/restDays + cycleStart: el día N del
+// ciclo es faena si (diasDesdeCycleStart mod (workDays+restDays)) < workDays. El
+// patrón ADMINISTRATIVO no rota: se trabaja de lunes a viernes (workDays/restDays
+// se ignoran). startTime/endTime son la jornada diaria "HH:mm"; dayNight marca turno
+// día o noche. Solo lo edita un admin (can_manage_users) desde el detalle del
+// trabajador; el propio trabajador aún no lo autoedita.
+model WorkSchedule {
+  id           String       @id @default(cuid())
+  userId       String       @unique
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shiftPattern ShiftPattern @default(ADMINISTRATIVO)
+  // Días de faena y de descanso del ciclo (solo patrones cíclicos; null en ADMINISTRATIVO).
+  workDays     Int?
+  restDays     Int?
+  // Día 1 del ciclo (primer día en faena). Date-only; null si aún no se define el ciclo.
+  cycleStart   DateTime?
+  dayNight     DayNight     @default(DIA)
+  startTime    String? // "HH:mm" jornada diaria (opcional)
+  endTime      String? // "HH:mm" jornada diaria (opcional)
+  notes        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("work_schedules")
+}
+
+// Patrón de turno del trabajador. Los preset cíclicos derivan workDays/restDays;
+// PERSONALIZADO deja que el admin fije días de faena/descanso a mano.
+enum ShiftPattern {
+  ADMINISTRATIVO
+  SIETE_POR_SIETE
+  CUATRO_POR_TRES
+  CATORCE_POR_CATORCE
+  PERSONALIZADO
+}
+
+enum DayNight {
+  DIA
+  NOCHE
 }
 
 // ============ PERFIL — Documentos personales (§6-1.5) ============
