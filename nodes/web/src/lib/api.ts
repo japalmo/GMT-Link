@@ -1492,6 +1492,27 @@ export function listTasks(filters: {
   return request<TaskView[]>(`/tasks${qs ? `?${qs}` : ''}`);
 }
 
+/**
+ * `GET /tasks/table` — MOTOR de tablas server-side (offset) para el backlog.
+ * Búsqueda, filtros (project/service/assignee/status) y orden sobre TODO el
+ * backlog visible. Lo consume la vista Tabla. Los filtros viajan como
+ * `filters[clave]=valor`.
+ */
+export function fetchTasksTable(req: TableRequest): Promise<TablePage<TaskView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<TaskView>>(`/tasks/table?${query.toString()}`);
+}
+
 export function createTask(dto: {
   name: string;
   description?: string;

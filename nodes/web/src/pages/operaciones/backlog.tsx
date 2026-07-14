@@ -1,4 +1,4 @@
-import { useState, type ReactNode, useMemo, useEffect } from 'react';
+import { useState, type ReactNode, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
@@ -37,6 +37,9 @@ import {
   CardHeader,
 } from '@/components/ui/card';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
+import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
+import { useDataTable } from '@/hooks/use-data-table';
+import type { TableRequest } from '@gmt-platform/contracts';
 import type { TaskView, TaskStatus, TaskDataSpec } from '@/types/operations';
 
 /** Etiqueta legible + variante de `Badge` por estado de tarea del backlog. */
@@ -149,6 +152,29 @@ export function BacklogTab(): ReactNode {
     filterService !== 'all' ? filterService : undefined
   );
 
+  // MOTOR de tablas para la VISTA TABLA (offset). Solo consulta cuando esa vista
+  // está activa (`enabled`); el Kanban conserva la carga completa de `useTasks`
+  // (necesita todas las tareas para agrupar y sumar puntos). Los filtros de la
+  // barra compartida (URL) se sincronizan al motor.
+  const tasksTableFetcher = useCallback((req: TableRequest) => api.fetchTasksTable(req), []);
+  const table = useDataTable<TaskView>(tasksTableFetcher, {
+    enabled: viewMode === 'table',
+    initialPageSize: 10,
+    initialSortBy: 'creado',
+    initialSortDir: 'desc',
+  });
+  const { setFilter: tableSetFilter, setSearch: tableSetSearch, refetch: tableRefetch } = table;
+  useEffect(() => {
+    tableSetFilter('project', filterProject === 'all' ? undefined : filterProject);
+    tableSetFilter('service', filterService === 'all' ? undefined : filterService);
+    tableSetFilter('assignee', filterAssignee === 'all' ? undefined : filterAssignee);
+    // El ITO solo ve tareas COMPLETADAS (se aplica server-side vía el filtro de estado).
+    tableSetFilter('status', isIto ? 'COMPLETADO' : undefined);
+  }, [filterProject, filterService, filterAssignee, isIto, tableSetFilter]);
+  useEffect(() => {
+    tableSetSearch(filterSearch);
+  }, [filterSearch, tableSetSearch]);
+
   // Modal states
   const [createOpen, setCreateOpen] = useState(false);
   const [editTask, setEditTask] = useState<TaskView | null>(null);
@@ -220,13 +246,6 @@ export function BacklogTab(): ReactNode {
     return list;
   }, [tasks]);
 
-  const visibleTasks = useMemo(() => {
-    if (isIto) {
-      return tasks.filter((t) => t.status === 'COMPLETADO');
-    }
-    return tasks;
-  }, [tasks, isIto]);
-
   const visibleColumns = useMemo((): TaskStatus[] => {
     if (isIto) {
       return ['COMPLETADO'];
@@ -275,6 +294,7 @@ export function BacklogTab(): ReactNode {
       setItoProjId('');
       setItoProduct('time_only');
       setItoRequestOpen(false);
+      tableRefetch();
       toast.success('Solicitud de actividad creada correctamente.');
     } catch (err) {
       setItoFormError(err instanceof Error ? err.message : 'Error al crear la solicitud.');
@@ -347,6 +367,7 @@ export function BacklogTab(): ReactNode {
       setTaskProduct('time_only');
       setWizardStep(1);
       setCreateOpen(false);
+      tableRefetch();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Error al crear la tarea.');
     }
@@ -376,6 +397,7 @@ export function BacklogTab(): ReactNode {
         recurrence: editRecurrence.trim() || undefined,
         clientUserId: editClientId || undefined,
       });
+      tableRefetch();
       setEditTask(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al actualizar la tarea.');
@@ -391,6 +413,7 @@ export function BacklogTab(): ReactNode {
     } else {
       try {
         await updateStatus(t.id, nextStatus);
+        tableRefetch();
         toast.success('Estado de la tarea actualizado.');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error al mover el estado de la tarea.');
@@ -402,6 +425,7 @@ export function BacklogTab(): ReactNode {
     if (!pointsPromptTask) return;
     try {
       await updateStatus(pointsPromptTask.id, 'COMPLETADO', Number(actualPointsVal));
+      tableRefetch();
       setPointsPromptOpen(false);
       setPointsPromptTask(null);
       toast.success('Tarea completada con éxito.');
@@ -413,6 +437,7 @@ export function BacklogTab(): ReactNode {
   const handleDeleteTask = async (id: string) => {
     try {
       await remove(id);
+      tableRefetch();
       toast.success('Tarea eliminada con éxito.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al eliminar la tarea.');
@@ -476,6 +501,7 @@ export function BacklogTab(): ReactNode {
       setDeliverableFile(null);
       setMetricCotaEspejo('');
       setMetricVolSalmuera('');
+      tableRefetch();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al registrar actividad.');
     }
@@ -488,6 +514,226 @@ export function BacklogTab(): ReactNode {
     const mins = Math.floor(elapsed / (1000 * 60)) % 60;
     const hours = Math.floor(elapsed / (1000 * 60 * 60));
     return `${hours > 0 ? `${hours}h ` : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Columnas de la VISTA TABLA (motor server-side). Reproducen las celdas de la
+  // tabla anterior; las acciones van en `rowActions`.
+  const taskColumns: ReadonlyArray<DataTableColumn<TaskView>> = [
+    {
+      id: 'tarea',
+      header: 'Tarea',
+      sortable: true,
+      render: (t) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium text-foreground">{t.name}</span>
+          {t.description && <span className="text-xs text-muted-foreground line-clamp-1">{t.description}</span>}
+          {(t.status === 'COMPLETADO' || t.status === 'REVISADO') &&
+            (t.dataSpec?.type === 'pdf_report' || t.dataSpec?.type === 'file_generic') && (
+              <div className="mt-1 flex max-w-xs flex-col gap-1 rounded-lg border bg-muted/20 p-2">
+                <span className="text-[9px] font-semibold text-muted-foreground">
+                  Entregable ({t.dataSpec?.label}):
+                </span>
+                {(() => {
+                  const taskDoc = projectDocs?.find((d) => d.name === `Entregable - ${t.name}`);
+                  return (
+                    <div className="flex flex-col gap-1.5">
+                      {taskDoc ? (
+                        <a
+                          href={taskDoc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-medium text-primary hover:underline"
+                        >
+                          Descargar entregable
+                        </a>
+                      ) : (
+                        <span className="text-[10px] italic text-amber-500">Pendiente</span>
+                      )}
+                      {!isReadOnly && (t.assignedToId === profile?.id || isSupervisorOrAdmin) && (
+                        <Input
+                          type="file"
+                          accept={t.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
+                          className="h-6 border-dashed border-border bg-card py-0 text-[9px]"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              await api.uploadProjectDocument(
+                                {
+                                  name: `Entregable - ${t.name}`,
+                                  projectId: t.projectId,
+                                  serviceId: t.serviceId || '',
+                                  documentType: 'INFORME',
+                                  areaCode: 'OPS',
+                                },
+                                file,
+                              );
+                              toast.success('Entregable subido con éxito.');
+                              e.target.value = '';
+                              void refetchDocs();
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+        </div>
+      ),
+    },
+    {
+      id: 'proyservicio',
+      header: 'Proyecto / Servicio',
+      render: (t) => (
+        <div className="flex flex-wrap gap-1">
+          <Badge variant="outline" className="border-primary/20 bg-primary/5 px-1 py-0 text-[10px] text-primary">
+            {t.project.code}
+          </Badge>
+          {t.service && (
+            <Badge variant="outline" className="border-muted bg-muted/30 px-1 py-0 text-[10px] text-muted-foreground">
+              {t.service.code}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'estado',
+      header: 'Estado',
+      sortable: true,
+      render: (t) => <Badge variant={TASK_STATUS_META[t.status].variant}>{TASK_STATUS_META[t.status].label}</Badge>,
+    },
+    {
+      id: 'estimado',
+      header: 'Est.',
+      sortable: true,
+      render: (t) => <span className="font-mono font-medium">{t.estimatedPoints}</span>,
+    },
+    {
+      id: 'real',
+      header: 'Real',
+      sortable: true,
+      render: (t) => {
+        const hasVariance = t.actualPoints !== null && t.actualPoints !== t.estimatedPoints;
+        const variance = t.actualPoints !== null ? t.actualPoints - t.estimatedPoints : 0;
+        return t.actualPoints !== null ? (
+          <span
+            className={`font-mono ${hasVariance ? (variance > 0 ? 'font-semibold text-destructive' : 'font-semibold text-emerald-500') : 'text-muted-foreground'}`}
+          >
+            {t.actualPoints}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Sin cierre</span>
+        );
+      },
+    },
+    {
+      id: 'responsable',
+      header: 'Responsable',
+      render: (t) => (
+        <div className="flex items-center gap-1.5 text-xs">
+          <User className="size-3 text-muted-foreground/60" />
+          <span>{t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}</span>
+        </div>
+      ),
+    },
+    {
+      id: 'registro',
+      header: 'Registro de Tiempo',
+      render: (t) => {
+        const activeLogForUser =
+          profile && t.timeLogs?.find((log) => log.userId === profile.id && log.endedAt === null);
+        if (isReadOnly) return null;
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={activeLogForUser ? 'destructive' : 'outline'}
+              className="h-7 gap-1 px-2 text-[10px]"
+              onClick={() => {
+                setTimeLogTask(t);
+                setTimeLogType(activeLogForUser ? 'finish' : 'start');
+                setTimeLogNote('');
+                setTimeLogModalOpen(true);
+              }}
+              disabled={!isSupervisorOrAdmin && t.assignedToId !== profile?.id}
+            >
+              {activeLogForUser ? <Square className="size-2.5 fill-current" /> : <Play className="size-2.5 fill-current" />}
+              {activeLogForUser ? 'Detener' : 'Iniciar'}
+            </Button>
+            {activeLogForUser && (
+              <span className="flex items-center gap-1 font-mono text-xs text-red-500">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                </span>
+                {formatElapsedTime(activeLogForUser.startedAt)}
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
+  const taskRowActions = (t: TaskView): ReactNode => {
+    const states: TaskStatus[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
+    return (
+      <>
+        {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id || t.assignedToId === profile?.id) && (
+          <Button variant="ghost" size="icon" className="size-7" onClick={() => handleOpenEdit(t)} title="Editar">
+            <Edit2 className="size-3.5" />
+          </Button>
+        )}
+        {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-destructive"
+            onClick={() => setDeleteTaskId(t.id)}
+            title="Eliminar"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        )}
+        {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && (
+          <>
+            {t.status !== 'PENDIENTE' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => {
+                  const prev = states[states.indexOf(t.status) - 1];
+                  if (prev) void handleMoveStatus(t, prev);
+                }}
+                title="Retroceder"
+              >
+                <ArrowLeft className="size-3.5" />
+              </Button>
+            )}
+            {t.status !== 'COMPLETADO' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => {
+                  const next = states[states.indexOf(t.status) + 1];
+                  if (next) void handleMoveStatus(t, next);
+                }}
+                title="Avanzar"
+              >
+                <ArrowRight className="size-3.5" />
+              </Button>
+            )}
+          </>
+        )}
+      </>
+    );
   };
 
   return (
@@ -606,13 +852,14 @@ export function BacklogTab(): ReactNode {
       </div>
 
       {/* Tablero Kanban o Tabla */}
-{loading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="h-96 animate-pulse rounded-xl bg-muted/40 border border-border" />
-          ))}
-        </div>
-      ) : viewMode === 'kanban' ? (
+{viewMode === 'kanban' ? (
+        loading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-96 animate-pulse rounded-xl bg-muted/40 border border-border" />
+            ))}
+          </div>
+        ) : (
         <div className={`grid grid-cols-1 gap-6 ${isIto ? 'max-w-2xl mx-auto w-full' : 'md:grid-cols-4'}`}>
           {visibleColumns.map((status) => {
             const columnTasks = columns[status];
@@ -877,225 +1124,16 @@ export function BacklogTab(): ReactNode {
             );
           })}
         </div>
+        )
       ) : (
-        /* Vista de Tabla */
-        <div className="overflow-x-auto rounded-xl border border-border bg-card/40">
-          <table className="w-full border-collapse text-sm text-left">
-            <thead className="bg-muted/50 border-b border-border text-xs font-semibold uppercase text-muted-foreground">
-              <tr>
-                <th className="p-3">Tarea</th>
-                <th className="p-3">Proyecto / Servicio</th>
-                <th className="p-3">Estado</th>
-                <th className="p-3">Est.</th>
-                <th className="p-3">Real</th>
-                <th className="p-3">Responsable</th>
-                <th className="p-3">Registro de Tiempo</th>
-                <th className="p-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visibleTasks.map((t) => {
-                const activeLogForUser = profile && t.timeLogs?.find((log) => log.userId === profile.id && log.endedAt === null);
-                const hasVariance = t.actualPoints !== null && t.actualPoints !== t.estimatedPoints;
-                const variance = t.actualPoints !== null ? t.actualPoints - t.estimatedPoints : 0;
-                return (
-                  <tr key={t.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="p-3 font-medium">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-foreground">{t.name}</span>
-                        {t.description && <span className="text-xs text-muted-foreground line-clamp-1">{t.description}</span>}
-                        {/* Deliverable link / upload for completed/reviewed tasks in Table */}
-                        {(t.status === 'COMPLETADO' || t.status === 'REVISADO') && (t.dataSpec?.type === 'pdf_report' || t.dataSpec?.type === 'file_generic') && (
-                          <div className="mt-1 flex flex-col gap-1 bg-muted/20 border rounded-lg p-2 max-w-xs">
-                            <span className="text-[9px] text-muted-foreground font-semibold">
-                              Entregable ({t.dataSpec?.label}):
-                            </span>
-                            {(() => {
-                              const taskDoc = projectDocs?.find(d => d.name === `Entregable - ${t.name}`);
-                              return (
-                                <div className="flex flex-col gap-1.5">
-                                  {taskDoc ? (
-                                    <a
-                                      href={taskDoc.fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[11px] text-primary hover:underline font-medium"
-                                    >
-                                      Descargar entregable
-                                    </a>
-                                  ) : (
-                                    <span className="text-[10px] text-amber-500 italic">Pendiente</span>
-                                  )}
-                                  
-                                  {!isReadOnly && (t.assignedToId === profile?.id || isSupervisorOrAdmin) && (
-                                    <Input
-                                      type="file"
-                                      accept={t.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
-                                      className="h-6 text-[9px] py-0 bg-card border-dashed border-border"
-                                      onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        try {
-                                          await api.uploadProjectDocument({
-                                            name: `Entregable - ${t.name}`,
-                                            projectId: t.projectId,
-                                            serviceId: t.serviceId || '',
-                                            documentType: 'INFORME',
-                                            areaCode: 'OPS',
-                                          }, file);
-                                          toast.success('Entregable subido con éxito.');
-                                          e.target.value = '';
-                                          void refetchDocs();
-                                        } catch (err) {
-                                          toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
-                                        }
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-1">
-                        <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/20 bg-primary/5 text-primary">
-                          {t.project.code}
-                        </Badge>
-                        {t.service && (
-                          <Badge variant="outline" className="text-[10px] py-0 px-1 border-muted bg-muted/30 text-muted-foreground">
-                            {t.service.code}
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <Badge variant={TASK_STATUS_META[t.status].variant}>
-                        {TASK_STATUS_META[t.status].label}
-                      </Badge>
-                    </td>
-                    <td className="p-3 font-medium font-mono">{t.estimatedPoints}</td>
-                    <td className="p-3 font-medium font-mono">
-                      {t.actualPoints !== null ? (
-                        <span className={hasVariance ? (variance > 0 ? 'text-destructive font-semibold' : 'text-emerald-500 font-semibold') : 'text-muted-foreground'}>
-                          {t.actualPoints}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1.5 text-xs">
-                        <User className="size-3 text-muted-foreground/60" />
-                        <span>{t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}</span>
-                      </div>
-                    </td>
-                    <td className="p-3 font-medium">
-                      {!isReadOnly && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant={activeLogForUser ? 'destructive' : 'outline'}
-                            className="h-7 px-2 text-[10px] gap-1"
-                            onClick={() => {
-                              setTimeLogTask(t);
-                              setTimeLogType(activeLogForUser ? 'finish' : 'start');
-                              setTimeLogNote('');
-                              setTimeLogModalOpen(true);
-                            }}
-                            disabled={!isSupervisorOrAdmin && t.assignedToId !== profile?.id}
-                          >
-                            {activeLogForUser ? <Square className="size-2.5 fill-current" /> : <Play className="size-2.5 fill-current" />}
-                            {activeLogForUser ? 'Detener' : 'Iniciar'}
-                          </Button>
-                          {activeLogForUser && (
-                            <span className="text-red-500 font-mono text-xs flex items-center gap-1">
-                              <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
-                              </span>
-                              {formatElapsedTime(activeLogForUser.startedAt)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex justify-end gap-1.5">
-                        {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id || t.assignedToId === profile?.id) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            onClick={() => handleOpenEdit(t)}
-                            title="Editar"
-                          >
-                            <Edit2 className="size-3.5" />
-                          </Button>
-                        )}
-                        {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => setDeleteTaskId(t.id)}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                        {/* Status Shift Buttons */}
-                        {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && (
-                          <>
-                            {t.status !== 'PENDIENTE' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7"
-                                onClick={() => {
-                                  const states: TaskStatus[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
-                                  const prev = states[states.indexOf(t.status) - 1];
-                                  if (prev) void handleMoveStatus(t, prev);
-                                }}
-                                title="Retroceder"
-                              >
-                                <ArrowLeft className="size-3.5" />
-                              </Button>
-                            )}
-                            {t.status !== 'COMPLETADO' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7"
-                                onClick={() => {
-                                  const states: TaskStatus[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
-                                  const next = states[states.indexOf(t.status) + 1];
-                                  if (next) void handleMoveStatus(t, next);
-                                }}
-                                title="Avanzar"
-                              >
-                                <ArrowRight className="size-3.5" />
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {visibleTasks.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                    No se encontraron tareas con los filtros seleccionados.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<TaskView>
+          table={table}
+          columns={taskColumns}
+          getRowId={(t) => t.id}
+          rowActions={taskRowActions}
+          emptyMessage="No se encontraron tareas con los filtros seleccionados."
+          caption="Backlog de tareas"
+        />
       )}
 
       {/* MODAL CREAR TAREA (WIZARD) */}
@@ -1601,7 +1639,7 @@ export function BacklogTab(): ReactNode {
                       <span className="font-semibold text-foreground">Iniciada:</span>{' '}
                       {(() => {
                         const log = timeLogTask.timeLogs.find((l) => l.userId === profile?.id && l.endedAt === null);
-                        return log ? new Date(log.startedAt).toLocaleString() : '—';
+                        return log ? new Date(log.startedAt).toLocaleString() : 'Sin registro';
                       })()}
                     </div>
                   )}

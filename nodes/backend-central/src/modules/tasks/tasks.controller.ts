@@ -12,6 +12,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { TasksService } from './tasks.service';
@@ -48,6 +49,34 @@ export class TasksController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.tasks.list(userId, { projectId, serviceId, status, assignedToId, search });
+  }
+
+  /**
+   * Lista con el MOTOR de tablas server-side (offset): búsqueda, filtros
+   * (project/service/assignee/status) y orden sobre TODO el backlog visible, con
+   * página + total. Lo consume la vista Tabla del Backlog. DEBE declararse antes
+   * de `@Get(':id')`.
+   */
+  @Get('table')
+  listTable(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<unknown>> {
+    const userId = this.requireUserId(authUser);
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      search,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    return this.tasks.listTable(userId, req);
   }
 
   @Get('assignees')

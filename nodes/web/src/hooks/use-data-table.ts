@@ -19,6 +19,12 @@ export interface UseDataTableOptions {
   initialFilters?: Record<string, string>;
   /** Debounce del buscador en ms (default 300). */
   searchDebounceMs?: number;
+  /**
+   * Si es `false`, el hook NO consulta (para tablas ocultas, p. ej. una vista de
+   * tabla detrás de un toggle). Al pasar a `true` dispara la primera consulta con
+   * el estado vigente. Default `true`.
+   */
+  enabled?: boolean;
 }
 
 export interface UseDataTableResult<T> {
@@ -55,7 +61,14 @@ export function useDataTable<T>(
   fetcher: (req: TableRequest) => Promise<TablePage<T>>,
   opts: UseDataTableOptions = {},
 ): UseDataTableResult<T> {
-  const { initialPageSize = 10, initialSortBy, initialSortDir = 'desc', initialFilters = {}, searchDebounceMs = 300 } = opts;
+  const {
+    initialPageSize = 10,
+    initialSortBy,
+    initialSortDir = 'desc',
+    initialFilters = {},
+    searchDebounceMs = 300,
+    enabled = true,
+  } = opts;
 
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -83,6 +96,12 @@ export function useDataTable<T>(
 
   const genRef = useRef(0);
   useEffect(() => {
+    if (!enabled) {
+      // Tabla deshabilitada (oculta): no consultamos. Al habilitarse, este efecto
+      // corre de nuevo (enabled está en las deps) y dispara la primera consulta.
+      setLoading(false);
+      return;
+    }
     const gen = ++genRef.current;
     setLoading(true);
     void fetcherRef
@@ -113,7 +132,7 @@ export function useDataTable<T>(
       .finally(() => {
         if (gen === genRef.current) setLoading(false);
       });
-  }, [page, pageSize, debouncedSearch, sortBy, sortDir, filters, reloadKey]);
+  }, [page, pageSize, debouncedSearch, sortBy, sortDir, filters, reloadKey, enabled]);
 
   const setSearch = useCallback((value: string) => {
     setSearchState(value);

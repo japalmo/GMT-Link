@@ -1,10 +1,25 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { TaskStatus, Prisma } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { PermissionService } from '../../authz/permission.service';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/tasks.dto';
+
+/** Include común de las consultas de tareas (misma forma para list y listTable). */
+const TASK_INCLUDE = {
+  project: true,
+  service: true,
+  assignedTo: true,
+  createdBy: true,
+  clientUser: true,
+  timeLogs: { orderBy: { startedAt: 'asc' as const } },
+} satisfies Prisma.TaskInclude;
+
+/** Estados válidos de tarea (whitelist del filtro de estado de la tabla). */
+const VALID_TASK_STATUSES: readonly string[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
 
 @Injectable()
 export class TasksService {
@@ -76,26 +91,99 @@ export class TasksService {
       search?: string;
     },
   ) {
-    // 1. Resolver el scope vía la fachada de permisos (ADR-0001). null = denegado.
-    const scope = await this.permissions.scopeFilter(userId, 'task:read');
-    if (scope === null) {
+    const where = await this.buildTaskWhere(userId, filters);
+    if (where === null) {
       return [];
     }
+    return this.prisma.task.findMany({
+      where,
+      include: TASK_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
-    // 2. Construir la consulta where según el scope.
+  /**
+   * Lista tareas con el MOTOR de tablas server-side (offset). Reusa el MISMO
+   * `where` (scope task:read + filtros + búsqueda) que el keyset `list`, pero
+   * devuelve una página numerada + total con orden configurable (nombre/estado/
+   * puntos/creado, default creado desc). Lo consume la vista Tabla del Backlog
+   * (el Kanban sigue con carga completa vía `list`). Los filtros llegan en
+   * `req.filters` (project/service/assignee/status), validados/mapeados aquí.
+   */
+  async listTable(userId: string, req: TableRequest): Promise<TablePage<unknown>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    const f = req.filters ?? {};
+    const asStr = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.trim() && v !== 'all' ? v.trim() : undefined;
+    const rawStatus = asStr(f.status);
+
+    const where = await this.buildTaskWhere(userId, {
+      projectId: asStr(f.project),
+      serviceId: asStr(f.service),
+      // 'unassigned'/'all' no filtran (paridad con la lista keyset actual).
+      assignedToId: (() => {
+        const a = asStr(f.assignee);
+        return a && a !== 'unassigned' ? a : undefined;
+      })(),
+      status: rawStatus && VALID_TASK_STATUSES.includes(rawStatus) ? (rawStatus as TaskStatus) : undefined,
+      search: typeof req.search === 'string' ? req.search : undefined,
+    });
+    if (where === null) {
+      return tablePage([], 0, page, pageSize);
+    }
+
+    const orderBy = tableOrderBy<Prisma.TaskOrderByWithRelationInput[]>(
+      req,
+      {
+        tarea: (dir) => [{ name: dir }, { id: 'desc' }],
+        estado: (dir) => [{ status: dir }, { createdAt: 'desc' }, { id: 'desc' }],
+        estimado: (dir) => [{ estimatedPoints: dir }, { createdAt: 'desc' }, { id: 'desc' }],
+        real: (dir) => [{ actualPoints: dir }, { createdAt: 'desc' }, { id: 'desc' }],
+        creado: (dir) => [{ createdAt: dir }, { id: 'desc' }],
+      },
+      [{ createdAt: 'desc' }, { id: 'desc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.task.findMany({ where, include: TASK_INCLUDE, orderBy, skip, take }),
+      this.prisma.task.count({ where }),
+    ]);
+
+    return tablePage(rows, total, page, pageSize);
+  }
+
+  /**
+   * Arma el `where` de la lista de tareas: scope funcional task:read (ADR-0001,
+   * OWN / projects / GLOBAL) + filtros project/service/status/assignee + búsqueda
+   * (nombre/descripción, intersectada con AND si el scope OWN ya ocupó el OR).
+   * Devuelve `null` si el scope deniega el acceso. Compartido por `list` (keyset)
+   * y `listTable` (offset) para aplicar exactamente el mismo filtrado.
+   */
+  private async buildTaskWhere(
+    userId: string,
+    filters: {
+      projectId?: string;
+      serviceId?: string;
+      status?: TaskStatus;
+      assignedToId?: string;
+      search?: string;
+    },
+  ): Promise<Prisma.TaskWhereInput | null> {
+    const scope = await this.permissions.scopeFilter(userId, 'task:read');
+    if (scope === null) {
+      return null;
+    }
+
     const where: Prisma.TaskWhereInput = {};
 
     if (scope.kind === 'own') {
-      // OWN: solo tareas que asignaron al usuario o que él creó.
       where.OR = [{ assignedToId: userId }, { createdById: userId }];
     } else if (scope.kind === 'projects') {
-      // PROJECT: limitar a los proyectos asociados al usuario.
       where.projectId = { in: scope.ids };
     }
     // scope.kind === 'none' (GLOBAL): sin restricción de fila.
 
     if (filters.projectId) {
-      // Un projectId del filtro solo se aplica si está dentro del scope permitido.
       if (scope.kind === 'projects' && !scope.ids.includes(filters.projectId)) {
         throw new BadRequestException('No tienes acceso a este proyecto.');
       }
@@ -114,32 +202,22 @@ export class TasksService {
       where.assignedToId = filters.assignedToId;
     }
 
-    if (filters.search) {
-      const search = [
-        { name: { contains: filters.search, mode: 'insensitive' as const } },
-        { description: { contains: filters.search, mode: 'insensitive' as const } },
+    const search = typeof filters.search === 'string' ? filters.search.trim() : '';
+    if (search.length > 0) {
+      const searchOr = [
+        { name: { contains: search, mode: 'insensitive' as const } },
+        { description: { contains: search, mode: 'insensitive' as const } },
       ];
       // Si el scope OWN ya ocupó `where.OR`, intersectar con AND para no ampliar el alcance.
       if (where.OR) {
-        where.AND = [{ OR: where.OR }, { OR: search }];
+        where.AND = [{ OR: where.OR }, { OR: searchOr }];
         delete where.OR;
       } else {
-        where.OR = search;
+        where.OR = searchOr;
       }
     }
 
-    return this.prisma.task.findMany({
-      where,
-      include: {
-        project: true,
-        service: true,
-        assignedTo: true,
-        createdBy: true,
-        clientUser: true,
-        timeLogs: { orderBy: { startedAt: 'asc' } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    return where;
   }
 
   /**
