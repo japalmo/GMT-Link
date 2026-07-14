@@ -1627,6 +1627,26 @@ export function listAssets(params: {
   return request<Paginated<AssetView>>(`/assets${qs ? `?${qs}` : ''}`);
 }
 
+/**
+ * `GET /assets/table` — MOTOR de tablas server-side (offset) para el catálogo de
+ * activos. Búsqueda, filtro (type/status/projectId) y orden se resuelven en el
+ * servidor sobre TODO el dataset visible. Los filtros viajan como `filters[clave]=valor`.
+ */
+export function fetchAssetsTable(req: TableRequest): Promise<TablePage<AssetView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<AssetView>>(`/assets/table?${query.toString()}`);
+}
+
 export function createAsset(dto: CreateAssetInput): Promise<AssetView> {
   return request<AssetView>('/assets', {
     method: 'POST',

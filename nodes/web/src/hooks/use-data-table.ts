@@ -41,6 +41,14 @@ export interface UseDataTableResult<T> {
   /** Fija/limpia un filtro estructurado por columna (undefined lo quita). */
   setFilter: (key: string, value: string | undefined) => void;
   refetch: () => void;
+  /**
+   * Reemplaza EN EL SITIO las filas visibles que cumplan `match`, sin refetch —
+   * para updates optimistas (p. ej. cambiar el estado de una fila tras una acción).
+   * `next` puede ser el item nuevo o un updater `(prev) => next`. Si ninguna fila
+   * matchea (la fila no está en la página actual), es un no-op: con paginación
+   * server-side no se insertan filas en el cliente (eso desincronizaría el total).
+   */
+  patchRow: (match: (item: T) => boolean, next: T | ((prev: T) => T)) => void;
 }
 
 export function useDataTable<T>(
@@ -145,11 +153,19 @@ export function useDataTable<T>(
 
   const refetch = useCallback(() => setReloadKey((k) => k + 1), []);
 
+  const patchRow = useCallback((match: (item: T) => boolean, next: T | ((prev: T) => T)) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        match(item) ? (typeof next === 'function' ? (next as (p: T) => T)(item) : next) : item,
+      ),
+    );
+  }, []);
+
   const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
 
   return {
     items, total, page, pageSize, pageCount, loading, error,
     search, sortBy, sortDir, filters,
-    setSearch, setPage, setPageSize, toggleSort, setFilter, refetch,
+    setSearch, setPage, setPageSize, toggleSort, setFilter, refetch, patchRow,
   };
 }

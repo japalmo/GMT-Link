@@ -7,8 +7,10 @@ import { PermissionService } from '../../authz/permission.service';
 import { ORG_ID } from '../../common/org.constant';
 import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { CreateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
 import { composeChecklistPdf } from './checklist-pdf.util';
+import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import {
   AssetDocumentView,
   AssetHistoryEntryView,
@@ -35,6 +37,20 @@ const NON_OPERATIONAL_STATUSES: AssetStatus[] = [
   AssetStatus.DEFECTUOSO,
   AssetStatus.NO_DISPONIBLE,
 ];
+
+/** Estrecha un valor de filtro al enum AssetType; undefined si no pertenece (evita 500 de Prisma). */
+function asAssetType(value: unknown): AssetType | undefined {
+  return typeof value === 'string' && (Object.values(AssetType) as string[]).includes(value)
+    ? (value as AssetType)
+    : undefined;
+}
+
+/** Estrecha un valor de filtro al enum AssetStatus; undefined si no pertenece. */
+function asAssetStatus(value: unknown): AssetStatus | undefined {
+  return typeof value === 'string' && (Object.values(AssetStatus) as string[]).includes(value)
+    ? (value as AssetStatus)
+    : undefined;
+}
 
 @Injectable()
 export class AssetsService {
@@ -424,8 +440,6 @@ export class AssetsService {
       search?: string;
     } = {},
   ): Promise<Paginated<AssetView>> {
-    const { type, status, projectId, cursor, search } = opts;
-
     // Normaliza el límite: default 30, tope 100, mínimo 1. Ignora valores no
     // numéricos (p. ej. un `?limit=` mal formado que llega como NaN).
     const requestedLimit = opts.limit;
@@ -433,6 +447,99 @@ export class AssetsService {
       requestedLimit !== undefined && Number.isFinite(requestedLimit) && requestedLimit > 0
         ? Math.min(Math.floor(requestedLimit), 100)
         : 30;
+
+    const where = await this.buildScopedAssetWhere(userId, opts);
+
+    // Keyset sobre el orden `code asc` (único): la página siguiente es todo lo
+    // que venga después del cursor.
+    if (opts.cursor) {
+      where.code = { gt: opts.cursor };
+    }
+
+    // limit + 1: la fila extra solo sirve para saber si hay página siguiente.
+    const rows = await this.prisma.asset.findMany({
+      where,
+      include: {
+        project: true,
+        assignedTo: true,
+        inUseBy: true,
+      },
+      orderBy: { code: 'asc' },
+      take: limit + 1,
+    });
+
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const lastRow = pageRows[pageRows.length - 1];
+    const nextCursor = hasMore && lastRow ? lastRow.code : null;
+
+    return {
+      items: pageRows.map((r) => this.toAssetView(r)),
+      nextCursor,
+    };
+  }
+
+  /**
+   * Lista activos con el MOTOR de tablas server-side (offset). Reusa el mismo
+   * `where` (scope `asset:read` + filtros type/status/projectId + búsqueda) que el
+   * keyset `listAll`, pero devuelve una página numerada + total, con orden
+   * configurable. Columnas ordenables: código, nombre, estado, fabricante, creado
+   * (default código asc). Los filtros llegan en `req.filters` (type/status/projectId),
+   * validados contra sus enums para no reventar la consulta. Lo consume la tabla
+   * del catálogo de recursos (una subsección por tipo inyecta `filters.type`).
+   */
+  async listAllTable(userId: string, req: TableRequest): Promise<TablePage<AssetView>> {
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    const filters = req.filters ?? {};
+    const projectId =
+      typeof filters.projectId === 'string' && filters.projectId.trim()
+        ? filters.projectId.trim()
+        : undefined;
+
+    const where = await this.buildScopedAssetWhere(userId, {
+      type: asAssetType(filters.type),
+      status: asAssetStatus(filters.status),
+      projectId,
+      search: req.search,
+    });
+
+    const orderBy = tableOrderBy<Prisma.AssetOrderByWithRelationInput[]>(
+      req,
+      {
+        codigo: (dir) => [{ code: dir }],
+        nombre: (dir) => [{ name: dir }, { code: 'asc' }],
+        estado: (dir) => [{ status: dir }, { code: 'asc' }],
+        fabricante: (dir) => [{ manufacturer: dir }, { code: 'asc' }],
+        creado: (dir) => [{ createdAt: dir }, { code: 'asc' }],
+      },
+      [{ code: 'asc' }],
+    );
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.asset.findMany({
+        where,
+        include: { project: true, assignedTo: true, inUseBy: true },
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.asset.count({ where }),
+    ]);
+
+    return tablePage(rows.map((r) => this.toAssetView(r)), total, page, pageSize);
+  }
+
+  /**
+   * Arma el `where` de la lista de activos: scope funcional `asset:read` (ADR-0001,
+   * GLOBAL / projects / respaldo por membresías) + filtros type/status/projectId +
+   * búsqueda por código/nombre/descripción. Compartido por el keyset `listAll` y el
+   * offset `listAllTable` para que ambos apliquen exactamente el mismo filtrado.
+   */
+  private async buildScopedAssetWhere(
+    userId: string,
+    opts: { type?: AssetType; status?: AssetStatus; projectId?: string; search?: string },
+  ): Promise<Prisma.AssetWhereInput> {
+    const { type, status, projectId, search } = opts;
 
     // Decisión funcional única (ADR-0001): quien tenga `asset:read` GLOBAL ve
     // TODO; con scope de proyectos, ve los suyos + globales; sin el permiso, se
@@ -475,7 +582,7 @@ export class AssetsService {
 
     // Búsqueda server-side. Va en `AND` para no pisar el `OR` del scope de
     // proyectos (ambos deben cumplirse a la vez).
-    const trimmedSearch = search?.trim();
+    const trimmedSearch = typeof search === 'string' ? search.trim() : '';
     if (trimmedSearch) {
       where.AND = {
         OR: [
@@ -486,33 +593,7 @@ export class AssetsService {
       };
     }
 
-    // Keyset sobre el orden `code asc` (único): la página siguiente es todo lo
-    // que venga después del cursor.
-    if (cursor) {
-      where.code = { gt: cursor };
-    }
-
-    // limit + 1: la fila extra solo sirve para saber si hay página siguiente.
-    const rows = await this.prisma.asset.findMany({
-      where,
-      include: {
-        project: true,
-        assignedTo: true,
-        inUseBy: true,
-      },
-      orderBy: { code: 'asc' },
-      take: limit + 1,
-    });
-
-    const hasMore = rows.length > limit;
-    const pageRows = hasMore ? rows.slice(0, limit) : rows;
-    const lastRow = pageRows[pageRows.length - 1];
-    const nextCursor = hasMore && lastRow ? lastRow.code : null;
-
-    return {
-      items: pageRows.map((r) => this.toAssetView(r)),
-      nextCursor,
-    };
+    return where;
   }
 
   /**

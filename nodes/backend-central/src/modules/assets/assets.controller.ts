@@ -21,6 +21,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AssetStatus, AssetType } from '@prisma/client';
+import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -116,6 +117,35 @@ export class AssetsController {
       cursor,
       search,
     });
+  }
+
+  /**
+   * Lista con el MOTOR de tablas server-side (offset): búsqueda, filtro (type/status/
+   * projectId) y orden se resuelven sobre TODO el dataset visible y se devuelve una
+   * página numerada + total. Lo consume la tabla del catálogo de recursos. DEBE
+   * declararse antes de `@Get(':id')` para que el segmento estático "table" no lo
+   * capture el param.
+   */
+  @Get('table')
+  listTable(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<TablePage<AssetView>> {
+    const userId = this.requireUserId(authUser);
+    const req: TableRequest = {
+      page: page !== undefined ? Number(page) : 1,
+      pageSize: pageSize !== undefined ? Number(pageSize) : 10,
+      search,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+      filters: filters && typeof filters === 'object' ? filters : undefined,
+    };
+    return this.assets.listAllTable(userId, req);
   }
 
   /**

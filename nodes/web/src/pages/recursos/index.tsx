@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useAssets } from '@/hooks/use-assets';
+import { useDataTable } from '@/hooks/use-data-table';
+import { DataTable, type DataTableColumn, type DataTableFilter } from '@/components/primitives/data-table/data-table';
 import { useProjects } from '@/hooks/use-operations';
-import { listUsers } from '@/lib/api';
+import {
+  listUsers,
+  fetchAssetsTable,
+  createAsset,
+  takeAssetUse,
+  releaseAssetUse,
+  type TableRequest,
+} from '@/lib/api';
 import { useProfile } from '@/hooks/use-profile';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import InsumosPage from '@/pages/insumos';
@@ -12,7 +21,6 @@ import {
   Wrench,
   Car,
   Plus,
-  Filter,
   History,
   FileText,
   Clock,
@@ -33,9 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
-import { SearchInput } from '@/components/ui/search-input';
 import { Tabs, type TabItem } from '@/components/ui/tabs';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import {
@@ -49,14 +55,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { RejectDialog } from '@/components/ui/reject-dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import type {
   AssetView,
   AssetType,
@@ -190,6 +188,7 @@ export default function RecursosPage(): ReactNode {
             <AssetDetailView id={selectedAssetId} onBack={() => setSelectedAssetId(null)} />
           ) : (
             <ActivosCatalogView
+              key={activeTab}
               subsection={
                 activeTab === 'vehiculos'
                   ? 'vehiculos'
@@ -233,22 +232,11 @@ interface ActivosCatalogViewProps {
 
 function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewProps): ReactNode {
   const { profile } = useProfile();
-  const {
-    items,
-    loading,
-    loadingMore,
-    error,
-    hasMore,
-    loadMore,
-    setSearch: setServerSearch,
-    setFilters: setServerFilters,
-    create,
-    takeUse,
-    releaseUse,
-  } = useAssets();
+  // Las acciones (crear/tomar/liberar) llaman directo a la API; la LISTA la maneja
+  // el MOTOR de tablas. No se usa useAssets aquí para no disparar su lista keyset.
   const { projects } = useProjects();
   const [users, setUsers] = useState<UserOption[]>([]);
-  // Tipo de activo real de la subsección: fija el filtro, el alta y el encabezado.
+  // Tipo de activo real de la subsección: fija el filtro server-side, el alta y el encabezado.
   const subsectionType: AssetType =
     subsection === 'vehiculos' ? 'VEHICULO' : subsection === 'maquinaria' ? 'MAQUINARIA' : 'EQUIPO';
 
@@ -256,10 +244,20 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   // el tipo del alta se fija según la subsección activa.
   const canCreate = useHasPermission('asset:manage');
 
-  // Search & Filter state
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterProj, setFilterProj] = useState<string>('ALL');
+  // MOTOR de tablas server-side (offset). El tipo de la subsección se inyecta como
+  // filtro fijo en cada consulta; estado y proyecto son filtros del usuario. El
+  // componente se remonta por subsección (key en el padre), así que el motor
+  // arranca limpio en cada tipo.
+  const fetcher = useCallback(
+    (req: TableRequest) =>
+      fetchAssetsTable({ ...req, filters: { ...(req.filters ?? {}), type: subsectionType } }),
+    [subsectionType],
+  );
+  const table = useDataTable<AssetView>(fetcher, {
+    initialPageSize: 10,
+    initialSortBy: 'codigo',
+    initialSortDir: 'asc',
+  });
 
   // Modal Create state
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -298,30 +296,24 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     profile?.roleKeys.includes('department_admin') ||
     profile?.roleKeys.includes('project_creator');
 
-  // Filtrado SERVER-SIDE: los filtros estructurales (tipo de la subsección +
-  // estado + proyecto) se envían al servidor, que reinicia a la página 1.
-  useEffect(() => {
-    setServerFilters({
-      type: subsectionType,
-      status: filterStatus === 'ALL' ? undefined : (filterStatus as AssetStatus),
-      projectId: filterProj === 'ALL' ? undefined : filterProj,
-    });
-  }, [subsectionType, filterStatus, filterProj, setServerFilters]);
-
-  // Búsqueda SERVER-SIDE: el término se manda al hook, que lo debouncea (~300ms)
-  // y consulta al servidor (no filtra en memoria).
-  useEffect(() => {
-    setServerSearch(search);
-  }, [search, setServerSearch]);
-
-  // El servidor ya entrega los activos filtrados y paginados; se renderizan tal cual.
-  const filteredAssets = items;
+  // Tras una acción que cambia el estado del activo: si hay un filtro de estado
+  // activo, la fila pudo dejar de matchear, así que se recarga la página (sale/entra
+  // según el filtro y se corrige el total). Si no, se actualiza la fila en el sitio
+  // con el valor confirmado por el servidor (sin recargar).
+  const reconcileRow = (id: string, asset: AssetView) => {
+    if (table.filters.status) {
+      table.refetch();
+    } else {
+      table.patchRow((a) => a.id === id, asset);
+    }
+  };
 
   const handleTakeUse = async (id: string) => {
     if (actioning) return;
     setActioning(id);
     try {
-      await takeUse(id);
+      const asset = await takeAssetUse(id);
+      reconcileRow(id, asset);
       toast.success('Activo puesto en uso con éxito.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
@@ -334,7 +326,8 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     if (actioning) return;
     setActioning(id);
     try {
-      await releaseUse(id);
+      const asset = await releaseAssetUse(id);
+      reconcileRow(id, asset);
       toast.success('Activo liberado con éxito.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al liberar el activo.');
@@ -393,7 +386,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
         : (newIdentifier || undefined);
 
     try {
-      await create({
+      await createAsset({
         type: newType,
         name: newName,
         description: newDesc || undefined,
@@ -406,6 +399,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
         metadata,
       });
       handleCloseCreateModal();
+      table.refetch();
       toast.success('Activo creado con éxito.');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al crear el activo.';
@@ -434,245 +428,205 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     }
   };
 
+  /** Metadata tipada del activo (campos por subtipo). */
+  const assetMeta = (a: AssetView) =>
+    (a.metadata || {}) as {
+      chargeCycles?: number;
+      calibrationDate?: string;
+      plateCode?: string;
+      odometerKm?: number;
+      year?: number;
+    };
+
+  const statusFilter: DataTableFilter = {
+    id: 'status',
+    label: 'Estado',
+    allLabel: 'Todos los estados',
+    options: [
+      { value: 'DISPONIBLE', label: 'Disponibles' },
+      { value: 'EN_USO', label: 'En uso' },
+      { value: 'MANTENIMIENTO', label: 'En mantenimiento' },
+      { value: 'BAJA', label: 'De baja' },
+      { value: 'DEFECTUOSO', label: 'Defectuoso' },
+      { value: 'NO_DISPONIBLE', label: 'No disponible' },
+    ],
+  };
+  const projectFilter: DataTableFilter = {
+    id: 'projectId',
+    label: 'Proyecto',
+    allLabel: 'Todos los proyectos',
+    options: projects.map((p) => ({ value: p.id, label: p.name })),
+  };
+
+  const columns: ReadonlyArray<DataTableColumn<AssetView>> = [
+    { id: 'codigo', header: 'Código', sortable: true, render: (a) => <span className="font-mono text-xs">{a.code}</span> },
+    {
+      id: 'nombre',
+      header: 'Nombre',
+      sortable: true,
+      render: (a) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{a.name}</span>
+          {a.description && (
+            <span className="text-xs text-muted-foreground line-clamp-1">{a.description}</span>
+          )}
+        </div>
+      ),
+    },
+    { id: 'estado', header: 'Estado', sortable: true, render: (a) => statusBadge(a.status) },
+    { id: 'proyecto', header: 'Proyecto', className: 'max-w-[120px] truncate', render: (a) => a.project?.name || 'Global' },
+    {
+      id: 'responsable',
+      header: 'Responsable',
+      render: (a) =>
+        a.assignedTo ? `${a.assignedTo.firstName} ${a.assignedTo.lastName.charAt(0)}.` : 'Sin asignar',
+    },
+    { id: 'fabricante', header: 'Fabricante', sortable: true, render: (a) => a.manufacturer || 'N/A' },
+    {
+      id: 'identificador',
+      header: 'Identificador',
+      render: (a) =>
+        a.identifier ? (
+          <div className="flex flex-col text-xs">
+            <span className="font-mono">{a.identifier}</span>
+            {a.identifierType && (
+              <span className="text-[10px] text-muted-foreground">{IDENTIFIER_TYPE_LABELS[a.identifierType]}</span>
+            )}
+          </div>
+        ) : (
+          'N/A'
+        ),
+    },
+    ...(subsection === 'equipos'
+      ? ([
+          { id: 'ciclos', header: 'Ciclos de Carga', render: (a: AssetView) => assetMeta(a).chargeCycles ?? 'N/A' },
+          {
+            id: 'calibracion',
+            header: 'Próxima Calibración',
+            render: (a: AssetView) => {
+              const cal = assetMeta(a).calibrationDate;
+              return cal ? formatDate(cal) : 'N/A';
+            },
+          },
+        ] as DataTableColumn<AssetView>[])
+      : []),
+    ...(subsection === 'vehiculos'
+      ? ([
+          {
+            id: 'subtipo',
+            header: 'Tipo de vehículo',
+            render: (a: AssetView) => (a.vehicleSubtype ? VEHICLE_SUBTYPE_LABELS[a.vehicleSubtype] : 'N/A'),
+          },
+          {
+            id: 'km',
+            header: 'Kilometraje',
+            render: (a: AssetView) => {
+              const km = assetMeta(a).odometerKm;
+              return km !== undefined ? `${km} KM` : 'N/A';
+            },
+          },
+          {
+            id: 'anio',
+            header: 'Año',
+            render: (a: AssetView) => {
+              const year = assetMeta(a).year;
+              return year !== undefined ? year : 'N/A';
+            },
+          },
+        ] as DataTableColumn<AssetView>[])
+      : []),
+  ];
+
+  const rowActions = (a: AssetView): ReactNode => (
+    <>
+      {a.status === 'DISPONIBLE' && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 text-xs"
+          disabled={actioning !== null}
+          onClick={() => void handleTakeUse(a.id)}
+        >
+          {actioning === a.id ? 'Poniendo en uso...' : 'Poner en uso'}
+        </Button>
+      )}
+      {a.status === 'EN_USO' && (a.inUseById === profile?.id || isAdmin) && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+          disabled={actioning !== null}
+          onClick={() => void handleReleaseUse(a.id)}
+        >
+          {actioning === a.id ? 'Liberando...' : 'Liberar'}
+        </Button>
+      )}
+      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => onSelectAsset(a.id)}>
+        Detalle
+      </Button>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Search and Filters Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-card/40 border border-border p-4 rounded-xl">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0 basis-full sm:basis-auto">
-          <SearchInput
-            className="max-w-sm"
-            label="Buscar activos"
-            placeholder="Buscar por código, nombre..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-
-          <div className="flex items-center gap-2">
-            <Filter className="size-4 text-muted-foreground" />
-            <Select
-              aria-label="Filtrar por estado"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <option value="ALL">Todos los Estados</option>
-              <option value="DISPONIBLE">Disponibles</option>
-              <option value="EN_USO">En Uso</option>
-              <option value="MANTENIMIENTO">En Mantenimiento</option>
-              <option value="BAJA">De Baja</option>
-              <option value="DEFECTUOSO">Defectuoso</option>
-              <option value="NO_DISPONIBLE">No Disponible</option>
-            </Select>
-
-            <Select
-              aria-label="Filtrar por proyecto"
-              value={filterProj}
-              onChange={(e) => setFilterProj(e.target.value)}
-              className="max-w-[150px]"
-            >
-              <option value="ALL">Todos los Proyectos</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </Select>
+      {/* Encabezado de la subsección + botón Nuevo */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            {subsection === 'vehiculos' ? (
+              <Car className="size-5" />
+            ) : subsection === 'maquinaria' ? (
+              <Construction className="size-5" />
+            ) : (
+              <Wrench className="size-5" />
+            )}
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">
+              {subsection === 'vehiculos'
+                ? 'Vehículos de Flota'
+                : subsection === 'maquinaria'
+                  ? 'Maquinaria'
+                  : 'Equipos e Instrumentos'}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {subsection === 'vehiculos'
+                ? 'Camionetas y vehículos con checklist de camioneta, telemetría y kilometraje.'
+                : subsection === 'maquinaria'
+                  ? 'Maquinaria y equipos pesados con fabricante e identificador de serie.'
+                  : 'Instrumentos, herramientas y equipos con ciclos de carga y calibración.'}
+            </p>
           </div>
         </div>
-
-        <div className="flex gap-2">
-          {canCreate && (
-            <Button
-              onClick={() => {
-                setNewType(subsectionType);
-                setCreateModalOpen(true);
-              }}
-            >
-              <Plus className="size-4 mr-2" />
-              {subsection === 'vehiculos'
-                ? 'Nuevo Vehículo'
-                : subsection === 'maquinaria'
-                  ? 'Nueva Maquinaria'
-                  : 'Nuevo Equipo'}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Encabezado de la subsección dedicada (Equipos o Vehículos) */}
-      <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          {subsection === 'vehiculos' ? (
-            <Car className="size-5" />
-          ) : subsection === 'maquinaria' ? (
-            <Construction className="size-5" />
-          ) : (
-            <Wrench className="size-5" />
-          )}
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold">
+        {canCreate && (
+          <Button
+            onClick={() => {
+              setNewType(subsectionType);
+              setCreateModalOpen(true);
+            }}
+          >
+            <Plus className="size-4 mr-2" />
             {subsection === 'vehiculos'
-              ? 'Vehículos de Flota'
+              ? 'Nuevo Vehículo'
               : subsection === 'maquinaria'
-                ? 'Maquinaria'
-                : 'Equipos e Instrumentos'}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {subsection === 'vehiculos'
-              ? 'Camionetas y vehículos con checklist de camioneta, telemetría y kilometraje.'
-              : subsection === 'maquinaria'
-                ? 'Maquinaria y equipos pesados con fabricante e identificador de serie.'
-                : 'Instrumentos, herramientas y equipos con ciclos de carga y calibración.'}
-          </p>
-        </div>
-      </div>
-
-      {/* Catalog Render (Table View) */}
-      {loading ? (
-        <LoadingState label="Cargando activos…" />
-      ) : error ? (
-        <ErrorState message={error} />
-      ) : filteredAssets.length === 0 ? (
-        <EmptyState
-          icon={Wrench}
-          title="No se encontraron activos"
-          message="Intenta ajustando los filtros de búsqueda o cambia de pestaña."
-        />
-      ) : (
-        <div className="border border-border rounded-xl overflow-hidden bg-card/40">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Proyecto</TableHead>
-                <TableHead>Responsable</TableHead>
-                <TableHead>Fabricante</TableHead>
-                <TableHead>Identificador</TableHead>
-                {subsection === 'equipos' && (
-                  <>
-                    <TableHead>Ciclos de Carga</TableHead>
-                    <TableHead>Próxima Calibración</TableHead>
-                  </>
-                )}
-                {subsection === 'vehiculos' && (
-                  <>
-                    <TableHead>Tipo de vehículo</TableHead>
-                    <TableHead>Kilometraje</TableHead>
-                    <TableHead>Año</TableHead>
-                  </>
-                )}
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAssets.map((asset) => {
-                const meta = (asset.metadata || {}) as { chargeCycles?: number; calibrationDate?: string; plateCode?: string; odometerKm?: number; year?: number };
-                return (
-                  <TableRow
-                    key={asset.id}
-                    onClick={() => onSelectAsset(asset.id)}
-                    className="cursor-pointer hover:bg-muted/30"
-                  >
-                    <TableCell className="font-mono text-xs">{asset.code}</TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex flex-col">
-                        <span>{asset.name}</span>
-                        {asset.description && (
-                          <span className="text-xs text-muted-foreground line-clamp-1">{asset.description}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{statusBadge(asset.status)}</TableCell>
-                    <TableCell className="truncate max-w-[120px]">
-                      {asset.project?.name || 'Global'}
-                    </TableCell>
-                    <TableCell>
-                      {asset.assignedTo
-                        ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName.charAt(0)}.`
-                        : 'Sin asignar'}
-                    </TableCell>
-                    <TableCell>{asset.manufacturer || 'N/A'}</TableCell>
-                    <TableCell className="text-xs">
-                      {asset.identifier ? (
-                        <div className="flex flex-col">
-                          <span className="font-mono">{asset.identifier}</span>
-                          {asset.identifierType && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {IDENTIFIER_TYPE_LABELS[asset.identifierType]}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        'N/A'
-                      )}
-                    </TableCell>
-                    {subsection === 'equipos' && (
-                      <>
-                        <TableCell>{meta.chargeCycles !== undefined ? meta.chargeCycles : 'N/A'}</TableCell>
-                        <TableCell>
-                          {meta.calibrationDate ? formatDate(meta.calibrationDate) : 'N/A'}
-                        </TableCell>
-                      </>
-                    )}
-                    {subsection === 'vehiculos' && (
-                      <>
-                        <TableCell>
-                          {asset.vehicleSubtype ? VEHICLE_SUBTYPE_LABELS[asset.vehicleSubtype] : 'N/A'}
-                        </TableCell>
-                        <TableCell>{meta.odometerKm !== undefined ? `${meta.odometerKm} KM` : 'N/A'}</TableCell>
-                        <TableCell>{meta.year !== undefined ? meta.year : 'N/A'}</TableCell>
-                      </>
-                    )}
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-2">
-                        {asset.status === 'DISPONIBLE' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            disabled={actioning !== null}
-                            onClick={() => void handleTakeUse(asset.id)}
-                          >
-                            {actioning === asset.id ? 'Poniendo en uso...' : 'Poner en uso'}
-                          </Button>
-                        )}
-                        {asset.status === 'EN_USO' && (asset.inUseById === profile?.id || isAdmin) && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                            disabled={actioning !== null}
-                            onClick={() => void handleReleaseUse(asset.id)}
-                          >
-                            {actioning === asset.id ? 'Liberando...' : 'Liberar'}
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs"
-                          onClick={() => onSelectAsset(asset.id)}
-                        >
-                          Detalle
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* Paginación server-side: carga la siguiente página al final de la lista. */}
-      {!loading && !error && hasMore && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
-            {loadingMore ? 'Cargando…' : 'Cargar más'}
+                ? 'Nueva Maquinaria'
+                : 'Nuevo Equipo'}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
+
+      <DataTable<AssetView>
+        table={table}
+        columns={columns}
+        getRowId={(a) => a.id}
+        searchable
+        searchPlaceholder="Buscar por código, nombre…"
+        filters={[statusFilter, projectFilter]}
+        onRowClick={(a) => onSelectAsset(a.id)}
+        emptyMessage="No se encontraron activos. Ajusta los filtros o crea el primero."
+        caption="Catálogo de activos"
+        rowActions={rowActions}
+      />
 
       {/* DIALOG CREAR ACTIVO */}
       {createModalOpen && (
