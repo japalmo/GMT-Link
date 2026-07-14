@@ -1,4 +1,4 @@
-import { IsEnum, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, Length } from 'class-validator';
+import { IsEnum, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Prisma, ProjectType, ProjectWorkerStatus, ServiceFrequency } from '@prisma/client';
 
 /**
@@ -44,19 +44,25 @@ export class CreateProjectDto {
   projectAdminId?: string;
 }
 
+/**
+ * Creación de servicio por TIPO (Tanda 4). Se elige un tipo del catálogo
+ * (`serviceTypeId`) y, opcionalmente, un nombre propio (default = nombre del tipo).
+ * El código corto (§7) y `docCodingConfig` se derivan del tipo en el service; ya no
+ * se pide un código manual.
+ */
 export class CreateServiceDto {
   @IsString()
-  @IsNotEmpty()
-  @Length(3, 3, { message: 'El código del servicio debe tener exactamente 3 caracteres.' })
-  code!: string;
+  @IsNotEmpty({ message: 'Debes elegir un tipo de servicio.' })
+  serviceTypeId!: string;
 
   @IsString()
-  @IsNotEmpty()
-  name!: string;
+  @IsOptional()
+  @MaxLength(160)
+  name?: string;
 
-  @IsObject()
-  @IsNotEmpty()
-  docCodingConfig!: Prisma.InputJsonValue;
+  @IsEnum(ServiceFrequency)
+  @IsOptional()
+  frequency?: ServiceFrequency | null;
 }
 
 /**

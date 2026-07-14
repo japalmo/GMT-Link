@@ -32,8 +32,10 @@ interface PrismaMock {
   };
   service: {
     findFirst: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
   };
+  serviceType: { findUnique: ReturnType<typeof vi.fn> };
   asset: { count: ReturnType<typeof vi.fn> };
   task: { aggregate: ReturnType<typeof vi.fn>; groupBy: ReturnType<typeof vi.fn> };
   department: { findMany: ReturnType<typeof vi.fn> };
@@ -54,7 +56,8 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
     },
     faena: { findUnique: vi.fn() },
     membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
-    service: { findFirst: vi.fn(), create: vi.fn() },
+    service: { findFirst: vi.fn(), findMany: vi.fn(() => Promise.resolve([])), create: vi.fn() },
+    serviceType: { findUnique: vi.fn() },
     asset: { count: vi.fn(() => Promise.resolve(0)) },
     task: {
       aggregate: vi.fn(() => Promise.resolve({ _sum: { actualPoints: 0 } })),
@@ -257,8 +260,17 @@ describe('ProjectsService', () => {
   });
 
   describe('createService', () => {
-    const svcDto = (): CreateServiceDto =>
-      ({ code: 'cub', name: 'Cubicación', docCodingConfig: {} }) as unknown as CreateServiceDto;
+    const svcDto = (): CreateServiceDto => ({ serviceTypeId: 'st1' }) as unknown as CreateServiceDto;
+
+    const serviceType = {
+      id: 'st1',
+      code: 'CUB',
+      name: 'Cubicación',
+      description: null,
+      requiresClientSignature: true,
+      procedures: [],
+      isActive: true,
+    };
 
     it('rechaza si FGA no permite crear servicios', async () => {
       fga.check.mockResolvedValue(false);
@@ -267,27 +279,57 @@ describe('ProjectsService', () => {
       );
     });
 
-    it('rechaza si ya existe el código de servicio', async () => {
+    it('rechaza si el tipo de servicio no existe', async () => {
       fga.check.mockResolvedValue(true);
-      mock.service.findFirst.mockResolvedValue({ id: 's0' });
+      mock.serviceType.findUnique.mockResolvedValue(null);
       await expect(service.createService('p1', svcDto(), 'u1')).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
 
-    it('crea el servicio en mayúsculas y escribe la tupla FGA', async () => {
+    it('rechaza si el tipo de servicio está desactivado', async () => {
       fga.check.mockResolvedValue(true);
-      mock.service.findFirst.mockResolvedValue(null);
+      mock.serviceType.findUnique.mockResolvedValue({ ...serviceType, isActive: false });
+      await expect(service.createService('p1', svcDto(), 'u1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('deriva el código y la config del tipo, nombra por defecto con el tipo y escribe la tupla FGA', async () => {
+      fga.check.mockResolvedValue(true);
+      mock.serviceType.findUnique.mockResolvedValue(serviceType);
+      mock.service.findMany.mockResolvedValue([]); // no hay servicios previos → code = CUB
       mock.service.create.mockResolvedValue({ id: 's1' });
 
       await service.createService('p1', svcDto(), 'u1');
 
       expect(mock.service.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ code: 'CUB', projectId: 'p1' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            code: 'CUB',
+            name: 'Cubicación',
+            projectId: 'p1',
+            serviceTypeId: 'st1',
+            docCodingConfig: { requiresClientSignature: true },
+          }),
+        }),
       );
       expect(fga.writeTuples).toHaveBeenCalledWith([
         { user: 'project:p1', relation: 'project', object: 'service:s1' },
       ]);
+    });
+
+    it('deriva un código con sufijo cuando el base ya está tomado en el proyecto', async () => {
+      fga.check.mockResolvedValue(true);
+      mock.serviceType.findUnique.mockResolvedValue(serviceType);
+      mock.service.findMany.mockResolvedValue([{ code: 'CUB' }, { code: 'CUB2' }]);
+      mock.service.create.mockResolvedValue({ id: 's2' });
+
+      await service.createService('p1', svcDto(), 'u1');
+
+      expect(mock.service.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ code: 'CUB3' }) }),
+      );
     });
   });
 

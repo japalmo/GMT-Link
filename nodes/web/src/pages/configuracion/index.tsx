@@ -2,10 +2,12 @@ import type { ReactNode } from 'react';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { usePermissionRequests } from '@/hooks/use-permission-requests';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { AppearanceSection } from './appearance-section';
 import { NotificationsSection } from './notifications-section';
 import { AccessRequestsSection } from './access-requests-section';
 import { PendingRequestsSection } from './pending-requests-section';
+import { ServiceTypesSection } from './service-types-section';
 
 /**
  * Página de Configuración (§6-2.3). Reúne en tarjetas: Apariencia (tema),
@@ -20,6 +22,7 @@ import { PendingRequestsSection } from './pending-requests-section';
 export default function ConfiguracionPage(): ReactNode {
   const { mine, pending, isAdmin, loading, error, refetch, create, approve, reject } =
     usePermissionRequests();
+  const canManageServiceTypes = useHasPermission('service_type:manage');
 
   return (
     <PageContainer maxWidth="3xl">
@@ -31,6 +34,7 @@ export default function ConfiguracionPage(): ReactNode {
 
       <AppearanceSection />
       <NotificationsSection />
+      {canManageServiceTypes && <ServiceTypesSection />}
       <AccessRequestsSection
         mine={mine}
         loading={loading}

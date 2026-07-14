@@ -50,6 +50,7 @@ import {
   listMetricPhases,
   createMetricPhase,
   createService,
+  fetchServiceTypes,
   setPhaseDataSpec,
   setServiceFrequency,
   listProjectDocuments,
@@ -73,6 +74,7 @@ import type {
   ProjectDocumentView,
   ProjectDocumentStatus,
 } from '@/types/operations';
+import type { ServiceTypeView } from '@gmt-platform/contracts';
 import {
   UploadProjectDocumentDialog,
   type UploadProjectDocumentFields,
@@ -960,39 +962,46 @@ function FasesTab({
 }): ReactNode {
   // Crear servicio (gate especial `service:create` / `can_create_service`).
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [code, setCode] = useState('');
+  const [serviceTypes, setServiceTypes] = useState<ServiceTypeView[]>([]);
+  const [typesLoading, setTypesLoading] = useState(false);
+  const [typesError, setTypesError] = useState(false);
+  const [serviceTypeId, setServiceTypeId] = useState('');
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const selectedType = serviceTypes.find((t) => t.id === serviceTypeId) ?? null;
+
   const openCreate = () => {
-    setCode('');
+    setServiceTypeId('');
     setName('');
     setFormError(null);
+    setTypesError(false);
     setDialogOpen(true);
+    setTypesLoading(true);
+    fetchServiceTypes(false)
+      .then((data) => setServiceTypes(data))
+      .catch((err: unknown) => {
+        setTypesError(true);
+        setFormError(errorToMessage(err, 'No se pudieron cargar los tipos de servicio.'));
+      })
+      .finally(() => setTypesLoading(false));
   };
 
   const handleCreateService = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    const trimmedCode = code.trim().toUpperCase();
-    const trimmedName = name.trim();
-    if (trimmedCode.length !== 3) {
-      setFormError('El código del servicio debe tener exactamente 3 caracteres.');
-      return;
-    }
-    if (!trimmedName) {
-      setFormError('Ingresa el nombre del servicio.');
+    if (!serviceTypeId) {
+      setFormError('Elige un tipo de servicio.');
       return;
     }
     setCreating(true);
     try {
+      // El código corto (§7) y la config de firma se derivan del tipo en el backend;
+      // el nombre es opcional (por defecto, el del tipo).
       await createService(projectId, {
-        code: trimmedCode,
-        name: trimmedName,
-        // Config de codificación de documentos mínima (JSONB no vacío que exige
-        // el backend); se afina luego desde Operaciones.
-        docCodingConfig: { requiresClientSignature: false },
+        serviceTypeId,
+        name: name.trim() || undefined,
       });
       toast.success('Servicio creado.');
       setDialogOpen(false);
@@ -1011,7 +1020,8 @@ function FasesTab({
           <ModalHeader>
             <ModalTitle>Nuevo servicio</ModalTitle>
             <ModalDescription>
-              Define el código y el nombre del servicio del proyecto.
+              Elige un tipo de servicio del catálogo. El código y la configuración se toman del
+              tipo; el nombre es opcional.
             </ModalDescription>
           </ModalHeader>
 
@@ -1021,25 +1031,46 @@ function FasesTab({
             </Alert>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="service-code">Código</Label>
-              <Input
-                id="service-code"
-                value={code}
-                maxLength={3}
-                autoCapitalize="characters"
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="TOP"
-              />
+              <Label>Tipo de servicio</Label>
+              {!typesLoading && !typesError && serviceTypes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No hay tipos de servicio disponibles. Créalos en Configuración, sección Tipos de
+                  servicio.
+                </p>
+              ) : (
+                <Select
+                  id="service-type"
+                  aria-label="Tipo de servicio"
+                  value={serviceTypeId}
+                  onChange={(e) => setServiceTypeId(e.target.value)}
+                  disabled={typesLoading}
+                >
+                  <option value="">{typesLoading ? 'Cargando…' : 'Elige un tipo…'}</option>
+                  {serviceTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.code})
+                    </option>
+                  ))}
+                </Select>
+              )}
+              {selectedType && selectedType.procedures.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedType.procedures.length}{' '}
+                  {selectedType.procedures.length === 1 ? 'procedimiento' : 'procedimientos'} en este
+                  tipo.
+                </p>
+              )}
             </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label htmlFor="service-name">Nombre</Label>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="service-name">Nombre (opcional)</Label>
               <Input
                 id="service-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ej. Topografía"
+                placeholder={selectedType ? selectedType.name : 'Se usa el nombre del tipo'}
               />
             </div>
           </div>
@@ -1053,7 +1084,7 @@ function FasesTab({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={creating}>
+            <Button type="submit" disabled={creating || !serviceTypeId}>
               {creating ? 'Creando…' : 'Crear servicio'}
             </Button>
           </ModalFooter>
@@ -1221,6 +1252,7 @@ function ServiceBlock({
               </Badge>
             </div>
             <CardDescription className="mt-1">
+              {service.serviceType ? `Tipo: ${service.serviceType.name} · ` : ''}
               {isRoutine ? 'Servicio rutinario' : 'Servicio · fases y datos esperados'}
             </CardDescription>
           </div>
@@ -1233,6 +1265,28 @@ function ServiceBlock({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {service.serviceType && service.serviceType.procedures.length > 0 && (
+          <div className="rounded-lg border border-border bg-muted/20 p-3">
+            <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <ListChecks className="size-4 text-muted-foreground" aria-hidden />
+              Procedimientos
+            </h4>
+            <ol className="flex flex-col gap-1.5">
+              {service.serviceType.procedures.map((p, i) => (
+                <li key={p.id} className="text-sm">
+                  <span className="font-medium text-foreground">
+                    {i + 1}. {p.nombre}
+                  </span>
+                  {p.instrucciones && (
+                    <p className="mt-0.5 whitespace-pre-line text-xs text-muted-foreground">
+                      {p.instrucciones}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         {isRoutine && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/20 p-3">
             <Label htmlFor={`freq-${service.id}`} className="text-sm">

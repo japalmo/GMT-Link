@@ -72,6 +72,10 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // proyecto/equipo, subir docs) sigue en los endpoints existentes / plan de Proyectos.
   { key: 'project:view:all', label: 'Ver toda la sección proyectos (solo lectura)', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'project:manage', label: 'Gestionar proyectos (cliente/faena/proyecto + equipo)', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
+  // Catálogo org-level de tipos de servicio (Tanda 4): crear/editar/borrar tipos y sus
+  // procedimientos. FUNCTIONAL org-scope (siempre GLOBAL). org_admin/admin_ti lo reciben
+  // vía ALL_GLOBAL_EXCEPT_BETA; el listado de tipos es de lectura para cualquier autenticado.
+  { key: 'service_type:manage', label: 'Gestionar tipos de servicio', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'project:doc:upload:worker', label: 'Subir documentación de trabajadores', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'project:doc:upload:project', label: 'Subir documentación del proyecto', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'project:doc:upload:hse', label: 'Subir documentación HSE', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },

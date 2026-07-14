@@ -187,10 +187,13 @@ model ProjectWorkerAssignment {
 
 model Service {
   id              String            @id @default(cuid())
-  code            String // 3 chars
+  code            String // 2-4 chars; semilla del código de documento §7. Se deriva del tipo al crear.
   name            String
   projectId       String
   project         Project           @relation(fields: [projectId], references: [id])
+  // Tipo de servicio del catálogo org (Tanda 4). Nullable: servicios legacy sin tipo.
+  serviceTypeId   String?
+  serviceType     ServiceType?      @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
   frequency       ServiceFrequency?
   docCodingConfig Json
   tasks           Task[]
@@ -198,6 +201,31 @@ model Service {
   phases          Phase[]           @relation("ServicePhases")
 
   @@unique([projectId, code])
+}
+
+// ============ CATÁLOGO DE TIPOS DE SERVICIO (Tanda 4) ============
+// Catálogo org-level de tipos de servicio reutilizables entre proyectos. Cada tipo
+// aporta el código corto que semilla la codificación de documentos (§7), el default
+// de firma de cliente, y una lista de PROCEDIMIENTOS (pasos con instrucciones). Al
+// crear un Service se elige un tipo: el servicio copia el código (único por proyecto)
+// y la config, quedando desacoplado de ediciones posteriores del tipo.
+model ServiceType {
+  id                      String    @id @default(cuid())
+  code                    String    @unique // 2-4 chars MAYÚSCULAS: semilla del §7
+  name                    String    @unique
+  description             String?
+  // Default de docCodingConfig.requiresClientSignature para servicios de este tipo.
+  requiresClientSignature Boolean   @default(false)
+  // Procedimientos: array de { id, nombre, instrucciones? }. Pasos con instrucciones;
+  // a futuro cargarán info y definirán flujos de trabajo.
+  procedures              Json      @default("[]")
+  // Desactivar en vez de borrar cuando ya está en uso por algún servicio.
+  isActive                Boolean   @default(true)
+  services                Service[]
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@map("service_types")
 }
 
 // ============ ROLES Y PERMISOS (catálogo — espejo de OpenFGA) ============

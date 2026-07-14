@@ -229,7 +229,8 @@ export class ProjectsService {
       include: {
         department: true,
         client: true,
-        services: true,
+        // Incluye el tipo de servicio (Tanda 4) para mostrar tipo + procedimientos.
+        services: { include: { serviceType: true } },
       },
     });
 
@@ -252,7 +253,10 @@ export class ProjectsService {
   }
 
   /**
-   * Crea un servicio dentro del proyecto.
+   * Crea un servicio dentro del proyecto ELIGIENDO UN TIPO del catálogo (Tanda 4).
+   * El código corto (§7) se deriva del código del tipo (único por proyecto: prueba
+   * sufijos numéricos ante colisión) y `docCodingConfig` toma el default de firma de
+   * cliente del tipo. El nombre por defecto es el del tipo (o el que pase el usuario).
    */
   async createService(projectId: string, dto: CreateServiceDto, userId: string) {
     // Validar acceso para modificar proyecto
@@ -265,38 +269,76 @@ export class ProjectsService {
       throw new BadRequestException('No tienes permisos para crear servicios en este proyecto.');
     }
 
-    const existing = await this.prisma.service.findFirst({
-      where: {
-        projectId,
-        code: dto.code.toUpperCase(),
-      },
+    const serviceType = await this.prisma.serviceType.findUnique({
+      where: { id: dto.serviceTypeId },
     });
-    if (existing) {
-      throw new BadRequestException(
-        `Ya existe un servicio con el código "${dto.code}" en este proyecto.`,
-      );
+    if (!serviceType) {
+      throw new BadRequestException('El tipo de servicio no existe.');
+    }
+    if (!serviceType.isActive) {
+      throw new BadRequestException('El tipo de servicio está desactivado.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const service = await tx.service.create({
-        data: {
-          code: dto.code.toUpperCase(),
-          name: dto.name,
-          projectId,
-          docCodingConfig: dto.docCodingConfig,
-        },
+    const name = dto.name?.trim() || serviceType.name;
+    const code = await this.deriveServiceCode(projectId, serviceType.code);
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const service = await tx.service.create({
+          data: {
+            code,
+            name,
+            projectId,
+            serviceTypeId: serviceType.id,
+            frequency: dto.frequency ?? null,
+            docCodingConfig: { requiresClientSignature: serviceType.requiresClientSignature },
+          },
+        });
+
+        await this.fga.writeTuples([
+          {
+            user: `project:${projectId}`,
+            relation: 'project',
+            object: `service:${service.id}`,
+          },
+        ]);
+
+        return service;
       });
+    } catch (error) {
+      // Carrera: dos creaciones simultáneas del mismo tipo derivan el mismo código
+      // (deriveServiceCode escanea fuera de la transacción) y chocan con
+      // @@unique([projectId, code]). El índice protege la integridad; devolvemos un
+      // 409 amigable en vez de un 500 genérico.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(
+          'No se pudo asignar el código del servicio por una creación simultánea. Vuelve a intentarlo.',
+        );
+      }
+      throw error;
+    }
+  }
 
-      await this.fga.writeTuples([
-        {
-          user: `project:${projectId}`,
-          relation: 'project',
-          object: `service:${service.id}`,
-        },
-      ]);
-
-      return service;
+  /**
+   * Deriva un código de servicio único DENTRO del proyecto a partir del código del
+   * tipo. Si el código base ya está tomado, prueba `BASE2`, `BASE3`, … El código es
+   * un segmento del código de documento (§7); se conserva estable en el servicio (no
+   * se recalcula si luego cambia el tipo).
+   */
+  private async deriveServiceCode(projectId: string, typeCode: string): Promise<string> {
+    const base = typeCode.toUpperCase();
+    const rows = await this.prisma.service.findMany({
+      where: { projectId },
+      select: { code: true },
     });
+    const taken = new Set(rows.map((r) => r.code));
+    if (!taken.has(base)) return base;
+    for (let n = 2; n < 1000; n += 1) {
+      const candidate = `${base}${n}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+    // Improbable: 1000 servicios del mismo tipo en un proyecto.
+    return `${base}${taken.size + 1}`;
   }
 
   /**

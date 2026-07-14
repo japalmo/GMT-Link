@@ -37,6 +37,7 @@ import { GamificationModule } from './modules/gamification/gamification.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { FaenasModule } from './modules/faenas/faenas.module';
+import { ServiceTypesModule } from './modules/service-types/service-types.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { FaenasModule } from './modules/faenas/faenas.module';
     ReimbursementsModule,
     OvertimeModule,
     ProjectsModule,
+    ServiceTypesModule,
     TasksModule,
     ProjectDocumentsModule,
     AssetsModule,

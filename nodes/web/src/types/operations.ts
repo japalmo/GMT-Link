@@ -1,3 +1,5 @@
+import type { Procedimiento, ServiceFrequency } from '@gmt-platform/contracts';
+
 export interface ProjectView {
   id: string;
   code: string;
@@ -17,6 +19,15 @@ export interface ServiceView {
   name: string;
   projectId: string;
   docCodingConfig: Record<string, unknown>;
+  serviceTypeId?: string | null;
+  frequency?: ServiceFrequency | null;
+  /** Tipo de servicio embebido (lo incluye `getProject`); solo lo que muestra la UI. */
+  serviceType?: {
+    id: string;
+    code: string;
+    name: string;
+    procedures: Procedimiento[];
+  } | null;
 }
 
 export type TaskStatus = 'PENDIENTE' | 'EN_PROGRESO' | 'REVISADO' | 'COMPLETADO';

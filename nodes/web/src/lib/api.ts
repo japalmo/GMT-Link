@@ -95,6 +95,12 @@ import type {
   UserRef,
 } from '@/types/projects';
 import type {
+  ServiceTypeView,
+  CreateServiceTypeInput,
+  UpdateServiceTypeInput,
+  CreateServiceByTypeInput,
+} from '@gmt-platform/contracts';
+import type {
   AssetView,
   AssetPublicView,
   AssetDocumentView,
@@ -1563,14 +1569,48 @@ export function createProject(
   });
 }
 
+/**
+ * Crea un servicio ELIGIENDO UN TIPO del catálogo (Tanda 4). El código corto (§7)
+ * y la config de firma se derivan del tipo en el servidor; `name` es opcional
+ * (default = nombre del tipo).
+ */
 export function createService(
   projectId: string,
-  dto: { code: string; name: string; docCodingConfig: Record<string, unknown> },
+  dto: CreateServiceByTypeInput,
 ): Promise<ServiceView> {
   return request<ServiceView>(`/projects/${encodeURIComponent(projectId)}/services`, {
     method: 'POST',
     body: JSON.stringify(dto),
   });
+}
+
+/* --- Catálogo de tipos de servicio (Tanda 4) --- */
+
+/** `GET /service-types` — catálogo de tipos de servicio. `includeInactive` para el admin. */
+export function fetchServiceTypes(includeInactive = false): Promise<ServiceTypeView[]> {
+  const query = includeInactive ? '?includeInactive=true' : '';
+  return request<ServiceTypeView[]>(`/service-types${query}`);
+}
+
+/** `POST /service-types` — crea un tipo de servicio (gate `service_type:manage`). */
+export function createServiceType(input: CreateServiceTypeInput): Promise<ServiceTypeView> {
+  return request<ServiceTypeView>('/service-types', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `PATCH /service-types/:id` — edita un tipo de servicio. */
+export function updateServiceType(id: string, input: UpdateServiceTypeInput): Promise<ServiceTypeView> {
+  return request<ServiceTypeView>(`/service-types/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `DELETE /service-types/:id` — borra un tipo (409 si está en uso; desactívalo en su lugar). */
+export function deleteServiceType(id: string): Promise<void> {
+  return request<void>(`/service-types/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function updateProjectKpis(projectId: string, kpis: Record<string, unknown>): Promise<ProjectView> {

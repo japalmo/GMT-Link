@@ -497,6 +497,72 @@ export type ServiceFrequency =
   | 'MENSUAL'
   | 'A_DEMANDA';
 
+// ============ Tipos de servicio + procedimientos (Tanda 4) ============
+
+/**
+ * Un procedimiento dentro de un tipo de servicio: un paso de trabajo con
+ * instrucciones. Por ahora solo texto; a futuro cargará información y definirá
+ * flujos de trabajo (fase en hold).
+ */
+export interface Procedimiento {
+  /** Id estable del paso (cuid/uuid del cliente). */
+  id: string;
+  nombre: string;
+  /** Instrucciones del procedimiento; opcional. */
+  instrucciones?: string | null;
+}
+
+/**
+ * Tipo de servicio del catálogo org (`GET /service-types`). Reutilizable entre
+ * proyectos. `serviceCount` indica cuántos servicios lo usan (para avisar antes de
+ * desactivar/borrar).
+ */
+export interface ServiceTypeView {
+  id: string;
+  /** Código corto (2-4 chars, MAYÚSCULAS): semilla del código de documento §7. */
+  code: string;
+  name: string;
+  description: string | null;
+  requiresClientSignature: boolean;
+  procedures: Procedimiento[];
+  isActive: boolean;
+  serviceCount: number;
+  /** ISO-8601. */
+  createdAt: string;
+  /** ISO-8601. */
+  updatedAt: string;
+}
+
+/** Cuerpo de `POST /service-types`. */
+export interface CreateServiceTypeInput {
+  code: string;
+  name: string;
+  description?: string | null;
+  requiresClientSignature?: boolean;
+  procedures?: Procedimiento[];
+}
+
+/** Cuerpo de `PATCH /service-types/:id` (parcial; solo se aplican los presentes). */
+export interface UpdateServiceTypeInput {
+  code?: string;
+  name?: string;
+  description?: string | null;
+  requiresClientSignature?: boolean;
+  procedures?: Procedimiento[];
+  isActive?: boolean;
+}
+
+/**
+ * Cuerpo de `POST /projects/:id/services` (Tanda 4): el servicio se crea eligiendo
+ * un tipo del catálogo + un nombre opcional. El código corto (§7) y la config de
+ * firma se derivan del tipo en el servidor. `name` por defecto = nombre del tipo.
+ */
+export interface CreateServiceByTypeInput {
+  serviceTypeId: string;
+  name?: string;
+  frequency?: ServiceFrequency | null;
+}
+
 /**
  * Tipo de dato de una Variable de fase/servicio (espejo del enum Prisma
  * `VariableType`, ampliado en el plan demo A0.1). `SCALAR/FILE/LIST` son los

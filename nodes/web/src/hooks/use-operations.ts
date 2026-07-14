@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import * as api from '@/lib/api';
+import type { CreateServiceByTypeInput } from '@gmt-platform/contracts';
 import type {
   ProjectView,
   ServiceView,
@@ -28,7 +29,7 @@ export interface UseProjectsResult {
   error: string | null;
   refetch: () => Promise<void>;
   create: (dto: { code: string; name: string; departmentId: string; clientId: string }) => Promise<ProjectView>;
-  createSrv: (projectId: string, dto: { code: string; name: string; docCodingConfig: Record<string, unknown> }) => Promise<ServiceView>;
+  createSrv: (projectId: string, dto: CreateServiceByTypeInput) => Promise<ServiceView>;
   updateKpis: (projectId: string, kpis: Record<string, unknown>) => Promise<ProjectView>;
 }
 
@@ -74,7 +75,7 @@ export function useProjects(): UseProjectsResult {
   );
 
   const createSrv = useCallback(
-    async (projectId: string, dto: { code: string; name: string; docCodingConfig: Record<string, unknown> }) => {
+    async (projectId: string, dto: CreateServiceByTypeInput) => {
       const s = await api.createService(projectId, dto);
       await load();
       return s;
