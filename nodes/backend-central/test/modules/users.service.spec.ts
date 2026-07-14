@@ -315,7 +315,7 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     const update = vi.fn((_args: { data: Record<string, unknown> }) => Promise.resolve({}));
     const service = serviceWith({ findUnique, update });
 
-    const { provisionalPassword } = await service.resendInvite('u1');
+    const { provisionalPassword } = await service.resendInvite('u1', { sendEmail: false });
 
     expect(provisionalPassword).toBeTruthy();
     const data = update.mock.calls[0]?.[0]?.data as { status: string; passwordHash: string };
@@ -330,7 +330,7 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     const update = vi.fn();
     const service = serviceWith({ findUnique, update });
 
-    await expect(service.resendInvite('u1')).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.resendInvite('u1', { sendEmail: false })).rejects.toBeInstanceOf(ConflictException);
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -339,7 +339,7 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     const update = vi.fn();
     const service = serviceWith({ findUnique, update });
 
-    await expect(service.resendInvite('ghost')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.resendInvite('ghost', { sendEmail: false })).rejects.toBeInstanceOf(NotFoundException);
     expect(update).not.toHaveBeenCalled();
   });
 });

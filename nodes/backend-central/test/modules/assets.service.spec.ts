@@ -40,6 +40,7 @@ function buildUserRow(overrides: Partial<User> = {}): User {
     pendingEmailKind: null,
     passwordHash: null,
     avatarUrl: null,
+    cargo: null,
     status: 'ACTIVE',
     tokenVersion: 0,
     firstLoginAt: null,
