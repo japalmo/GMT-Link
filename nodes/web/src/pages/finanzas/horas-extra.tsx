@@ -31,7 +31,7 @@ import { useDataTable } from '@/hooks/use-data-table';
 import { useOvertime } from '@/hooks/use-overtime';
 import { errorToMessage, fetchOvertimeTable } from '@/lib/api';
 import type { TableRequest } from '@gmt-platform/contracts';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatHours } from '@/lib/format';
 import type { OvertimeView } from '@/types/finance';
 import { HorasExtraFormDialog } from './horas-extra-form';
 
@@ -117,7 +117,7 @@ export function HorasExtraTab(): ReactNode {
       header: 'Horas',
       sortable: true,
       render: (item) => (
-        <span className="font-semibold">{item.hours != null ? `${item.hours} hrs` : 'Sin cierre'}</span>
+        <span className="font-semibold">{item.hours != null ? formatHours(item.hours) : 'Sin cierre'}</span>
       ),
     },
     {
@@ -257,7 +257,7 @@ export function HorasExtraTab(): ReactNode {
                   <TableRow key={item.id}>
                     <TableCell>{formatDate(item.date)}</TableCell>
                     <TableCell className="font-semibold">
-                      {item.hours != null ? `${item.hours} hrs` : '—'}
+                      {item.hours != null ? formatHours(item.hours) : '—'}
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-md truncate" title={item.reason ?? undefined}>
                       {item.reason ?? '—'}

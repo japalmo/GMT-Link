@@ -69,6 +69,9 @@ function ot(over: Partial<OvertimeView>): OvertimeView {
     userId: 'u1',
     date: '2026-06-10T00:00:00.000Z',
     hours: 2,
+    totalHours: 12,
+    regularHours: 10,
+    shiftLabel: '08:00-18:00',
     reason: 'Cierre',
     startTime: '18:00',
     endTime: '20:00',
@@ -100,6 +103,35 @@ describe('toFinanceRows', () => {
     expect(o.hours).toBe(2);
     expect(o.amount).toBeNull();
     expect(o.description).toBe('Cierre');
+  });
+
+  it('mapea el desglose de horas extra (inicio/fin, total, turno normal, turno del día)', () => {
+    const rows = toFinanceRows(
+      [reimb({})],
+      [
+        ot({
+          startTime: '06:00',
+          endTime: '18:00',
+          hours: 2,
+          totalHours: 12,
+          regularHours: 10,
+          shiftLabel: '08:00-18:00',
+        }),
+      ],
+    );
+    const o = rows.find((x) => x.kind === 'HORA_EXTRA')!;
+    expect(o.startTime).toBe('06:00');
+    expect(o.endTime).toBe('18:00');
+    expect(o.totalHours).toBe(12);
+    expect(o.regularHours).toBe(10);
+    expect(o.shiftLabel).toBe('08:00-18:00');
+    // El desglose no aplica a reembolsos.
+    const r = rows.find((x) => x.kind === 'REEMBOLSO')!;
+    expect(r.startTime).toBeNull();
+    expect(r.endTime).toBeNull();
+    expect(r.totalHours).toBeNull();
+    expect(r.regularHours).toBeNull();
+    expect(r.shiftLabel).toBeNull();
   });
 
   it('hidrata proyecto/cliente de la HE contra la lista de proyectos', () => {

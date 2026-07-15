@@ -13,8 +13,14 @@ export interface OvertimeView {
   userId: string;
   /** ISO-8601 — fecha de las horas trabajadas. */
   date: string;
-  /** Computada de inicio/término; null mientras la HE es borrador (endTime ausente). */
+  /** HORA EXTRA real (periodo fuera del turno); null mientras la HE es borrador. */
   hours: number | null;
+  /** Horas totales del periodo trabajado; null en borrador o filas legacy. */
+  totalHours: number | null;
+  /** Tramo de turno normal (total menos hora extra); null si no computable. */
+  regularHours: number | null;
+  /** Turno usado ese día "HH:mm-HH:mm"; null si descanso / sin turno configurado. */
+  shiftLabel: string | null;
   /** Opcional: el nuevo formulario no lo pide (se conserva por retrocompat). */
   reason: string | null;
   /** "HH:mm" hora de inicio; null en filas legacy. */

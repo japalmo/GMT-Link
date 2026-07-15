@@ -103,8 +103,14 @@ export interface OvertimeView {
   userId: string;
   /** ISO-8601 — fecha de las horas trabajadas. */
   date: string;
-  /** Computada de inicio/término; `null` mientras la HE es borrador. */
+  /** HORA EXTRA real (periodo fuera del turno); `null` mientras la HE es borrador. */
   hours: number | null;
+  /** Horas totales del periodo trabajado; `null` en borrador o filas legacy. */
+  totalHours: number | null;
+  /** Tramo de turno normal (total menos hora extra); `null` si no computable. */
+  regularHours: number | null;
+  /** Turno usado ese día "HH:mm-HH:mm"; `null` si descanso / sin turno configurado. */
+  shiftLabel: string | null;
   /** Opcional: el formulario nuevo no lo exige (retrocompat). */
   reason: string | null;
   /** "HH:mm" hora de inicio; `null` en filas legacy. */
@@ -244,6 +250,18 @@ export interface FinanceRow {
   /** Solo reembolsos: para el flujo de impresión en lote. */
   printed: boolean;
   receiptUrl: string | null;
+  /* ── Desglose de horas extra (solo `kind === 'HORA_EXTRA'`; `null`/`undefined`
+   * en reembolsos y en filas legacy sin estos datos). ── */
+  /** "HH:mm" hora de inicio del periodo trabajado. */
+  startTime?: string | null;
+  /** "HH:mm" hora de término del periodo trabajado. */
+  endTime?: string | null;
+  /** Horas totales del periodo trabajado (turno normal + hora extra). */
+  totalHours?: number | null;
+  /** Tramo dentro del turno normal (total menos hora extra). */
+  regularHours?: number | null;
+  /** Turno usado ese día "HH:mm-HH:mm"; `null` si descanso / sin turno. */
+  shiftLabel?: string | null;
 }
 
 /** Filtros de la tabla histórica (§5.3). `null` = sin filtro. El filtro por

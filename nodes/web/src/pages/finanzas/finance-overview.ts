@@ -67,6 +67,12 @@ export function toFinanceRows(
     clientName: null,
     printed: r.printed,
     receiptUrl: r.receiptUrl,
+    // El desglose de horario/horas no aplica a reembolsos.
+    startTime: null,
+    endTime: null,
+    totalHours: null,
+    regularHours: null,
+    shiftLabel: null,
   }));
 
   const oRows: FinanceRow[] = overtime.map((o) => {
@@ -89,6 +95,12 @@ export function toFinanceRows(
       clientName: proj?.clientName ?? null,
       printed: false,
       receiptUrl: null,
+      // Desglose de horas extra: inicio/fin, total, turno normal y turno del día.
+      startTime: o.startTime,
+      endTime: o.endTime,
+      totalHours: o.totalHours,
+      regularHours: o.regularHours,
+      shiftLabel: o.shiftLabel,
     };
   });
 

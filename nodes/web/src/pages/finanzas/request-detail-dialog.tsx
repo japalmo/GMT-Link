@@ -12,7 +12,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/components/ui/modal';
-import { formatCLP, formatDate } from '@/lib/format';
+import { formatCLP, formatDate, formatHours } from '@/lib/format';
 import type { FinanceRow } from '@/types/finance';
 
 export interface RequestDetailDialogProps {
@@ -78,16 +78,50 @@ export function RequestDetailDialog({
                 )}
               </dd>
             </div>
-            <div>
-              <dt className="text-muted-foreground">{isReimb ? 'Monto' : 'Horas'}</dt>
-              <dd className="font-medium">
-                {isReimb
-                  ? formatCLP(row.amount ?? 0)
-                  : row.hours != null
-                    ? `${row.hours} hrs`
-                    : 'Borrador'}
-              </dd>
-            </div>
+            {isReimb ? (
+              <div>
+                <dt className="text-muted-foreground">Monto</dt>
+                <dd className="font-medium">{formatCLP(row.amount ?? 0)}</dd>
+              </div>
+            ) : row.isDraft ? (
+              <div>
+                <dt className="text-muted-foreground">Hora extra</dt>
+                <dd className="font-medium">Borrador</dd>
+              </div>
+            ) : (
+              <>
+                {row.startTime && row.endTime && (
+                  <div>
+                    <dt className="text-muted-foreground">Horario</dt>
+                    <dd className="font-medium">
+                      {row.startTime} - {row.endTime}
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-muted-foreground">Turno del día</dt>
+                  <dd>{row.shiftLabel ?? 'Sin turno / descanso'}</dd>
+                </div>
+                {row.totalHours != null && (
+                  <div>
+                    <dt className="text-muted-foreground">Total trabajado</dt>
+                    <dd className="font-medium">{formatHours(row.totalHours)}</dd>
+                  </div>
+                )}
+                {row.regularHours != null && (
+                  <div>
+                    <dt className="text-muted-foreground">Turno normal</dt>
+                    <dd>{formatHours(row.regularHours)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-muted-foreground">Hora extra</dt>
+                  <dd className="font-semibold text-primary">
+                    {row.hours != null ? formatHours(row.hours) : '—'}
+                  </dd>
+                </div>
+              </>
+            )}
             <div className="col-span-2">
               <dt className="text-muted-foreground">Detalle</dt>
               <dd>{row.description}</dd>

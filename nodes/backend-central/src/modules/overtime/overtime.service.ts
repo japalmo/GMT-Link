@@ -12,7 +12,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
-import { computeHours } from './overtime-hours.util';
+import { computeOvertimeBreakdown, resolveShiftForDate } from './overtime-hours.util';
+import type { OvertimeBreakdown } from './overtime-hours.util';
 import { monthRange } from '../finance/finance-month.util';
 import { startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
@@ -74,6 +75,23 @@ export class OvertimeService {
   ) {}
 
   /**
+   * Desglose de un periodo contra el turno del trabajador en la fecha dada: total,
+   * tramo de turno normal y hora extra real (total menos el solape con el turno).
+   * Carga el `WorkSchedule` del trabajador (dueño de la HE); sin jornada configurada
+   * o día de descanso => todo el periodo es hora extra.
+   */
+  private async breakdownFor(
+    workerId: string,
+    date: Date,
+    startTime: string,
+    endTime: string,
+  ): Promise<OvertimeBreakdown> {
+    const schedule = await this.prisma.workSchedule.findUnique({ where: { userId: workerId } });
+    const shift = resolveShiftForDate(schedule, date);
+    return computeOvertimeBreakdown(startTime, endTime, shift);
+  }
+
+  /**
    * Crea una HE. `canOnBehalf` lo resuelve el controller (permiso
    * `finance:overtime:create:onbehalf`):
    *  - sin permiso: la fecha se FUERZA al día en curso y no puede crear a nombre de otro.
@@ -89,7 +107,9 @@ export class OvertimeService {
     const filedBy = targetWorkerId !== creatorId ? creatorId : null;
     const date = canOnBehalf ? parseDate(dto.date) : startOfTodaySantiago();
     const isDraft = dto.endTime === undefined;
-    const hours = isDraft ? null : computeHours(dto.startTime, dto.endTime as string);
+    const breakdown = isDraft
+      ? null
+      : await this.breakdownFor(targetWorkerId, date, dto.startTime, dto.endTime as string);
 
     const row = await this.prisma.overtimeRequest.create({
       data: {
@@ -97,7 +117,9 @@ export class OvertimeService {
         date,
         startTime: dto.startTime,
         endTime: dto.endTime ?? null,
-        hours,
+        hours: breakdown ? breakdown.overtimeHours : null,
+        totalHours: breakdown ? breakdown.totalHours : null,
+        shiftLabel: breakdown ? breakdown.shiftLabel : null,
         isDraft,
         reason: dto.reason ?? null,
         projectId: dto.projectId ?? null,
@@ -122,9 +144,21 @@ export class OvertimeService {
     if (!current.startTime) {
       throw new BadRequestException('La solicitud no tiene hora de inicio.');
     }
+    const breakdown = await this.breakdownFor(
+      current.userId,
+      current.date,
+      current.startTime,
+      endTime,
+    );
     const row = await this.prisma.overtimeRequest.update({
       where: { id },
-      data: { endTime, hours: computeHours(current.startTime, endTime), isDraft: false },
+      data: {
+        endTime,
+        hours: breakdown.overtimeHours,
+        totalHours: breakdown.totalHours,
+        shiftLabel: breakdown.shiftLabel,
+        isDraft: false,
+      },
     });
     return toView(row);
   }
@@ -144,14 +178,18 @@ export class OvertimeService {
       throw new ConflictException('No se puede editar una solicitud ya resuelta.');
     }
     const isDraft = dto.endTime === undefined;
-    const hours = isDraft ? null : computeHours(dto.startTime, dto.endTime as string);
+    const breakdown = isDraft
+      ? null
+      : await this.breakdownFor(current.userId, current.date, dto.startTime, dto.endTime as string);
 
     const row = await this.prisma.overtimeRequest.update({
       where: { id },
       data: {
         startTime: dto.startTime,
         endTime: dto.endTime ?? null,
-        hours,
+        hours: breakdown ? breakdown.overtimeHours : null,
+        totalHours: breakdown ? breakdown.totalHours : null,
+        shiftLabel: breakdown ? breakdown.shiftLabel : null,
         isDraft,
         reason: dto.reason ?? null,
         projectId: dto.projectId ?? null,
@@ -483,6 +521,13 @@ function toView(row: OvertimeRequest): OvertimeView {
     userId: row.userId,
     date: row.date.toISOString(),
     hours: row.hours,
+    totalHours: row.totalHours,
+    // Turno normal = total menos hora extra (derivado; null si falta alguno o es borrador).
+    regularHours:
+      row.totalHours !== null && row.hours !== null
+        ? Math.round((row.totalHours - row.hours) * 100) / 100
+        : null,
+    shiftLabel: row.shiftLabel,
     reason: row.reason,
     startTime: row.startTime,
     endTime: row.endTime,

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
-import { formatCLP } from '@/lib/format';
+import { formatCLP, formatHours } from '@/lib/format';
 import { StatCarousel, type CarouselState } from './stat-carousel';
 import { aggregate, rankByProject, rankByWorker, type RankEntry } from './finance-overview';
 import type { FinanceRow } from '@/types/finance';
@@ -30,7 +30,7 @@ function RankList({
         <li key={e.key} className="flex items-center justify-between gap-2 text-sm">
           <span className="truncate">{e.label}</span>
           <span className="tabular-nums font-medium">
-            {unit === 'clp' ? formatCLP(e.value) : unit === 'hrs' ? `${e.value} hrs` : e.value}
+            {unit === 'clp' ? formatCLP(e.value) : unit === 'hrs' ? formatHours(e.value) : e.value}
           </span>
         </li>
       ))}

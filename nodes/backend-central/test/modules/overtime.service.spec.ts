@@ -18,6 +18,8 @@ function buildRow(overrides: Partial<OvertimeRequest> = {}): OvertimeRequest {
     startTime: '09:00',
     endTime: '11:30',
     hours: 2.5,
+    totalHours: 2.5,
+    shiftLabel: null,
     isDraft: false,
     reason: 'Cierre de informe',
     projectId: null,
@@ -51,6 +53,8 @@ interface PrismaParts {
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  /** workSchedule.findUnique del trabajador (para el desglose de horas extra). Default null. */
+  workSchedule: ReturnType<typeof vi.fn>;
 }
 
 function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
@@ -61,8 +65,12 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
     delete: parts.delete ?? vi.fn(),
+    workSchedule: parts.workSchedule ?? vi.fn(() => Promise.resolve(null)),
   };
-  const prisma = { overtimeRequest: resolved } as unknown as PrismaService;
+  const prisma = {
+    overtimeRequest: resolved,
+    workSchedule: { findUnique: resolved.workSchedule },
+  } as unknown as PrismaService;
   return { prisma, parts: resolved };
 }
 
@@ -107,6 +115,43 @@ describe('OvertimeService', () => {
     expect(data.status).toBe(FinanceStatus.PENDIENTE);
     expect(data.hours).toBe(3);
     expect(view.status).toBe(FinanceStatus.PENDIENTE);
+  });
+
+  it('create descuenta el turno: 06:00-18:00 con turno 08:00-18:00 => hours=2 extra, total=12', async () => {
+    // El caso reportado por la dueña: registra 06:00-18:00 un lunes; su turno ese día
+    // es 08:00-18:00 => 2 h extra (06:00-08:00) y 10 h de turno normal.
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data, id: 'o-new' })),
+    );
+    const workSchedule = vi.fn(() =>
+      Promise.resolve({
+        shiftPattern: 'ADMINISTRATIVO',
+        workDays: null,
+        restDays: null,
+        cycleStart: null,
+        startTime: '08:00',
+        endTime: '18:00',
+        weeklyHours: [{ weekday: 1, start: '08:00', end: '18:00' }],
+      }),
+    );
+    const { prisma } = buildPrisma({ create, workSchedule });
+    const service = makeService(prisma);
+
+    await service.create(
+      'felipe',
+      { date: '2026-07-13T00:00:00.000Z', startTime: '06:00', endTime: '18:00' }, // 2026-07-13 lunes
+      true,
+    );
+
+    expect(workSchedule).toHaveBeenCalledWith({ where: { userId: 'felipe' } });
+    const data = create.mock.calls[0]?.[0]?.data as {
+      hours: number;
+      totalHours: number;
+      shiftLabel: string;
+    };
+    expect(data.hours).toBe(2); // hora extra real
+    expect(data.totalHours).toBe(12);
+    expect(data.shiftLabel).toBe('08:00-18:00');
   });
 
   it('create sin permiso onBehalf: FUERZA la fecha al día de hoy', async () => {

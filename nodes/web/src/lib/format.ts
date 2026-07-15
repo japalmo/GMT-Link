@@ -129,6 +129,15 @@ export function formatCLP(amount: number): string {
   return clpFormatter.format(amount);
 }
 
+/**
+ * Formatea horas decimales en español chileno con la unidad ("8,33 hrs"): coma
+ * decimal y máximo 2 decimales. Redondea al mostrar, así que absorbe las colas de
+ * coma flotante de las sumas acumuladas (p. ej. 1,1 + 2,2 = "3,3 hrs", no "3.3000…").
+ */
+export function formatHours(hours: number): string {
+  return `${hours.toLocaleString('es-CL', { maximumFractionDigits: 2 })} hrs`;
+}
+
 /** Formatea un tamaño en bytes a texto legible ("2,4 MB"). */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

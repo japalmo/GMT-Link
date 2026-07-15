@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCLP, formatDate } from '@/lib/format';
+import { formatCLP, formatDate, formatHours } from '@/lib/format';
 import type { FinanceRow, OverviewFilters } from '@/types/finance';
 
 /** Opción de tamaño de página. `0` = todas. */
@@ -233,7 +233,7 @@ export function HistoricalTable({
                     {r.kind === 'REEMBOLSO'
                       ? formatCLP(r.amount ?? 0)
                       : r.hours != null
-                        ? `${r.hours} hrs`
+                        ? formatHours(r.hours)
                         : '—'}
                   </TableCell>
                   <TableCell>

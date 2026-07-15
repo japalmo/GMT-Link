@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Receipt } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCLP, formatDate } from '@/lib/format';
+import { formatCLP, formatDate, formatHours } from '@/lib/format';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useReimbursements } from '@/hooks/use-reimbursements';
 import { useOvertime } from '@/hooks/use-overtime';
@@ -84,7 +84,9 @@ export function MisSolicitudesRecientesWidget(): ReactNode {
                     <span className="shrink-0 font-medium text-foreground">
                       {row.kind === 'REEMBOLSO'
                         ? formatCLP(row.amount ?? 0)
-                        : `${row.hours ?? 0} hrs`}
+                        : row.isDraft || row.hours == null
+                          ? '—'
+                          : formatHours(row.hours)}
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground">

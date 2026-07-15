@@ -559,7 +559,9 @@ model OvertimeRequest {
   date             DateTime
   startTime        String? // "HH:mm" hora inicio (obligatoria al crear; nullable por filas legacy)
   endTime          String? // "HH:mm" hora término; null => borrador
-  hours            Float? // computada de start/end; null mientras es borrador
+  hours            Float? // HORA EXTRA real (periodo fuera del turno); null mientras es borrador
+  totalHours       Float? // horas totales del periodo trabajado; null en borrador o filas legacy
+  shiftLabel       String? // turno usado ese día "HH:mm-HH:mm"; null si descanso / sin turno
   isDraft          Boolean       @default(false)
   reason           String? // opcional (el nuevo form no lo pide; legacy)
   projectId        String?
