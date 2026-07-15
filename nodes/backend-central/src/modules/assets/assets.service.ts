@@ -1,13 +1,13 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ZodError } from 'zod';
-import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission } from '@prisma/client';
+import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { PermissionService } from '../../authz/permission.service';
 import { ORG_ID } from '../../common/org.constant';
 import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
-import type { TablePage, TableRequest } from '@gmt-platform/contracts';
+import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
 import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
 import { composeChecklistPdf } from './checklist-pdf.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
@@ -37,6 +37,19 @@ const NON_OPERATIONAL_STATUSES: AssetStatus[] = [
   AssetStatus.DEFECTUOSO,
   AssetStatus.NO_DISPONIBLE,
 ];
+
+/** Foto opcional (recogida/entrega) de un ciclo de uso, ya leída del multipart. */
+export interface UsageCyclePhotoInput {
+  buffer: Buffer;
+  filename: string;
+  contentType: string;
+}
+
+/** Respuesta de las mutaciones del ciclo de uso: el activo y el ciclo actualizados. */
+export interface UsageCycleResult {
+  asset: AssetView;
+  cycle: UsageCycleView;
+}
 
 /** Estrecha un valor de filtro al enum AssetType; undefined si no pertenece (evita 500 de Prisma). */
 function asAssetType(value: unknown): AssetType | undefined {
@@ -1035,6 +1048,353 @@ export class AssetsService {
     });
 
     return this.toAssetView(row);
+  }
+
+  // ============ Ciclo de uso (reportar uso -> checklist -> en uso -> terminar) ============
+
+  private readonly usageCycleInclude = { user: true, handoffTo: true } as const;
+
+  /** Mapea una fila UsageCycle (con user/handoffTo) a la vista del frontend. */
+  private toUsageCycleView(
+    row: Prisma.UsageCycleGetPayload<{ include: { user: true; handoffTo: true } }>,
+  ): UsageCycleView {
+    const person = (
+      u: { id: string; firstName: string; lastName: string } | null,
+    ): { id: string; firstName: string; lastName: string } | null =>
+      u ? { id: u.id, firstName: u.firstName, lastName: u.lastName } : null;
+    return {
+      id: row.id,
+      assetId: row.assetId,
+      userId: row.userId,
+      user: person(row.user),
+      status: row.status,
+      startedAt: row.startedAt.toISOString(),
+      confirmedAt: row.confirmedAt ? row.confirmedAt.toISOString() : null,
+      endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+      checklistSubmissionId: row.checklistSubmissionId,
+      startPhotoUrl: row.startPhotoUrl,
+      endPhotoUrl: row.endPhotoUrl,
+      endKind: row.endKind,
+      endLatitude: row.endLatitude,
+      endLongitude: row.endLongitude,
+      endText: row.endText,
+      handoffToUserId: row.handoffToUserId,
+      handoffTo: person(row.handoffTo),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  /** ¿Tiene el activo una plantilla de checklist APROBADA (flujo con checklist inicial)? */
+  private async hasApprovedChecklist(assetId: string): Promise<boolean> {
+    const tpl = await this.prisma.checklistTemplate.findUnique({ where: { assetId } });
+    return !!tpl && tpl.status === DocumentStatus.APROBADO;
+  }
+
+  /** Guarda una foto del ciclo en el storage (carpeta propia del activo). */
+  private async saveUsageCyclePhoto(
+    assetId: string,
+    photo: UsageCyclePhotoInput,
+  ): Promise<{ url: string; key: string }> {
+    return this.storage.save({
+      buffer: photo.buffer,
+      filename: photo.filename,
+      contentType: photo.contentType,
+      folder: `assets/${assetId}/usage-cycles`,
+    });
+  }
+
+  /** Carga un ciclo del activo y exige que el usuario sea su dueño o un admin global. */
+  private async loadOwnCycle(
+    assetId: string,
+    cycleId: string,
+    userId: string,
+  ): Promise<Prisma.UsageCycleGetPayload<Record<string, never>>> {
+    const cycle = await this.prisma.usageCycle.findUnique({ where: { id: cycleId } });
+    if (!cycle || cycle.assetId !== assetId) {
+      throw new NotFoundException('El ciclo de uso no existe.');
+    }
+    if (cycle.userId !== userId) {
+      const isGlobalAdmin = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'admin',
+        object: `organization:${ORG_ID}`,
+      });
+      if (!isGlobalAdmin) {
+        throw new ForbiddenException(
+          'Solo quien tiene el uso o un administrador puede gestionar el ciclo.',
+        );
+      }
+    }
+    return cycle;
+  }
+
+  /** Re-lee el activo y el ciclo para la respuesta de las mutaciones. */
+  private async loadUsageCycleResult(assetId: string, cycleId: string): Promise<UsageCycleResult> {
+    const [assetRow, cycleRow] = await Promise.all([
+      this.prisma.asset.findUniqueOrThrow({
+        where: { id: assetId },
+        include: { project: true, assignedTo: true, inUseBy: true },
+      }),
+      this.prisma.usageCycle.findUniqueOrThrow({
+        where: { id: cycleId },
+        include: this.usageCycleInclude,
+      }),
+    ]);
+    return { asset: this.toAssetView(assetRow), cycle: this.toUsageCycleView(cycleRow) };
+  }
+
+  /**
+   * Reportar uso: reclama el activo (atómico) y abre un ciclo. Si el activo tiene un
+   * checklist APROBADO queda EN_PREPARACION (a la espera de firmar en `confirm`); si no,
+   * pasa directo a EN_USO (ciclo EN_CURSO). Foto inicial opcional. Mismo gate que
+   * takeUse (asset:use:report + visibilidad).
+   */
+  async startUsageCycle(
+    assetId: string,
+    userId: string,
+    photo?: UsageCyclePhotoInput,
+  ): Promise<UsageCycleResult> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+    await this.assertCanReportUse(userId, asset);
+    if (NON_OPERATIONAL_STATUSES.includes(asset.status)) {
+      throw new BadRequestException('El activo no está disponible para su uso.');
+    }
+
+    const withChecklist = await this.hasApprovedChecklist(assetId);
+    const startPhoto = photo ? await this.saveUsageCyclePhoto(assetId, photo) : null;
+    const now = new Date();
+
+    const cycleId = await this.prisma.$transaction(async (tx) => {
+      // Reclamo ATÓMICO: la condición inUseById:null va en el mismo UPDATE (anti TOCTOU).
+      const claimed = await tx.asset.updateMany({
+        where: { id: assetId, inUseById: null },
+        data: {
+          inUseById: userId,
+          inUseSince: now,
+          status: withChecklist ? AssetStatus.EN_PREPARACION : AssetStatus.EN_USO,
+        },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException('El activo ya está en uso por otro colaborador.');
+      }
+      const cycle = await tx.usageCycle.create({
+        data: {
+          assetId,
+          userId,
+          status: withChecklist ? UsageCycleStatus.EN_PREPARACION : UsageCycleStatus.EN_CURSO,
+          startedAt: now,
+          confirmedAt: withChecklist ? null : now,
+          startPhotoUrl: startPhoto?.url ?? null,
+          startPhotoKey: startPhoto?.key ?? null,
+        },
+      });
+      await this.createHistoryEntry(
+        tx,
+        assetId,
+        'CICLO',
+        withChecklist
+          ? 'Reportó uso; en preparación (checklist pendiente).'
+          : 'Reportó uso; activo en uso.',
+        userId,
+      );
+      return cycle.id;
+    });
+
+    return this.loadUsageCycleResult(assetId, cycleId);
+  }
+
+  /**
+   * Confirmar uso: firma el checklist inicial de un ciclo EN_PREPARACION. Reusa
+   * submitChecklist (gates, plantilla APROBADA, odómetro, detección de falla) y liga la
+   * ChecklistSubmission al ciclo. Si el checklist reporta falla (submitChecklist deja el
+   * activo en MANTENIMIENTO) el ciclo se CANCELA y se libera; si no, el activo pasa a
+   * EN_USO y el ciclo a EN_CURSO.
+   */
+  async confirmUsageCycle(
+    assetId: string,
+    cycleId: string,
+    userId: string,
+    templateId: string,
+    answers: Record<string, unknown>[],
+  ): Promise<UsageCycleResult> {
+    const cycle = await this.prisma.usageCycle.findUnique({ where: { id: cycleId } });
+    if (!cycle || cycle.assetId !== assetId) {
+      throw new NotFoundException('El ciclo de uso no existe.');
+    }
+    if (cycle.userId !== userId) {
+      throw new ForbiddenException('Solo quien reportó el uso puede confirmarlo.');
+    }
+    if (cycle.status !== UsageCycleStatus.EN_PREPARACION) {
+      throw new ConflictException('El ciclo ya no está en preparación.');
+    }
+
+    const submission = await this.submitChecklist(assetId, templateId, userId, answers);
+    const asset = await this.prisma.asset.findUniqueOrThrow({ where: { id: assetId } });
+    const failed = asset.status === AssetStatus.MANTENIMIENTO;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (failed) {
+        // Checklist con falla: el activo ya quedó en mantenimiento; el ciclo se cancela y se libera.
+        await tx.asset.update({
+          where: { id: assetId },
+          data: { inUseById: null, inUseSince: null },
+        });
+        await tx.usageCycle.update({
+          where: { id: cycleId },
+          data: {
+            status: UsageCycleStatus.CANCELADO,
+            endedAt: new Date(),
+            checklistSubmissionId: submission.id,
+          },
+        });
+        await this.createHistoryEntry(
+          tx,
+          assetId,
+          'CICLO',
+          'Checklist con falla: activo a mantenimiento, ciclo cancelado.',
+          userId,
+        );
+      } else {
+        await tx.asset.update({ where: { id: assetId }, data: { status: AssetStatus.EN_USO } });
+        await tx.usageCycle.update({
+          where: { id: cycleId },
+          data: {
+            status: UsageCycleStatus.EN_CURSO,
+            confirmedAt: new Date(),
+            checklistSubmissionId: submission.id,
+          },
+        });
+        await this.createHistoryEntry(tx, assetId, 'CICLO', 'Confirmó uso; activo en uso.', userId);
+      }
+    });
+
+    return this.loadUsageCycleResult(assetId, cycleId);
+  }
+
+  /** Cancelar un ciclo EN_PREPARACION (antes de confirmar): libera el activo. */
+  async cancelUsageCycle(
+    assetId: string,
+    cycleId: string,
+    userId: string,
+  ): Promise<UsageCycleResult> {
+    const cycle = await this.loadOwnCycle(assetId, cycleId, userId);
+    if (cycle.status !== UsageCycleStatus.EN_PREPARACION) {
+      throw new ConflictException('Solo se puede cancelar un ciclo en preparación.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.asset.update({
+        where: { id: assetId },
+        data: { inUseById: null, inUseSince: null, status: AssetStatus.DISPONIBLE },
+      });
+      await tx.usageCycle.update({
+        where: { id: cycleId },
+        data: { status: UsageCycleStatus.CANCELADO, endedAt: new Date() },
+      });
+      await this.createHistoryEntry(
+        tx,
+        assetId,
+        'CICLO',
+        'Canceló el ciclo de uso; activo disponible.',
+        userId,
+      );
+    });
+    return this.loadUsageCycleResult(assetId, cycleId);
+  }
+
+  /**
+   * Terminar uso: cierra un ciclo EN_CURSO con la forma de cierre (GPS / estacionamiento
+   * / traspaso) y foto opcional. El activo queda DISPONIBLE también en traspaso: el otro
+   * usuario reportará su propio uso y checklist (decisión de producto). Dueño o admin.
+   */
+  async endUsageCycle(
+    assetId: string,
+    cycleId: string,
+    userId: string,
+    dto: EndUsageCycleInput,
+    photo?: UsageCyclePhotoInput,
+  ): Promise<UsageCycleResult> {
+    const cycle = await this.loadOwnCycle(assetId, cycleId, userId);
+    if (cycle.status !== UsageCycleStatus.EN_CURSO) {
+      throw new ConflictException('Solo se puede terminar un ciclo en uso.');
+    }
+
+    let handoffToUserId: string | null = null;
+    if (dto.endKind === 'TRASPASO') {
+      if (!dto.handoffToUserId) {
+        throw new BadRequestException('Indica el usuario al que traspasas el activo.');
+      }
+      const target = await this.prisma.user.findUnique({ where: { id: dto.handoffToUserId } });
+      if (!target) {
+        throw new BadRequestException('El usuario del traspaso no existe.');
+      }
+      handoffToUserId = target.id;
+    }
+
+    const endPhoto = photo ? await this.saveUsageCyclePhoto(assetId, photo) : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.asset.update({
+        where: { id: assetId },
+        data: { inUseById: null, inUseSince: null, status: AssetStatus.DISPONIBLE },
+      });
+      await tx.usageCycle.update({
+        where: { id: cycleId },
+        data: {
+          status: UsageCycleStatus.CERRADO,
+          endedAt: new Date(),
+          endKind: dto.endKind,
+          endLatitude: dto.endKind === 'GPS' ? dto.latitude ?? null : null,
+          endLongitude: dto.endKind === 'GPS' ? dto.longitude ?? null : null,
+          endText: dto.endKind === 'ESTACIONAMIENTO' ? dto.text ?? null : null,
+          handoffToUserId,
+          endPhotoUrl: endPhoto?.url ?? null,
+          endPhotoKey: endPhoto?.key ?? null,
+        },
+      });
+      await this.createHistoryEntry(
+        tx,
+        assetId,
+        'CICLO',
+        handoffToUserId ? 'Terminó uso; traspasó el activo.' : 'Terminó uso; activo disponible.',
+        userId,
+      );
+    });
+
+    return this.loadUsageCycleResult(assetId, cycleId);
+  }
+
+  /** Historial de ciclos de uso del activo (más recientes primero). Requiere ver el activo. */
+  async listUsageCycles(assetId: string, userId: string): Promise<UsageCycleView[]> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset || !(await this.canViewAsset(userId, asset))) {
+      throw new NotFoundException('El activo no existe o no tienes acceso.');
+    }
+    const rows = await this.prisma.usageCycle.findMany({
+      where: { assetId },
+      include: this.usageCycleInclude,
+      orderBy: { startedAt: 'desc' },
+    });
+    return rows.map((r) => this.toUsageCycleView(r));
+  }
+
+  /** Detalle de un ciclo de uso puntual. Requiere ver el activo. */
+  async getUsageCycle(assetId: string, cycleId: string, userId: string): Promise<UsageCycleView> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset || !(await this.canViewAsset(userId, asset))) {
+      throw new NotFoundException('El activo no existe o no tienes acceso.');
+    }
+    const row = await this.prisma.usageCycle.findUnique({
+      where: { id: cycleId },
+      include: this.usageCycleInclude,
+    });
+    if (!row || row.assetId !== assetId) {
+      throw new NotFoundException('El ciclo de uso no existe.');
+    }
+    return this.toUsageCycleView(row);
   }
 
   /**

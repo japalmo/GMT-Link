@@ -795,6 +795,7 @@ export type AssetType = 'EQUIPO' | 'VEHICULO' | 'MAQUINARIA';
 /** Estado operativo de un activo (espejo del enum Prisma `AssetStatus`). */
 export type AssetStatus =
   | 'DISPONIBLE'
+  | 'EN_PREPARACION' // reservado: alguien reportó uso y está llenando el checklist inicial
   | 'EN_USO'
   | 'MANTENIMIENTO'
   | 'BAJA'
@@ -841,6 +842,69 @@ export interface AssetView {
    * puebla el detalle (`GET /assets/:id`); en listados queda `undefined`.
    */
   canManageAssets?: boolean;
+}
+
+/** Estado de un ciclo de uso (espejo del enum Prisma `UsageCycleStatus`). */
+export type UsageCycleStatus = 'EN_PREPARACION' | 'EN_CURSO' | 'CERRADO' | 'CANCELADO';
+
+/** Forma de cierre de un ciclo de uso (espejo del enum Prisma `UsageEndKind`). */
+export type UsageEndKind = 'GPS' | 'ESTACIONAMIENTO' | 'TRASPASO';
+
+/** Persona mínima referenciada en un ciclo de uso. */
+export interface UsageCyclePerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * Vista de un ciclo de uso de un activo (reportar uso -> checklist -> en uso ->
+ * terminar uso). Fechas en ISO-8601. Las fotos y los campos de cierre son opcionales.
+ */
+export interface UsageCycleView {
+  id: string;
+  assetId: string;
+  userId: string;
+  /** Usuario actual (quién reportó / tiene el uso). */
+  user: UsageCyclePerson | null;
+  status: UsageCycleStatus;
+  /** Cuando reportó uso. */
+  startedAt: string;
+  /** Cuando pasó a EN_CURSO (checklist firmado / inmediato sin plantilla). */
+  confirmedAt: string | null;
+  /** Cuando terminó el uso. */
+  endedAt: string | null;
+  /** Checklist inicial ligado al ciclo (null si el activo no tiene plantilla). */
+  checklistSubmissionId: string | null;
+  /** Foto opcional al recoger. */
+  startPhotoUrl: string | null;
+  /** Foto opcional al dejar. */
+  endPhotoUrl: string | null;
+  endKind: UsageEndKind | null;
+  /** Solo endKind = GPS. */
+  endLatitude: number | null;
+  endLongitude: number | null;
+  /** Estacionamiento (texto libre) o nota de cierre. */
+  endText: string | null;
+  handoffToUserId: string | null;
+  /** Usuario al que se traspasó (solo endKind = TRASPASO). */
+  handoffTo: UsageCyclePerson | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Cuerpo de "terminar uso" (`POST /assets/:id/usage-cycles/:cycleId/end`). Según
+ * `endKind`: GPS usa `latitude`/`longitude`; ESTACIONAMIENTO usa `text`; TRASPASO usa
+ * `handoffToUserId` (ese usuario hará su propio checklist). La foto final va aparte
+ * (multipart) y es opcional.
+ */
+export interface EndUsageCycleInput {
+  endKind: UsageEndKind;
+  latitude?: number;
+  longitude?: number;
+  text?: string;
+  handoffToUserId?: string;
 }
 
 /**

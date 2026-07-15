@@ -82,6 +82,8 @@ model User {
   faenasSupervised       Faena[]                   @relation("FaenaSupervisor")
   projectsAdmin          Project[]                 @relation("ProjectAdmin")
   projectAssignments     ProjectWorkerAssignment[] @relation("ProjectAssignments")
+  usageCycles            UsageCycle[]              @relation("UsageCycleUser")
+  handoffUsageCycles     UsageCycle[]              @relation("UsageCycleHandoff")
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
 }
@@ -720,11 +722,27 @@ enum AssetIdentifierType {
 
 enum AssetStatus {
   DISPONIBLE
+  EN_PREPARACION // reservado: alguien reportó uso y está llenando el checklist inicial
   EN_USO
   MANTENIMIENTO
   BAJA
   DEFECTUOSO
   NO_DISPONIBLE
+}
+
+// Estado de un ciclo de uso de un activo.
+enum UsageCycleStatus {
+  EN_PREPARACION // reportó uso, llenando el checklist inicial (activo reservado)
+  EN_CURSO       // en uso (checklist firmado, o inmediato si el activo no tiene plantilla)
+  CERRADO        // uso terminado
+  CANCELADO      // cancelado antes de confirmar (nunca llegó a EN_CURSO)
+}
+
+// Forma de cierre de un ciclo de uso (formulario de "terminar uso").
+enum UsageEndKind {
+  GPS             // ubicación GPS del dispositivo móvil
+  ESTACIONAMIENTO // texto libre de dónde quedó estacionado
+  TRASPASO        // se traspasa a otro usuario, que hará su propio checklist
 }
 
 model Asset {
@@ -759,6 +777,7 @@ model Asset {
   accessories          AssetAccessory[]
   checklistTemplate    ChecklistTemplate?
   checklistSubmissions ChecklistSubmission[]
+  usageCycles          UsageCycle[]          @relation("AssetUsageCycles")
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -850,9 +869,48 @@ model ChecklistSubmission {
   user       User              @relation("ChecklistSubmitter", fields: [userId], references: [id], onDelete: Cascade)
   answers    Json // array de { itemId, value: string/boolean/number, comment?: string }
   createdAt  DateTime          @default(now())
+  // Ciclo de uso que abrió este checklist (si el checklist se ejecutó al reportar uso).
+  usageCycle UsageCycle?       @relation("UsageCycleChecklist")
 
   @@index([assetId])
   @@map("checklist_submissions")
+}
+
+// Ciclo de uso de un activo: quién lo usa, desde/hasta cuándo, checklist inicial,
+// fotos opcionales de recogida/entrega y el cierre (GPS / estacionamiento / traspaso).
+// Aplica a CUALQUIER activo; el checklist inicial solo si el activo tiene plantilla.
+model UsageCycle {
+  id                    String               @id @default(cuid())
+  assetId               String
+  asset                 Asset                @relation("AssetUsageCycles", fields: [assetId], references: [id], onDelete: Cascade)
+  // Usuario actual (quién reportó el uso / lo tiene en uso).
+  userId                String
+  user                  User                 @relation("UsageCycleUser", fields: [userId], references: [id])
+  status                UsageCycleStatus     @default(EN_PREPARACION)
+  startedAt             DateTime             @default(now()) // cuando reportó uso
+  confirmedAt           DateTime? // cuando pasó a EN_CURSO (checklist firmado / o inmediato sin plantilla)
+  endedAt               DateTime? // cuando terminó el uso
+  // Checklist inicial ligado a este ciclo (null si el activo no tiene plantilla).
+  checklistSubmissionId String?              @unique
+  checklistSubmission   ChecklistSubmission? @relation("UsageCycleChecklist", fields: [checklistSubmissionId], references: [id], onDelete: SetNull)
+  // Fotos opcionales (al recoger / al dejar).
+  startPhotoUrl         String?
+  startPhotoKey         String?
+  endPhotoUrl           String?
+  endPhotoKey           String?
+  // Cierre del ciclo ("terminar uso").
+  endKind               UsageEndKind?
+  endLatitude           Float? // solo endKind = GPS
+  endLongitude          Float? // solo endKind = GPS
+  endText               String? // estacionamiento (texto libre) o nota de cierre
+  handoffToUserId       String? // solo endKind = TRASPASO
+  handoffTo             User?                @relation("UsageCycleHandoff", fields: [handoffToUserId], references: [id], onDelete: SetNull)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([assetId, startedAt])
+  @@index([userId, status])
+  @@map("usage_cycles")
 }
 
 // ============ PROVEEDORES (Etapa 5.5) ============

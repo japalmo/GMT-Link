@@ -12,6 +12,8 @@ import {
   CreateAccessoryDto,
   UpdateAccessoryDto,
   UpdateChecklistTemplateDto,
+  ConfirmUsageCycleDto,
+  EndUsageCycleDto,
 } from '../../src/modules/assets/dto/assets.dto';
 
 const USER: AuthUser = { id: 'u1', email: 'operador@gmt.cl' };
@@ -45,6 +47,12 @@ function buildController(options: { allowed?: boolean } = {}): Mocks {
     listChecklistSubmissions: vi.fn(() => Promise.resolve([])),
     takeUse: vi.fn(() => Promise.resolve(asset)),
     releaseUse: vi.fn(() => Promise.resolve(asset)),
+    startUsageCycle: vi.fn(() => Promise.resolve({ asset, cycle: { id: 'cyc-1' } })),
+    confirmUsageCycle: vi.fn(() => Promise.resolve({ asset, cycle: { id: 'cyc-1' } })),
+    cancelUsageCycle: vi.fn(() => Promise.resolve({ asset, cycle: { id: 'cyc-1' } })),
+    endUsageCycle: vi.fn(() => Promise.resolve({ asset, cycle: { id: 'cyc-1' } })),
+    listUsageCycles: vi.fn(() => Promise.resolve([])),
+    getUsageCycle: vi.fn(() => Promise.resolve({ id: 'cyc-1' })),
   };
 
   return {
@@ -181,6 +189,89 @@ describe('AssetsController — use/release sin guard can_view_list', () => {
     const { controller, check, service } = buildController();
     await controller.releaseUse(USER, 'a-1');
     expect(service.releaseUse).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+});
+
+describe('AssetsController — ciclo de uso (autorización en el servicio)', () => {
+  // Igual que use/release: sin gate FGA en el controller; el servicio resuelve
+  // toda la autorización. El controller solo saca el userId de la sesión y arma
+  // la foto opcional desde el multipart.
+  it('startUsageCycle sin foto delega con photo undefined', async () => {
+    const { controller, check, service } = buildController();
+    await controller.startUsageCycle(USER, 'a-1', undefined);
+    expect(service.startUsageCycle).toHaveBeenCalledWith('a-1', 'u1', undefined);
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('startUsageCycle con foto arma el objeto desde el archivo', async () => {
+    const { controller, service } = buildController();
+    const file = {
+      buffer: Buffer.from('foto'),
+      originalname: 'recogida.jpg',
+      mimetype: 'image/jpeg',
+    } as Express.Multer.File;
+    await controller.startUsageCycle(USER, 'a-1', file);
+    expect(service.startUsageCycle).toHaveBeenCalledWith('a-1', 'u1', {
+      buffer: file.buffer,
+      filename: 'recogida.jpg',
+      contentType: 'image/jpeg',
+    });
+  });
+
+  it('confirmUsageCycle delega templateId y answers del DTO', async () => {
+    const { controller, service } = buildController();
+    const dto = Object.assign(new ConfirmUsageCycleDto(), {
+      templateId: 'tpl-1',
+      answers: [{ itemId: '1', value: true }],
+    });
+    await controller.confirmUsageCycle(USER, 'a-1', 'cyc-1', dto);
+    expect(service.confirmUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1', 'tpl-1', [
+      { itemId: '1', value: true },
+    ]);
+  });
+
+  it('cancelUsageCycle delega con el userId de la sesión', async () => {
+    const { controller, check, service } = buildController();
+    await controller.cancelUsageCycle(USER, 'a-1', 'cyc-1');
+    expect(service.cancelUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('endUsageCycle sin foto delega el DTO y photo undefined', async () => {
+    const { controller, service } = buildController();
+    const dto = Object.assign(new EndUsageCycleDto(), { endKind: 'GPS', latitude: -33.4, longitude: -70.6 });
+    await controller.endUsageCycle(USER, 'a-1', 'cyc-1', dto, undefined);
+    expect(service.endUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1', dto, undefined);
+  });
+
+  it('endUsageCycle con foto arma el objeto desde el archivo', async () => {
+    const { controller, service } = buildController();
+    const dto = Object.assign(new EndUsageCycleDto(), { endKind: 'ESTACIONAMIENTO', text: 'B2' });
+    const file = {
+      buffer: Buffer.from('foto'),
+      originalname: 'entrega.jpg',
+      mimetype: 'image/jpeg',
+    } as Express.Multer.File;
+    await controller.endUsageCycle(USER, 'a-1', 'cyc-1', dto, file);
+    expect(service.endUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1', dto, {
+      buffer: file.buffer,
+      filename: 'entrega.jpg',
+      contentType: 'image/jpeg',
+    });
+  });
+
+  it('listUsageCycles delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.listUsageCycles(USER, 'a-1');
+    expect(service.listUsageCycles).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('getUsageCycle delega con userId sin gate FGA', async () => {
+    const { controller, check, service } = buildController();
+    await controller.getUsageCycle(USER, 'a-1', 'cyc-1');
+    expect(service.getUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1');
     expect(check).not.toHaveBeenCalled();
   });
 });

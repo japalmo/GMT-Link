@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { AssetStatus, AssetType, DocumentStatus, ScopeType } from '@prisma/client';
+import { AssetStatus, AssetType, DocumentStatus, ScopeType, UsageCycleStatus } from '@prisma/client';
 import type {
   Asset,
   AssetAccessory,
@@ -152,6 +152,38 @@ function buildSubmissionRow(overrides: Partial<ChecklistSubmission> = {}): Check
   };
 }
 
+/**
+ * Fila de UsageCycle con el include del service (`user` + `handoffTo`) ya resuelto,
+ * lista para `toUsageCycleView`. Por defecto: ciclo EN_PREPARACION del usuario u-1.
+ */
+function buildUsageCycleRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const now = new Date('2026-06-16T00:00:00.000Z');
+  return {
+    id: 'cyc-1',
+    assetId: 'a-1',
+    userId: 'u-1',
+    status: UsageCycleStatus.EN_PREPARACION,
+    startedAt: now,
+    confirmedAt: null,
+    endedAt: null,
+    checklistSubmissionId: null,
+    startPhotoUrl: null,
+    startPhotoKey: null,
+    endPhotoUrl: null,
+    endPhotoKey: null,
+    endKind: null,
+    endLatitude: null,
+    endLongitude: null,
+    endText: null,
+    handoffToUserId: null,
+    createdAt: now,
+    updatedAt: now,
+    user: { id: 'u-1', firstName: 'Juan', lastName: 'Pérez' },
+    handoffTo: null,
+    ...overrides,
+  };
+}
+
 type MockFunction = ReturnType<typeof vi.fn>;
 
 interface MockTx {
@@ -182,6 +214,10 @@ interface MockTx {
   checklistSubmission: {
     create: MockFunction;
   };
+  usageCycle: {
+    create: MockFunction;
+    update: MockFunction;
+  };
 }
 
 interface MockPrisma {
@@ -191,6 +227,16 @@ interface MockPrisma {
     findFirst: MockFunction;
     findUnique: MockFunction;
     findMany: MockFunction;
+    findUniqueOrThrow: MockFunction;
+  };
+  user: {
+    findUnique: MockFunction;
+  };
+  usageCycle: {
+    create: MockFunction;
+    findUnique: MockFunction;
+    findMany: MockFunction;
+    update: MockFunction;
     findUniqueOrThrow: MockFunction;
   };
   membership: {
@@ -274,6 +320,10 @@ describe('AssetsService', () => {
       checklistSubmission: {
         create: vi.fn((args) => Promise.resolve(buildSubmissionRow(args.data))),
       },
+      usageCycle: {
+        create: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
+        update: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
+      },
     };
 
     prismaMock = {
@@ -283,7 +333,23 @@ describe('AssetsService', () => {
         findFirst: vi.fn(() => Promise.resolve(null)),
         findUnique: vi.fn(),
         findMany: vi.fn(() => Promise.resolve([])),
-        findUniqueOrThrow: vi.fn(),
+        // Default con include resuelto (project/assignedTo/inUseBy) para que
+        // `loadUsageCycleResult` (re-lee el activo tras las mutaciones del ciclo)
+        // funcione sin re-mockear en cada test. Los tests que necesitan un estado
+        // concreto lo sobrescriben con `mockResolvedValueOnce`.
+        findUniqueOrThrow: vi.fn(() =>
+          Promise.resolve({ ...buildAssetRow(), project: null, assignedTo: null, inUseBy: null }),
+        ),
+      },
+      user: {
+        findUnique: vi.fn(() => Promise.resolve(buildUserRow())),
+      },
+      usageCycle: {
+        create: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
+        findUnique: vi.fn(),
+        findMany: vi.fn(() => Promise.resolve([])),
+        update: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
+        findUniqueOrThrow: vi.fn(() => Promise.resolve(buildUsageCycleRow())),
       },
       membership: {
         findFirst: vi.fn(() => Promise.resolve(null)),
@@ -1369,6 +1435,343 @@ describe('AssetsService', () => {
           description: expect.stringContaining('Kilometraje (odómetro) actualizado automáticamente'),
         })
       }));
+    });
+  });
+
+  describe('ciclo de uso', () => {
+    describe('startUsageCycle', () => {
+      it('con checklist APROBADO deja el activo EN_PREPARACION y el ciclo EN_PREPARACION', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' }); // asset:use:report
+        // hasApprovedChecklist => plantilla aprobada => withChecklist = true.
+        prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+          buildTemplateRow({ status: DocumentStatus.APROBADO }),
+        );
+
+        const res = await service.startUsageCycle('a-1', 'u-1');
+
+        // Reclamo ATÓMICO (inUseById:null en el mismo UPDATE) hacia EN_PREPARACION.
+        expect(txMock.asset.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'a-1', inUseById: null },
+            data: expect.objectContaining({ status: AssetStatus.EN_PREPARACION, inUseById: 'u-1' }),
+          }),
+        );
+        expect(txMock.usageCycle.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              assetId: 'a-1',
+              userId: 'u-1',
+              status: UsageCycleStatus.EN_PREPARACION,
+              confirmedAt: null,
+            }),
+          }),
+        );
+        expect(res.asset).toBeDefined();
+        expect(res.cycle).toBeDefined();
+      });
+
+      it('SIN plantilla deja el activo EN_USO y el ciclo EN_CURSO con confirmedAt seteado', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
+        // Sin plantilla aprobada => withChecklist = false => pasa directo a EN_USO.
+        prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
+
+        await service.startUsageCycle('a-1', 'u-1');
+
+        expect(txMock.asset.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: AssetStatus.EN_USO }),
+          }),
+        );
+        const createArg = txMock.usageCycle.create.mock.calls[0]?.[0] as {
+          data: { status: string; confirmedAt: Date | null };
+        };
+        expect(createArg.data.status).toBe(UsageCycleStatus.EN_CURSO);
+        // Sin checklist inicial el ciclo nace confirmado (confirmedAt = ahora).
+        expect(createArg.data.confirmedAt).toBeInstanceOf(Date);
+      });
+
+      it('lanza ConflictException si el reclamo atómico no encuentra el activo libre (count 0)', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
+        prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
+        txMock.asset.updateMany.mockResolvedValueOnce({ count: 0 });
+
+        await expect(service.startUsageCycle('a-1', 'u-1')).rejects.toBeInstanceOf(ConflictException);
+        expect(txMock.usageCycle.create).not.toHaveBeenCalled();
+      });
+
+      it('lanza ForbiddenException sin el permiso asset:use:report (mismo gate que takeUse)', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
+
+        await expect(service.startUsageCycle('a-1', 'u-x')).rejects.toBeInstanceOf(ForbiddenException);
+        expect(permissionsMock.can).toHaveBeenCalledWith('u-x', 'asset:use:report');
+        expect(txMock.asset.updateMany).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('confirmUsageCycle', () => {
+      it('éxito (checklist sin falla): activo EN_USO, ciclo EN_CURSO y submission ligada', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_PREPARACION, userId: 'u-1' }),
+        );
+        // submitChecklist: permiso funcional + activo + plantilla aprobada.
+        permissionsMock.can.mockResolvedValue({ effect: 'allow' }); // asset:checklist:run:any
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+          buildTemplateRow({ status: DocumentStatus.APROBADO }),
+        );
+        // Tras submitChecklist el activo NO quedó en mantenimiento (default DISPONIBLE).
+
+        await service.confirmUsageCycle('a-1', 'cyc-1', 'u-1', 'tpl-1', [
+          { itemId: '1', label: 'Freno', value: true },
+        ]);
+
+        expect(txMock.asset.update).toHaveBeenCalledWith(
+          expect.objectContaining({ where: { id: 'a-1' }, data: { status: AssetStatus.EN_USO } }),
+        );
+        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cyc-1' },
+            data: expect.objectContaining({
+              status: UsageCycleStatus.EN_CURSO,
+              checklistSubmissionId: 'sub-1',
+            }),
+          }),
+        );
+      });
+
+      it('checklist con falla: activo a mantenimiento, ciclo CANCELADO e inUseById liberado', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_PREPARACION, userId: 'u-1' }),
+        );
+        permissionsMock.can.mockResolvedValue({ effect: 'allow' });
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        // Plantilla vacía + valor false => submitChecklist detecta falla (fallback legacy).
+        prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+          buildTemplateRow({ status: DocumentStatus.APROBADO }),
+        );
+        // Re-lectura tras submitChecklist: el activo quedó en MANTENIMIENTO.
+        prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
+          ...buildAssetRow({ status: AssetStatus.MANTENIMIENTO }),
+          project: null,
+          assignedTo: null,
+          inUseBy: null,
+        });
+
+        await service.confirmUsageCycle('a-1', 'cyc-1', 'u-1', 'tpl-1', [
+          { itemId: '1', label: 'Freno de Mano', value: false },
+        ]);
+
+        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cyc-1' },
+            data: expect.objectContaining({
+              status: UsageCycleStatus.CANCELADO,
+              checklistSubmissionId: 'sub-1',
+            }),
+          }),
+        );
+        // Se libera el activo (inUseById null); el estado MANTENIMIENTO ya lo dejó el checklist.
+        expect(txMock.asset.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'a-1' },
+            data: expect.objectContaining({ inUseById: null, inUseSince: null }),
+          }),
+        );
+      });
+
+      it('lanza ConflictException si el ciclo no está EN_PREPARACION', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+
+        await expect(
+          service.confirmUsageCycle('a-1', 'cyc-1', 'u-1', 'tpl-1', [{ itemId: '1', value: true }]),
+        ).rejects.toBeInstanceOf(ConflictException);
+      });
+
+      it('lanza ForbiddenException si lo confirma otro usuario', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_PREPARACION, userId: 'u-otro' }),
+        );
+
+        await expect(
+          service.confirmUsageCycle('a-1', 'cyc-1', 'u-1', 'tpl-1', [{ itemId: '1', value: true }]),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      });
+    });
+
+    describe('cancelUsageCycle', () => {
+      it('cancela un ciclo EN_PREPARACION: activo DISPONIBLE y ciclo CANCELADO', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_PREPARACION, userId: 'u-1' }),
+        );
+
+        await service.cancelUsageCycle('a-1', 'cyc-1', 'u-1');
+
+        expect(txMock.asset.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'a-1' },
+            data: expect.objectContaining({
+              status: AssetStatus.DISPONIBLE,
+              inUseById: null,
+              inUseSince: null,
+            }),
+          }),
+        );
+        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cyc-1' },
+            data: expect.objectContaining({ status: UsageCycleStatus.CANCELADO }),
+          }),
+        );
+      });
+
+      it('lanza ConflictException si el ciclo no está EN_PREPARACION', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+
+        await expect(service.cancelUsageCycle('a-1', 'cyc-1', 'u-1')).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+      });
+    });
+
+    describe('endUsageCycle', () => {
+      it('GPS: guarda lat/lng y deja el activo DISPONIBLE', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+
+        await service.endUsageCycle('a-1', 'cyc-1', 'u-1', {
+          endKind: 'GPS',
+          latitude: -33.45,
+          longitude: -70.66,
+        });
+
+        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cyc-1' },
+            data: expect.objectContaining({
+              status: UsageCycleStatus.CERRADO,
+              endKind: 'GPS',
+              endLatitude: -33.45,
+              endLongitude: -70.66,
+            }),
+          }),
+        );
+        expect(txMock.asset.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'a-1' },
+            data: expect.objectContaining({ status: AssetStatus.DISPONIBLE, inUseById: null }),
+          }),
+        );
+      });
+
+      it('ESTACIONAMIENTO: guarda el texto de cierre', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+
+        await service.endUsageCycle('a-1', 'cyc-1', 'u-1', {
+          endKind: 'ESTACIONAMIENTO',
+          text: 'Estacionamiento subterráneo B2',
+        });
+
+        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              endKind: 'ESTACIONAMIENTO',
+              endText: 'Estacionamiento subterráneo B2',
+              endLatitude: null,
+              endLongitude: null,
+            }),
+          }),
+        );
+      });
+
+      it('TRASPASO: valida el usuario destino, lo guarda y deja el activo DISPONIBLE', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+        prismaMock.user.findUnique.mockResolvedValueOnce(buildUserRow({ id: 'u-2' }));
+
+        await service.endUsageCycle('a-1', 'cyc-1', 'u-1', {
+          endKind: 'TRASPASO',
+          handoffToUserId: 'u-2',
+        });
+
+        expect(prismaMock.user.findUnique).toHaveBeenCalledWith({ where: { id: 'u-2' } });
+        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ endKind: 'TRASPASO', handoffToUserId: 'u-2' }),
+          }),
+        );
+        expect(txMock.asset.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: AssetStatus.DISPONIBLE, inUseById: null }),
+          }),
+        );
+      });
+
+      it('TRASPASO sin handoffToUserId lanza BadRequestException', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+
+        await expect(
+          service.endUsageCycle('a-1', 'cyc-1', 'u-1', { endKind: 'TRASPASO' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(txMock.usageCycle.update).not.toHaveBeenCalled();
+      });
+
+      it('TRASPASO a un usuario inexistente lanza BadRequestException', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_CURSO, userId: 'u-1' }),
+        );
+        prismaMock.user.findUnique.mockResolvedValueOnce(null);
+
+        await expect(
+          service.endUsageCycle('a-1', 'cyc-1', 'u-1', { endKind: 'TRASPASO', handoffToUserId: 'u-x' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(txMock.usageCycle.update).not.toHaveBeenCalled();
+      });
+
+      it('lanza ConflictException si el ciclo no está EN_CURSO', async () => {
+        prismaMock.usageCycle.findUnique.mockResolvedValueOnce(
+          buildUsageCycleRow({ status: UsageCycleStatus.EN_PREPARACION, userId: 'u-1' }),
+        );
+
+        await expect(
+          service.endUsageCycle('a-1', 'cyc-1', 'u-1', { endKind: 'GPS' }),
+        ).rejects.toBeInstanceOf(ConflictException);
+      });
+    });
+
+    describe('listUsageCycles / getUsageCycle', () => {
+      it('listUsageCycles lanza NotFoundException si no puede ver el activo', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ projectId: 'p-ajeno' }));
+        permissionsMock.scopeFilter.mockResolvedValueOnce(null); // sin asset:read
+        fgaMock.check.mockResolvedValueOnce(false); // ni can_view_list del proyecto ajeno
+
+        await expect(service.listUsageCycles('a-1', 'u-x')).rejects.toBeInstanceOf(NotFoundException);
+        expect(prismaMock.usageCycle.findMany).not.toHaveBeenCalled();
+      });
+
+      it('getUsageCycle lanza NotFoundException si no puede ver el activo', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ projectId: 'p-ajeno' }));
+        permissionsMock.scopeFilter.mockResolvedValueOnce(null);
+        fgaMock.check.mockResolvedValueOnce(false);
+
+        await expect(service.getUsageCycle('a-1', 'cyc-1', 'u-x')).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+        expect(prismaMock.usageCycle.findUnique).not.toHaveBeenCalled();
+      });
     });
   });
 });

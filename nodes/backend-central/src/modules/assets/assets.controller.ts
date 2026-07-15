@@ -22,12 +22,13 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AssetStatus, AssetType } from '@prisma/client';
-import type { TablePage, TableRequest } from '@gmt-platform/contracts';
+import type { TablePage, TableRequest, UsageCycleView } from '@gmt-platform/contracts';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { FgaService } from '../../fga/fga.service';
 import { AssetsService } from './assets.service';
+import type { UsageCycleResult } from './assets.service';
 import {
   CreateAssetDto,
   UpdateAssetDto,
@@ -40,6 +41,8 @@ import {
   ReviewChecklistTemplateDto,
   SubmitChecklistDto,
   SubmitTelemetryDto,
+  ConfirmUsageCycleDto,
+  EndUsageCycleDto,
 } from './dto/assets.dto';
 import {
   AssetDocumentView,
@@ -281,6 +284,108 @@ export class AssetsController {
   ): Promise<AssetView> {
     const userId = this.requireUserId(authUser);
     return this.assets.releaseUse(id, userId);
+  }
+
+  // ============ Ciclo de uso (reportar uso -> checklist -> en uso -> terminar) ============
+  // Sin @RequirePermission: igual que use/release, el servicio resuelve toda la
+  // autorización (start exige asset:use:report + visibilidad; confirm/cancel/end
+  // exigen dueño-o-admin; list/detalle exigen ver el activo). Rutas bajo el
+  // segmento estático `usage-cycles`; los sub-recursos llevan sufijo estático
+  // (`confirm`/`cancel`/`end`), así `:cycleId` nunca captura una acción.
+
+  /**
+   * Reportar uso: reclama el activo y abre un ciclo. Foto inicial opcional
+   * (multipart `photo`); si el activo tiene checklist aprobado queda en
+   * preparación a la espera de `confirm`.
+   */
+  @Post(':id/usage-cycles')
+  @HttpCode(200)
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  startUsageCycle(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ): Promise<UsageCycleResult> {
+    const userId = this.requireUserId(authUser);
+    const photo = file
+      ? { buffer: file.buffer, filename: file.originalname, contentType: file.mimetype }
+      : undefined;
+    return this.assets.startUsageCycle(id, userId, photo);
+  }
+
+  /**
+   * Confirmar uso: firma el checklist inicial de un ciclo en preparación.
+   */
+  @Post(':id/usage-cycles/:cycleId/confirm')
+  @HttpCode(200)
+  confirmUsageCycle(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('cycleId') cycleId: string,
+    @Body() dto: ConfirmUsageCycleDto,
+  ): Promise<UsageCycleResult> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.confirmUsageCycle(id, cycleId, userId, dto.templateId, dto.answers);
+  }
+
+  /**
+   * Cancelar un ciclo en preparación (antes de confirmar): libera el activo.
+   */
+  @Post(':id/usage-cycles/:cycleId/cancel')
+  @HttpCode(200)
+  cancelUsageCycle(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('cycleId') cycleId: string,
+  ): Promise<UsageCycleResult> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.cancelUsageCycle(id, cycleId, userId);
+  }
+
+  /**
+   * Terminar uso: cierra un ciclo en curso con la forma de cierre (GPS /
+   * estacionamiento / traspaso) y foto final opcional (multipart `photo`).
+   */
+  @Post(':id/usage-cycles/:cycleId/end')
+  @HttpCode(200)
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  endUsageCycle(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('cycleId') cycleId: string,
+    @Body() dto: EndUsageCycleDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ): Promise<UsageCycleResult> {
+    const userId = this.requireUserId(authUser);
+    const photo = file
+      ? { buffer: file.buffer, filename: file.originalname, contentType: file.mimetype }
+      : undefined;
+    return this.assets.endUsageCycle(id, cycleId, userId, dto, photo);
+  }
+
+  /**
+   * Historial de ciclos de uso del activo (más recientes primero).
+   */
+  @Get(':id/usage-cycles')
+  listUsageCycles(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<UsageCycleView[]> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.listUsageCycles(id, userId);
+  }
+
+  /**
+   * Detalle de un ciclo de uso puntual.
+   */
+  @Get(':id/usage-cycles/:cycleId')
+  getUsageCycle(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('cycleId') cycleId: string,
+  ): Promise<UsageCycleView> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.getUsageCycle(id, cycleId, userId);
   }
 
   /**

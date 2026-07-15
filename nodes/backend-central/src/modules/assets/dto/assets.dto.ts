@@ -5,16 +5,26 @@ import {
   DocumentStatus,
   VehicleSubtype,
 } from '@prisma/client';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateIf,
 } from 'class-validator';
+import type { UsageEndKind } from '@gmt-platform/contracts';
+
+/** Recorta espacios de un valor string (deja intactos los no-string). */
+const trim = (): PropertyDecorator =>
+  Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  );
 
 export class CreateAssetDto {
   @IsEnum(AssetType, { message: 'El tipo de activo debe ser EQUIPO, VEHICULO o MAQUINARIA' })
@@ -196,4 +206,52 @@ export class SubmitTelemetryDto {
 
   @IsNumber({}, { message: 'La velocidad debe ser un número' })
   speed!: number;
+}
+
+/**
+ * Confirmar uso: firma el checklist inicial de un ciclo en preparación. Espeja
+ * SubmitChecklistDto (plantilla + respuestas): el service reusa submitChecklist
+ * para validar la plantilla aprobada, el odómetro y la detección de falla.
+ */
+export class ConfirmUsageCycleDto {
+  @IsString()
+  @IsNotEmpty({ message: 'El ID de la plantilla es requerido' })
+  templateId!: string;
+
+  @IsArray()
+  @IsNotEmpty({ message: 'Las respuestas son requeridas' })
+  answers!: Record<string, unknown>[];
+}
+
+/**
+ * Terminar uso: espejo de `EndUsageCycleInput`. Valida solo TIPOS; la coherencia
+ * entre `endKind` y sus campos (GPS usa lat/lng, ESTACIONAMIENTO usa text,
+ * TRASPASO usa handoffToUserId) la resuelve el service. Los números vienen del
+ * multipart como texto, por eso el `@Type(() => Number)`.
+ */
+export class EndUsageCycleDto {
+  @IsIn(['GPS', 'ESTACIONAMIENTO', 'TRASPASO'], {
+    message: 'La forma de cierre debe ser GPS, ESTACIONAMIENTO o TRASPASO',
+  })
+  endKind!: UsageEndKind;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'La latitud debe ser un número' })
+  latitude?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'La longitud debe ser un número' })
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  @trim()
+  @MaxLength(500, { message: 'La nota de cierre no puede superar los 500 caracteres' })
+  text?: string;
+
+  @IsOptional()
+  @IsString()
+  handoffToUserId?: string;
 }
