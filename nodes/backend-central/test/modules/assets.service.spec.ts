@@ -129,6 +129,7 @@ function buildTemplateRow(overrides: Partial<ChecklistTemplate> = {}): Checklist
     assetId: 'a-1',
     name: 'Checklist mensual',
     items: [],
+    sections: null,
     status: DocumentStatus.APROBADO,
     previousItems: null,
     reviewedById: null,
@@ -1333,6 +1334,206 @@ describe('AssetsService', () => {
       expect(res.items).toEqual([
         expect.objectContaining({ id: 'freno', label: 'Freno de mano', type: 'BOOLEAN', required: true }),
       ]);
+    });
+
+    it('actualiza la plantilla con secciones y persiste el arreglo de secciones', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      const res = await service.updateChecklistTemplate(
+        'a-1',
+        'u-1',
+        'Checklist con secciones',
+        [
+          {
+            id: 'motor',
+            label: 'Motor',
+            type: 'ESTADO',
+            required: true,
+            config: { options: ['Bueno', 'Malo'] },
+            section: 'sec-1',
+          },
+        ],
+        [{ id: 'sec-1', title: 'Motor y frenos', description: 'Revisión mecánica' }],
+      );
+
+      expect(txMock.checklistTemplate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sections: [{ id: 'sec-1', title: 'Motor y frenos', description: 'Revisión mecánica' }],
+          }),
+        }),
+      );
+      expect(res.sections).toEqual([
+        { id: 'sec-1', title: 'Motor y frenos', description: 'Revisión mecánica' },
+      ]);
+      expect(res.status).toBe(DocumentStatus.EN_REVISION);
+    });
+
+    it('rechaza (400) un ítem que referencia una sección inexistente', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      await expect(
+        service.updateChecklistTemplate(
+          'a-1',
+          'u-1',
+          'Checklist',
+          [{ id: 'motor', label: 'Motor', type: 'TEXTO', required: false, section: 'sec-fantasma' }],
+          [{ id: 'sec-1', title: 'General' }],
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistTemplate.update).not.toHaveBeenCalled();
+    });
+
+    it('rechaza (400) secciones con ids duplicados', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      await expect(
+        service.updateChecklistTemplate(
+          'a-1',
+          'u-1',
+          'Checklist',
+          [{ id: 'nota', label: 'Nota', type: 'TEXTO', required: false }],
+          [
+            { id: 'sec-1', title: 'Motor' },
+            { id: 'sec-1', title: 'Frenos' },
+          ],
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistTemplate.update).not.toHaveBeenCalled();
+    });
+
+    it('acepta y persiste un ítem SVG con partes válidas', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      const res = await service.updateChecklistTemplate('a-1', 'u-1', 'Checklist carrocería', [
+        {
+          id: 'carroceria',
+          label: 'Carrocería',
+          type: 'SVG',
+          required: false,
+          config: {
+            svg: '<svg><g data-part="puerta"></g></svg>',
+            parts: [{ id: 'puerta', name: 'Puerta delantera' }],
+          },
+        },
+      ]);
+
+      expect(txMock.checklistTemplate.update).toHaveBeenCalled();
+      expect(res.items).toEqual([
+        expect.objectContaining({ id: 'carroceria', type: 'SVG', required: false }),
+      ]);
+    });
+
+    it('rechaza (400) un ítem SVG sin marcado (svg vacío)', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      await expect(
+        service.updateChecklistTemplate('a-1', 'u-1', 'Checklist', [
+          {
+            id: 'carroceria',
+            label: 'Carrocería',
+            type: 'SVG',
+            required: false,
+            config: { svg: '', parts: [{ id: 'puerta', name: 'Puerta' }] },
+          },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(txMock.checklistTemplate.update).not.toHaveBeenCalled();
+    });
+
+    it('un ítem SVG (comentarios de carrocería) NUNCA gatilla falla ni MANTENIMIENTO', async () => {
+      const svgTemplate = buildTemplateRow({
+        status: DocumentStatus.APROBADO,
+        items: [
+          {
+            id: 'carroceria',
+            label: 'Carrocería',
+            type: 'SVG',
+            required: true,
+            config: {
+              svg: '<svg><g data-part="puerta"></g></svg>',
+              parts: [{ id: 'puerta', name: 'Puerta delantera' }],
+            },
+          },
+        ] as unknown as ChecklistTemplate['items'],
+      });
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(svgTemplate);
+
+      const res = await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+        {
+          itemId: 'carroceria',
+          label: 'Carrocería',
+          value: '{"puerta":{"comment":"Rayón leve en la puerta"}}',
+        },
+      ]);
+
+      expect(txMock.checklistSubmission.create).toHaveBeenCalled();
+      expect(txMock.asset.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: AssetStatus.MANTENIMIENTO } }),
+      );
+      expect(res.userId).toBe('u-1');
+    });
+
+    it('getChecklistTemplate expone las secciones persistidas', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({
+          items: [
+            { id: 'motor', label: 'Motor', type: 'TEXTO', required: false, section: 'sec-1' },
+          ] as unknown as ChecklistTemplate['items'],
+          sections: [{ id: 'sec-1', title: 'Mecánica' }] as unknown as ChecklistTemplate['sections'],
+        }),
+      );
+
+      const res = await service.getChecklistTemplate('a-1', 'u-1');
+
+      expect(res.sections).toEqual([{ id: 'sec-1', title: 'Mecánica' }]);
+      expect(res.items).toEqual([
+        expect.objectContaining({ id: 'motor', section: 'sec-1' }),
+      ]);
+    });
+
+    it('genera el PDF de preview del formulario agrupado por secciones', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({
+          items: [
+            {
+              id: 'motor',
+              label: 'Motor',
+              type: 'ESTADO',
+              required: true,
+              config: { options: ['Bueno', 'Malo'] },
+              section: 'sec-1',
+            },
+            {
+              id: 'carroceria',
+              label: 'Carrocería',
+              type: 'SVG',
+              required: false,
+              config: {
+                svg: '<svg><g data-part="puerta"></g></svg>',
+                parts: [{ id: 'puerta', name: 'Puerta delantera' }],
+              },
+              section: 'sec-2',
+            },
+          ] as unknown as ChecklistTemplate['items'],
+          sections: [
+            { id: 'sec-1', title: 'Mecánica' },
+            { id: 'sec-2', title: 'Carrocería' },
+          ] as unknown as ChecklistTemplate['sections'],
+        }),
+      );
+
+      const pdf = await service.generateChecklistTemplatePreviewPdf('a-1', 'u-1');
+
+      // Es un PDF válido (encabezado %PDF-).
+      expect(Buffer.from(pdf).subarray(0, 5).toString('utf8')).toBe('%PDF-');
+      expect(pdf.byteLength).toBeGreaterThan(0);
     });
   });
 

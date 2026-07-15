@@ -143,6 +143,182 @@ export async function composeChecklistPdf(data: ChecklistPdfData): Promise<Uint8
   return doc.save();
 }
 
+/** Un ítem del formulario en blanco, listo para dibujar en el preview. */
+export interface TemplatePreviewItem {
+  label: string;
+  /** Etiqueta del tipo (p. ej. "Estado", "Diagrama"). */
+  typeLabel: string;
+  /** Línea auxiliar (opciones de ESTADO, partes de SVG, …); ausente = espacio en blanco. */
+  detail?: string;
+  required: boolean;
+}
+
+/** Una sección (página) del formulario con su título, descripción e ítems. */
+export interface TemplatePreviewSection {
+  title: string;
+  description?: string;
+  items: readonly TemplatePreviewItem[];
+}
+
+/** Datos de cabecera + secciones para componer el PDF de preview de la plantilla. */
+export interface TemplatePreviewPdfData {
+  assetCode: string;
+  assetName: string;
+  templateName: string;
+  sections: readonly TemplatePreviewSection[];
+}
+
+/**
+ * Compone el PDF de PREVIEW de una plantilla de checklist (A4 vertical): el
+ * formulario oficial EN BLANCO. Cabecera con el activo + nombre de la plantilla y,
+ * por sección (título + descripción), la lista de ítems con su tipo. Para ESTADO
+ * muestra las opciones; para SVG lista las partes por nombre; para el resto pinta
+ * una línea de respuesta en blanco. Pagina automáticamente. Devuelve los bytes.
+ */
+export async function composeTemplatePreviewPdf(data: TemplatePreviewPdfData): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  const usableW = A4.width - MARGIN * 2;
+  let page = doc.addPage([A4.width, A4.height]);
+  let y = A4.height - MARGIN;
+
+  const newPage = (): void => {
+    page = doc.addPage([A4.width, A4.height]);
+    y = A4.height - MARGIN;
+  };
+  const ensureSpace = (needed: number): void => {
+    if (y - needed < MARGIN) {
+      newPage();
+    }
+  };
+
+  // ---- Cabecera ----
+  page.drawText('Formulario de checklist', {
+    x: MARGIN,
+    y: y - 18,
+    size: 18,
+    font: fontBold,
+    color: rgb(0.1, 0.1, 0.1),
+  });
+  y -= 34;
+
+  const headerLines = [
+    `Activo: ${data.assetName} (${data.assetCode})`,
+    `Plantilla: ${data.templateName}`,
+    'Formulario oficial en blanco para inspección.',
+  ];
+  for (const line of headerLines) {
+    page.drawText(truncate(line, font, 10, usableW), {
+      x: MARGIN,
+      y: y - 10,
+      size: 10,
+      font,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    y -= 15;
+  }
+
+  y -= 8;
+  page.drawLine({
+    start: { x: MARGIN, y },
+    end: { x: A4.width - MARGIN, y },
+    thickness: 0.75,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  y -= 18;
+
+  const hasItems = data.sections.some((section) => section.items.length > 0);
+  if (!hasItems) {
+    page.drawText('La plantilla no tiene ítems.', {
+      x: MARGIN,
+      y: y - 10,
+      size: 9,
+      font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+    return doc.save();
+  }
+
+  for (const section of data.sections) {
+    // ---- Título de sección ----
+    ensureSpace(28);
+    page.drawText(truncate(section.title, fontBold, 13, usableW), {
+      x: MARGIN,
+      y: y - 13,
+      size: 13,
+      font: fontBold,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    y -= 20;
+
+    if (section.description) {
+      for (const dline of wrap(section.description, font, 9, usableW)) {
+        ensureSpace(13);
+        page.drawText(dline, { x: MARGIN, y: y - 9, size: 9, font, color: rgb(0.45, 0.45, 0.45) });
+        y -= 13;
+      }
+    }
+    y -= 4;
+
+    if (section.items.length === 0) {
+      ensureSpace(16);
+      page.drawText('Sin ítems en esta sección.', {
+        x: MARGIN + 8,
+        y: y - 9,
+        size: 9,
+        font,
+        color: rgb(0.6, 0.6, 0.6),
+      });
+      y -= 18;
+      continue;
+    }
+
+    for (const item of section.items) {
+      const labelText = `${item.label}${item.required ? ' *' : ''}`;
+      const labelLines = wrap(labelText, fontBold, 10, usableW - 8);
+      const detailLines = item.detail
+        ? wrap(item.detail, font, 9, usableW - 12)
+        : ['Respuesta: ____________________________'];
+      const rowHeight = labelLines.length * (10 + 4) + (9 + 3) + detailLines.length * (9 + 3) + 8;
+
+      ensureSpace(rowHeight);
+
+      let lineY = y;
+      for (const lline of labelLines) {
+        page.drawText(lline, { x: MARGIN, y: lineY - 10, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15) });
+        lineY -= 10 + 4;
+      }
+      page.drawText(`Tipo: ${item.typeLabel}`, {
+        x: MARGIN + 12,
+        y: lineY - 9,
+        size: 8,
+        font,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      lineY -= 9 + 3;
+      for (const dline of detailLines) {
+        page.drawText(dline, { x: MARGIN + 12, y: lineY - 9, size: 9, font, color: rgb(0.3, 0.3, 0.3) });
+        lineY -= 9 + 3;
+      }
+
+      lineY -= 6;
+      page.drawLine({
+        start: { x: MARGIN, y: lineY },
+        end: { x: A4.width - MARGIN, y: lineY },
+        thickness: 0.3,
+        color: rgb(0.92, 0.92, 0.92),
+      });
+      y = lineY - 4;
+    }
+
+    y -= 8;
+  }
+
+  return doc.save();
+}
+
 /** Envuelve `text` en líneas que quepan en `maxWidth` puntos. */
 function wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);

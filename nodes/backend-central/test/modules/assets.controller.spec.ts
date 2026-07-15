@@ -120,7 +120,8 @@ describe('AssetsController — gate FGA propio de activos (can_manage_assets)', 
       Object.assign(new UpdateChecklistTemplateDto(), { name: 'Diaria', items: [{ label: 'Aceite' }] }),
     );
     expect(check).toHaveBeenCalledWith(MANAGE_GATE);
-    expect(service.updateChecklistTemplate).toHaveBeenCalledWith('a-1', 'u1', 'Diaria', [{ label: 'Aceite' }]);
+    // Se propaga `sections` (undefined cuando el DTO no lo trae) como 5º argumento.
+    expect(service.updateChecklistTemplate).toHaveBeenCalledWith('a-1', 'u1', 'Diaria', [{ label: 'Aceite' }], undefined);
   });
 });
 

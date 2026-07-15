@@ -33,11 +33,12 @@ import {
   X,
   Construction,
   ImagePlus,
+  Layers,
+  FileDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Tabs, tabPanelId, tabTriggerId, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
@@ -58,6 +59,8 @@ import { useUsageCycles } from '@/hooks/use-usage-cycles';
 import { UsageCycleTimerCard } from './usage-cycle-card';
 import { EndUsageForm } from './end-usage-form';
 import { UsageHistory } from './usage-history';
+import { SvgChecklistInput, parseCommentMap } from './svg-checklist-input';
+import { ChecklistFillBody } from './checklist-fill-body';
 import type {
   AssetView,
   AssetType,
@@ -69,6 +72,7 @@ import type {
   ChecklistSubmissionView,
   ChecklistTemplateItem,
   ChecklistItemConfig,
+  ChecklistSection,
   ChecklistAnswer,
   VehicleSubtype,
   AssetIdentifierType,
@@ -933,6 +937,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     submitChecklistAnswers,
     listSubmissions,
     getSubmissionPdf,
+    getTemplatePdf,
   } = useAssets();
   const {
     start: startCycle,
@@ -1008,13 +1013,22 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   // Checklist template state & builder
   const [tplName, setTplName] = useState('');
   const [tplItems, setTplItems] = useState<ChecklistTemplateItem[]>([]);
+  const [tplSections, setTplSections] = useState<ChecklistSection[]>([]);
   const [showTplConfig, setShowTplConfig] = useState(false);
+  // Preview del PDF del formulario oficial de la plantilla (estado de carga).
+  const [previewingTplPdf, setPreviewingTplPdf] = useState(false);
 
   // Checklist execution answers state
   const [executionAnswers, setExecutionAnswers] = useState<Record<string, unknown>>({});
   // Guarda de doble envío del checklist ("Firmar y Enviar Inspección"): bloquea el
   // botón y descarta clics repetidos mientras la firma está en vuelo.
   const [submittingChecklist, setSubmittingChecklist] = useState(false);
+
+  // Fija la respuesta de un ítem (o de una observación companion) en el mapa de
+  // ejecución. Lo consume `ChecklistFillBody` (paginado o página única).
+  const setAnswer = useCallback((key: string, value: unknown) => {
+    setExecutionAnswers((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   // Diálogo de "Reportar uso": entrada única al ciclo (reclama el activo + abre el
   // checklist). Permite adjuntar una foto inicial OPCIONAL antes de iniciar el ciclo.
@@ -1048,6 +1062,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       setSubmissions(subList);
       setTplName(tpl?.name || '');
       setTplItems(tpl?.items || []);
+      setTplSections(tpl?.sections ?? []);
       setCycles(cycList);
       // A lo más un ciclo vigente (el backend lo garantiza): el que esté
       // EN_PREPARACION o EN_CURSO manda el timer / las acciones de cierre.
@@ -1354,6 +1369,67 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     setTplItems(tplItems.filter((item) => item.id !== itemId));
   };
 
+  // Asigna un ítem a una sección (o a "General/Sin sección" con string vacío).
+  const handleUpdateItemSection = (itemId: string, sectionId: string) => {
+    setTplItems(
+      tplItems.map((item) =>
+        item.id === itemId ? { ...item, section: sectionId || undefined } : item,
+      ),
+    );
+  };
+
+  // ---- Secciones (páginas) de la plantilla ----
+  const handleAddSection = () => {
+    const newSection: ChecklistSection = {
+      id: Math.random().toString(36).substring(2, 9),
+      title: 'Nueva sección',
+    };
+    setTplSections((prev) => [...prev, newSection]);
+  };
+
+  const handleUpdateSection = (
+    sectionId: string,
+    field: 'title' | 'description',
+    value: string,
+  ) => {
+    setTplSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, [field]: value } : s)),
+    );
+  };
+
+  // Elimina una sección y devuelve sus ítems a "General" (limpia item.section).
+  const handleRemoveSection = (sectionId: string) => {
+    setTplSections((prev) => prev.filter((s) => s.id !== sectionId));
+    setTplItems((prev) =>
+      prev.map((item) => (item.section === sectionId ? { ...item, section: undefined } : item)),
+    );
+  };
+
+  // Preview del PDF del formulario oficial de la plantilla (endpoint template/pdf):
+  // obtiene el blob y lo abre en una pestaña nueva vía objectURL (mismo patrón de
+  // ancla que la descarga de inspecciones, más robusto que window.open tras await).
+  const handlePreviewTemplatePdf = async () => {
+    if (previewingTplPdf) return;
+    setPreviewingTplPdf(true);
+    try {
+      const blob = await getTemplatePdf(id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Da tiempo a que la pestaña cargue el blob antes de revocar el objectURL.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al generar el PDF del formulario.');
+    } finally {
+      setPreviewingTplPdf(false);
+    }
+  };
+
   // Ítems companion (TEXTO referidos por el `obsItemId` de otro ítem) no se
   // editan como filas sueltas en el diseñador: su valor se captura en la
   // observación del ítem padre, igual que en la ejecución. Se ocultan de la
@@ -1369,7 +1445,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       return;
     }
     try {
-      await updateTemplate(id, { name: tplName, items: tplItems });
+      await updateTemplate(id, { name: tplName, items: tplItems, sections: tplSections });
       setShowTplConfig(false);
       void loadData();
       toast.success('Nueva revisión de plantilla enviada para revisión.');
@@ -1403,11 +1479,14 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       const answers: ChecklistAnswer[] = template.items.map((item) => {
         const raw = executionAnswers[item.id];
         const missing = raw === undefined || raw === null || raw === '';
-        if (item.required && missing) {
+        // Los SVG son opcionales (un diagrama sin observaciones es válido): no se
+        // exige aunque el ítem esté marcado como requerido.
+        if (item.required && missing && item.type !== 'SVG') {
           throw new Error(`El ítem "${item.label}" es requerido.`);
         }
 
-        // Valor tipado según el tipo del ítem (null si quedó vacío).
+        // Valor tipado según el tipo del ítem (null si quedó vacío). SVG guarda el
+        // JSON string del mapa de comentarios tal cual (o '{}' si quedó vacío).
         let value: string | number | boolean | null;
         switch (item.type) {
           case 'BOOLEAN':
@@ -1415,6 +1494,9 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
             break;
           case 'ENTERO':
             value = missing ? null : Number(raw);
+            break;
+          case 'SVG':
+            value = missing ? '{}' : String(raw);
             break;
           default: // ESTADO, FECHA, TEXTO
             value = missing ? null : String(raw);
@@ -1538,6 +1620,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     if (loadVehicleTemplate && (!template || template.items.length === 0)) {
       setShowTplConfig(true);
       setTplItems(VEHICLE_CHECKLIST_DEFAULT);
+      setTplSections([]);
     }
   };
 
@@ -2139,15 +2222,28 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                   </CardTitle>
                   <CardDescription>Control de bitácora y verificación del activo</CardDescription>
                 </div>
-                {isAdmin && template && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowTplConfig(!showTplConfig)}
-                  >
-                    <Settings className="size-3.5 mr-1.5" />
-                    {showTplConfig ? 'Ver Checklist' : 'Configurar Preguntas'}
-                  </Button>
+                {template && (
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      loading={previewingTplPdf}
+                      onClick={() => void handlePreviewTemplatePdf()}
+                    >
+                      <FileDown className="size-3.5 mr-1.5" />
+                      Ver PDF del formulario
+                    </Button>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowTplConfig(!showTplConfig)}
+                      >
+                        <Settings className="size-3.5 mr-1.5" />
+                        {showTplConfig ? 'Ver Checklist' : 'Configurar Preguntas'}
+                      </Button>
+                    )}
+                  </div>
                 )}
               </CardHeader>
               <CardContent className="flex flex-col gap-6">
@@ -2224,6 +2320,57 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                       />
                     </div>
 
+                    {/* Editor de secciones (páginas del formulario). Sin secciones,
+                        el checklist se llena en una sola página (intacto). */}
+                    <div className="flex flex-col gap-2 border border-border/60 rounded-md p-3 bg-card/30">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                          <Layers className="size-3.5 text-primary" /> Secciones (páginas del formulario)
+                        </p>
+                        <Button type="button" variant="outline" size="sm" onClick={handleAddSection}>
+                          <Plus className="size-3.5 mr-1" /> Agregar sección
+                        </Button>
+                      </div>
+                      {tplSections.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          Sin secciones: el formulario se llena en una sola página. Agrega secciones para dividirlo en pasos.
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {tplSections.map((s, i) => (
+                            <div key={s.id} className="flex flex-col gap-1.5 border border-border/50 rounded p-2 bg-background">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-muted-foreground text-[11px]">#{i + 1}</span>
+                                <Input
+                                  aria-label={`Título de la sección ${i + 1}`}
+                                  value={s.title}
+                                  onChange={(e) => handleUpdateSection(s.id, 'title', e.target.value)}
+                                  placeholder="Título de la sección"
+                                  className="h-8 text-xs"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:bg-destructive/10 h-8 px-2 shrink-0"
+                                  onClick={() => handleRemoveSection(s.id)}
+                                >
+                                  Eliminar
+                                </Button>
+                              </div>
+                              <Input
+                                aria-label={`Descripción de la sección ${i + 1}`}
+                                value={s.description ?? ''}
+                                onChange={(e) => handleUpdateSection(s.id, 'description', e.target.value)}
+                                placeholder="Descripción (opcional)"
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex flex-col gap-3">
                       <p className="text-[11px] font-semibold text-muted-foreground">Preguntas y Puntos de Control ({visibleTplItems.length})</p>
 
@@ -2259,6 +2406,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                                     <option value="ENTERO">Número entero</option>
                                     <option value="FECHA">Fecha</option>
                                     <option value="TEXTO">Texto</option>
+                                    <option value="SVG">Diagrama SVG</option>
                                   </Select>
                                 </div>
 
@@ -2282,6 +2430,41 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                                   Eliminar
                                 </Button>
                               </div>
+
+                              {/* Selector de sección (solo si la plantilla tiene secciones) */}
+                              {tplSections.length > 0 && (
+                                <div className="flex items-center gap-2 border-t border-border/50 pt-2">
+                                  <Label
+                                    htmlFor={`sec-${item.id}`}
+                                    className="text-[11px] text-muted-foreground shrink-0"
+                                  >
+                                    Sección
+                                  </Label>
+                                  <Select
+                                    id={`sec-${item.id}`}
+                                    aria-label={`Sección del ítem ${index + 1}`}
+                                    value={item.section ?? ''}
+                                    onChange={(e) => handleUpdateItemSection(item.id, e.target.value)}
+                                    className="h-8 px-2 text-xs w-full max-w-xs"
+                                  >
+                                    <option value="">General (sin sección)</option>
+                                    {tplSections.map((s) => (
+                                      <option key={s.id} value={s.id}>
+                                        {s.title || 'Sección sin título'}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                </div>
+                              )}
+
+                              {/* Editor del diagrama para ítems de tipo SVG */}
+                              {item.type === 'SVG' && (
+                                <SvgChecklistInput
+                                  mode="edit"
+                                  config={item.config}
+                                  onChange={(config) => handleUpdateItemConfig(item.id, config)}
+                                />
+                              )}
 
                               {/* Editor inline de opciones para ítems de tipo ESTADO */}
                               {item.type === 'ESTADO' && (
@@ -2375,7 +2558,10 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => setTplItems(VEHICLE_CHECKLIST_DEFAULT)}
+                              onClick={() => {
+                                setTplItems(VEHICLE_CHECKLIST_DEFAULT);
+                                setTplSections([]);
+                              }}
                             >
                               Cargar Plantilla Estándar Camioneta
                             </Button>
@@ -2397,134 +2583,12 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                       <p className="text-xs font-semibold text-foreground">Ejecutar Inspección Diaria (Checklist Activo)</p>
                     </div>
 
-                    {template.items.length === 0 ? (
-                      <p className="text-center text-xs text-muted-foreground py-4">No hay preguntas de inspección configuradas en este checklist.</p>
-                    ) : (() => {
-                      // Los ítems TEXTO companion (referidos por `obsItemId` de un
-                      // ESTADO) no se muestran sueltos: su valor se captura en el
-                      // textarea de observación del ESTADO correspondiente.
-                      const obsItemIds = new Set(
-                        template.items
-                          .map((it) => it.config?.obsItemId)
-                          .filter((v): v is string => Boolean(v)),
-                      );
-                      return (
-                        <>
-                          <div className="space-y-4">
-                            {template.items.map((item) => {
-                              if (obsItemIds.has(item.id)) return null;
-                              return (
-                                <div key={item.id} className="flex flex-col gap-1.5 text-xs">
-                                  <Label className="font-semibold text-foreground flex gap-1">
-                                    {item.label}
-                                    {item.required && <span className="text-rose-500">*</span>}
-                                  </Label>
-
-                                  {item.type === 'BOOLEAN' && (
-                                    <div className="flex gap-4 mt-1">
-                                      <label className="flex items-center gap-1.5 cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name={`ans-${item.id}`}
-                                          required={item.required}
-                                          checked={executionAnswers[item.id] === true}
-                                          onChange={() => setExecutionAnswers({ ...executionAnswers, [item.id]: true })}
-                                          className="size-4 text-primary"
-                                        />
-                                        <span>Sí</span>
-                                      </label>
-                                      <label className="flex items-center gap-1.5 cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name={`ans-${item.id}`}
-                                          required={item.required}
-                                          checked={executionAnswers[item.id] === false}
-                                          onChange={() => setExecutionAnswers({ ...executionAnswers, [item.id]: false })}
-                                          className="size-4 text-rose-500"
-                                        />
-                                        <span className="text-rose-400 font-medium">No</span>
-                                      </label>
-                                    </div>
-                                  )}
-
-                                  {item.type === 'ESTADO' && (() => {
-                                    const chosen = executionAnswers[item.id];
-                                    const isFail = typeof chosen === 'string' && (item.config?.failOptions?.includes(chosen) ?? false);
-                                    const showObs = isFail || (item.config?.requireObs ?? false);
-                                    const obsKey = item.config?.obsItemId ?? `${item.id}__obs`;
-                                    return (
-                                      <>
-                                        <Select
-                                          aria-label={item.label}
-                                          required={item.required}
-                                          value={(chosen as string | undefined) ?? ''}
-                                          onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
-                                          className="h-8 px-2 text-xs w-full max-w-xs"
-                                        >
-                                          <option value="" disabled>Selecciona una opción</option>
-                                          {(item.config?.options ?? []).map((opt) => (
-                                            <option key={opt} value={opt}>{opt}</option>
-                                          ))}
-                                        </Select>
-                                        {showObs && (
-                                          <Textarea
-                                            required={showObs}
-                                            value={(executionAnswers[obsKey] as string | undefined) ?? ''}
-                                            onChange={(e) => setExecutionAnswers({ ...executionAnswers, [obsKey]: e.target.value })}
-                                            placeholder="Describe la observación o falla detectada"
-                                            className="text-xs mt-1"
-                                          />
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-
-                                  {item.type === 'ENTERO' && (
-                                    <Input
-                                      type="number"
-                                      required={item.required}
-                                      min={item.config?.min}
-                                      max={item.config?.max}
-                                      value={(executionAnswers[item.id] as string | number | undefined) ?? ''}
-                                      onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value === '' ? '' : Number(e.target.value) })}
-                                      placeholder="Ingresa un valor numérico"
-                                      className="h-8 text-xs w-full max-w-xs"
-                                    />
-                                  )}
-
-                                  {item.type === 'FECHA' && (
-                                    <Input
-                                      type="date"
-                                      required={item.required}
-                                      value={(executionAnswers[item.id] as string | undefined) ?? ''}
-                                      onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
-                                      className="h-8 text-xs w-full max-w-xs"
-                                    />
-                                  )}
-
-                                  {item.type === 'TEXTO' && (
-                                    <Input
-                                      type="text"
-                                      required={item.required}
-                                      value={(executionAnswers[item.id] as string | undefined) ?? ''}
-                                      onChange={(e) => setExecutionAnswers({ ...executionAnswers, [item.id]: e.target.value })}
-                                      placeholder="Ingresa tus observaciones"
-                                      className="h-8 text-xs w-full"
-                                    />
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          <div className="flex justify-end mt-2">
-                            <Button type="submit" size="sm" loading={submittingChecklist}>
-                              Firmar y Enviar Inspección
-                            </Button>
-                          </div>
-                        </>
-                      );
-                    })()}
+                    <ChecklistFillBody
+                      template={template}
+                      answers={executionAnswers}
+                      setAnswer={setAnswer}
+                      submitting={submittingChecklist}
+                    />
                   </form>
                 )}
 
@@ -2580,6 +2644,34 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1 border-t pt-2 border-border/40">
                               {sub.answers.map((ans, idx) => {
                                 if (redundantObsIds.has(ans.itemId)) return null;
+                                const tItem = template?.items.find((it) => it.id === ans.itemId);
+
+                                // Ítem SVG: el valor es el JSON del mapa de comentarios.
+                                // Se muestra el conteo + cada parte observada (no el JSON crudo).
+                                if (tItem?.type === 'SVG') {
+                                  const svgMap = parseCommentMap(
+                                    typeof ans.value === 'string' ? ans.value : '',
+                                  );
+                                  const entries = Object.values(svgMap);
+                                  return (
+                                    <div key={idx} className="flex flex-col gap-0.5 text-[11px] border-b border-border/20 pb-1 md:col-span-2">
+                                      <div className="flex justify-between gap-2">
+                                        <span className="text-muted-foreground truncate">{ans.label || ans.itemId}:</span>
+                                        <span className="font-semibold text-foreground">
+                                          {entries.length === 0
+                                            ? 'Sin observaciones'
+                                            : `${entries.length} ${entries.length === 1 ? 'observación' : 'observaciones'}`}
+                                        </span>
+                                      </div>
+                                      {entries.map((entry, i) => (
+                                        <span key={i} className="text-muted-foreground italic break-words">
+                                          {entry.part}: {entry.comment}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+
                                 const fail = isAnswerFailure(ans);
                                 const display =
                                   ans.value === true ? 'Sí' :

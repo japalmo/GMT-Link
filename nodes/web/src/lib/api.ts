@@ -2068,6 +2068,39 @@ export async function downloadChecklistPdf(
   return res.blob();
 }
 
+/**
+ * `GET /assets/:id/checklist/template/pdf`: genera en el SERVIDOR un PDF de
+ * PREVIEW del formulario oficial de la plantilla (sin respuestas) y lo devuelve
+ * como `Blob`. Mismo gate de lectura que ver el activo. El llamador arma el
+ * objeto de descarga / lo abre (`URL.createObjectURL`).
+ */
+export async function getChecklistTemplatePdf(id: string): Promise<Blob> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${API_URL}/assets/${encodeURIComponent(id)}/checklist/template/pdf`,
+      { headers },
+    );
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', 0);
+  }
+
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(extractMessage(body, `Error ${res.status} al generar el PDF.`), res.status);
+  }
+  return res.blob();
+}
+
 export function submitTelemetry(
   id: string,
   dto: { latitude: number; longitude: number; speed: number },

@@ -633,7 +633,26 @@ export class AssetsController {
       }
     }
 
-    return this.assets.updateChecklistTemplate(id, userId, dto.name, dto.items);
+    return this.assets.updateChecklistTemplate(id, userId, dto.name, dto.items, dto.sections);
+  }
+
+  /**
+   * Genera y descarga un PDF de PREVIEW de la PLANTILLA (formulario oficial en
+   * blanco), agrupado por sección. Lectura pura: la autorización (`asset:read` con
+   * respaldo estructural, vía canViewAsset) la resuelve el servicio, igual que
+   * getChecklistTemplate. Responde `application/pdf`.
+   */
+  @Get(':id/checklist/template/pdf')
+  async getChecklistTemplatePreviewPdf(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const userId = this.requireUserId(authUser);
+    const pdf = await this.assets.generateChecklistTemplatePreviewPdf(id, userId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="formulario-checklist-${id}.pdf"`);
+    res.end(Buffer.from(pdf));
   }
 
   /**

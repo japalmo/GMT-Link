@@ -174,6 +174,16 @@ export class UpdateChecklistTemplateDto {
   @IsArray()
   @IsNotEmpty({ message: 'Los ítems del checklist son requeridos' })
   items!: Record<string, unknown>[];
+
+  /**
+   * Secciones (páginas) del formulario. Validación laxa acá (arreglo de objetos);
+   * la validación fina (ids únicos, título no vacío) y el cruce con `item.section`
+   * los hace Zod en el service. Opcional: si no viene, se conservan las secciones
+   * ya guardadas.
+   */
+  @IsArray()
+  @IsOptional()
+  sections?: Record<string, unknown>[];
 }
 
 export class ReviewChecklistTemplateDto {

@@ -843,7 +843,8 @@ model ChecklistTemplate {
   assetId         String                @unique
   asset           Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
   name            String
-  items           Json // array de { id, label, type: 'YES_NO' | 'TEXT' | 'NUMBER', required: boolean }
+  items           Json // array de { id, label, type: 'BOOLEAN'|'ESTADO'|'ENTERO'|'FECHA'|'TEXTO'|'SVG', required, config?, section? }
+  sections        Json? // array de { id, title, description? } (páginas del formulario); null/ausente = sin secciones
   status          DocumentStatus        @default(EN_REVISION)
   previousItems   Json? // versión anterior para el ApprovalWorkflow
   reviewedById    String?

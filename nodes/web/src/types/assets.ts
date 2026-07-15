@@ -19,6 +19,8 @@ import type {
   ChecklistItemType,
   ChecklistItemConfig,
   ChecklistTemplateItem,
+  ChecklistSvgPart,
+  ChecklistSection,
   ChecklistAnswer,
   UsageCycleView,
   UsageCycleStatus,
@@ -40,6 +42,8 @@ export type {
   ChecklistItemType,
   ChecklistItemConfig,
   ChecklistTemplateItem,
+  ChecklistSvgPart,
+  ChecklistSection,
   ChecklistAnswer,
   UsageCycleView,
   UsageCycleStatus,
@@ -142,6 +146,11 @@ export interface ChecklistTemplateView {
   assetId: string;
   name: string;
   items: ChecklistTemplateItem[];
+  /**
+   * Secciones (páginas) de la plantilla. Vacío = plantilla de una sola página
+   * (comportamiento clásico). Los ítems referencian su sección por `item.section`.
+   */
+  sections: ChecklistSection[];
   status: DocumentStatus;
   previousItems: ChecklistTemplateItem[] | null;
   reviewedById: string | null;
@@ -177,6 +186,8 @@ export interface UpdateAccessoryInput {
 export interface UpdateChecklistTemplateInput {
   name: string;
   items: ChecklistTemplateItem[];
+  /** Secciones (páginas) de la plantilla. Omitir/[] = plantilla de una sola página. */
+  sections?: ChecklistSection[];
 }
 
 export interface ReviewChecklistTemplateInput {

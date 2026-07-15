@@ -23,6 +23,7 @@ import {
   submitChecklist,
   listChecklistSubmissions,
   downloadChecklistPdf,
+  getChecklistTemplatePdf,
   submitTelemetry,
 } from '@/lib/api';
 import type {
@@ -95,6 +96,8 @@ export interface UseAssetsResult {
   submitChecklistAnswers: (id: string, input: SubmitChecklistInput) => Promise<ChecklistSubmissionView>;
   listSubmissions: (id: string) => Promise<ChecklistSubmissionView[]>;
   getSubmissionPdf: (id: string, submissionId: string) => Promise<Blob>;
+  /** PDF de preview del formulario oficial de la plantilla (sin respuestas). */
+  getTemplatePdf: (id: string) => Promise<Blob>;
   submitTelemetryAnswers: (id: string, input: SubmitTelemetryInput) => Promise<AssetView>;
 }
 
@@ -364,6 +367,11 @@ export function useAssets(): UseAssetsResult {
     return blob;
   }, []);
 
+  const getTemplatePdf = useCallback(async (id: string) => {
+    const blob = await getChecklistTemplatePdf(id);
+    return blob;
+  }, []);
+
   const submitTelemetryAnswers = useCallback(async (id: string, input: SubmitTelemetryInput) => {
     const data = await submitTelemetry(id, input);
     return data;
@@ -399,6 +407,7 @@ export function useAssets(): UseAssetsResult {
     submitChecklistAnswers,
     listSubmissions,
     getSubmissionPdf,
+    getTemplatePdf,
     submitTelemetryAnswers,
   };
 }

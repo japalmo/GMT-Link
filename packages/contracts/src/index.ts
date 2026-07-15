@@ -973,13 +973,23 @@ export interface UpdateAssetInput {
  * web/backend con el union viejo). Legacy al leer: YES_NO→BOOLEAN, NUMBER→ENTERO,
  * TEXT→TEXTO (los históricos NO se migran; se normalizan al parsear).
  */
-export type ChecklistItemType = 'BOOLEAN' | 'ESTADO' | 'ENTERO' | 'FECHA' | 'TEXTO';
+export type ChecklistItemType = 'BOOLEAN' | 'ESTADO' | 'ENTERO' | 'FECHA' | 'TEXTO' | 'SVG';
+
+/** Una parte nombrada (`<g>`) de un diagrama SVG interactivo (p. ej. carrocería). */
+export interface ChecklistSvgPart {
+  /** Id del elemento `<g>` en el SVG. */
+  id: string;
+  /** Nombre legible de la parte (se muestra al pasar el cursor y en el comentario). */
+  name: string;
+}
 
 /**
  * Configuración por ítem. `options`/`failOptions` aplican a ESTADO (opciones
  * configurables por campo, p.ej. Bueno/Regular/Malo con Malo = falla);
  * `isOdometer`/`min`/`max` a ENTERO; `requireObs`/`obsItemId` vinculan un ítem
- * TEXTO companion (observación exigida cuando el estado cae en falla).
+ * TEXTO companion (observación exigida cuando el estado cae en falla). Para SVG,
+ * `svg` es el marcado del diagrama y `parts` las partes nombradas (`<g>`) que el
+ * inspector puede tocar para dejar un comentario.
  */
 export interface ChecklistItemConfig {
   options?: string[];
@@ -989,6 +999,10 @@ export interface ChecklistItemConfig {
   isOdometer?: boolean;
   min?: number;
   max?: number;
+  /** SVG: marcado del diagrama interactivo. */
+  svg?: string;
+  /** SVG: partes nombradas (`<g>`) que se pueden comentar. */
+  parts?: ChecklistSvgPart[];
 }
 
 /** Definición tipada de un ítem de la plantilla de checklist. */
@@ -998,6 +1012,19 @@ export interface ChecklistTemplateItem {
   type: ChecklistItemType;
   required: boolean;
   config?: ChecklistItemConfig;
+  /** Id de la sección (página) a la que pertenece el ítem; ausente = sección general. */
+  section?: string;
+}
+
+/**
+ * Sección (página) de una plantilla de checklist: agrupa ítems bajo un título y una
+ * descripción. El formulario se renderiza como una página por sección, en el orden
+ * del arreglo. Los ítems referencian su sección por `ChecklistTemplateItem.section`.
+ */
+export interface ChecklistSection {
+  id: string;
+  title: string;
+  description?: string;
 }
 
 /** Respuesta a un ítem en una ejecución de checklist. `comment` = observación companion. */

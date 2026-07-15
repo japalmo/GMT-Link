@@ -14,12 +14,16 @@ export type {
   AssetIdentifierType,
   AssetView,
   AssetPublicView,
+  ChecklistItemType,
+  ChecklistItemConfig,
+  ChecklistSvgPart,
   ChecklistTemplateItem,
+  ChecklistSection,
   ChecklistAnswer,
   Paginated,
 } from '@gmt-platform/contracts';
 
-import type { ChecklistAnswer, ChecklistTemplateItem } from '@gmt-platform/contracts';
+import type { ChecklistAnswer, ChecklistSection, ChecklistTemplateItem } from '@gmt-platform/contracts';
 
 export interface AssetDocumentView {
   id: string;
@@ -62,6 +66,8 @@ export interface ChecklistTemplateView {
   assetId: string;
   name: string;
   items: ChecklistTemplateItem[];
+  /** Secciones (páginas) del formulario; `[]` si la plantilla no define ninguna. */
+  sections: ChecklistSection[];
   status: DocumentStatus;
   previousItems: ChecklistTemplateItem[] | null;
   reviewedById: string | null;

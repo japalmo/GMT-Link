@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import type { ChecklistItemConfig, ChecklistItemType, ChecklistTemplateItem } from '@gmt-platform/contracts';
+import type {
+  ChecklistItemConfig,
+  ChecklistItemType,
+  ChecklistSection,
+  ChecklistTemplateItem,
+} from '@gmt-platform/contracts';
 
 /**
  * Esquemas Zod del checklist tipado (Tanda 5). Fuente única de validación: el
@@ -15,12 +20,21 @@ import type { ChecklistItemConfig, ChecklistItemType, ChecklistTemplateItem } fr
 const idSchema = z.string().trim().min(1, 'El id del ítem es requerido');
 const labelSchema = z.string().trim().min(1, 'La etiqueta del ítem es requerida');
 
+/**
+ * Id de la sección (página) del formulario a la que pertenece el ítem. Opcional
+ * en todos los tipos: un ítem sin `section` cae en la sección general. El cruce
+ * `item.section` ↔ una sección existente se valida en el service (donde se
+ * conocen a la vez los ítems y el arreglo de secciones).
+ */
+const sectionRefSchema = z.string().trim().min(1).optional();
+
 /** BOOLEAN: pregunta Sí/No. `config` opcional (sin campos obligatorios). */
 const booleanItemSchema = z.object({
   id: idSchema,
   label: labelSchema,
   type: z.literal('BOOLEAN'),
   required: z.boolean(),
+  section: sectionRefSchema,
   config: z
     .object({
       requireObs: z.boolean().optional(),
@@ -35,6 +49,7 @@ const enteroItemSchema = z.object({
   label: labelSchema,
   type: z.literal('ENTERO'),
   required: z.boolean(),
+  section: sectionRefSchema,
   config: z
     .object({
       isOdometer: z.boolean().optional(),
@@ -50,6 +65,7 @@ const fechaItemSchema = z.object({
   label: labelSchema,
   type: z.literal('FECHA'),
   required: z.boolean(),
+  section: sectionRefSchema,
   config: z.object({}).optional(),
 });
 
@@ -59,6 +75,7 @@ const textoItemSchema = z.object({
   label: labelSchema,
   type: z.literal('TEXTO'),
   required: z.boolean(),
+  section: sectionRefSchema,
   config: z.object({}).optional(),
 });
 
@@ -74,6 +91,7 @@ const estadoItemSchema = z.object({
   label: labelSchema,
   type: z.literal('ESTADO'),
   required: z.boolean(),
+  section: sectionRefSchema,
   config: z.object({
     options: z
       .array(z.string().trim().min(1, 'Las opciones no pueden estar vacías'))
@@ -88,6 +106,36 @@ const estadoItemSchema = z.object({
   }),
 });
 
+/**
+ * SVG: diagrama interactivo (p. ej. carrocería). `config.svg` es el marcado del
+ * diagrama (string no vacío) y `config.parts` las partes nombradas (`<g>`) que el
+ * inspector puede tocar para dejar un comentario; cada parte trae `id` y `name`
+ * no vacíos y los `id` deben ser únicos. El VALOR de respuesta es un string (JSON
+ * serializado del mapa `{ partId: { comment } }`), así que nunca es falla (los
+ * comentarios de carrocería son observaciones, no fallas — ver `isFailure`).
+ */
+const svgItemSchema = z.object({
+  id: idSchema,
+  label: labelSchema,
+  type: z.literal('SVG'),
+  required: z.boolean(),
+  section: sectionRefSchema,
+  config: z.object({
+    svg: z.string().trim().min(1, 'El marcado del diagrama SVG es requerido'),
+    parts: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1, 'El id de la parte del diagrama es requerido'),
+          name: z.string().trim().min(1, 'El nombre de la parte del diagrama es requerido'),
+        }),
+      )
+      .refine(
+        (parts) => new Set(parts.map((p) => p.id)).size === parts.length,
+        'Los ids de las partes del diagrama deben ser únicos',
+      ),
+  }),
+});
+
 /** Union discriminado por `type` de un ítem de plantilla ya normalizado. */
 export const templateItemSchema = z.discriminatedUnion('type', [
   booleanItemSchema,
@@ -95,6 +143,7 @@ export const templateItemSchema = z.discriminatedUnion('type', [
   fechaItemSchema,
   textoItemSchema,
   estadoItemSchema,
+  svgItemSchema,
 ]);
 
 /** Opciones cuyo texto normalizado es `'malo'` (default de `failOptions`). */
@@ -189,6 +238,39 @@ export const answerSchema = z.object({
 /** Conjunto de respuestas de una ejecución de checklist. */
 export const submitAnswersSchema = z.array(answerSchema);
 
+/**
+ * Sección (página) de una plantilla: `{ id, title, description? }`. `id` y `title`
+ * no vacíos. El arreglo completo exige `id` únicos. Las secciones viven en su
+ * propia columna Json (`ChecklistTemplate.sections`), separadas de los ítems; el
+ * ítem apunta a su sección por `ChecklistTemplateItem.section`.
+ */
+const sectionSchema = z.object({
+  id: z.string().trim().min(1, 'El id de la sección es requerido'),
+  title: z.string().trim().min(1, 'El título de la sección es requerido'),
+  description: z.string().optional(),
+});
+
+/** Arreglo de secciones con ids únicos. */
+export const sectionsSchema = z.array(sectionSchema).superRefine((sections, ctx) => {
+  const ids = new Set<string>();
+  for (const section of sections) {
+    if (ids.has(section.id)) {
+      ctx.addIssue({ code: 'custom', message: `El id de sección "${section.id}" está duplicado.` });
+    }
+    ids.add(section.id);
+  }
+});
+
+/**
+ * Valida y normaliza el arreglo de secciones. `null`/`undefined` (plantilla sin
+ * secciones) devuelve `[]`. Lanza `ZodError` si la estructura es inválida; el
+ * servicio traduce ese error a `BadRequestException`.
+ */
+export function parseSections(raw: unknown): ChecklistSection[] {
+  if (raw === null || raw === undefined) return [];
+  return sectionsSchema.parse(raw);
+}
+
 /** Mapa de tipos legacy → union nuevo. Los tipos nuevos pasan sin cambios. */
 const LEGACY_TYPE_MAP: Record<string, ChecklistItemType> = {
   YES_NO: 'BOOLEAN',
@@ -230,6 +312,7 @@ export function parseTemplateItems(raw: unknown): ChecklistTemplateItem[] {
  * - BOOLEAN: `false` o `'no'`.
  * - ESTADO: el valor coincide (case-insensitive) con alguna `failOptions`
  *   (default `['Malo']`).
+ * - SVG: NUNCA es falla (los comentarios de carrocería son observaciones).
  * - Sin ítem definido (plantilla vacía / respuesta legacy): un booleano `false`
  *   sigue contando como falla.
  * - Resto de tipos: nunca es falla.
@@ -238,6 +321,11 @@ export function isFailure(
   item: ChecklistTemplateItem | undefined,
   value: string | number | boolean | null,
 ): boolean {
+  if (item?.type === 'SVG') {
+    // Diagrama de carrocería: el valor es un mapa de comentarios (observaciones),
+    // nunca una falla que mande el activo a mantenimiento.
+    return false;
+  }
   if (item?.type === 'BOOLEAN') {
     return value === false || value === 'no';
   }

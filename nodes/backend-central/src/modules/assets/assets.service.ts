@@ -9,7 +9,8 @@ import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
 import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
-import { composeChecklistPdf } from './checklist-pdf.util';
+import { composeChecklistPdf, composeTemplatePreviewPdf } from './checklist-pdf.util';
+import type { TemplatePreviewSection } from './checklist-pdf.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import {
   AssetDocumentView,
@@ -19,13 +20,16 @@ import {
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
+  ChecklistItemType,
   ChecklistTemplateItem,
+  ChecklistSection,
   ChecklistAnswer,
   Paginated,
 } from './assets.types';
 import {
   DEFAULT_VEHICLE_CHECKLIST,
   isFailure,
+  parseSections,
   parseTemplateItems,
   submitAnswersSchema,
 } from './checklist.schema';
@@ -1713,6 +1717,8 @@ export class AssetsService {
       // una plantilla histórica (YES_NO/NUMBER/TEXT) llegue al front con tipos
       // nuevos y la ejecución dibuje los inputs correctos. Es idempotente.
       items: this.readTemplateItems(row.items),
+      // Secciones (páginas) del formulario; `[]` si la plantilla no define ninguna.
+      sections: this.readSections(row.sections),
       status: row.status,
       previousItems: row.previousItems ? this.readTemplateItems(row.previousItems) : null,
       reviewedById: row.reviewedById,
@@ -1748,6 +1754,40 @@ export class AssetsService {
         throw new BadRequestException(`Checklist inválido: ${message}`);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Valida y normaliza el arreglo de secciones con Zod (ids únicos, título no
+   * vacío). Traduce `ZodError` a `BadRequestException` con el primer mensaje claro.
+   */
+  private validateSections(sections: Record<string, unknown>[]): ChecklistSection[] {
+    try {
+      return parseSections(sections);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const message = error.issues[0]?.message ?? 'Las secciones del checklist son inválidas.';
+        throw new BadRequestException(`Checklist inválido: ${message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Lee y valida (tolerante) las secciones ya persistidas de una plantilla. Si el
+   * Json es inválido, registra el aviso y devuelve `[]` en vez de romper la lectura
+   * (paralelo a `readTemplateItems`).
+   */
+  private readSections(raw: Prisma.JsonValue | null): ChecklistSection[] {
+    try {
+      return parseSections(raw);
+    } catch (error) {
+      this.logger.warn(
+        `Secciones de checklist con shape inválido; se ignoran. ${
+          error instanceof ZodError ? error.issues[0]?.message ?? '' : ''
+        }`,
+      );
+      return [];
     }
   }
 
@@ -1821,6 +1861,7 @@ export class AssetsService {
     userId: string,
     name: string,
     items: Record<string, unknown>[],
+    sections?: Record<string, unknown>[],
   ): Promise<ChecklistTemplateView> {
     const template = await this.prisma.checklistTemplate.findUnique({ where: { assetId } });
     if (!template) {
@@ -1831,12 +1872,27 @@ export class AssetsService {
     // guardan ya normalizados; así el shape nuevo se propaga sin migrar la BD.
     const normalizedItems = this.validateTemplateItems(items);
 
+    // Secciones: si vienen, se validan; si no, se conservan las ya guardadas (así
+    // un cliente que no envía secciones no las borra). El cruce item.section ↔
+    // sección existente se valida contra las secciones efectivas.
+    const normalizedSections =
+      sections !== undefined ? this.validateSections(sections) : this.readSections(template.sections);
+    const sectionIds = new Set(normalizedSections.map((section) => section.id));
+    for (const item of normalizedItems) {
+      if (item.section && !sectionIds.has(item.section)) {
+        throw new BadRequestException(
+          `Checklist inválido: el ítem "${item.label}" hace referencia a una sección inexistente.`,
+        );
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.checklistTemplate.update({
         where: { assetId },
         data: {
           name,
           items: normalizedItems as unknown as Prisma.InputJsonValue,
+          sections: normalizedSections as unknown as Prisma.InputJsonValue,
           previousItems: template.items as Prisma.InputJsonValue,
           status: DocumentStatus.EN_REVISION,
           reviewedById: null,
@@ -2185,6 +2241,108 @@ export class AssetsService {
       submittedBy: submittedByName,
       submittedAt: submission.createdAt.toISOString(),
       rows,
+    });
+  }
+
+  /** Etiqueta legible por tipo de ítem para el PDF de preview del formulario. */
+  private static readonly CHECKLIST_TYPE_LABELS: Record<ChecklistItemType, string> = {
+    BOOLEAN: 'Sí / No',
+    ESTADO: 'Estado',
+    ENTERO: 'Número entero',
+    FECHA: 'Fecha',
+    TEXTO: 'Texto',
+    SVG: 'Diagrama',
+  };
+
+  /**
+   * Detalle por ítem para el preview del formulario (línea auxiliar bajo la
+   * etiqueta): ESTADO lista sus opciones; SVG describe el diagrama y sus partes por
+   * nombre; ENTERO anota odómetro/mín/máx. BOOLEAN/FECHA/TEXTO devuelven `undefined`
+   * (el PDF pinta un espacio en blanco para la respuesta).
+   */
+  private checklistItemPreviewDetail(item: ChecklistTemplateItem): string | undefined {
+    if (item.type === 'ESTADO') {
+      const options = item.config?.options ?? [];
+      return options.length > 0 ? `Opciones: ${options.join(', ')}` : undefined;
+    }
+    if (item.type === 'SVG') {
+      const parts = item.config?.parts ?? [];
+      if (parts.length === 0) {
+        return 'Diagrama sin partes definidas';
+      }
+      return `Diagrama con ${parts.length} parte(s): ${parts.map((part) => part.name).join(', ')}`;
+    }
+    if (item.type === 'ENTERO') {
+      const bits: string[] = [];
+      if (item.config?.isOdometer === true) bits.push('odómetro');
+      if (typeof item.config?.min === 'number') bits.push(`mín ${item.config.min}`);
+      if (typeof item.config?.max === 'number') bits.push(`máx ${item.config.max}`);
+      return bits.length > 0 ? bits.join(' · ') : undefined;
+    }
+    return undefined;
+  }
+
+  /**
+   * Agrupa los ítems de la plantilla por sección para el PDF de preview. Cada
+   * sección declarada se renderiza en el orden del arreglo `sections`; los ítems sin
+   * sección (o que apuntan a una sección inexistente) caen en una sección "General"
+   * que se lista primero. Las secciones declaradas sin ítems se conservan (muestran
+   * la estructura del formulario).
+   */
+  private buildTemplatePreviewSections(
+    items: ChecklistTemplateItem[],
+    sections: ChecklistSection[],
+  ): TemplatePreviewSection[] {
+    const toPreviewItem = (item: ChecklistTemplateItem) => ({
+      label: item.label,
+      typeLabel: AssetsService.CHECKLIST_TYPE_LABELS[item.type] ?? item.type,
+      detail: this.checklistItemPreviewDetail(item),
+      required: item.required,
+    });
+
+    const sectionIds = new Set(sections.map((section) => section.id));
+    const result: TemplatePreviewSection[] = [];
+
+    // "General": ítems sin sección o con una sección que ya no existe.
+    const generalItems = items.filter((item) => !item.section || !sectionIds.has(item.section));
+    if (generalItems.length > 0) {
+      result.push({ title: 'General', items: generalItems.map(toPreviewItem) });
+    }
+
+    for (const section of sections) {
+      const sectionItems = items.filter((item) => item.section === section.id);
+      result.push({
+        title: section.title,
+        description: section.description,
+        items: sectionItems.map(toPreviewItem),
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Genera un PDF de PREVIEW de la PLANTILLA (formulario oficial en blanco): cabecera
+   * con el activo + nombre de la plantilla y, por sección (título + descripción), la
+   * lista de ítems con su tipo/opciones. Reusa `getChecklistTemplate` para la carga y
+   * la autorización (canViewAsset), así que respeta el mismo gate de lectura. Los ítems
+   * SVG solo listan sus partes por nombre (no se rasteriza el diagrama). Devuelve los
+   * bytes (application/pdf).
+   */
+  async generateChecklistTemplatePreviewPdf(assetId: string, userId: string): Promise<Uint8Array> {
+    // getChecklistTemplate valida acceso (canViewAsset), crea la plantilla por defecto
+    // si no existe y devuelve items + sections ya normalizados.
+    const template = await this.getChecklistTemplate(assetId, userId);
+    const asset = await this.prisma.asset.findUniqueOrThrow({
+      where: { id: assetId },
+      select: { code: true, name: true },
+    });
+
+    return composeTemplatePreviewPdf({
+      assetCode: asset.code,
+      assetName: asset.name,
+      templateName: template.name,
+      sections: this.buildTemplatePreviewSections(template.items, template.sections),
     });
   }
 
