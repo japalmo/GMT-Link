@@ -30,10 +30,7 @@ import type { ReimbursementSummary } from './reimbursements-summary.util';
 /** Carpeta lógica del storage para boletas de reembolso (§6-3.1). */
 const RECEIPTS_FOLDER = 'reimbursements';
 
-/** Cuota diaria de IA por usuario (mismo mecanismo/límite que tools y providers). */
-const DAILY_AI_QUOTA = 3;
-
-/** Acción registrada en `geminiUsage` por cada OCR de boleta (comparte cuota con el resto de IA). */
+/** Acción registrada en `geminiUsage` por cada OCR de boleta (solo auditoría de uso). */
 const RECEIPT_OCR_ACTION = 'RECEIPT_OCR';
 
 /** Tipo de notificación que recibe el solicitante en cada transición (§6-2.2). */
@@ -352,25 +349,11 @@ export class ReimbursementsService {
 
   /**
    * OCR de boleta (spec §5.5): imagen (data URL base64) → NVIDIA visión → campos
-   * sugeridos. Protegido por una cuota diaria por usuario (MISMO mecanismo que
-   * `tools.detectShoreline` y `providers.cleanProviderData`: tabla `geminiUsage`,
-   * conteo de filas del día, límite `DAILY_AI_QUOTA`) para acotar el costo del
-   * modelo de visión. Si no hay clave NVIDIA, devuelve objeto vacío SIN consumir
-   * cuota (no hay llamada paga; el usuario llena a mano).
+   * sugeridos. Sin límite diario: los modelos NVIDIA NIM son gratuitos e
+   * ilimitados; se conserva el registro en `geminiUsage` solo como auditoría de
+   * uso. Si no hay clave NVIDIA, devuelve objeto vacío (el usuario llena a mano).
    */
   async scanReceipt(userId: string, imageDataUrl: string): Promise<ReceiptScanResult> {
-    // 1. Cuota diaria por usuario (comparte contador con el resto de features de IA).
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const usageCount = await this.prisma.geminiUsage.count({
-      where: { userId, createdAt: { gte: today } },
-    });
-    if (usageCount >= DAILY_AI_QUOTA) {
-      throw new BadRequestException(
-        `Alcanzaste el límite diario de lectura automática de boletas (${DAILY_AI_QUOTA}/día). Completa los datos a mano.`,
-      );
-    }
-
     const apiKey =
       this.config.get<string>('NVIDIA_API_KEY_VISION') ?? this.config.get<string>('NVIDIA_API_KEY');
     if (!apiKey) {
@@ -382,7 +365,7 @@ export class ReimbursementsService {
     const model =
       this.config.get<string>('NVIDIA_VISION_MODEL') ?? 'meta/llama-3.2-90b-vision-instruct';
 
-    // 2. Registrar el uso ANTES de la llamada paga (cuenta como una consulta de IA).
+    // Registrar el uso (auditoría de consumo NVIDIA, sin límite).
     await this.prisma.geminiUsage.create({ data: { userId, action: RECEIPT_OCR_ACTION } });
 
     try {

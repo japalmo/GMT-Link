@@ -47,7 +47,7 @@ function shell(innerHtml: string): string {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
           <tr>
             <td align="center" style="background-color:#ffffff;padding:26px 32px 20px;border-bottom:1px solid #eef1f6;">
-              <img src="${escapeHtml(LOGO_URL)}" alt="GMT Link" height="34" style="height:34px;width:auto;display:block;border:0;outline:none;text-decoration:none;" />
+              <img src="${escapeHtml(LOGO_URL)}" alt="GMT Link" height="56" style="height:56px;width:auto;display:block;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
           <tr>

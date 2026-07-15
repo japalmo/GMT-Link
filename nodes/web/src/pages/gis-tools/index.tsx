@@ -29,7 +29,6 @@ import {
   convertCoordinate,
   convertCoordinatesBulk,
   detectShorelineWithIA,
-  getGeminiQuota,
   type ConvertPointInput,
   type ConvertPointResult,
 } from '@/lib/api';
@@ -38,9 +37,6 @@ export default function GisToolsPage(): ReactNode {
   // Navigation Tabs
   const [activeSubTab, setActiveSubTab] = useState<'convert' | 'shoreline'>('convert');
   const idBase = useId();
-
-  // Quota state
-  const [quota, setQuota] = useState<{ used: number; remaining: number } | null>(null);
 
   // Single Point Conversion State
   const [direction, setDirection] = useState<'UTM_TO_LL' | 'LL_TO_UTM'>('LL_TO_UTM');
@@ -70,20 +66,6 @@ export default function GisToolsPage(): ReactNode {
   // References
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Fetch Gemini daily quota
-  const fetchQuota = async () => {
-    try {
-      const q = await getGeminiQuota();
-      setQuota(q);
-    } catch {
-      // Quiet fail or placeholder
-    }
-  };
-
-  useEffect(() => {
-    void fetchQuota();
-  }, []);
 
   // Drawing points/polygons on canvas plotter
   useEffect(() => {
@@ -415,7 +397,7 @@ export default function GisToolsPage(): ReactNode {
     }
   };
 
-  // Detect Shoreline with Gemini REST call
+  // Detect Shoreline via IA (NVIDIA NIM en el backend)
   const handleDetectShoreline = async () => {
     if (!aerialFile) return;
     setShoreLoading(true);
@@ -432,7 +414,6 @@ export default function GisToolsPage(): ReactNode {
 
       const res = await detectShorelineWithIA({ fileBase64: fileDataUrl });
       setDetectedPolygon(res.polygon);
-      await fetchQuota();
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'Error al analizar la foto aérea');
     } finally {
@@ -468,7 +449,7 @@ export default function GisToolsPage(): ReactNode {
 
   const tabItems: TabItem<'convert' | 'shoreline'>[] = [
     { value: 'convert', label: 'Transformación de Coordenadas', icon: Globe },
-    { value: 'shoreline', label: 'Detección de Orillas (Gemini IA)', icon: Sparkles },
+    { value: 'shoreline', label: 'Detección de Orillas (IA)', icon: Sparkles },
   ];
 
   return (
@@ -477,19 +458,6 @@ export default function GisToolsPage(): ReactNode {
       <PageHeader
         title="Herramientas Técnicas GIS"
         description="Módulo de transformación de coordenadas geográficas e inteligencia artificial para análisis topográfico."
-        actions={
-          quota && (
-            <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-2 text-xs">
-              <Sparkles className="size-4 text-indigo-500 animate-pulse" />
-              <div>
-                <span className="text-muted-foreground font-semibold">Consultas IA diarias: </span>
-                <Badge variant="outline" className="font-bold border-indigo-500/35 text-indigo-500 bg-indigo-500/5 ml-1">
-                  {quota.remaining} restantes
-                </Badge>
-              </div>
-            </div>
-          )
-        }
       />
 
       {globalError && (
@@ -871,7 +839,7 @@ export default function GisToolsPage(): ReactNode {
                   )}
 
                   <Button
-                    disabled={!aerialFile || shoreLoading || (quota !== null && quota.remaining === 0)}
+                    disabled={!aerialFile || shoreLoading}
                     onClick={handleDetectShoreline}
                     className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2 mt-2 py-2"
                   >
@@ -882,7 +850,7 @@ export default function GisToolsPage(): ReactNode {
                     ) : (
                       <>
                         <Sparkles className="size-4 text-white animate-pulse" />
-                        Detectar Orilla con Gemini IA
+                        Detectar Orilla con IA
                       </>
                     )}
                   </Button>
@@ -899,9 +867,9 @@ export default function GisToolsPage(): ReactNode {
                 </CardHeader>
                 <CardContent className="text-[11px] text-muted-foreground/90 flex flex-col gap-2">
                   <p>1. Carga una ortofoto de alta resolución donde la masa de agua sea claramente distinguible.</p>
-                  <p>2. Presiona el botón de detección con IA. Gemini procesará la imagen e identificará los puntos limítrofes.</p>
+                  <p>2. Presiona el botón de detección con IA. La IA procesará la imagen e identificará los puntos limítrofes.</p>
                   <p>3. El polígono generado se proyectará como un overlay animado sobre tu ortofoto.</p>
-                  <p className="font-semibold text-amber-500/95">Nota: Para evitar abusos de la API, cada operador cuenta con una cuota estricta de 3 solicitudes diarias.</p>
+                  <p>Nota: El uso de esta herramienta queda registrado para fines de auditoría.</p>
                 </CardContent>
               </Card>
             </div>
@@ -932,7 +900,7 @@ export default function GisToolsPage(): ReactNode {
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white">
                           <Loader2 className="size-10 animate-spin text-indigo-400" />
                           <span className="text-sm font-semibold mt-4 tracking-wide">Analizando imagen y delimitando orilla...</span>
-                          <span className="text-xs text-muted-foreground mt-1">Llamando al modelo multimodal Gemini-1.5-Flash</span>
+                          <span className="text-xs text-muted-foreground mt-1">Llamando al modelo multimodal de IA</span>
                         </div>
                       )}
                     </div>

@@ -7,7 +7,7 @@ import { SidebarProvider, useSidebar } from '@/components/layout/use-sidebar';
 import { SidebarContent } from '@/components/layout/sidebar';
 import { BetaBanner } from '@/components/layout/beta-banner';
 import { NotificationBell } from '@/components/notifications/notification-bell';
-import logoMid from '@/assets/branding/logo-mid.png';
+import { BrandLogo } from '@/components/branding/brand-logo';
 
 /** Topbar: solo visible en móvil; ofrece el botón hamburguesa del drawer. */
 function Topbar() {
@@ -23,7 +23,8 @@ function Topbar() {
       >
         <Menu aria-hidden />
       </Button>
-      <img src={logoMid} alt="GMT Link" className="h-6 w-auto object-contain" />
+      {/* En 24px de alto el logotipo vertical no se lee: va solo el isotipo. */}
+      <BrandLogo variant="iso" className="h-7" />
       <div className="ml-auto">
         <NotificationBell />
       </div>

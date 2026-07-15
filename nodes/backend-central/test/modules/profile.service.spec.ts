@@ -333,6 +333,57 @@ describe('ProfileService.requestEmailChange', () => {
   });
 });
 
+describe('ProfileService.requestEmailVerify', () => {
+  it('fija el pendiente con el correo YA cargado y envía el OTP SIN pedir contraseña', async () => {
+    // Usuario sin contraseña definida: el flujo de verificación no la exige.
+    const { service, update, otpGenerate, emailSend } = buildService({
+      findUser: baseUser({ emailInstitucionalVerified: null, passwordHash: null }),
+    });
+
+    const res = await service.requestEmailVerify('me-1', 'INSTITUCIONAL');
+
+    expect(res).toEqual({ ok: true });
+    const arg = update.mock.calls[0]?.[0] as UpdateArgs;
+    expect(arg.where).toEqual({ id: 'me-1' });
+    expect(arg.data).toEqual({ pendingEmail: 'ana@gmt.cl', pendingEmailKind: 'INSTITUCIONAL' });
+
+    // El OTP viaja al correo PROPIO ya registrado, nunca en la respuesta.
+    expect(otpGenerate).toHaveBeenCalledWith('ana@gmt.cl', 'CHANGE_EMAIL');
+    const sent = emailSend.mock.calls[0]?.[0] as { to: string; body: string };
+    expect(sent.to).toBe('ana@gmt.cl');
+    expect(JSON.stringify(res)).not.toContain('123456');
+  });
+
+  it('400 si no hay correo cargado del tipo pedido: no persiste ni genera OTP', async () => {
+    const { service, update, otpGenerate } = buildService({
+      findUser: baseUser({ emailPersonal: null }),
+    });
+
+    await expect(service.requestEmailVerify('me-1', 'PERSONAL')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(otpGenerate).not.toHaveBeenCalled();
+  });
+
+  it('400 si el correo ya está verificado: no persiste ni genera OTP', async () => {
+    const { service, update, otpGenerate } = buildService({ findUser: baseUser() });
+
+    await expect(service.requestEmailVerify('me-1', 'INSTITUCIONAL')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(otpGenerate).not.toHaveBeenCalled();
+  });
+
+  it('404 si el usuario de la sesión ya no existe', async () => {
+    const { service } = buildService({ findUser: null });
+    await expect(service.requestEmailVerify('ghost', 'INSTITUCIONAL')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
 describe('ProfileService.confirmEmailChange', () => {
   const dto: ChangeEmailConfirmDto = { code: '123456' };
 

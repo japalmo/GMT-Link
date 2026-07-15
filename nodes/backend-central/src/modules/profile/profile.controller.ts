@@ -16,6 +16,7 @@ const CREDENTIAL_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 import { CurrentUser } from '../../auth/current-user.decorator';
 import { ChangeEmailConfirmDto } from './dto/change-email-confirm.dto';
 import { ChangeEmailRequestDto } from './dto/change-email-request.dto';
+import { VerifyEmailRequestDto } from './dto/verify-email-request.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileService } from './profile.service';
@@ -62,6 +63,21 @@ export class ProfileController {
     @Body() dto: ChangeEmailRequestDto,
   ): Promise<OkResponse> {
     return this.profileService.requestEmailChange(this.requireUserId(authUser), dto);
+  }
+
+  /**
+   * Solicita el OTP para VERIFICAR el correo YA cargado (institucional o
+   * personal), sin cambiarlo y SIN contraseña: el código viaja al correo ya
+   * registrado, y probar su posesión es la verificación misma. Se confirma con
+   * el mismo `email/change-confirm`. 401 si no hay sesión.
+   */
+  @Post('email/verify-request')
+  @Throttle(CREDENTIAL_THROTTLE)
+  requestEmailVerify(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Body() dto: VerifyEmailRequestDto,
+  ): Promise<OkResponse> {
+    return this.profileService.requestEmailVerify(this.requireUserId(authUser), dto.kind);
   }
 
   /**

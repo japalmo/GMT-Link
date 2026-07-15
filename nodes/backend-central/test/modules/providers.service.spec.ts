@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
 import { ProvidersService } from '../../src/modules/providers/providers.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { ConfigService } from '@nestjs/config';
@@ -89,10 +88,9 @@ describe('ProvidersService', () => {
     };
 
     configMock = {
-      get: vi.fn((key: string) => {
-        if (key === 'GEMINI_API_KEY') return ''; // fallback to dev mockup mode
-        return undefined;
-      }),
+      // Sin clave NVIDIA (NVIDIA_API_KEY) => el service usa el fallback de
+      // desarrollo (proveedor demo) sin llamada externa.
+      get: vi.fn(() => undefined),
     };
 
     gamificationMock = {
@@ -126,17 +124,11 @@ describe('ProvidersService', () => {
     });
   });
 
-  describe('Gemini Quota limit', () => {
-    it('falla si el usuario ya realizó 3 consultas de IA hoy', async () => {
-      prismaMock.geminiUsage.count.mockResolvedValueOnce(3);
-
-      await expect(service.cleanProviderData('u-1', 'messy text')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('ejecuta con éxito (fallback dev) si no supera la cuota', async () => {
-      prismaMock.geminiUsage.count.mockResolvedValueOnce(1);
+  describe('Limpieza IA sin límite de consultas', () => {
+    it('ejecuta aunque el usuario ya tenga muchos usos en el día (sin cuota)', async () => {
+      // Antes existía un límite de 3/día; ahora los modelos NVIDIA son gratuitos
+      // e ilimitados: un conteo alto no bloquea la ejecución.
+      prismaMock.geminiUsage.count.mockResolvedValue(50);
 
       const res = await service.cleanProviderData('u-1', 'messy text');
 

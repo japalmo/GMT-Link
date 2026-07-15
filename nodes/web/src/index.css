@@ -4,6 +4,16 @@
 @import '@fontsource-variable/inter';
 
 /*
+ * Marca según tema (BrandLogo): se montan las dos variantes del logo y estas
+ * clases muestran la que corresponde al tema activo (`.dark` en <html>).
+ * La variante dark trae halo blanco para fondos oscuros; la light, contorno
+ * navy para fondos claros.
+ */
+.brand-dark-only { display: none; }
+.dark .brand-dark-only { display: inline; }
+.dark .brand-light-only { display: none; }
+
+/*
  * Design system GMT Link — Etapa 0.6.
  * La paleta DEFINITIVA está pendiente (§9): estos tokens son NEUTROS y
  * re-tematizables. Todo color vive en una CSS variable bajo :root y se

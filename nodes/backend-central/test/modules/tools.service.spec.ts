@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
 import { ToolsService } from '../../src/modules/tools/tools.service';
 import { ConvertDirection } from '../../src/modules/tools/dto/tools.dto';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -22,10 +21,9 @@ describe('ToolsService - Coordinates & GIS', () => {
     };
 
     configMock = {
-      get: vi.fn((key: string) => {
-        if (key === 'GEMINI_API_KEY') return ''; // dev mode fallback
-        return undefined;
-      }),
+      // Sin clave NVIDIA (NVIDIA_API_KEY / NVIDIA_API_KEY_VISION) => el service
+      // usa el fallback de desarrollo (polígono placeholder) sin llamada externa.
+      get: vi.fn(() => undefined),
     };
 
     service = new ToolsService(
@@ -71,22 +69,25 @@ describe('ToolsService - Coordinates & GIS', () => {
     });
   });
 
-  describe('Shoreline detection quota', () => {
-    it('bloquea la ejecución si la cuota de IA está completa', async () => {
-      prismaMock.geminiUsage.count.mockResolvedValueOnce(3);
-
-      await expect(service.detectShoreline('u-1', 'base64image')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('ejecuta con éxito fallback si queda cuota disponible', async () => {
-      prismaMock.geminiUsage.count.mockResolvedValueOnce(2);
+  describe('Shoreline detection sin límite de IA', () => {
+    it('ejecuta aunque el usuario ya tenga muchos usos en el día (sin cuota)', async () => {
+      // Antes existía un límite de 3/día; ahora los modelos NVIDIA son gratuitos
+      // e ilimitados: un conteo alto no bloquea la ejecución.
+      prismaMock.geminiUsage.count.mockResolvedValue(50);
 
       const res = await service.detectShoreline('u-1', 'base64image');
 
       expect(res.polygon.length).toBeGreaterThan(0);
       expect(prismaMock.geminiUsage.create).toHaveBeenCalled();
+    });
+
+    it('registra el uso como auditoría en cada ejecución', async () => {
+      const res = await service.detectShoreline('u-1', 'base64image');
+
+      expect(res.polygon.length).toBeGreaterThan(0);
+      expect(prismaMock.geminiUsage.create).toHaveBeenCalledWith({
+        data: { userId: 'u-1', action: 'SHORE_DETECTION' },
+      });
     });
   });
 });

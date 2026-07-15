@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { BrandLogo } from '@/components/branding/brand-logo';
 import type { AssetPublicView, AssetStatus } from '@/types/assets';
 import { ASSET_TYPE_LABELS } from '@/types/assets';
 
@@ -57,14 +58,9 @@ export default function PublicAssetPage(): ReactNode {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       {/* Container */}
       <div className="w-full max-w-md">
-        {/* Brand Header */}
-        <div className="flex items-center justify-center gap-2 mb-6 text-center">
-          <div className="size-8 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-lg shadow-sm">
-            G
-          </div>
-          <span className="text-xl font-bold tracking-wider text-foreground">
-            GMT LINK
-          </span>
+        {/* Brand Header: logotipo real (consciente del tema; anónimos ven claro). */}
+        <div className="mb-6 flex justify-center">
+          <BrandLogo variant="logo" className="h-20" />
         </div>
 
         {loading ? (

@@ -152,23 +152,8 @@ export class ProvidersService {
     address?: string;
     products: Array<{ name: string; description?: string; price?: number; unit?: string }>;
   }> {
-    // 1. Validate Gemini quota limit (3 queries per day)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const usageCount = await this.prisma.geminiUsage.count({
-      where: {
-        userId,
-        createdAt: { gte: today },
-      },
-    });
-
-    if (usageCount >= 3) {
-      throw new BadRequestException(
-        'Has alcanzado tu límite de 3 consultas de IA para el día de hoy.',
-      );
-    }
-
+    // Sin límite diario: los modelos NVIDIA NIM son gratuitos e ilimitados. Se
+    // conserva el registro de uso (geminiUsage) solo como auditoría.
     const apiKey = this.configService.get<string>('NVIDIA_API_KEY');
     if (!apiKey) {
       // In development, if no API key is present, fallback to a mocked clean response so it doesn't block evaluation.

@@ -51,6 +51,7 @@ export default function PerfilPage(): ReactNode {
     changePassword,
     requestPasswordChange,
     requestEmailChange,
+    requestEmailVerify,
     confirmEmailChange,
   } = useProfile();
 
@@ -105,6 +106,7 @@ export default function PerfilPage(): ReactNode {
                 profile={profile}
                 onSave={save}
                 onRequestEmailChange={requestEmailChange}
+                onRequestEmailVerify={requestEmailVerify}
                 onConfirmEmailChange={confirmEmailChange}
               />
             </CardContent>

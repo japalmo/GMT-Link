@@ -5,6 +5,7 @@ import {
   changePassword as apiChangePassword,
   confirmEmailChange as apiConfirmEmailChange,
   requestEmailChange as apiRequestEmailChange,
+  requestEmailVerify as apiRequestEmailVerify,
   requestPasswordChange as apiRequestPasswordChange,
   getProfile,
   updateProfile,
@@ -42,6 +43,11 @@ export interface UseProfileResult {
   requestPasswordChange: () => Promise<void>;
   /** Exige la contraseña actual y envía un OTP al `newEmail` para verificarlo antes de aplicarlo al campo `kind`. */
   requestEmailChange: (newEmail: string, kind: EmailKind, currentPassword: string) => Promise<void>;
+  /**
+   * Envía un OTP al correo YA cargado del tipo `kind` para verificarlo (sin
+   * cambiarlo y sin contraseña) y refresca el perfil (queda `pendingEmail`).
+   */
+  requestEmailVerify: (kind: EmailKind) => Promise<void>;
   /**
    * Confirma el cambio de correo con el OTP y refresca el estado local con el
    * perfil ya actualizado que devuelve el backend.
@@ -114,6 +120,16 @@ export function useProfile(): UseProfileResult {
     [],
   );
 
+  const requestEmailVerify = useCallback(async (kind: EmailKind): Promise<void> => {
+    await apiRequestEmailVerify(kind);
+    // Refresca el perfil SIN togglear `loading` (como save/confirmEmailChange):
+    // si pasara por `load()`, PerfilPage desmontaría el formulario y el diálogo
+    // de código nunca se abriría. Con el perfil fresco queda `pendingEmail` y el
+    // diálogo abre directo en el paso código.
+    const data = await getProfile();
+    if (mountedRef.current) setProfile(data);
+  }, []);
+
   const confirmEmailChange = useCallback(
     async (code: string): Promise<ProfileMe> => {
       const updated = await apiConfirmEmailChange(code);
@@ -132,6 +148,7 @@ export function useProfile(): UseProfileResult {
     changePassword,
     requestPasswordChange,
     requestEmailChange,
+    requestEmailVerify,
     confirmEmailChange,
   };
 }

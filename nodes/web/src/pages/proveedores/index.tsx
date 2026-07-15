@@ -43,7 +43,6 @@ import {
   addProviderProduct,
   submitProviderRating,
   cleanProviderDataWithIA,
-  getGeminiQuota,
   type ProviderView,
   type ProviderProductView,
   type ProviderRatingView,
@@ -91,7 +90,6 @@ export default function ProveedoresPage(): ReactNode {
   const [showAiCleaner, setShowAiCleaner] = useState(false);
   const [aiRawText, setAiRawText] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiQuota, setAiQuota] = useState<{ used: number; remaining: number } | null>(null);
   const [aiCleanedData, setAiCleanedData] = useState<{
     name: string;
     rut?: string;
@@ -142,22 +140,6 @@ export default function ProveedoresPage(): ReactNode {
       fetchProviderDetail(selectedProviderId);
     }
   }, [selectedProviderId, fetchProviderDetail]);
-
-  // Load AI Quota when AI modal opens
-  const fetchAiQuota = async () => {
-    try {
-      const quota = await getGeminiQuota();
-      setAiQuota(quota);
-    } catch {
-      setAiQuota(null);
-    }
-  };
-
-  useEffect(() => {
-    if (showAiCleaner) {
-      void fetchAiQuota();
-    }
-  }, [showAiCleaner]);
 
   // Create Provider action
   const handleCreateProvider = async (e: React.FormEvent) => {
@@ -252,7 +234,7 @@ export default function ProveedoresPage(): ReactNode {
     }
   };
 
-  // Clean data using Gemini REST client
+  // Limpieza de datos vía IA (NVIDIA NIM en el backend)
   const handleCleanData = async () => {
     if (!aiRawText.trim()) {
       setErrorMsg('Escribe o pega algún texto desordenado primero.');
@@ -263,7 +245,6 @@ export default function ProveedoresPage(): ReactNode {
     try {
       const data = await cleanProviderDataWithIA({ rawData: aiRawText });
       setAiCleanedData(data);
-      await fetchAiQuota();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error al procesar datos con IA');
     } finally {
@@ -832,12 +813,9 @@ export default function ProveedoresPage(): ReactNode {
               <div className="flex items-start gap-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 text-xs text-indigo-700 dark:text-indigo-400">
                 <Info className="size-4 shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  Pega un correo, un fragmento de texto o una lista desordenada de precios. La IA de Gemini extraerá el nombre, contacto y estructurará el catálogo del proveedor automáticamente.
-                  {aiQuota && (
-                    <div className="mt-1 font-bold">
-                      Cuota de IA hoy: {aiQuota.remaining} consultas restantes (límite 3 por día).
-                    </div>
-                  )}
+                  Pega un correo, un fragmento de texto o una lista desordenada de precios. La IA
+                  extraerá el nombre, contacto y estructurará el catálogo del proveedor
+                  automáticamente.
                 </div>
               </div>
 
@@ -861,12 +839,12 @@ Lista de precios actualizados para GMT:
                     type="button"
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 mt-2 flex items-center justify-center gap-2"
                     onClick={handleCleanData}
-                    disabled={aiLoading || !aiRawText.trim() || (aiQuota !== null && aiQuota.remaining === 0)}
+                    disabled={aiLoading || !aiRawText.trim()}
                   >
                     {aiLoading ? (
                       <>
                         <Loader2 className="size-4 animate-spin" />
-                        Analizando con Gemini...
+                        Analizando con IA...
                       </>
                     ) : (
                       <>

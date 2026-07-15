@@ -176,7 +176,7 @@ export default function ImportWizardDemo() {
         aiHelpSlot={
           <p className="text-xs text-muted-foreground">
             Próximamente: limpieza asistida por IA para ordenar columnas
-            automáticamente (cuota 3/día).
+            automáticamente.
           </p>
         }
       />

@@ -11,8 +11,7 @@ import { useAuth } from '@/context/auth-context';
 import { useSidebar } from '@/components/layout/use-sidebar';
 import { PRIMARY_NAV, SECONDARY_NAV, type NavItem } from '@/components/layout/nav-items';
 import { NotificationBell } from '@/components/notifications/notification-bell';
-import logoMid from '@/assets/branding/logo-mid.png';
-import logoCompact from '@/assets/branding/logo-compact.png';
+import { SidebarBrand } from '@/components/branding/brand-logo';
 
 /** Iniciales para el avatar de fallback (nombre + apellido). */
 function initials(firstName: string, lastName: string): string {
@@ -127,32 +126,39 @@ export function SidebarContent({
 
   return (
     <div className="flex h-full flex-col bg-card">
-      {/* Marca + colapso */}
+      {/* Marca + colapso. Colapsado, el isotipo ES el botón para expandir (el
+          chevron solo se muestra expandido): así la marca y la acción caben en
+          el rail de 64px con la transición logotipo ↔ isotipo. */}
       <div
         className={cn(
           'flex h-16 items-center gap-2 border-b border-border px-3',
           collapsed && 'justify-center px-0',
         )}
       >
-        {collapsed ? (
-          <img src={logoCompact} alt="GMT" className="h-10 w-auto object-contain" />
-        ) : (
-          <img src={logoMid} alt="GMT Link" className="h-14 w-auto max-w-[170px] object-contain" />
-        )}
-        {!forceExpanded && (
-          <Button
-            variant="ghost"
-            size="icon"
+        {collapsed && !forceExpanded ? (
+          <button
+            type="button"
             onClick={toggleCollapsed}
-            aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-            aria-pressed={collapsed}
-            className={cn('text-muted-foreground', !collapsed && 'ml-auto')}
+            aria-label="Expandir menú"
+            className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ChevronLeft
-              className={cn('transition-transform', collapsed && 'rotate-180')}
-              aria-hidden
-            />
-          </Button>
+            <SidebarBrand collapsed />
+          </button>
+        ) : (
+          <>
+            <SidebarBrand collapsed={false} />
+            {!forceExpanded && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleCollapsed}
+                aria-label="Colapsar menú"
+                className="ml-auto shrink-0 text-muted-foreground"
+              >
+                <ChevronLeft aria-hidden />
+              </Button>
+            )}
+          </>
         )}
       </div>
 

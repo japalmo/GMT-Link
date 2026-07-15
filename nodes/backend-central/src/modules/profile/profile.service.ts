@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { Prisma, User } from '@prisma/client';
+import type { EmailKind, Prisma, User } from '@prisma/client';
 import { ORG_ID } from '../../common/org.constant';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
@@ -134,6 +134,46 @@ export class ProfileService {
 
     const code = await this.otp.generate(newEmail, OTP_PURPOSES.CHANGE_EMAIL);
     await this.emailService.send({ to: newEmail, ...verificationCodeEmail(code) });
+
+    return { ok: true };
+  }
+
+  /**
+   * Solicita el OTP para VERIFICAR el correo YA cargado del propio usuario (sin
+   * cambiarlo). A diferencia del cambio de correo, NO exige contraseña: el código
+   * viaja al correo que ya está registrado en la cuenta, así que probar su
+   * posesión es en sí la verificación (no hay riesgo de redirigir la cuenta a un
+   * correo ajeno). Reusa el mecanismo pendiente + confirmación existente: fija
+   * `pendingEmail` = correo actual del tipo y envía el código; el usuario confirma
+   * con `POST /profile/email/change-confirm`, que marca el timestamp de verificado.
+   */
+  async requestEmailVerify(userId: string, kind: EmailKind): Promise<OkResponse> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('El usuario de la sesión ya no existe.');
+    }
+
+    const email = kind === 'INSTITUCIONAL' ? user.emailInstitucional : user.emailPersonal;
+    if (!email) {
+      throw new BadRequestException(
+        kind === 'INSTITUCIONAL'
+          ? 'No tienes un correo institucional cargado.'
+          : 'No tienes un correo personal cargado.',
+      );
+    }
+    const verifiedAt =
+      kind === 'INSTITUCIONAL' ? user.emailInstitucionalVerified : user.emailPersonalVerified;
+    if (verifiedAt) {
+      throw new BadRequestException('Ese correo ya está verificado.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { pendingEmail: email, pendingEmailKind: kind },
+    });
+
+    const code = await this.otp.generate(email, OTP_PURPOSES.CHANGE_EMAIL);
+    await this.emailService.send({ to: email, ...verificationCodeEmail(code) });
 
     return { ok: true };
   }

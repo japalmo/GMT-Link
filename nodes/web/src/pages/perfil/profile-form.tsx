@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Check, CheckCircle2, Pencil, Plus, TriangleAlert } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, Pencil, Plus, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import type { EmailKind, ProfileMe, UpdateProfileInput } from '@gmt-platform/contracts';
 import { errorToMessage } from '@/lib/api';
@@ -75,10 +75,14 @@ function EmailBlock({
   kind,
   profile,
   onOpen,
+  onVerify,
+  verifying,
 }: {
   kind: EmailKind;
   profile: ProfileMe;
   onOpen: (kind: EmailKind) => void;
+  onVerify: (kind: EmailKind) => void;
+  verifying: boolean;
 }): ReactNode {
   const isInstitucional = kind === 'INSTITUCIONAL';
   const email = isInstitucional ? profile.emailInstitucional : profile.emailPersonal;
@@ -88,6 +92,8 @@ function EmailBlock({
   const pending = profile.pendingEmailKind === kind ? profile.pendingEmail : null;
   const label = isInstitucional ? 'Correo institucional' : 'Correo personal';
   const buttonLabel = pending ? 'Ingresar código' : email ? 'Cambiar' : 'Agregar';
+  // El correo YA cargado se puede verificar directo (sin contraseña ni correo nuevo).
+  const canVerifyExisting = Boolean(email) && !verified && !pending;
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
@@ -122,15 +128,30 @@ function EmailBlock({
             </p>
           )}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onOpen(kind)}
-        >
-          {email ? <Pencil aria-hidden /> : <Plus aria-hidden />}
-          {buttonLabel}
-        </Button>
+        <div className="flex items-center gap-2">
+          {canVerifyExisting && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={() => onVerify(kind)}
+              disabled={verifying}
+            >
+              {verifying ? <Loader2 className="animate-spin" aria-hidden /> : <CheckCircle2 aria-hidden />}
+              Verificar
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpen(kind)}
+            disabled={verifying}
+          >
+            {email ? <Pencil aria-hidden /> : <Plus aria-hidden />}
+            {buttonLabel}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -362,11 +383,13 @@ export function ProfileForm({
   profile,
   onSave,
   onRequestEmailChange,
+  onRequestEmailVerify,
   onConfirmEmailChange,
 }: {
   profile: ProfileMe;
   onSave: (input: UpdateProfileInput) => Promise<ProfileMe>;
   onRequestEmailChange: (newEmail: string, kind: EmailKind, currentPassword: string) => Promise<void>;
+  onRequestEmailVerify: (kind: EmailKind) => Promise<void>;
   onConfirmEmailChange: (code: string) => Promise<ProfileMe>;
 }): ReactNode {
   const [form, setForm] = useState<FormState>(() => toFormState(profile));
@@ -374,6 +397,25 @@ export function ProfileForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [openKind, setOpenKind] = useState<EmailKind | null>(null);
+  const [verifyingKind, setVerifyingKind] = useState<EmailKind | null>(null);
+
+  /**
+   * Verificar el correo YA cargado: pide el código (sin contraseña), refresca el
+   * perfil (queda pendiente) y abre el diálogo directo en el paso de código.
+   */
+  async function handleVerify(kind: EmailKind): Promise<void> {
+    setVerifyingKind(kind);
+    try {
+      await onRequestEmailVerify(kind);
+      setOpenKind(kind);
+    } catch (err) {
+      // Toast (no el error del formulario de datos): el aviso queda junto a la
+      // acción, consistente con los toasts del diálogo de verificación.
+      toast.error(errorToMessage(err, 'No se pudo enviar el código de verificación.'));
+    } finally {
+      setVerifyingKind(null);
+    }
+  }
 
   // Si el perfil cambia (refetch / guardado externo), re-sincroniza el form.
   useEffect(() => {
@@ -429,8 +471,9 @@ export function ProfileForm({
         <div>
           <h3 className="text-sm font-medium text-foreground">Correos</h3>
           <p className="text-xs text-muted-foreground">
-            Necesitas al menos un correo verificado. Cambiar o agregar un correo
-            requiere confirmarlo con un código que enviamos al correo nuevo.
+            Necesitas al menos un correo verificado. Verifica el correo ya cargado con
+            un código que te enviamos a ese mismo correo; cambiarlo o agregar uno nuevo
+            requiere además tu contraseña.
           </p>
         </div>
 
@@ -442,8 +485,20 @@ export function ProfileForm({
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <EmailBlock kind="INSTITUCIONAL" profile={profile} onOpen={setOpenKind} />
-          <EmailBlock kind="PERSONAL" profile={profile} onOpen={setOpenKind} />
+          <EmailBlock
+            kind="INSTITUCIONAL"
+            profile={profile}
+            onOpen={setOpenKind}
+            onVerify={(k) => void handleVerify(k)}
+            verifying={verifyingKind === 'INSTITUCIONAL'}
+          />
+          <EmailBlock
+            kind="PERSONAL"
+            profile={profile}
+            onOpen={setOpenKind}
+            onVerify={(k) => void handleVerify(k)}
+            verifying={verifyingKind === 'PERSONAL'}
+          />
         </div>
       </section>
 

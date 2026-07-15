@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import logoWideLogin from '@/assets/branding/logo-wide-login.png';
+import { BrandLogo } from '@/components/branding/brand-logo';
 import { useAuth } from '@/context/auth-context';
 import { ApiError } from '@/lib/api';
 
@@ -64,7 +64,7 @@ export default function FirstLoginPage() {
     <main className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex justify-center">
-          <img src={logoWideLogin} alt="GMT Link" className="h-16 w-auto object-contain" />
+          <BrandLogo variant="logo" className="h-24" />
         </div>
 
         <Card>

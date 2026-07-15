@@ -8,7 +8,7 @@
 
 ## Stack (decisiones cerradas — §2, no re-litigar)
 
-PostgreSQL + Prisma · OpenFGA (autorización estructural) · BD + gateway por tenant (multicloud; ver nota arriba) · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Auth propia (JWT + bcrypt) · Cloudflare R2 · NVIDIA NIM (cuota 3/día/usuario).
+PostgreSQL + Prisma · OpenFGA (autorización estructural) · BD + gateway por tenant (multicloud; ver nota arriba) · monorepo pnpm · NestJS (`nodes/backend-central`) · React + Vite + TS + Tailwind + shadcn/ui (`nodes/web`) · tipos compartidos en `packages/contracts` · Auth propia (JWT + bcrypt) · Cloudflare R2 · NVIDIA NIM (sin límite de consultas; se registra el uso solo como auditoría).
 
 ## Estructura
 

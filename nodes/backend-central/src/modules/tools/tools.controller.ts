@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Post, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { BulkConvertDto, ConvertPointDto, ShoreDetectDto } from './dto/tools.dto';
@@ -26,12 +26,6 @@ export class ToolsController {
   ): Promise<{ polygon: Array<{ x: number; y: number }> }> {
     const userId = this.requireUserId(user);
     return this.service.detectShoreline(userId, dto.fileBase64);
-  }
-
-  @Get('gis/quota')
-  getQuota(@CurrentUser() user: AuthUser | undefined): Promise<{ used: number; remaining: number }> {
-    const userId = this.requireUserId(user);
-    return this.service.getRemainingQuota(userId);
   }
 
   private requireUserId(user: AuthUser | undefined): string {

@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import {
-  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -684,7 +683,7 @@ describe('ReimbursementsService', () => {
     expect(call?.orderBy).toEqual([{ date: 'asc' }, { id: 'asc' }]);
   });
 
-  it('scanReceipt sin clave NVIDIA => objeto vacío y NO consume cuota', async () => {
+  it('scanReceipt sin clave NVIDIA => objeto vacío y NO registra uso', async () => {
     const geminiCreate = vi.fn(() => Promise.resolve(undefined));
     const { prisma } = buildPrisma({ geminiCreate });
     const service = makeService(prisma);
@@ -692,29 +691,16 @@ describe('ReimbursementsService', () => {
     expect(geminiCreate).not.toHaveBeenCalled();
   });
 
-  it('scanReceipt cuenta la cuota diaria por el propio userId (tabla geminiUsage)', async () => {
-    const geminiCount = vi.fn<
-      (args: { where: { userId: string; createdAt: { gte: Date } } }) => Promise<number>
-    >(() => Promise.resolve(0));
-    const { prisma } = buildPrisma({ geminiCount });
-    const service = makeService(prisma);
-
-    await service.scanReceipt('u1', 'data:image/jpeg;base64,AAAA');
-
-    const where = geminiCount.mock.calls[0]?.[0]?.where;
-    expect(where?.userId).toBe('u1');
-    expect(where?.createdAt.gte).toBeInstanceOf(Date);
-  });
-
-  it('scanReceipt supera el límite diario (>=3) => BadRequest y NO consume cuota', async () => {
-    const geminiCount = vi.fn(() => Promise.resolve(3));
+  it('scanReceipt no aplica límite diario: con muchos usos previos igual procede', async () => {
+    // Antes existía un límite de 3/día; ahora los modelos NVIDIA son gratuitos e
+    // ilimitados. Con conteo alto NO lanza BadRequest (sin clave NVIDIA degrada a
+    // objeto vacío sin registrar uso, porque no hubo llamada al modelo).
+    const geminiCount = vi.fn(() => Promise.resolve(50));
     const geminiCreate = vi.fn(() => Promise.resolve(undefined));
     const { prisma } = buildPrisma({ geminiCount, geminiCreate });
     const service = makeService(prisma);
 
-    await expect(service.scanReceipt('u1', 'data:image/jpeg;base64,AAAA')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(service.scanReceipt('u1', 'data:image/jpeg;base64,AAAA')).resolves.toEqual({});
     expect(geminiCreate).not.toHaveBeenCalled();
   });
 

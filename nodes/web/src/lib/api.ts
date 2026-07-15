@@ -704,6 +704,17 @@ export function confirmEmailChange(code: string): Promise<ProfileMe> {
   });
 }
 
+/**
+ * `POST /profile/email/verify-request` — pide el código para VERIFICAR el correo
+ * YA cargado (sin cambiarlo y sin contraseña). Se confirma con `change-confirm`.
+ */
+export function requestEmailVerify(kind: EmailKind): Promise<void> {
+  return request<void>('/profile/email/verify-request', {
+    method: 'POST',
+    body: JSON.stringify({ kind }),
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Directorio (§6-1.6) — visible para cualquier usuario autenticado            */
 /* -------------------------------------------------------------------------- */
@@ -2320,10 +2331,6 @@ export function detectShorelineWithIA(dto: { fileBase64: string }): Promise<{ po
     method: 'POST',
     body: JSON.stringify(dto),
   });
-}
-
-export function getGeminiQuota(): Promise<{ used: number; remaining: number }> {
-  return request<{ used: number; remaining: number }>('/tools/gis/quota');
 }
 
 /* -------------------------------------------------------------------------- */

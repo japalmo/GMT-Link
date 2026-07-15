@@ -137,20 +137,8 @@ export class ToolsService {
     userId: string,
     fileBase64: string,
   ): Promise<{ polygon: Array<{ x: number; y: number }> }> {
-    // 1. Verify daily limit
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const count = await this.prisma.geminiUsage.count({
-      where: {
-        userId,
-        createdAt: { gte: today },
-      },
-    });
-
-    if (count >= 3) {
-      throw new BadRequestException('Has alcanzado tu límite de 3 consultas de IA para el día de hoy.');
-    }
+    // Sin límite diario: los modelos NVIDIA NIM son gratuitos e ilimitados. Se
+    // conserva el registro de uso (geminiUsage) solo como auditoría.
 
     // Strip header if base64 starts with data URI scheme
     let rawBase64 = fileBase64;
@@ -226,20 +214,4 @@ Do not write markdown formatting wrappers or markdown code blocks, return ONLY t
     }
   }
 
-  async getRemainingQuota(userId: string): Promise<{ used: number; remaining: number }> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const used = await this.prisma.geminiUsage.count({
-      where: {
-        userId,
-        createdAt: { gte: today },
-      },
-    });
-
-    return {
-      used,
-      remaining: Math.max(0, 3 - used),
-    };
-  }
 }
