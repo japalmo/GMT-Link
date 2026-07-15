@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSvgUpload, parseCommentMap, sanitizeSvgMarkup } from './svg-checklist-input';
+import { parseSvgUpload, parseCommentMap, sanitizeSvg } from './svg-checklist-input';
 
 const VALID_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <g id="capo" data-part="Capó"><rect x="0" y="0" width="10" height="10" /></g>
@@ -67,16 +67,59 @@ describe('parseCommentMap', () => {
   });
 });
 
-describe('sanitizeSvgMarkup', () => {
-  it('devuelve null para entrada vacía', () => {
-    expect(sanitizeSvgMarkup(null)).toBeNull();
-    expect(sanitizeSvgMarkup(undefined)).toBeNull();
-    expect(sanitizeSvgMarkup('')).toBeNull();
-  });
-
-  it('conserva el <svg> saneado', () => {
-    const clean = sanitizeSvgMarkup(VALID_SVG);
+describe('sanitizeSvg', () => {
+  it('conserva el <svg>, los grupos de dibujo y el atributo id', () => {
+    const clean = sanitizeSvg(VALID_SVG);
     expect(clean).toContain('<svg');
     expect(clean).toContain('id="capo"');
+    expect(clean).toContain('id="puerta"');
+    // El atributo data-part (usado para nombrar/ubicar partes) sobrevive.
+    expect(clean).toContain('data-part="Capó"');
+  });
+
+  it('conserva un grupo de dibujo limpio con su id (<g id="techo">)', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg"><g id="techo"><path d="M0 0h10v10H0z"/></g></svg>`;
+    const clean = sanitizeSvg(svg);
+    expect(clean).toContain('<g id="techo"');
+  });
+
+  // --- Payloads XSS que la lista negra casera dejaba pasar (ahora neutralizados). ---
+
+  it('neutraliza foreignObject + iframe (XSS zero-click)', () => {
+    const payload = `<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><iframe src="javascript:alert(1)"></iframe></foreignObject><g id="p1"/></svg>`;
+    const clean = sanitizeSvg(payload);
+    expect(clean).not.toContain('<iframe');
+    expect(clean).not.toContain('<foreignObject');
+    expect(clean.toLowerCase()).not.toContain('foreignobject');
+  });
+
+  it('neutraliza <a xlink:href="javascript..."> con carácter de control', () => {
+    const payload = `<svg xmlns="http://www.w3.org/2000/svg"><a xlink:href="javascript&#10;:alert(1)"><rect width="5" height="5"/></a></svg>`;
+    const clean = sanitizeSvg(payload);
+    expect(clean).not.toContain('<a');
+    expect(clean.toLowerCase()).not.toContain('javascript');
+  });
+
+  it('neutraliza <image> con referencia externa', () => {
+    const payload = `<svg xmlns="http://www.w3.org/2000/svg"><image href="https://evil/x.png"/></svg>`;
+    const clean = sanitizeSvg(payload);
+    expect(clean).not.toContain('<image');
+    expect(clean).not.toContain('https://evil');
+  });
+
+  it('elimina <script> y conserva el grupo con id', () => {
+    const payload = `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><g id="p1"/></svg>`;
+    const clean = sanitizeSvg(payload);
+    expect(clean).not.toContain('<script');
+    expect(clean).not.toContain('alert(1)');
+    expect(clean).toContain('<g id="p1"');
+  });
+
+  it('despoja url()/expression() del atributo style (beacon externo) conservando fill', () => {
+    const payload = `<svg xmlns="http://www.w3.org/2000/svg"><rect style="fill:#ff0000;background:url(https://evil/x.png)" id="p1"/></svg>`;
+    const clean = sanitizeSvg(payload);
+    expect(clean).not.toContain('https://evil');
+    expect(clean.toLowerCase()).not.toContain('url(');
+    expect(clean).toContain('fill:#ff0000'); // el estilo legítimo se conserva
   });
 });

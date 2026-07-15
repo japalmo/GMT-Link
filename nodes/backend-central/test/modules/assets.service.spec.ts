@@ -22,6 +22,7 @@ import type { PermissionService } from '../../src/authz/permission.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 import { AssetsService } from '../../src/modules/assets/assets.service';
+import { formatSvgAnswerValue } from '../../src/modules/assets/checklist-pdf.util';
 
 function buildUserRow(overrides: Partial<User> = {}): User {
   return {
@@ -214,10 +215,12 @@ interface MockTx {
   };
   checklistSubmission: {
     create: MockFunction;
+    delete: MockFunction;
   };
   usageCycle: {
     create: MockFunction;
     update: MockFunction;
+    updateMany: MockFunction;
   };
 }
 
@@ -266,6 +269,7 @@ interface MockPrisma {
   checklistSubmission: {
     create: MockFunction;
     findMany: MockFunction;
+    findUnique: MockFunction;
   };
 }
 
@@ -380,6 +384,7 @@ describe('AssetsService', () => {
       checklistSubmission: {
         create: vi.fn((args) => Promise.resolve(buildSubmissionRow(args.data))),
         findMany: vi.fn(() => Promise.resolve([])),
+        findUnique: vi.fn(),
       },
     };
 
@@ -1534,6 +1539,118 @@ describe('AssetsService', () => {
       // Es un PDF válido (encabezado %PDF-).
       expect(Buffer.from(pdf).subarray(0, 5).toString('utf8')).toBe('%PDF-');
       expect(pdf.byteLength).toBeGreaterThan(0);
+    });
+
+    it('sanea (server-side) el marcado SVG antes de persistir: elimina <foreignObject>/<iframe>', async () => {
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
+
+      await service.updateChecklistTemplate('a-1', 'u-1', 'Checklist carrocería', [
+        {
+          id: 'carroceria',
+          label: 'Carrocería',
+          type: 'SVG',
+          required: false,
+          config: {
+            svg:
+              '<svg xmlns="http://www.w3.org/2000/svg">' +
+              '<foreignObject><iframe src="javascript:alert(1)"></iframe></foreignObject>' +
+              '<script>alert(2)</script>' +
+              '<g id="puerta" onclick="evil()"><rect width="10" height="10"/></g>' +
+              '</svg>',
+            parts: [{ id: 'puerta', name: 'Puerta' }],
+          },
+        },
+      ]);
+
+      expect(txMock.checklistTemplate.update).toHaveBeenCalled();
+      const updateArg = txMock.checklistTemplate.update.mock.calls[0]?.[0] as {
+        data: { items: Array<{ type: string; config?: { svg?: string } }> };
+      };
+      const svgItem = updateArg.data.items.find((item) => item.type === 'SVG');
+      const persistedSvg = svgItem?.config?.svg ?? '';
+      // Lo persistido ya NO contiene los elementos/atributos peligrosos.
+      expect(persistedSvg).not.toMatch(/<iframe/i);
+      expect(persistedSvg).not.toMatch(/<foreignObject/i);
+      expect(persistedSvg).not.toMatch(/<script/i);
+      expect(persistedSvg).not.toMatch(/onclick/i);
+      // La parte interactiva (id del <g>) se conserva.
+      expect(persistedSvg).toMatch(/id="puerta"/i);
+    });
+
+    it('genera el PDF de una submission con ítem SVG sin volcar JSON crudo', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: null });
+      prismaMock.checklistSubmission.findUnique.mockResolvedValueOnce({
+        ...buildSubmissionRow({
+          answers: [
+            {
+              itemId: 'carroceria',
+              label: 'Carrocería',
+              value:
+                '{"puerta":{"part":"Puerta delantera","comment":"Rayón leve"},' +
+                '"capo":{"part":"Capó","comment":"Abolladura"}}',
+            },
+          ],
+        }),
+        user: buildUserRow(),
+        asset: buildAssetRow({ type: AssetType.VEHICULO }),
+        template: buildTemplateRow({
+          items: [
+            {
+              id: 'carroceria',
+              label: 'Carrocería',
+              type: 'SVG',
+              required: false,
+              config: {
+                svg: '<svg><g id="puerta"></g></svg>',
+                parts: [{ id: 'puerta', name: 'Puerta delantera' }],
+              },
+            },
+          ] as unknown as ChecklistTemplate['items'],
+        }),
+      });
+
+      const pdf = await service.generateChecklistSubmissionPdf('a-1', 'sub-1', 'u-1');
+
+      // Es un PDF válido (no crashea al expandir el mapa de observaciones).
+      expect(Buffer.from(pdf).subarray(0, 5).toString('utf8')).toBe('%PDF-');
+      expect(pdf.byteLength).toBeGreaterThan(0);
+    });
+  });
+
+  describe('formatSvgAnswerValue', () => {
+    it('resume el mapa de observaciones a "N observaciones" + líneas parte:comentario', () => {
+      const result = formatSvgAnswerValue(
+        '{"puerta":{"part":"Puerta delantera","comment":"Rayón leve"},' +
+          '"capo":{"part":"Capó","comment":"Abolladura"}}',
+      );
+      expect(result).not.toBeNull();
+      expect(result?.summary).toBe('2 observaciones');
+      expect(result?.lines).toEqual([
+        'Puerta delantera: Rayón leve',
+        'Capó: Abolladura',
+      ]);
+    });
+
+    it('usa singular y omite partes sin comentario; cae a la key si falta el nombre', () => {
+      const result = formatSvgAnswerValue(
+        '{"puerta":{"part":"Puerta","comment":"Rayón"},"capo":{"part":"Capó","comment":"  "},"techo":{"comment":"Golpe"}}',
+      );
+      expect(result?.summary).toBe('2 observaciones');
+      expect(result?.lines).toEqual(['Puerta: Rayón', 'techo: Golpe']);
+    });
+
+    it('mapa vacío => "Sin observaciones" sin líneas', () => {
+      const result = formatSvgAnswerValue('{}');
+      expect(result).toEqual({ summary: 'Sin observaciones', lines: [] });
+    });
+
+    it('devuelve null ante un value que no parsea al mapa (déjalo como está)', () => {
+      expect(formatSvgAnswerValue('Bueno')).toBeNull();
+      expect(formatSvgAnswerValue('no es json {')).toBeNull();
+      expect(formatSvgAnswerValue('{"a":"texto plano"}')).toBeNull();
+      expect(formatSvgAnswerValue(42)).toBeNull();
+      expect(formatSvgAnswerValue(null)).toBeNull();
+      expect(formatSvgAnswerValue(undefined)).toBeNull();
     });
   });
 

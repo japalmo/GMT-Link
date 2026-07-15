@@ -11,11 +11,15 @@
  *   partes con comentario. El valor es un JSON string del mapa
  *   `{ [partId]: { part, comment } }`.
  *
- * Seguridad: el SVG viene de un admin (confiable), pero igual se sanitiza al
- * parsear/renderizar se remueven elementos `<script>` y atributos `on*` (y
- * `href="javascript:"`) antes de inyectar el marcado.
+ * Seguridad: el SVG viene de un admin, pero igual se sanitiza con DOMPurify
+ * (lista blanca estricta para SVG) tanto al subir/persistir como antes de CADA
+ * `dangerouslySetInnerHTML`. Se conservan solo los elementos de dibujo y el
+ * atributo `id` (necesario para identificar las partes); se eliminan
+ * `foreignObject`, `iframe`, `object`, `embed`, `script`, `style`, `a`, `image`,
+ * `use`, animaciones y todo atributo `href`/`xlink:href`/`src`/handler `on*`.
  */
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Upload, MapPin, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,25 +63,55 @@ export interface SvgParseResult {
 /* Helpers puros (testeables sin DOM de React)                                */
 /* -------------------------------------------------------------------------- */
 
-/** Remueve `<script>`, atributos `on*` y `href="javascript:"` de un elemento y su árbol. */
-function sanitizeSvgElement(root: Element): void {
-  root.querySelectorAll('script').forEach((s) => s.remove());
-  const nodes: Element[] = [root, ...Array.from(root.querySelectorAll('*'))];
-  for (const node of nodes) {
-    for (const attr of Array.from(node.attributes)) {
-      const name = attr.name.toLowerCase();
-      if (name.startsWith('on')) {
-        node.removeAttribute(attr.name);
-        continue;
-      }
-      if (
-        (name === 'href' || name === 'xlink:href') &&
-        attr.value.trim().toLowerCase().startsWith('javascript:')
-      ) {
-        node.removeAttribute(attr.name);
-      }
-    }
+/**
+ * Sanitiza un marcado SVG con DOMPurify usando una LISTA BLANCA estricta.
+ *
+ * - Conserva los elementos de dibujo (svg, g, path, rect, circle, ellipse, line,
+ *   polyline, polygon, text, tspan, title, defs, gradientes, stop, clipPath,
+ *   mask, symbol) y el atributo `id` (crítico: identifica las partes).
+ * - Elimina por completo `foreignObject`, `iframe`, `object`, `embed`, `script`,
+ *   `style`, `a`, `image`, `use`, `audio`, `video` y las etiquetas de animación
+ *   (que pueden disparar scripts o cargar refs externas).
+ * - Quita todo atributo `href`/`xlink:href`/`src`/`data` y los handlers `on*`
+ *   (DOMPurify descarta los `on*` por defecto en el perfil SVG).
+ *
+ * Devuelve siempre un string (posiblemente vacío si la entrada no aporta SVG).
+ */
+// El atributo `style` sobrevive el perfil svg (lo necesitan diagramas legítimos con
+// fill/stroke), pero su CSS puede cargar recursos externos vía url(...) (beacon de
+// tracking) o expression() (IE viejo). Se despojan esas construcciones del valor
+// conservando el resto del estilo, cerrando el canal sin romper el diagrama.
+DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+  if (data.attrName === 'style' && data.attrValue) {
+    data.attrValue = data.attrValue
+      .replace(/url\s*\([^)]*\)/gi, '')
+      .replace(/expression\s*\([^)]*\)/gi, '');
   }
+});
+
+export function sanitizeSvg(markup: string): string {
+  return DOMPurify.sanitize(markup, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+    FORBID_TAGS: [
+      'foreignObject',
+      'iframe',
+      'object',
+      'embed',
+      'script',
+      'style',
+      'a',
+      'image',
+      'use',
+      'audio',
+      'video',
+      'animate',
+      'animateColor',
+      'animateTransform',
+      'animateMotion',
+      'set',
+    ],
+    FORBID_ATTR: ['href', 'xlink:href', 'src', 'data'],
+  });
 }
 
 /** Extrae las partes nombrables (`<g>` con `id`, sin duplicar) de un `<svg>`. */
@@ -96,10 +130,18 @@ function collectSvgParts(svgEl: Element): ChecklistSvgPart[] {
   return parts;
 }
 
+/** Extrae los `<g id>` de un marcado (ya saneado) parseándolo de forma tolerante. */
+function collectSvgPartsFromMarkup(markup: string): ChecklistSvgPart[] {
+  const doc = new DOMParser().parseFromString(markup, 'text/html');
+  const svgEl = doc.querySelector('svg');
+  return svgEl ? collectSvgParts(svgEl) : [];
+}
+
 /**
- * Parsea el texto de un archivo SVG: valida, SANITIZA (quita scripts/on*) y
- * extrae los `<g id>` como partes. Nunca lanza: devuelve `error` con un mensaje
- * claro para SVG inválido o sin grupos con id.
+ * Parsea el texto de un archivo SVG: valida, SANITIZA con DOMPurify (lista
+ * blanca) y extrae los `<g id>` como partes SOBRE el marcado ya saneado. Nunca
+ * lanza: devuelve `error` con un mensaje claro para SVG inválido o sin grupos
+ * con id. El `svg` devuelto ya está limpio, así lo persistido queda seguro.
  */
 export function parseSvgUpload(text: string): SvgParseResult {
   let doc: Document;
@@ -118,9 +160,12 @@ export function parseSvgUpload(text: string): SvgParseResult {
     return { svg: null, parts: [], error: 'El archivo no contiene un elemento <svg>.' };
   }
 
-  sanitizeSvgElement(svgEl);
-  const parts = collectSvgParts(svgEl);
-  const markup = new XMLSerializer().serializeToString(svgEl);
+  const markup = sanitizeSvg(text);
+  if (!markup || !markup.includes('<svg')) {
+    return { svg: null, parts: [], error: 'El archivo no contiene un elemento <svg>.' };
+  }
+
+  const parts = collectSvgPartsFromMarkup(markup);
 
   if (parts.length === 0) {
     return {
@@ -131,13 +176,6 @@ export function parseSvgUpload(text: string): SvgParseResult {
     };
   }
   return { svg: markup, parts, error: null };
-}
-
-/** Sanitiza un marcado SVG ya guardado (defensa al renderizar en modo fill). */
-export function sanitizeSvgMarkup(markup: string | null | undefined): string | null {
-  if (!markup) return null;
-  const result = parseSvgUpload(markup);
-  return result.svg;
 }
 
 /** Parsea (tolerante) el JSON string del valor a un mapa de comentarios válido. */
@@ -224,7 +262,7 @@ function SvgEditView({ config, onChange }: EditModeProps) {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const parts = config?.parts ?? [];
-  const markup = useMemo(() => sanitizeSvgMarkup(config?.svg), [config?.svg]);
+  const markup = useMemo(() => (config?.svg ? sanitizeSvg(config.svg) : null), [config?.svg]);
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
@@ -354,7 +392,7 @@ function SvgEditView({ config, onChange }: EditModeProps) {
 function SvgFillView({ config, value, onChange, disabled = false }: FillModeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const parts = useMemo(() => config?.parts ?? [], [config?.parts]);
-  const markup = useMemo(() => sanitizeSvgMarkup(config?.svg), [config?.svg]);
+  const markup = useMemo(() => (config?.svg ? sanitizeSvg(config.svg) : null), [config?.svg]);
   const map = useMemo(() => parseCommentMap(value), [value]);
 
   const [activePartId, setActivePartId] = useState<string | null>(null);
@@ -433,7 +471,7 @@ function SvgFillView({ config, value, onChange, disabled = false }: FillModeProp
     <div className="flex flex-col gap-2">
       <style>{`
         .${scopeClass} svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
-        .${scopeClass} .gmt-svg-part { pointer-events: auto; transition: opacity .15s ease; }
+        .${scopeClass} .gmt-svg-part { pointer-events: all; transition: opacity .15s ease; }
         .${scopeClass} .gmt-svg-part:hover { opacity: .82; }
         .${scopeClass} .gmt-svg-part.has-comment,
         .${scopeClass} .gmt-svg-part.has-comment * {

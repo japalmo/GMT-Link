@@ -15,7 +15,7 @@
  * JSON string del mapa de comentarios, guardado en `answers[item.id]` como
  * cualquier otro valor.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,45 @@ function isItemMissing(item: ChecklistTemplateItem, answers: Record<string, unkn
   const raw = answers[item.id];
   if (item.type === 'BOOLEAN') return typeof raw !== 'boolean';
   return raw === undefined || raw === null || raw === '';
+}
+
+/** Motivo por el que un ítem bloquea el avance/envío. */
+type ItemIssue = { item: ChecklistTemplateItem; reason: 'required' | 'obs' };
+
+/**
+ * Primer ítem de la lista que impide continuar/enviar. Mismo criterio que el
+ * envío del contenedor: (a) requerido no-SVG vacío, y (b) ESTADO en falla (o con
+ * `requireObs`) sin observación registrada. Los SVG son opcionales.
+ */
+function findItemIssue(
+  items: ChecklistTemplateItem[],
+  answers: Record<string, unknown>,
+): ItemIssue | null {
+  for (const item of items) {
+    if (item.required && item.type !== 'SVG' && isItemMissing(item, answers)) {
+      return { item, reason: 'required' };
+    }
+    if (item.type === 'ESTADO') {
+      const chosen = answers[item.id];
+      const isFail =
+        typeof chosen === 'string' && (item.config?.failOptions?.includes(chosen) ?? false);
+      const showObs = isFail || (item.config?.requireObs ?? false);
+      if (showObs) {
+        const obsKey = item.config?.obsItemId ?? `${item.id}__obs`;
+        const obs = answers[obsKey];
+        const obsText = typeof obs === 'string' ? obs.trim() : '';
+        if (obsText === '') return { item, reason: 'obs' };
+      }
+    }
+  }
+  return null;
+}
+
+/** Mensaje de la validación suave según el motivo y la acción ("continuar"/"enviar"). */
+function describeIssue(issue: ItemIssue, verb: 'continuar' | 'enviar'): string {
+  return issue.reason === 'obs'
+    ? `Registra una observación para "${issue.item.label}" antes de ${verb}.`
+    : `Completa "${issue.item.label}" antes de ${verb}.`;
 }
 
 export function ChecklistFillBody({
@@ -113,17 +152,43 @@ export function ChecklistFillBody({
   }
 
   // Validación suave al avanzar de página: avisa si falta un requerido de ESTA
-  // página (no bloquea el resto del flujo). Los SVG no se exigen (son opcionales
-  // en la práctica: un diagrama sin observaciones es válido).
+  // página o una observación de un ESTADO en falla (mismo criterio que el envío).
+  // No bloquea el resto del flujo. Los SVG no se exigen (un diagrama sin
+  // observaciones es válido).
   const goNext = () => {
-    const missing = currentPage.items.find(
-      (it) => it.required && it.type !== 'SVG' && isItemMissing(it, answers),
-    );
-    if (missing) {
-      toast.warning(`Completa "${missing.label}" antes de continuar.`);
+    const issue = findItemIssue(currentPage.items, answers);
+    if (issue) {
+      toast.warning(describeIssue(issue, 'continuar'));
       return;
     }
     setPageIndex(Math.min(safeIndex + 1, pages.length - 1));
+  };
+
+  // Enter en un input de una sola línea (no textarea) de una página que NO es la
+  // última no debe enviar el checklist entero: avanza a la siguiente página.
+  const handleFormKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target as HTMLElement;
+    if (target instanceof HTMLInputElement && !isLastPage) {
+      e.preventDefault();
+      goNext();
+    }
+  };
+
+  // Antes de enviar valida TODAS las páginas (no solo la visible): si falta un
+  // requerido u observación en una página anterior (desmontada), evita el envío,
+  // salta a esa página y avisa, en vez de dejar que el backend lo rechace con un
+  // error genérico sobre un campo que el inspector no ve.
+  const handleSubmitClick = (e: MouseEvent<HTMLButtonElement>) => {
+    for (const [i, page] of pages.entries()) {
+      const issue = findItemIssue(page.items, answers);
+      if (issue) {
+        e.preventDefault();
+        if (i !== safeIndex) setPageIndex(i);
+        toast.warning(describeIssue(issue, 'enviar'));
+        return;
+      }
+    }
   };
 
   const renderItemInput = (item: ChecklistTemplateItem) => {
@@ -272,8 +337,10 @@ export function ChecklistFillBody({
   }
 
   // ---- Layout por páginas (una sección por página). ----
+  // El `div.contents` no genera caja (no altera el layout flex del <form>): solo
+  // captura el keydown para interceptar el Enter que enviaría todo prematuramente.
   return (
-    <>
+    <div className="contents" onKeyDown={handleFormKeyDown}>
       <div className="flex flex-col gap-1 border-b border-border/50 pb-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -314,7 +381,7 @@ export function ChecklistFillBody({
         </Button>
 
         {isLastPage ? (
-          <Button type="submit" size="sm" loading={submitting}>
+          <Button type="submit" size="sm" loading={submitting} onClick={handleSubmitClick}>
             Firmar y Enviar Inspección
           </Button>
         ) : (
@@ -323,6 +390,6 @@ export function ChecklistFillBody({
           </Button>
         )}
       </div>
-    </>
+    </div>
   );
 }

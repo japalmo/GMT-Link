@@ -121,7 +121,11 @@ const svgItemSchema = z.object({
   required: z.boolean(),
   section: sectionRefSchema,
   config: z.object({
-    svg: z.string().trim().min(1, 'El marcado del diagrama SVG es requerido'),
+    svg: z
+      .string()
+      .trim()
+      .min(1, 'El marcado del diagrama SVG es requerido')
+      .max(600_000, 'El diagrama SVG es demasiado grande (máx ~600 KB).'),
     parts: z
       .array(
         z.object({

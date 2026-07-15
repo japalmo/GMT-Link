@@ -14,6 +14,12 @@ async function bootstrap(): Promise<void> {
   // Fail-fast: aborta el arranque si AUTH_JWT_SECRET falta o es débil.
   validateAuthJwtSecret();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Sube el límite del body JSON por sobre el default (~100 KB) para acomodar una
+  // plantilla de checklist con un diagrama SVG embebido (el schema tope el SVG en
+  // ~600 KB; 2 MB da margen para el resto del payload). Así un SVG dentro del
+  // límite se guarda bien y uno demasiado grande devuelve un 400 claro del schema
+  // (no un 413 opaco del body-parser).
+  app.useBodyParser('json', { limit: '2mb' });
   // Detrás del proxy de Railway: confiar en 1 hop para que req.ip sea la IP real
   // del cliente (X-Forwarded-For). Sin esto el rate-limit por IP colapsa en un
   // único balde global y un atacante bloquea el login de todos. También habilita

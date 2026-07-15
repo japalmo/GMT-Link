@@ -34,6 +34,7 @@
     "class-validator": "^0.14.0",
     "geotiff": "^3.0.5",
     "helmet": "^8.2.0",
+    "isomorphic-dompurify": "^3.18.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^9.0.1",
     "pdf-lib": "^1.17.1",

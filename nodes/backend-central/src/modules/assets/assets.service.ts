@@ -9,8 +9,9 @@ import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
 import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
-import { composeChecklistPdf, composeTemplatePreviewPdf } from './checklist-pdf.util';
+import { composeChecklistPdf, composeTemplatePreviewPdf, formatSvgAnswerValue } from './checklist-pdf.util';
 import type { TemplatePreviewSection } from './checklist-pdf.util';
+import { sanitizeSvgMarkup } from './svg-sanitize.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import {
   AssetDocumentView,
@@ -1758,6 +1759,20 @@ export class AssetsService {
   }
 
   /**
+   * Saneamiento server-side (defensa en profundidad) del marcado SVG de cada ítem
+   * SVG antes de persistir. Elimina elementos y atributos peligrosos con DOMPurify
+   * (ver `sanitizeSvgMarkup`); conserva `id`/estructura para que las partes sigan
+   * siendo interactivas. Los ítems no-SVG (y los SVG sin marcado) pasan intactos.
+   */
+  private sanitizeSvgItems(items: ChecklistTemplateItem[]): ChecklistTemplateItem[] {
+    return items.map((item) =>
+      item.type === 'SVG' && typeof item.config?.svg === 'string' && item.config.svg.length > 0
+        ? { ...item, config: { ...item.config, svg: sanitizeSvgMarkup(item.config.svg) } }
+        : item,
+    );
+  }
+
+  /**
    * Valida y normaliza el arreglo de secciones con Zod (ids únicos, título no
    * vacío). Traduce `ZodError` a `BadRequestException` con el primer mensaje claro.
    */
@@ -1870,7 +1885,11 @@ export class AssetsService {
 
     // Normaliza (legacy → union nuevo) y valida ANTES de persistir. Los ítems se
     // guardan ya normalizados; así el shape nuevo se propaga sin migrar la BD.
-    const normalizedItems = this.validateTemplateItems(items);
+    // Defensa en profundidad: aunque el frontend ya sanea el SVG con DOMPurify, un
+    // guardado por API directa podría traer un marcado malicioso; por eso el marcado
+    // de cada ítem SVG se vuelve a sanear server-side (quita <script>/<iframe>/
+    // <foreignObject>/on*/href/…) antes de persistir.
+    const normalizedItems = this.sanitizeSvgItems(this.validateTemplateItems(items));
 
     // Secciones: si vienen, se validan; si no, se conservan las ya guardadas (así
     // un cliente que no envía secciones no las borra). El cruce item.section ↔
@@ -2223,6 +2242,22 @@ export class AssetsService {
       const comment = effective.comment !== undefined && effective.comment !== null && String(effective.comment) !== ''
         ? String(effective.comment)
         : undefined;
+
+      // Ítem SVG (diagrama de carrocería): el value es un JSON string del mapa
+      // `{ [partId]: { part, comment } }`. Se expande a un resumen ("N
+      // observaciones") + una línea `parte: comentario` por parte, en vez de
+      // volcar el JSON crudo ilegible. Se detecta por el tipo del ítem de la
+      // plantilla o, en fallback (respuestas sin plantilla), porque el value
+      // parsea a ese mapa. Si el value no parsea (SVG sin responder, etc.) cae al
+      // formateo común (`formatChecklistValue`), robusto ante datos legacy.
+      const isSvgItem = String(item.type ?? '') === 'SVG';
+      const svgSummary = formatSvgAnswerValue(effective.value);
+      if (isSvgItem || svgSummary) {
+        if (svgSummary) {
+          return { label, valueLabel: svgSummary.summary, comment, details: svgSummary.lines };
+        }
+      }
+
       return {
         label,
         valueLabel: this.formatChecklistValue(effective.value),
