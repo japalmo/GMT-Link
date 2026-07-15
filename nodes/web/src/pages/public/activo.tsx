@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getPublicAsset } from '@/lib/api';
 import {
   Wrench,
@@ -13,12 +13,14 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { BrandLogo } from '@/components/branding/brand-logo';
 import type { AssetPublicView, AssetStatus } from '@/types/assets';
 import { ASSET_TYPE_LABELS } from '@/types/assets';
 
 export default function PublicAssetPage(): ReactNode {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetPublicView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +172,31 @@ export default function PublicAssetPage(): ReactNode {
                 </div>
               )}
             </CardContent>
+
+            {/* Acciones con deep-link post-login (Tanda 6): llevan a la app autenticada.
+                Los guards resuelven la sesión: si no hay, ProtectedRoute manda a login
+                preservando el destino y PublicRoute vuelve aquí tras loguear. El id solo
+                se usa dentro de la app (que exige login + permiso). Si por algún motivo
+                no viene (ficha muy vieja), se ocultan. */}
+            {asset.id && (
+              <div className="flex flex-col gap-3 px-6 pb-6">
+                <Button
+                  className="w-full"
+                  onClick={() => navigate(`/recursos?asset=${encodeURIComponent(asset.id)}&accion=ver-docs`)}
+                >
+                  <FileText className="size-4" />
+                  Ver documentos
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate(`/recursos?asset=${encodeURIComponent(asset.id)}&accion=reportar-uso`)}
+                >
+                  <ClipboardCheck className="size-4" />
+                  Registrar uso
+                </Button>
+              </div>
+            )}
 
             <CardFooter className="bg-muted/30 border-t py-4 text-center justify-center">
               <p className="text-[10px] text-muted-foreground">

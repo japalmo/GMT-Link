@@ -15,10 +15,14 @@ import { FullPageLoader } from '@/components/layout/full-page-loader';
  */
 export function ProtectedRoute() {
   const { user, loading } = useAuth();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
 
   if (loading) return <FullPageLoader label="Verificando sesión…" />;
-  if (!user) return <Navigate to="/login" replace />;
+  // Sin sesión: manda a login PRESERVANDO el destino (deep-link). PublicRoute lo
+  // usa para aterrizar ahí tras loguear (p.ej. la ficha pública del QR abre
+  // `/recursos?asset=…&accion=…` sin sesión → login → de vuelta a esa vista).
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
   if (user.status === 'PENDING_FIRST_LOGIN') {
     return pathname === '/first-login' ? <Outlet /> : <Navigate to="/first-login" replace />;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useId, useRef, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAssets } from '@/hooks/use-assets';
 import { useDataTable } from '@/hooks/use-data-table';
@@ -90,6 +91,15 @@ interface UserOption {
 
 type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria' | 'insumos';
 
+/**
+ * Destino inicial del detalle de un activo:
+ * - 'checklist': pestaña Ficha con scroll al checklist (poner en uso desde la tabla);
+ * - 'documentos': pestaña Ficha con scroll a Documentos (deep-link "Ver documentos");
+ * - 'reportar-uso': pestaña Información y auto-abre el diálogo de reportar uso si aplica
+ *   (deep-link "Registrar uso").
+ */
+type AssetDetailTarget = 'checklist' | 'documentos' | 'reportar-uso';
+
 // Plantilla estándar de inspección de camioneta. Fuente única del front (mismo
 // contenido que el default del backend). Cada punto crítico es un ESTADO
 // Bueno/Regular/Malo con "Malo" = falla y un ítem TEXTO companion para la
@@ -158,9 +168,33 @@ export default function RecursosPage(): ReactNode {
   const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   // Destino inicial del detalle: 'checklist' aterriza en la pestaña Ficha con
-  // scroll al checklist (flujo "Poner en uso" de un vehículo desde la tabla).
-  const [detailTarget, setDetailTarget] = useState<'checklist' | null>(null);
+  // scroll al checklist (flujo "Poner en uso" de un vehículo desde la tabla);
+  // 'documentos'/'reportar-uso' llegan por deep-link desde la ficha pública (QR).
+  const [detailTarget, setDetailTarget] = useState<AssetDetailTarget | null>(null);
   const idBase = useId();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link desde la ficha pública (QR): `?asset=<id>&accion=ver-docs|reportar-uso`
+  // abre el detalle del activo directo en la vista/acción pedida. Se consume UNA vez
+  // y se limpian los params (replace) para no reaccionar de nuevo ni dejarlos en la
+  // URL/historial. Al llegar por deep-link ya se pasó por los guards (si no había
+  // sesión, ProtectedRoute preservó el destino y PublicRoute volvió tras loguear).
+  useEffect(() => {
+    const assetId = searchParams.get('asset');
+    if (!assetId) return;
+    const accion = searchParams.get('accion');
+    const target: AssetDetailTarget | null =
+      accion === 'reportar-uso' ? 'reportar-uso' : accion === 'ver-docs' ? 'documentos' : null;
+    setSelectedAssetId(assetId);
+    setDetailTarget(target);
+    // El detalle solo se muestra dentro de una pestaña de activos; si el deep-link
+    // llega con Insumos activo, vuelve a Equipos para que el detalle se renderice.
+    setActiveTab((t) => (t === 'insumos' ? 'equipos' : t));
+    const next = new URLSearchParams(searchParams);
+    next.delete('asset');
+    next.delete('accion');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos' || activeTab === 'maquinaria';
 
@@ -870,10 +904,11 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
 interface AssetDetailViewProps {
   id: string;
   /**
-   * Destino inicial al montar: 'checklist' aterriza en la pestaña Ficha pública
-   * con scroll a la tarjeta del checklist (flujo "Poner en uso" desde la tabla).
+   * Destino inicial al montar (ver {@link AssetDetailTarget}):
+   * - 'checklist'/'documentos' → pestaña Ficha con scroll al checklist / a Documentos;
+   * - 'reportar-uso' → pestaña Información y auto-abre el diálogo de reportar uso si aplica.
    */
-  initialTarget?: 'checklist' | null;
+  initialTarget?: AssetDetailTarget | null;
   onBack: () => void;
 }
 
@@ -937,16 +972,25 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [newAssignId, setNewAssignId] = useState('');
 
-  // Tabs for detailed view. Con `initialTarget='checklist'` (poner en uso desde la
-  // tabla) se monta directo en la pestaña Ficha con scroll pendiente al checklist.
+  // Tabs for detailed view. Con `initialTarget='checklist'|'documentos'` (poner en
+  // uso desde la tabla o deep-link "Ver documentos") se monta directo en la pestaña
+  // Ficha; 'reportar-uso' y el resto arrancan en Información.
   const [detailTab, setDetailTab] = useState<'informacion' | 'ficha' | 'historial'>(
-    initialTarget === 'checklist' ? 'ficha' : 'informacion',
+    initialTarget === 'checklist' || initialTarget === 'documentos' ? 'ficha' : 'informacion',
   );
   const [editOpen, setEditOpen] = useState(false);
   // Al "Reportar uso"/"Poner en uso" el operador debe aterrizar en el checklist, que
   // vive en la pestaña Ficha pública; este flag hace scroll a esa tarjeta al montarse.
   const [scrollToChecklist, setScrollToChecklist] = useState(initialTarget === 'checklist');
   const checklistRef = useRef<HTMLDivElement>(null);
+  // Deep-link 'documentos' (botón "Ver documentos" de la ficha pública): aterriza en
+  // la pestaña Ficha y hace scroll a la tarjeta "Documentos del Activo".
+  const [scrollToDocs, setScrollToDocs] = useState(initialTarget === 'documentos');
+  const docsRef = useRef<HTMLDivElement>(null);
+  // Deep-link 'reportar-uso' (botón "Registrar uso" de la ficha pública): tras cargar
+  // el detalle, si el activo aplica (DISPONIBLE sin ciclo vigente) auto-abre el diálogo
+  // de reportar uso. Se consume una sola vez.
+  const [autoReportUse, setAutoReportUse] = useState(initialTarget === 'reportar-uso');
 
   // Descarga de PDF de una inspección (submissionId en curso).
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
@@ -1511,6 +1555,29 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     }
   }, [loading, detailTab, scrollToChecklist]);
 
+  // Deep-link 'documentos': scroll a la tarjeta "Documentos del Activo" dentro de la
+  // pestaña Ficha, una vez cargado el detalle (la tarjeta recién existe entonces).
+  useEffect(() => {
+    if (!loading && detailTab === 'ficha' && scrollToDocs) {
+      const raf = requestAnimationFrame(() =>
+        docsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      );
+      setScrollToDocs(false);
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [loading, detailTab, scrollToDocs]);
+
+  // Deep-link 'reportar-uso': una vez cargado, si el activo está DISPONIBLE y sin ciclo
+  // vigente (es decir, el botón "Reportar uso" aplica), abre su diálogo. Si no aplica
+  // (ya en uso, en mantención, etc.) no fuerza nada. Se consume una sola vez.
+  useEffect(() => {
+    if (loading || !autoReportUse) return;
+    setAutoReportUse(false);
+    if (asset && asset.status === 'DISPONIBLE' && !activeCycle) {
+      setReportUseOpen(true);
+    }
+  }, [loading, autoReportUse, asset, activeCycle]);
+
   if (loading) {
     return (
       <div className="h-96 flex items-center justify-center animate-pulse">
@@ -1796,7 +1863,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
           {/* Documents Tab */}
           {detailTab === 'ficha' && (
-            <Card>
+            <Card ref={docsRef}>
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">

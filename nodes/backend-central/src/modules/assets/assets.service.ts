@@ -803,6 +803,10 @@ export class AssetsService {
     // identificador. Expone info no sensible + prueba de documentación y última
     // inspección (sin archivos ni respuestas del checklist).
     return {
+      // Id interno: SOLO para el deep-link post-login desde la ficha pública (QR)
+      // hacia la app autenticada (`/recursos?asset=<id>`). No es sensible: la app
+      // autenticada igual exige login + permiso para operar el activo.
+      id: asset.id,
       code: asset.code,
       type: asset.type,
       name: asset.name,
