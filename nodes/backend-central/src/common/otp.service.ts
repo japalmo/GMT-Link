@@ -20,6 +20,8 @@ export const OTP_PURPOSES = {
   CHANGE_EMAIL: 'CHANGE_EMAIL',
   /** Autorización de un cambio de contraseña. */
   CHANGE_PASSWORD: 'CHANGE_PASSWORD',
+  /** Recuperación de contraseña de una cuenta ACTIVA (usuario olvidó su clave). */
+  RESET_PASSWORD: 'RESET_PASSWORD',
 } as const;
 
 /** SHA-256 hex del código: nunca se persiste el OTP en claro. */
@@ -102,22 +104,27 @@ export class OtpService {
       throw new BadRequestException('El código OTP ha expirado.');
     }
 
+    // El código CORRECTO se acepta ANTES del gate de intentos: el dueño legítimo del
+    // código nunca queda bloqueado por intentos fallidos ajenos (p. ej. un atacante
+    // que quemó los 5 intentos del OTP activo de la víctima). El lockout solo frena
+    // el adivinado (códigos incorrectos), no al que ya tiene el correcto.
+    if (hashesEqual(record.codeHash, hashOtp(code))) {
+      await this.prisma.otpCode.update({
+        where: { id: record.id },
+        data: { consumedAt: new Date() },
+      });
+      return true;
+    }
+
+    // Código incorrecto: recién aquí aplica el lockout de fuerza bruta.
     if (record.attempts >= OTP_MAX_ATTEMPTS) {
       throw new BadRequestException('Demasiados intentos fallidos. Solicita un nuevo código.');
     }
 
-    if (!hashesEqual(record.codeHash, hashOtp(code))) {
-      await this.prisma.otpCode.update({
-        where: { id: record.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new BadRequestException('Código OTP incorrecto.');
-    }
-
     await this.prisma.otpCode.update({
       where: { id: record.id },
-      data: { consumedAt: new Date() },
+      data: { attempts: { increment: 1 } },
     });
-    return true;
+    throw new BadRequestException('Código OTP incorrecto.');
   }
 }

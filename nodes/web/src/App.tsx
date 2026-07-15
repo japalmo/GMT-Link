@@ -9,6 +9,7 @@ import { RequireModule } from '@/routes/require-access';
 import { AppShell } from '@/components/layout/app-shell';
 // Páginas críticas (eager): login, first-login, dashboard y estados de sesión.
 import LoginPage from '@/pages/login';
+import RecoverPasswordPage from '@/pages/recuperar-clave';
 import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
 import SuspendedPage from '@/pages/suspended';
@@ -75,7 +76,11 @@ function NotFoundRedirect() {
 const router = createBrowserRouter([
   {
     element: <PublicRoute />,
-    children: [{ path: '/login', element: <LoginPage /> }],
+    children: [
+      { path: '/login', element: <LoginPage /> },
+      // Recuperar contraseña: pública, rebota a quien ya tiene sesión (PublicRoute).
+      { path: '/recuperar-clave', element: <RecoverPasswordPage /> },
+    ],
   },
   // Cuenta suspendida: se auto-guarda (requiere sesión + status SUSPENDED),
   // fuera de ProtectedRoute para no entrar en bucle de redirección.

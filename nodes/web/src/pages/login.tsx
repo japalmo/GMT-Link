@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,6 +127,15 @@ export default function LoginPage() {
               <Button type="submit" loading={submitting} className="w-full">
                 {submitting ? 'Ingresando…' : 'Ingresar'}
               </Button>
+
+              <div className="text-center">
+                <Link
+                  to="/recuperar-clave"
+                  className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
             </form>
           </CardContent>
         </Card>

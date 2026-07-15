@@ -36,6 +36,9 @@ model User {
   status                 UserStatus                @default(PENDING_FIRST_LOGIN)
   tokenVersion           Int                       @default(0) // época de sesión (A3): incrementar invalida todos los JWT previos del usuario
   firstLoginAt           DateTime? // primer acceso completado; null = invitación aún no usada
+  failedLoginAttempts    Int                       @default(0) // #67 lockout: intentos fallidos consecutivos; se resetea al ingresar ok o recuperar clave
+  lockedUntil            DateTime? // #67 lockout: si > now, la cuenta está bloqueada temporalmente por exceso de intentos
+  lastRecoveryAt         DateTime? // #66 cooldown: última recuperación de clave iniciada; limita reenvío/rotación por cuenta (anti email-bombing/DoS)
   points                 Int                       @default(0) // gamificación
   isClientUser           Boolean                   @default(false)
   clientId               String?

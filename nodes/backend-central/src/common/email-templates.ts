@@ -103,6 +103,20 @@ export function passwordChangeCodeEmail(code: string): EmailContent {
   };
 }
 
+/** Correo con el OTP para RECUPERAR la contraseña (usuario olvidó su clave). */
+export function passwordResetCodeEmail(code: string): EmailContent {
+  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Recupera tu contraseña</p>
+              <p style="margin:0;color:#475569;">Recibimos una solicitud para restablecer tu contraseña en GMT Link. Ingresa este código para continuar:</p>
+              ${codeBox(code)}
+              <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;">Si no solicitaste recuperar tu contraseña, ignora este mensaje y tu contraseña seguirá igual.</p>`);
+
+  return {
+    subject: 'Recupera tu contraseña en GMT Link',
+    body: `Tu código para recuperar la contraseña es ${code}. Vence en 5 minutos.\n\nSi no solicitaste recuperar tu contraseña, ignora este mensaje y tu contraseña seguirá igual.`,
+    html,
+  };
+}
+
 /** Fila etiqueta/valor para la caja de credenciales. */
 function credentialRow(label: string, value: string): string {
   return `<p style="margin:0 0 4px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(label)}</p>

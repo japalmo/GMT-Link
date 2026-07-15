@@ -295,6 +295,45 @@ export async function completeFirstLogin(
   });
 }
 
+/** Resultado de iniciar la recuperación de contraseña. */
+export interface ForgotPasswordResult {
+  /**
+   * `CREDENTIAL_RESENT`: cuenta pendiente, se reenvió una credencial provisoria.
+   * `OTP_SENT`: cuenta activa, se envió un código para restablecer la contraseña.
+   */
+  kind: 'CREDENTIAL_RESENT' | 'OTP_SENT';
+  /** Correo (enmascarado) a donde se envió el mensaje, p. ej. `jua*****@gmail.com`. */
+  maskedEmail: string;
+}
+
+/**
+ * `POST /auth/forgot-password` — inicia la recuperación por usuario. Según el
+ * estado de la cuenta, el servidor reenvía la credencial provisoria (cuenta
+ * pendiente) o envía un OTP de 6 dígitos (cuenta activa), y devuelve el correo
+ * enmascarado. 401 si el usuario no existe; 409 si la cuenta no tiene correo.
+ */
+export async function forgotPassword(username: string): Promise<ForgotPasswordResult> {
+  return request<ForgotPasswordResult>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  });
+}
+
+/**
+ * `POST /auth/reset-password` — cierra la recuperación de una cuenta activa:
+ * canjea el OTP (enviado por `forgotPassword`) por una contraseña nueva.
+ */
+export async function resetPassword(input: {
+  username: string;
+  code: string;
+  newPassword: string;
+}): Promise<void> {
+  await request<{ ok: true }>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Usuarios (§6-1.1) — administración / provisión                              */
 /* -------------------------------------------------------------------------- */

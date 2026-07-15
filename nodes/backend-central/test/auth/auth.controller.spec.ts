@@ -1,11 +1,15 @@
 import 'reflect-metadata';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, HttpException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthController } from '../../src/auth/auth.controller';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import { CompleteFirstLoginDto } from '../../src/auth/dto/complete-first-login.dto';
+import { ForgotPasswordDto } from '../../src/auth/dto/forgot-password.dto';
+import { ResetPasswordDto } from '../../src/auth/dto/reset-password.dto';
 import { hashPassword, verifyPassword } from '../../src/common/password';
+import { maskEmail } from '../../src/common/mask-email';
+import { OTP_PURPOSES } from '../../src/common/otp.service';
 import '../../src/auth/auth-request.types';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 import type { FgaService } from '../../src/fga/fga.service';
@@ -25,10 +29,13 @@ interface Mocks {
   awardPoints: ReturnType<typeof vi.fn>;
   fgaCheck: ReturnType<typeof vi.fn>;
   permissionKeys: ReturnType<typeof vi.fn>;
+  otpGenerate: ReturnType<typeof vi.fn>;
+  otpVerify: ReturnType<typeof vi.fn>;
+  emailSend: ReturnType<typeof vi.fn>;
 }
 
 function buildController(options: {
-  user?: UserRow | { status: string; passwordHash?: string | null } | null;
+  user?: UserRow | { status: string; passwordHash?: string | null } | Record<string, unknown> | null;
   canManageRoles?: boolean;
   permissions?: string[];
 }): Mocks {
@@ -37,6 +44,9 @@ function buildController(options: {
   const awardPoints = vi.fn(() => Promise.resolve());
   const fgaCheck = vi.fn(() => Promise.resolve(options.canManageRoles ?? false));
   const permissionKeys = vi.fn(() => Promise.resolve(options.permissions ?? []));
+  const otpGenerate = vi.fn(() => Promise.resolve('123456'));
+  const otpVerify = vi.fn(() => Promise.resolve(true));
+  const emailSend = vi.fn(() => Promise.resolve());
 
   const prisma = {
     user: { findUnique, update },
@@ -48,14 +58,26 @@ function buildController(options: {
   const permissionService = {
     permissionKeysForUser: permissionKeys,
   } as unknown as import('../../src/authz/permission.service').PermissionService;
+  // El proveedor real de correo se detecta por `!(email instanceof NoopEmailService)`;
+  // este stub simple no es Noop, así que cuenta como proveedor real (envía).
+  const otp = {
+    generate: otpGenerate,
+    verify: otpVerify,
+  } as unknown as import('../../src/common/otp.service').OtpService;
+  const email = {
+    send: emailSend,
+  } as unknown as import('../../src/common/email.service').EmailService;
 
   return {
-    controller: new AuthController(prisma, gamification, fga, permissionService),
+    controller: new AuthController(prisma, gamification, fga, permissionService, otp, email),
     findUnique,
     update,
     awardPoints,
     fgaCheck,
     permissionKeys,
+    otpGenerate,
+    otpVerify,
+    emailSend,
   };
 }
 
@@ -278,5 +300,196 @@ describe('AuthController · POST /auth/first-login/complete', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(update).not.toHaveBeenCalled();
     expect(awardPoints).not.toHaveBeenCalled();
+  });
+});
+
+/** Usuario de recuperación con correos institucional/personal/primario. */
+function recoverUser(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'u1',
+    firstName: 'Felipe',
+    username: 'fperez',
+    status: 'ACTIVE',
+    email: 'fperez@gmt.cl',
+    emailInstitucional: 'felipe.perez@gmt.cl',
+    emailPersonal: 'felipe@gmail.com',
+    emailInstitucionalVerified: new Date(),
+    emailPersonalVerified: null,
+    lastRecoveryAt: null,
+    ...overrides,
+  };
+}
+
+function forgotDto(username: string): ForgotPasswordDto {
+  const d = new ForgotPasswordDto();
+  d.username = username;
+  return d;
+}
+
+function resetDto(username: string, code: string, newPassword: string): ResetPasswordDto {
+  const d = new ResetPasswordDto();
+  d.username = username;
+  d.code = code;
+  d.newPassword = newPassword;
+  return d;
+}
+
+describe('AuthController · POST /auth/forgot-password', () => {
+  it('401 si el usuario no existe', async () => {
+    const { controller, update, emailSend } = buildController({ user: null });
+    await expect(controller.forgotPassword(forgotDto('nadie'))).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(emailSend).not.toHaveBeenCalled();
+  });
+
+  it('SUSPENDED → mismo 401 neutro que "no existe" (no filtra el estado de suspensión)', async () => {
+    const { controller, emailSend } = buildController({
+      user: recoverUser({ status: 'SUSPENDED' }),
+    });
+    const err = await controller.forgotPassword(forgotDto('fperez')).catch((e) => e);
+    expect(err).toBeInstanceOf(UnauthorizedException);
+    // Mensaje idéntico al de cuenta inexistente: no revela que la cuenta existe/está suspendida.
+    expect((err as UnauthorizedException).message).toBe('No existe una cuenta con ese usuario.');
+    expect((err as UnauthorizedException).message).not.toMatch(/suspendida/i);
+    expect(emailSend).not.toHaveBeenCalled();
+  });
+
+  it('cooldown por cuenta: una segunda solicitud dentro de la ventana no reenvía/rota ni genera OTP', async () => {
+    const { controller, update, emailSend, otpGenerate } = buildController({
+      user: recoverUser({ lastRecoveryAt: new Date(Date.now() - 10_000) }), // hace 10 s (< 60 s)
+    });
+    const res = await controller.forgotPassword(forgotDto('fperez'));
+    // Respuesta de la misma forma, pero SIN efectos secundarios.
+    expect(res).toEqual({ kind: 'OTP_SENT', maskedEmail: maskEmail('felipe.perez@gmt.cl') });
+    expect(otpGenerate).not.toHaveBeenCalled();
+    expect(emailSend).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('cooldown expirado: una solicitud pasada la ventana sí reenvía (genera OTP)', async () => {
+    const { controller, otpGenerate, emailSend } = buildController({
+      user: recoverUser({ lastRecoveryAt: new Date(Date.now() - 5 * 60_000) }), // hace 5 min (> 60 s)
+    });
+    await controller.forgotPassword(forgotDto('fperez'));
+    expect(otpGenerate).toHaveBeenCalledWith('felipe.perez@gmt.cl', OTP_PURPOSES.RESET_PASSWORD);
+    expect(emailSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('ACTIVE → genera OTP RESET_PASSWORD al correo verificado y devuelve OTP_SENT + correo enmascarado', async () => {
+    const { controller, otpGenerate, emailSend } = buildController({ user: recoverUser() });
+    const res = await controller.forgotPassword(forgotDto('fperez'));
+    // El destino es el institucional VERIFICADO (emailInstitucionalVerified != null).
+    expect(otpGenerate).toHaveBeenCalledWith('felipe.perez@gmt.cl', OTP_PURPOSES.RESET_PASSWORD);
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(res).toEqual({ kind: 'OTP_SENT', maskedEmail: maskEmail('felipe.perez@gmt.cl') });
+    expect(res.maskedEmail).not.toContain('felipe.perez'); // el correo va enmascarado
+  });
+
+  it('PENDING_FIRST_LOGIN → reenvía credencial provisoria, rota la clave y devuelve CREDENTIAL_RESENT', async () => {
+    const { controller, update, emailSend, otpGenerate } = buildController({
+      user: recoverUser({ status: 'PENDING_FIRST_LOGIN' }),
+    });
+    const res = await controller.forgotPassword(forgotDto('fperez'));
+    // No usa OTP en el camino pendiente; reenvía la credencial.
+    expect(otpGenerate).not.toHaveBeenCalled();
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+    const call = update.mock.calls[0]?.[0] as {
+      data: { passwordHash: string; status: string; tokenVersion: unknown };
+    };
+    expect(call.data.status).toBe('PENDING_FIRST_LOGIN');
+    expect(typeof call.data.passwordHash).toBe('string');
+    expect(call.data.tokenVersion).toEqual({ increment: 1 });
+    expect(res.kind).toBe('CREDENTIAL_RESENT');
+    // El institucional NO está verificado en este caso de prueba, pero primaryEmail
+    // usa institucional > personal > email sin exigir verificación.
+    expect(res.maskedEmail).toBe(maskEmail('felipe.perez@gmt.cl'));
+  });
+
+  it('PENDING + fallo de envío de correo → 502 y NO rota la clave (credencial vigente sobrevive)', async () => {
+    const { controller, update, emailSend } = buildController({
+      user: recoverUser({ status: 'PENDING_FIRST_LOGIN' }),
+    });
+    emailSend.mockRejectedValueOnce(new Error('SMTP caído'));
+    const err = await controller.forgotPassword(forgotDto('fperez')).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(502);
+    // Clave NO rotada: se envía ANTES de actualizar, así el usuario no queda sin acceso.
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('409 si la cuenta no tiene ningún correo para enviar (proveedor real, pero sin destino)', async () => {
+    const { controller } = buildController({
+      user: recoverUser({
+        status: 'PENDING_FIRST_LOGIN',
+        email: '',
+        emailInstitucional: null,
+        emailPersonal: null,
+      }),
+    });
+    await expect(controller.forgotPassword(forgotDto('fperez'))).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
+
+describe('AuthController · POST /auth/reset-password', () => {
+  it('401 si el usuario no existe', async () => {
+    const { controller, update, otpVerify } = buildController({ user: null });
+    await expect(
+      controller.resetPassword(resetDto('nadie', '123456', 'nuevaClave123')),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(otpVerify).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('401 neutro si la cuenta no está ACTIVE (PENDING/SUSPENDED no filtran su estado)', async () => {
+    const { controller, update, otpVerify } = buildController({
+      user: recoverUser({ status: 'PENDING_FIRST_LOGIN' }),
+    });
+    const err = await controller
+      .resetPassword(resetDto('fperez', '123456', 'nuevaClave123'))
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(UnauthorizedException);
+    // Mismo mensaje que cuenta inexistente: no revela PENDING/SUSPENDED.
+    expect((err as UnauthorizedException).message).toBe('No existe una cuenta con ese usuario.');
+    expect(otpVerify).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('ACTIVE + OTP válido → verifica, fija clave nueva, sube tokenVersion y limpia lockout', async () => {
+    const { controller, update, otpVerify } = buildController({ user: recoverUser() });
+    const res = await controller.resetPassword(resetDto('fperez', '123456', 'nuevaClave123'));
+    expect(otpVerify).toHaveBeenCalledWith(
+      'felipe.perez@gmt.cl',
+      OTP_PURPOSES.RESET_PASSWORD,
+      '123456',
+    );
+    expect(update).toHaveBeenCalledTimes(1);
+    const call = update.mock.calls[0]?.[0] as {
+      data: {
+        passwordHash: string;
+        tokenVersion: unknown;
+        failedLoginAttempts: number;
+        lockedUntil: Date | null;
+      };
+    };
+    expect(typeof call.data.passwordHash).toBe('string');
+    await expect(verifyPassword('nuevaClave123', call.data.passwordHash)).resolves.toBe(true);
+    expect(call.data.tokenVersion).toEqual({ increment: 1 });
+    expect(call.data.failedLoginAttempts).toBe(0);
+    expect(call.data.lockedUntil).toBeNull();
+    expect(res).toEqual({ ok: true });
+  });
+
+  it('OTP inválido → propaga el error de verify y NO cambia la clave', async () => {
+    const { controller, update, otpVerify } = buildController({ user: recoverUser() });
+    otpVerify.mockRejectedValueOnce(new Error('Código OTP incorrecto.'));
+    await expect(
+      controller.resetPassword(resetDto('fperez', '000000', 'nuevaClave123')),
+    ).rejects.toThrow(/OTP/i);
+    expect(update).not.toHaveBeenCalled();
   });
 });

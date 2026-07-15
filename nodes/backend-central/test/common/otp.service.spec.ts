@@ -124,7 +124,7 @@ describe('OtpService', () => {
       });
     });
 
-    it('lanza lockout tras 5 intentos fallidos', async () => {
+    it('lanza lockout tras 5 intentos fallidos (con un código INCORRECTO)', async () => {
       const row: OtpRow = {
         id: 'otp-1',
         codeHash: hashOtp('123456'),
@@ -133,9 +133,29 @@ describe('OtpService', () => {
       };
       prismaMock.otpCode.findFirst.mockResolvedValue(row);
 
+      // Código incorrecto + intentos agotados -> lockout (el gate solo aplica a fallos).
       await expect(
-        service.verify('user@gmt.cl', OTP_PURPOSES.CHANGE_EMAIL, '123456'),
+        service.verify('user@gmt.cl', OTP_PURPOSES.CHANGE_EMAIL, '999999'),
       ).rejects.toThrow('Demasiados intentos fallidos. Solicita un nuevo código.');
+    });
+
+    it('acepta el código CORRECTO aunque los intentos estén agotados (el dueño no queda bloqueado por fallos ajenos)', async () => {
+      const code = '123456';
+      const row: OtpRow = {
+        id: 'otp-1',
+        codeHash: hashOtp(code),
+        expiresAt: new Date(Date.now() + 10_000),
+        attempts: 5, // ya en el tope: un atacante quemó los intentos del OTP de la víctima
+      };
+      prismaMock.otpCode.findFirst.mockResolvedValue(row);
+
+      const ok = await service.verify('user@gmt.cl', OTP_PURPOSES.CHANGE_EMAIL, code);
+
+      expect(ok).toBe(true);
+      expect(prismaMock.otpCode.update).toHaveBeenCalledWith({
+        where: { id: 'otp-1' },
+        data: expect.objectContaining({ consumedAt: expect.any(Date) }),
+      });
     });
 
     it('incrementa intentos si el código es incorrecto', async () => {

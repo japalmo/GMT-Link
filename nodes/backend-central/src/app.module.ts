@@ -42,8 +42,13 @@ import { ServiceTypesModule } from './modules/service-types/service-types.module
 
 @Module({
   imports: [
-    // Límite global anti-abuso: 120 req/min por IP (excluye /health).
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
+    // Límite global anti-abuso: 120 req/min por IP (excluye /health). El
+    // errorMessage traduce el 429 del throttle al español (el lockout de cuenta
+    // trae su propio mensaje con los minutos restantes).
+    ThrottlerModule.forRoot({
+      throttlers: [{ name: 'default', ttl: 60_000, limit: 120 }],
+      errorMessage: 'Demasiadas solicitudes. Espera un momento e intenta de nuevo.',
+    }),
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     CommonModule,
     StorageModule,

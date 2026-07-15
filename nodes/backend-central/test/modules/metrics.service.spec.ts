@@ -197,11 +197,15 @@ describe('MetricsService', () => {
       });
     });
 
-    it('verifyOtp debería arrojar error si se excedió el número máximo de intentos', async () => {
+    it('verifyOtp debería arrojar error si se excedió el número máximo de intentos (código incorrecto)', async () => {
+      const crypto = await import('crypto');
+      // Hash de OTRO código: el gate de intentos solo aplica a códigos incorrectos.
+      const hash = crypto.createHash('sha256').update('999999').digest('hex');
       prismaMock.otpCode.findFirst.mockResolvedValue({
         id: 'otp-1',
         expiresAt: new Date(Date.now() + 10000),
         attempts: 5,
+        codeHash: hash,
       });
 
       await expect(service.verifyOtp('user@gmt.cl', '123456')).rejects.toThrow('Demasiados intentos fallidos.');

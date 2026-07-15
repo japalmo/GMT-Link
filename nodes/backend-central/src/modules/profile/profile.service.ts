@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { EmailKind, Prisma, User } from '@prisma/client';
+import type { EmailKind, Prisma } from '@prisma/client';
 import { ORG_ID } from '../../common/org.constant';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
@@ -14,6 +14,7 @@ import { signToken } from '../../common/jwt';
 import { EmailService } from '../../common/email.service';
 import { verificationCodeEmail, passwordChangeCodeEmail } from '../../common/email-templates';
 import { OtpService, OTP_PURPOSES } from '../../common/otp.service';
+import { resolvePasswordOtpTarget } from '../../common/email-target';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ChangeEmailRequestDto } from './dto/change-email-request.dto';
 import type { ChangeEmailConfirmDto } from './dto/change-email-confirm.dto';
@@ -254,7 +255,7 @@ export class ProfileService {
       throw new NotFoundException('El usuario de la sesión ya no existe.');
     }
 
-    const target = this.resolvePasswordOtpTarget(user);
+    const target = resolvePasswordOtpTarget(user);
     const code = await this.otp.generate(target, OTP_PURPOSES.CHANGE_PASSWORD);
     await this.emailService.send({ to: target, ...passwordChangeCodeEmail(code) });
 
@@ -282,7 +283,7 @@ export class ProfileService {
     }
 
     // Verifica el OTP contra el mismo destino que usó el request (consistencia).
-    const target = this.resolvePasswordOtpTarget(user);
+    const target = resolvePasswordOtpTarget(user);
     await this.otp.verify(target, OTP_PURPOSES.CHANGE_PASSWORD, dto.code);
 
     // Cambiar la clave CIERRA las demás sesiones (A3): al subir tokenVersion, los
@@ -295,20 +296,6 @@ export class ProfileService {
       select: { tokenVersion: true },
     });
     return { ok: true, token: signToken(userId, updated.tokenVersion) };
-  }
-
-  /**
-   * Destino del OTP de contraseña: primer correo VERIFICADO en orden
-   * (institucional → personal); si ninguno está verificado, el `email` primario.
-   */
-  private resolvePasswordOtpTarget(user: User): string {
-    if (user.emailInstitucional && user.emailInstitucionalVerified) {
-      return user.emailInstitucional;
-    }
-    if (user.emailPersonal && user.emailPersonalVerified) {
-      return user.emailPersonal;
-    }
-    return user.email;
   }
 
   /**
