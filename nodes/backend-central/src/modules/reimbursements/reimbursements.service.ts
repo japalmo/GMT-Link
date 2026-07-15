@@ -16,6 +16,7 @@ import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
+import { oneMonthAgoSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateReimbursementDto, UpdateReimbursementDto } from './dto/reimbursements.dto';
@@ -106,6 +107,10 @@ export class ReimbursementsService {
     dto: CreateReimbursementDto,
     file: UploadedReceiptFile,
   ): Promise<ReimbursementView> {
+    // Ventana de fecha ANTES de subir la boleta: un 400 no deja archivos huérfanos.
+    const expenseDate = parseDate(dto.date);
+    assertExpenseDateWithinWindow(expenseDate);
+
     const saved = await this.storage.save({
       buffer: file.buffer,
       filename: file.originalname,
@@ -117,7 +122,7 @@ export class ReimbursementsService {
       data: {
         userId,
         amount: dto.amount,
-        date: parseDate(dto.date),
+        date: expenseDate,
         concept: dto.concept,
         category: dto.category ?? null,
         subcategory: dto.subcategory ?? null,
@@ -456,11 +461,22 @@ export class ReimbursementsService {
       throw new ConflictException('Solo puedes editar un reembolso mientras está pendiente.');
     }
 
+    // Ventana de fecha DESPUÉS de dueño/estado: conserva la semántica 404/409. Solo
+    // se revalida cuando la fecha del gasto CAMBIA (a nivel de día UTC, convención
+    // date-only); así un reembolso PENDIENTE cuyo gasto ya envejeció más allá de 1
+    // mes sigue editable en sus otros campos (monto, concepto) sin mover la fecha.
+    const expenseDate = parseDate(dto.date);
+    const toUtcDay = (d: Date): number =>
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    if (toUtcDay(expenseDate) !== toUtcDay(current.date)) {
+      assertExpenseDateWithinWindow(expenseDate);
+    }
+
     const row = await this.prisma.reimbursement.update({
       where: { id },
       data: {
         amount: dto.amount,
-        date: parseDate(dto.date),
+        date: expenseDate,
         concept: dto.concept,
         category: dto.category ?? null,
         subcategory: dto.subcategory ?? null,
@@ -635,6 +651,23 @@ function parseDate(value: string): Date {
     throw new BadRequestException('Fecha inválida.');
   }
   return date;
+}
+
+/**
+ * Ventana de la fecha del gasto (versión beta, spec de la dueña): no puede ser
+ * FUTURA ni tener más de 1 MES CALENDARIO de antigüedad, ambos medidos en día
+ * calendario de Chile (`finance-time.util`, ancla DST-safe). Se compara solo la
+ * parte de día (UTC) del valor ya parseado, coherente con la convención
+ * date-only del almacenamiento. Fuera de la ventana → 400.
+ */
+function assertExpenseDateWithinWindow(date: Date): void {
+  const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  if (day > startOfTodaySantiago().getTime()) {
+    throw new BadRequestException('La fecha del gasto no puede ser futura.');
+  }
+  if (day < oneMonthAgoSantiago().getTime()) {
+    throw new BadRequestException('La fecha del gasto no puede tener más de 1 mes de antigüedad.');
+  }
 }
 
 /** Formateador de pesos chilenos (sin decimales) para los encabezados del PDF. */

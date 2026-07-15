@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  oneMonthAgoSantiago,
   startOfTodaySantiago,
   santiagoDateParts,
 } from '../../src/modules/finance/finance-time.util';
@@ -38,6 +39,41 @@ describe('startOfTodaySantiago (día calendario de Chile)', () => {
     expect(santiagoDateParts(new Date('2026-01-15T03:30:00.000Z')).day).toBe(15);
     // Invierno (julio): 03:30Z - 4 = 23:30 del 14 => día 14.
     expect(santiagoDateParts(new Date('2026-07-15T03:30:00.000Z')).day).toBe(14);
+  });
+});
+
+describe('oneMonthAgoSantiago (límite de la ventana de reembolsos, 1 mes calendario)', () => {
+  it('caso normal: mismo día del mes anterior (15-jul → 15-jun)', () => {
+    // 2026-07-15T12:00Z = 15-jul 08:00 en Chile (invierno, UTC-4).
+    const instant = new Date('2026-07-15T12:00:00.000Z');
+    expect(oneMonthAgoSantiago(instant).toISOString()).toBe('2026-06-15T00:00:00.000Z');
+  });
+
+  it('clamp: si el mes anterior no tiene el día, va al último día (31-mar → 28-feb)', () => {
+    // 2026 no es bisiesto. 2026-03-31T12:00Z = 31-mar 09:00 en Chile (verano, UTC-3).
+    const instant = new Date('2026-03-31T12:00:00.000Z');
+    expect(oneMonthAgoSantiago(instant).toISOString()).toBe('2026-02-28T00:00:00.000Z');
+  });
+
+  it('clamp con bisiesto: 31-mar-2028 → 29-feb-2028', () => {
+    const instant = new Date('2028-03-31T12:00:00.000Z');
+    expect(oneMonthAgoSantiago(instant).toISOString()).toBe('2028-02-29T00:00:00.000Z');
+  });
+
+  it('clamp a mes de 30 días: 31-may → 30-abr', () => {
+    const instant = new Date('2026-05-31T12:00:00.000Z');
+    expect(oneMonthAgoSantiago(instant).toISOString()).toBe('2026-04-30T00:00:00.000Z');
+  });
+
+  it('cruce de año: 15-ene → 15-dic del año anterior', () => {
+    const instant = new Date('2027-01-15T12:00:00.000Z');
+    expect(oneMonthAgoSantiago(instant).toISOString()).toBe('2026-12-15T00:00:00.000Z');
+  });
+
+  it('ancla al día CHILENO: de noche en Chile aún no cruza al día UTC siguiente', () => {
+    // 2026-07-16T02:00Z = 15-jul 22:00 en Chile (invierno, UTC-4) => 1 mes atrás del 15.
+    const instant = new Date('2026-07-16T02:00:00.000Z');
+    expect(oneMonthAgoSantiago(instant).toISOString()).toBe('2026-06-15T00:00:00.000Z');
   });
 });
 

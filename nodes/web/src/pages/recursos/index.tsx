@@ -138,6 +138,9 @@ export default function RecursosPage(): ReactNode {
   // mis solicitudes).
   const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  // Destino inicial del detalle: 'checklist' aterriza en la pestaña Ficha con
+  // scroll al checklist (flujo "Poner en uso" de un vehículo desde la tabla).
+  const [detailTarget, setDetailTarget] = useState<'checklist' | null>(null);
   const idBase = useId();
 
   const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos' || activeTab === 'maquinaria';
@@ -163,6 +166,7 @@ export default function RecursosPage(): ReactNode {
         onValueChange={(tab) => {
           setActiveTab(tab);
           setSelectedAssetId(null);
+          setDetailTarget(null);
         }}
         idBase={idBase}
       />
@@ -177,7 +181,14 @@ export default function RecursosPage(): ReactNode {
       >
         {isAssetTab && (
           selectedAssetId ? (
-            <AssetDetailView id={selectedAssetId} onBack={() => setSelectedAssetId(null)} />
+            <AssetDetailView
+              id={selectedAssetId}
+              initialTarget={detailTarget}
+              onBack={() => {
+                setSelectedAssetId(null);
+                setDetailTarget(null);
+              }}
+            />
           ) : (
             <ActivosCatalogView
               key={activeTab}
@@ -188,7 +199,10 @@ export default function RecursosPage(): ReactNode {
                     ? 'maquinaria'
                     : 'equipos'
               }
-              onSelectAsset={setSelectedAssetId}
+              onSelectAsset={(id, target) => {
+                setSelectedAssetId(id);
+                setDetailTarget(target ?? null);
+              }}
             />
           )
         )}
@@ -211,7 +225,11 @@ interface ActivosCatalogViewProps {
    * 'maquinaria' type=MAQUINARIA.
    */
   subsection: 'equipos' | 'vehiculos' | 'maquinaria';
-  onSelectAsset: (id: string) => void;
+  /**
+   * Abre el detalle del activo. `target: 'checklist'` aterriza directo en la
+   * pestaña Ficha con scroll al checklist (tras poner en uso un vehículo).
+   */
+  onSelectAsset: (id: string, target?: 'checklist') => void;
 }
 
 function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewProps): ReactNode {
@@ -299,6 +317,12 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       const asset = await takeAssetUse(id);
       reconcileRow(id, asset);
       toast.success('Activo puesto en uso con éxito.');
+      // Para vehículos, el operador debe registrar el estado al recibirlo: se abre
+      // el detalle directo al checklist (misma conducta que "Poner en uso" desde
+      // el detalle del activo).
+      if (asset.type === 'VEHICULO') {
+        onSelectAsset(id, 'checklist');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
     } finally {
@@ -464,6 +488,16 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       header: 'Responsable',
       render: (a) =>
         a.assignedTo ? `${a.assignedTo.firstName} ${a.assignedTo.lastName.charAt(0)}.` : 'Sin asignar',
+    },
+    {
+      id: 'enUsoPor',
+      header: 'En uso por',
+      render: (a) =>
+        a.inUseBy ? (
+          `${a.inUseBy.firstName} ${a.inUseBy.lastName.charAt(0)}.`
+        ) : (
+          <span className="text-muted-foreground">Sin uso</span>
+        ),
     },
     { id: 'fabricante', header: 'Fabricante', sortable: true, render: (a) => a.manufacturer || 'N/A' },
     {
@@ -831,10 +865,15 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
 
 interface AssetDetailViewProps {
   id: string;
+  /**
+   * Destino inicial al montar: 'checklist' aterriza en la pestaña Ficha pública
+   * con scroll a la tarjeta del checklist (flujo "Poner en uso" desde la tabla).
+   */
+  initialTarget?: 'checklist' | null;
   onBack: () => void;
 }
 
-function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
+function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewProps): ReactNode {
   const { profile } = useProfile();
   const {
     getById,
@@ -880,12 +919,15 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [newAssignId, setNewAssignId] = useState('');
 
-  // Tabs for detailed view
-  const [detailTab, setDetailTab] = useState<'informacion' | 'ficha' | 'historial'>('informacion');
+  // Tabs for detailed view. Con `initialTarget='checklist'` (poner en uso desde la
+  // tabla) se monta directo en la pestaña Ficha con scroll pendiente al checklist.
+  const [detailTab, setDetailTab] = useState<'informacion' | 'ficha' | 'historial'>(
+    initialTarget === 'checklist' ? 'ficha' : 'informacion',
+  );
   const [editOpen, setEditOpen] = useState(false);
   // Al "Reportar uso"/"Poner en uso" el operador debe aterrizar en el checklist, que
   // vive en la pestaña Ficha pública; este flag hace scroll a esa tarjeta al montarse.
-  const [scrollToChecklist, setScrollToChecklist] = useState(false);
+  const [scrollToChecklist, setScrollToChecklist] = useState(initialTarget === 'checklist');
   const checklistRef = useRef<HTMLDivElement>(null);
 
   // Descarga de PDF de una inspección (submissionId en curso).
@@ -1350,16 +1392,18 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   };
 
   // Tras "Reportar uso"/"Poner en uso", lleva el foco a la tarjeta del checklist
-  // dentro de la pestaña Ficha pública (que se monta al cambiar de pestaña).
+  // dentro de la pestaña Ficha pública (que se monta al cambiar de pestaña). El
+  // gate `!loading` cubre el aterrizaje con `initialTarget='checklist'`: espera a
+  // que el detalle cargue (la tarjeta aún no existe) sin consumir el flag antes.
   useEffect(() => {
-    if (detailTab === 'ficha' && scrollToChecklist) {
+    if (!loading && detailTab === 'ficha' && scrollToChecklist) {
       const raf = requestAnimationFrame(() =>
         checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       );
       setScrollToChecklist(false);
       return () => cancelAnimationFrame(raf);
     }
-  }, [detailTab, scrollToChecklist]);
+  }, [loading, detailTab, scrollToChecklist]);
 
   if (loading) {
     return (

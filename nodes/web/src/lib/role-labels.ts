@@ -28,6 +28,8 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   admin_ti: 'Administrador TI',
   // Rol de sistema Logística (módulo Inventario).
   logistica: 'Logística',
+  // Rol de sistema Conductor (flota de vehículos): reporta uso y ejecuta checklist.
+  conductor: 'Conductor',
   // Legacy: etiquetas de rol de trabajador a nivel PROYECTO (no bundles de org).
   supervisor: 'Supervisor',
   operador: 'Operador',

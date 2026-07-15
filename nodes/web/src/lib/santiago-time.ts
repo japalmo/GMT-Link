@@ -31,6 +31,24 @@ export function todaySantiagoString(now: Date = new Date()): string {
 }
 
 /**
+ * Día que queda EXACTAMENTE 1 mes CALENDARIO antes de hoy (día de Chile), en
+ * formato YYYY-MM-DD. Espejo de `oneMonthAgoSantiago` del backend: límite
+ * inferior (inclusive) de la ventana de fecha del gasto en reembolsos (versión
+ * beta). Mismo día del mes anterior (15-jul → 15-jun); si ese mes no tiene el
+ * día (31-mar), se ajusta al último día (28/29-feb).
+ */
+export function oneMonthAgoSantiagoString(now: Date = new Date()): string {
+  const { year, month, day } = santiagoParts(now);
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonth = month === 1 ? 12 : month - 1; // 1-based
+  // Día 0 del mes SIGUIENTE al anterior (índice 0-based = prevMonth) = último
+  // día del mes anterior; clampa un 31 a 28/29/30 según corresponda.
+  const lastDayOfPrev = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+  const day2 = Math.min(day, lastDayOfPrev);
+  return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(day2).padStart(2, '0')}`;
+}
+
+/**
  * Mes contable en curso "YYYY-MM" (cierre día 20) según el día de Chile.
  * Mismo criterio que `accountingMonth` del backend: día > 20 empuja al mes
  * siguiente.

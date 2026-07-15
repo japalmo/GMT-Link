@@ -6,7 +6,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma, User, WorkSchedule } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { User, WorkSchedule } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import type {
@@ -20,6 +21,7 @@ import type {
   UpdateUserAdminInput,
   UpsertWorkScheduleInput,
   UserMembership,
+  WeeklyHoursEntry,
   WorkScheduleView,
 } from '@gmt-platform/contracts';
 import { SHIFT_PATTERN_CYCLE } from '@gmt-platform/contracts';
@@ -51,6 +53,10 @@ const ORG_ADMIN_ROLE: RoleKey = 'org_admin';
 const PROJECT_MANAGE_PERMISSION = 'project:manage';
 /** Estados válidos de `User.status` (enum Prisma) — whitelist del filtro de la tabla. */
 const VALID_USER_STATUSES: readonly string[] = ['PENDING_FIRST_LOGIN', 'ACTIVE', 'SUSPENDED'];
+/** "HH:mm" 24h (00:00 a 23:59) — horas del horario semanal (espejo del DTO). */
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** Lunes a viernes en convención ISO (1 = lunes .. 7 = domingo). */
+const WEEKDAYS_MON_FRI: readonly number[] = [1, 2, 3, 4, 5];
 import type {
   CreateUserResponse,
   ImportErrorRow,
@@ -610,9 +616,12 @@ export class UsersService {
   /**
    * Upsert de la jornada de un trabajador (`PUT /users/:id/schedule`). Reemplazo
    * completo. Normaliza los días de ciclo según el patrón: ADMINISTRATIVO no rota
-   * (workDays/restDays/cycleStart quedan en null); los preset cíclicos derivan
-   * workDays/restDays de la tabla; PERSONALIZADO exige workDays/restDays (≥1). 404
-   * si el usuario no existe.
+   * (workDays/restDays/cycleStart quedan en null) y define su horario POR DÍA de
+   * la semana en `weeklyHours` (si el cliente no lo manda, se deriva lunes a
+   * viernes de startTime/endTime); los preset cíclicos derivan workDays/restDays
+   * de la tabla; PERSONALIZADO exige workDays/restDays (≥1). En los cíclicos
+   * `weeklyHours` queda en null: startTime/endTime es la jornada en faena (en
+   * faena todos los días son iguales). 404 si el usuario no existe.
    */
   async upsertSchedule(id: string, input: UpsertWorkScheduleInput): Promise<WorkScheduleView> {
     await this.assertUserExists(id);
@@ -620,12 +629,26 @@ export class UsersService {
     let workDays: number | null;
     let restDays: number | null;
     let cycleStart: Date | null;
+    let weeklyHours: WeeklyHoursEntry[] | null;
+    let startTime: string | null;
+    let endTime: string | null;
 
     if (input.shiftPattern === 'ADMINISTRATIVO') {
-      // Jornada administrativa: lunes a viernes, sin ciclo rotativo.
+      // Jornada administrativa: días fijos por semana, sin ciclo rotativo.
       workDays = null;
       restDays = null;
       cycleStart = null;
+      weeklyHours = this.normalizeWeeklyHours(input);
+      if (weeklyHours !== null) {
+        // Sincroniza la jornada única legacy con las horas del lunes (o null si
+        // el lunes no se trabaja) para no romper lectores viejos de la fila.
+        const monday = weeklyHours.find((entry) => entry.weekday === 1) ?? null;
+        startTime = monday?.start ?? null;
+        endTime = monday?.end ?? null;
+      } else {
+        startTime = this.normalizeTime(input.startTime);
+        endTime = this.normalizeTime(input.endTime);
+      }
     } else {
       const preset = SHIFT_PATTERN_CYCLE[input.shiftPattern];
       if (preset) {
@@ -647,6 +670,14 @@ export class UsersService {
       if (cycleStart === null) {
         throw new BadRequestException('Los turnos cíclicos requieren una fecha de inicio de ciclo.');
       }
+      // En faena todos los días son iguales: rige la jornada única y el horario
+      // semanal por día no aplica.
+      weeklyHours = null;
+      startTime = this.normalizeTime(input.startTime);
+      endTime = this.normalizeTime(input.endTime);
+      if (startTime !== null && endTime !== null) {
+        this.assertTimeRange(startTime, endTime, input.dayNight === 'NOCHE');
+      }
     }
 
     const data = {
@@ -655,8 +686,17 @@ export class UsersService {
       restDays,
       cycleStart,
       dayNight: input.dayNight,
-      startTime: this.normalizeTime(input.startTime),
-      endTime: this.normalizeTime(input.endTime),
+      startTime,
+      endTime,
+      // Prisma rechaza un null JS plano en Json?: se usa el guard Prisma.JsonNull.
+      weeklyHours:
+        weeklyHours === null
+          ? Prisma.JsonNull
+          : (weeklyHours.map((entry) => ({
+              weekday: entry.weekday,
+              start: entry.start,
+              end: entry.end,
+            })) as Prisma.InputJsonValue),
       notes: input.notes?.trim() || null,
     };
 
@@ -681,9 +721,100 @@ export class UsersService {
       dayNight: row.dayNight,
       startTime: row.startTime,
       endTime: row.endTime,
+      weeklyHours: this.weeklyHoursFromRow(row.weeklyHours),
       notes: row.notes,
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Valida y normaliza el horario semanal por día (patrón ADMINISTRATIVO).
+   * Si el cliente lo manda: weekday 1..7 únicos, horas "HH:mm", término posterior
+   * al inicio, máximo 7 días y al menos 1; se retorna ordenado por weekday. Si no
+   * viene (escritor legacy): se deriva lunes a viernes de startTime/endTime cuando
+   * el par está completo; si no, queda sin definir (null, interpretación legacy).
+   */
+  private normalizeWeeklyHours(input: UpsertWorkScheduleInput): WeeklyHoursEntry[] | null {
+    if (input.weeklyHours === undefined || input.weeklyHours === null) {
+      const start = this.normalizeTime(input.startTime);
+      const end = this.normalizeTime(input.endTime);
+      if (start === null || end === null) return null;
+      this.assertTimeRange(start, end, input.dayNight === 'NOCHE');
+      return WEEKDAYS_MON_FRI.map((weekday) => ({ weekday, start, end }));
+    }
+    if (input.weeklyHours.length === 0) {
+      throw new BadRequestException(
+        'La jornada administrativa requiere al menos un día trabajado en la semana.',
+      );
+    }
+    if (input.weeklyHours.length > 7) {
+      throw new BadRequestException('El horario semanal admite como máximo 7 días.');
+    }
+    const seen = new Set<number>();
+    const entries = input.weeklyHours.map((entry): WeeklyHoursEntry => {
+      const { weekday } = entry;
+      if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) {
+        throw new BadRequestException(
+          'El día de la semana debe estar entre 1 (lunes) y 7 (domingo).',
+        );
+      }
+      if (seen.has(weekday)) {
+        throw new BadRequestException('El horario semanal no puede repetir un día de la semana.');
+      }
+      seen.add(weekday);
+      const start = entry.start?.trim() ?? '';
+      const end = entry.end?.trim() ?? '';
+      if (!HHMM_RE.test(start) || !HHMM_RE.test(end)) {
+        throw new BadRequestException('Las horas del horario semanal deben tener formato HH:mm.');
+      }
+      this.assertTimeRange(start, end, input.dayNight === 'NOCHE');
+      return { weekday, start, end };
+    });
+    return entries.sort((a, b) => a.weekday - b.weekday);
+  }
+
+  /**
+   * Valida el rango horario "HH:mm". De día exige término posterior al inicio;
+   * en turno NOCHE (`allowOvernight`) se permite cruzar medianoche (p. ej. 20:00
+   * a 08:00) y solo se rechaza que inicio y término sean iguales.
+   */
+  private assertTimeRange(start: string, end: string, allowOvernight = false): void {
+    const startMin = this.timeToMinutes(start);
+    const endMin = this.timeToMinutes(end);
+    if (allowOvernight) {
+      if (endMin === startMin) {
+        throw new BadRequestException('La hora de término no puede ser igual a la de inicio.');
+      }
+      return;
+    }
+    if (endMin <= startMin) {
+      throw new BadRequestException('La hora de término debe ser posterior a la hora de inicio.');
+    }
+  }
+
+  /** "HH:mm" → minutos desde medianoche (asume formato ya validado). */
+  private timeToMinutes(value: string): number {
+    const [hours = '0', minutes = '0'] = value.split(':');
+    return Number(hours) * 60 + Number(minutes);
+  }
+
+  /**
+   * Columna Json `weeklyHours` → contrato. Defensivo: si la forma persistida no
+   * es la esperada (array de { weekday, start, end }) se retorna null y la fila
+   * se interpreta como legacy (lunes a viernes con startTime/endTime).
+   */
+  private weeklyHoursFromRow(value: Prisma.JsonValue | null): WeeklyHoursEntry[] | null {
+    if (!Array.isArray(value)) return null;
+    const entries: WeeklyHoursEntry[] = [];
+    for (const item of value) {
+      if (item === null || typeof item !== 'object' || Array.isArray(item)) return null;
+      const { weekday, start, end } = item as Record<string, unknown>;
+      if (typeof weekday !== 'number' || typeof start !== 'string' || typeof end !== 'string') {
+        return null;
+      }
+      entries.push({ weekday, start, end });
+    }
+    return entries.length > 0 ? entries : null;
   }
 
   /** ISO date/datetime opcional → Date; null si vacío; 400 si inválido. */

@@ -69,9 +69,17 @@ export class AssetsService {
    *
    * Regla funcional (ADR-0001): quien tenga `asset:read` con scope GLOBAL ve
    * todo; con scope de proyectos, ve los de sus proyectos y los globales. Si no
-   * tiene el permiso funcional, se conserva el gate estructural por-activo de
-   * OpenFGA (usuario asignado / con `can_view_list` del proyecto) para no
-   * romper la retrocompatibilidad. No concede ninguna escritura.
+   * tiene el permiso funcional, un activo GLOBAL (flota, `projectId` null) igual
+   * es visible para quien pueda reportar uso o ejecutar checklist (rol conductor
+   * / bundles admin); esto habilita el flujo tomar en uso -> llenar checklist del
+   * vehículo. Como último respaldo se conserva el gate estructural por-activo de
+   * OpenFGA (usuario asignado / con `can_view_list` del proyecto) para no romper la
+   * retrocompatibilidad. Este detalle es a propósito MÁS estricto que el listado
+   * (`buildScopedAssetWhere` muestra los globales a cualquier usuario con membresía,
+   * incluidos los externos client_ito): el detalle sí excluye a los externos de los
+   * globales, porque no tienen ninguno de esos permisos funcionales. Ver NO concede
+   * escritura: tomar/liberar y ejecutar checklist/telemetría exigen además el permiso
+   * correspondiente (ver assertCanReportUse / canRunChecklist).
    */
   private async canViewAsset(
     userId: string,
@@ -85,6 +93,16 @@ export class AssetsService {
         if (filter.ids.includes(asset.projectId)) return true;
       }
     }
+    // Activo GLOBAL (flota) sin asset:read: lo ve quien puede reportar uso o
+    // ejecutar checklist de cualquier activo (conductor / bundles admin). Los
+    // externos (client_ito / viewer) no tienen estos permisos funcionales.
+    if (asset.projectId === null) {
+      const [report, checklist] = await Promise.all([
+        this.permissions.can(userId, 'asset:use:report'),
+        this.permissions.can(userId, 'asset:checklist:run:any'),
+      ]);
+      if (report.effect === 'allow' || checklist.effect === 'allow') return true;
+    }
     // Fallback estructural: usuario asignado / con can_view del proyecto ve su
     // ficha aunque no tenga asset:read (retrocompatibilidad con el gate por-activo).
     return this.fga.check({
@@ -92,6 +110,31 @@ export class AssetsService {
       relation: 'can_view_list',
       object: `asset:${asset.id}`,
     });
+  }
+
+  /**
+   * Exige que el usuario pueda REPORTAR uso (tomar/liberar la disputa "en uso")
+   * de este activo. Requiere DOS condiciones:
+   *  1. el permiso funcional GLOBAL `asset:use:report` (rol conductor / bundles
+   *     admin), y
+   *  2. poder VER el activo (`canViewAsset`).
+   * El permiso solo (sin ver) permitiría tomar activos ajenos que ni siquiera se
+   * ven; la visibilidad sola (sin permiso) dejaría a externos (client_ito/viewer)
+   * tomar activos de su proyecto. Ambos juntos acotan la acción a la flota y a los
+   * activos que el usuario ya puede ver, y excluyen a los usuarios cliente. Así
+   * `asset:read` vuelve a ser de solo lectura (no habilita tomar/liberar).
+   */
+  private async assertCanReportUse(
+    userId: string,
+    asset: { id: string; projectId: string | null },
+  ): Promise<void> {
+    const decision = await this.permissions.can(userId, 'asset:use:report');
+    if (decision.effect !== 'allow') {
+      throw new ForbiddenException('No tienes permiso para reportar uso de activos.');
+    }
+    if (!(await this.canViewAsset(userId, asset))) {
+      throw new ForbiddenException('No tienes acceso a este activo.');
+    }
   }
 
   /**
@@ -876,13 +919,17 @@ export class AssetsService {
   }
 
   /**
-   * Disputa "en uso": toma un activo para utilizarlo.
+   * Disputa "en uso": toma un activo para utilizarlo. Autoriza en el service
+   * (patrón híbrido ADR-0001): `asset:use:report` funcional o visibilidad del
+   * activo como respaldo.
    */
   async takeUse(id: string, userId: string): Promise<AssetView> {
     const asset = await this.prisma.asset.findUnique({ where: { id } });
     if (!asset) {
       throw new NotFoundException('El activo no existe.');
     }
+
+    await this.assertCanReportUse(userId, asset);
 
     if (NON_OPERATIONAL_STATUSES.includes(asset.status)) {
       throw new BadRequestException('El activo no está disponible para su uso.');
@@ -928,7 +975,9 @@ export class AssetsService {
   }
 
   /**
-   * Disputa "en uso": libera el activo.
+   * Disputa "en uso": libera el activo. Mismo gate de entrada que `takeUse`
+   * (`asset:use:report` o visibilidad); además conserva la regla de negocio:
+   * solo libera quien lo tiene en uso o un org_admin.
    */
   async releaseUse(id: string, userId: string): Promise<AssetView> {
     const asset = await this.prisma.asset.findUnique({ where: { id } });
@@ -936,21 +985,25 @@ export class AssetsService {
       throw new NotFoundException('El activo no existe.');
     }
 
+    await this.assertCanReportUse(userId, asset);
+
     if (!asset.inUseById) {
       throw new BadRequestException('El activo no se encuentra en uso actualmente.');
     }
 
-    // Permitir liberar si es el usuario en uso o el administrador global.
-    const isGlobalAdmin = await this.prisma.membership.findFirst({
-      where: {
-        userId,
-        roleKey: 'org_admin',
-        scopeType: ScopeType.ORGANIZATION,
-      },
-    });
-
-    if (asset.inUseById !== userId && !isGlobalAdmin) {
-      throw new BadRequestException('No puedes liberar un activo tomado por otro colaborador.');
+    // Permitir liberar si es el usuario en uso o el administrador global. Liberar el
+    // PROPIO activo no depende de OpenFGA: solo si lo tiene otro se consulta el escape
+    // de admin, resuelto por FGA (ADR-0001: PermissionService/FGA es el punto de
+    // decisión, no se lee Membership.roleKey directamente).
+    if (asset.inUseById !== userId) {
+      const isGlobalAdmin = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'admin',
+        object: `organization:${ORG_ID}`,
+      });
+      if (!isGlobalAdmin) {
+        throw new BadRequestException('No puedes liberar un activo tomado por otro colaborador.');
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -1470,6 +1523,14 @@ export class AssetsService {
     if (!(await this.canRunChecklist(userId, assetId))) {
       throw new ForbiddenException('No tienes permiso para ejecutar el checklist de este activo.');
     }
+    // Ejecutar el checklist es una ESCRITURA: además de poder ejecutarlo, exige poder
+    // VER el activo. El rol conductor tiene asset:checklist:run:any GLOBAL sin
+    // asset:read, así que sin este chequeo escribiría el checklist de un activo de otro
+    // proyecto que ni siquiera ve (misma asimetría que assertCanReportUse cierra en
+    // tomar/liberar). Los vehículos de flota (globales) siguen visibles para el conductor.
+    if (!(await this.canViewAsset(userId, asset))) {
+      throw new ForbiddenException('No tienes acceso a este activo.');
+    }
 
     const template = await this.prisma.checklistTemplate.findUnique({ where: { id: templateId } });
     if (!template || template.assetId !== assetId) {
@@ -1733,6 +1794,12 @@ export class AssetsService {
     }
     if (!(await this.canRunChecklist(userId, id))) {
       throw new ForbiddenException('No tienes permiso para registrar telemetría de este activo.');
+    }
+    // Escritura: exige poder VER el activo (ver submitChecklist). Evita que el rol
+    // conductor (asset:checklist:run:any GLOBAL sin asset:read) sobrescriba la
+    // telemetría de un vehículo de otro proyecto que no puede ver.
+    if (!(await this.canViewAsset(userId, asset))) {
+      throw new ForbiddenException('No tienes acceso a este activo.');
     }
 
     if (asset.type !== AssetType.VEHICULO) {

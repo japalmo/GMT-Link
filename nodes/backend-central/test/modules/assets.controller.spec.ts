@@ -43,6 +43,8 @@ function buildController(options: { allowed?: boolean } = {}): Mocks {
     listAccessories: vi.fn(() => Promise.resolve([])),
     getChecklistTemplate: vi.fn(() => Promise.resolve({ id: 'tpl-1' })),
     listChecklistSubmissions: vi.fn(() => Promise.resolve([])),
+    takeUse: vi.fn(() => Promise.resolve(asset)),
+    releaseUse: vi.fn(() => Promise.resolve(asset)),
   };
 
   return {
@@ -159,6 +161,26 @@ describe('AssetsController — GET de lectura sin guard can_view_list', () => {
     const { controller, check, service } = buildController();
     await controller.listChecklistSubmissions(USER, 'a-1');
     expect(service.listChecklistSubmissions).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+});
+
+describe('AssetsController — use/release sin guard can_view_list', () => {
+  // El guard @RequirePermission('can_view_list') era INSATISFACIBLE para los
+  // vehículos de flota (projectId null, sin tupla FGA). Se eliminó y la
+  // autorización (asset:use:report con respaldo de visibilidad) vive en el
+  // servicio: el controller solo delega.
+  it('takeUse delega en el servicio sin gate FGA del controller', async () => {
+    const { controller, check, service } = buildController();
+    await controller.takeUse(USER, 'a-1');
+    expect(service.takeUse).toHaveBeenCalledWith('a-1', 'u1');
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('releaseUse delega en el servicio sin gate FGA del controller', async () => {
+    const { controller, check, service } = buildController();
+    await controller.releaseUse(USER, 'a-1');
+    expect(service.releaseUse).toHaveBeenCalledWith('a-1', 'u1');
     expect(check).not.toHaveBeenCalled();
   });
 });

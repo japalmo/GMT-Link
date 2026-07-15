@@ -122,7 +122,8 @@ export interface ResendInviteResult {
 /**
  * Patrón de turno de un trabajador. Los preset cíclicos definen días de faena y
  * descanso; `PERSONALIZADO` deja que el admin fije esos días a mano;
- * `ADMINISTRATIVO` no rota (lunes a viernes).
+ * `ADMINISTRATIVO` no rota: trabaja los días de la semana definidos en
+ * `weeklyHours` (lunes a viernes si aún no se define).
  */
 export type ShiftPattern =
   | 'ADMINISTRATIVO'
@@ -144,6 +145,24 @@ export const SHIFT_PATTERN_CYCLE: Record<ShiftPattern, { workDays: number; restD
 };
 
 /**
+ * Horario de UN día de la semana dentro del horario semanal (patrón
+ * `ADMINISTRATIVO`). Solo los días trabajados aparecen en el arreglo: un día
+ * ausente es día de descanso.
+ */
+export interface WeeklyHoursEntry {
+  /** Día de la semana, convención ISO-8601: 1 = lunes .. 7 = domingo. */
+  weekday: number;
+  /** Hora de inicio de la jornada de ese día, "HH:mm" 24h. */
+  start: string;
+  /**
+   * Hora de término de la jornada de ese día, "HH:mm" 24h. Posterior a `start` en
+   * turno DÍA; en turno NOCHE puede ser anterior (la jornada cruza la medianoche,
+   * p. ej. 22:00 a 06:00), nunca igual a `start`.
+   */
+  end: string;
+}
+
+/**
  * Jornada/turnos de un trabajador (`GET /users/:id/schedule`). `null` en el
  * endpoint cuando el trabajador aún no tiene jornada configurada.
  */
@@ -156,10 +175,18 @@ export interface WorkScheduleView {
   /** Día 1 del ciclo (primer día en faena), ISO-8601 date-only; null si sin definir. */
   cycleStart: string | null;
   dayNight: DayNight;
-  /** Jornada diaria "HH:mm"; null si sin definir. */
+  /** Jornada diaria "HH:mm"; null si sin definir. En cíclicos es la jornada en faena. */
   startTime: string | null;
-  /** Jornada diaria "HH:mm"; null si sin definir. */
+  /** Jornada diaria "HH:mm"; null si sin definir. En cíclicos es la jornada en faena. */
   endTime: string | null;
+  /**
+   * Horario semanal por día (solo `ADMINISTRATIVO`): un elemento por día
+   * trabajado, ordenado por `weekday`. `null` en los patrones cíclicos (en faena
+   * todos los días usan `startTime`/`endTime`) y en filas ADMINISTRATIVO
+   * anteriores a esta columna, que se interpretan como lunes a viernes con
+   * `startTime`/`endTime` legacy.
+   */
+  weeklyHours: WeeklyHoursEntry[] | null;
   notes: string | null;
   /** ISO-8601. */
   updatedAt: string;
@@ -171,7 +198,9 @@ export interface WorkScheduleView {
  * `PERSONALIZADO`) exigen `cycleStart`; además `PERSONALIZADO` exige
  * `workDays`/`restDays` (>=1), mientras los preset los derivan de
  * `SHIFT_PATTERN_CYCLE`. `ADMINISTRATIVO` ignora los días de ciclo y la fecha de
- * inicio. `startTime`/`endTime` en "HH:mm".
+ * inicio, y define su horario por día con `weeklyHours` (si no viene, el server
+ * lo deriva de `startTime`/`endTime` como lunes a viernes). Los cíclicos ignoran
+ * `weeklyHours` y usan `startTime`/`endTime` como jornada en faena, en "HH:mm".
  */
 export interface UpsertWorkScheduleInput {
   shiftPattern: ShiftPattern;
@@ -181,6 +210,8 @@ export interface UpsertWorkScheduleInput {
   dayNight: DayNight;
   startTime?: string | null;
   endTime?: string | null;
+  /** Horario semanal por día (solo `ADMINISTRATIVO`): al menos 1 día, weekday 1..7 únicos. */
+  weeklyHours?: WeeklyHoursEntry[] | null;
   notes?: string | null;
 }
 
@@ -212,6 +243,8 @@ export const ROLE_KEYS = [
   'admin_ti',
   // Rol de sistema Logística (módulo Inventario).
   'logistica',
+  // Rol de sistema Conductor (flota de vehículos): reporta uso y ejecuta checklist.
+  'conductor',
 ] as const;
 
 /**

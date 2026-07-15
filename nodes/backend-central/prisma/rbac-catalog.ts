@@ -148,6 +148,11 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // asignación por-activo (can_run_checklist). FUNCTIONAL org-scope (siempre GLOBAL);
   // el submit lo honra ADEMÁS del gate estructural del usuario asignado.
   { key: 'asset:checklist:run:any', label: 'Ejecutar checklist de cualquier activo', module: 'recursos', kind: 'FUNCTIONAL', scopeable: false },
+  // Reportar uso de activos: tomar/liberar la disputa "en uso" (POST /assets/:id/use
+  // y /release). Derecho del rol conductor (flota de vehículos) y de los bundles
+  // admin. FUNCTIONAL org-scope (siempre GLOBAL); los endpoints lo honran ADEMÁS
+  // del respaldo de visibilidad (asset:read funcional o gate estructural por-activo).
+  { key: 'asset:use:report', label: 'Reportar uso de activos (conductor)', module: 'recursos', kind: 'FUNCTIONAL', scopeable: false },
 ];
 
 /** Todo el catálogo a GLOBAL EXCEPTO system:beta:full (org_admin / admin_ti). */
@@ -290,5 +295,15 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:request:create', 'GLOBAL'),
       g('inventory:request:own', 'GLOBAL'),
     ],
+  },
+  // ── Rol de sistema Conductor (flota de vehículos): reporta uso (tomar/liberar
+  //    la disputa "en uso") y ejecuta el checklist de cualquier activo. Es un rol
+  //    COMPLEMENTARIO que se suma al rol base del trabajador (no lo reemplaza),
+  //    por eso NO otorga finance:request:create ni inventory:request:own y el
+  //    espejo RESOLUCIÓN #2 se mantiene (ninguno de los dos presente). ──
+  {
+    key: 'conductor',
+    label: 'Conductor',
+    grants: [g('asset:use:report', 'GLOBAL'), g('asset:checklist:run:any', 'GLOBAL')],
   },
 ];

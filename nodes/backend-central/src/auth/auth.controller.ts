@@ -68,6 +68,9 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   'asset:manage': 'recursos',
   'asset:fields:edit': 'recursos',
   'asset:read': 'recursos',
+  // Rol conductor: reportar uso (tomar/liberar) enciende Recursos para llegar
+  // al catálogo de vehículos y su checklist.
+  'asset:use:report': 'recursos',
   // Derecho base de solicitar insumos propios: enciende Recursos para que el
   // trabajador llegue a la pestaña "Mis insumos" (los externos no lo tienen).
   'inventory:request:own': 'recursos',

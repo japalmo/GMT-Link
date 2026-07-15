@@ -365,10 +365,13 @@ model CVCertification {
 // Jornada de un trabajador 1:1 con User. Los patrones cíclicos de faena (7x7, 4x3,
 // 14x14, personalizado) se modelan con workDays/restDays + cycleStart: el día N del
 // ciclo es faena si (diasDesdeCycleStart mod (workDays+restDays)) < workDays. El
-// patrón ADMINISTRATIVO no rota: se trabaja de lunes a viernes (workDays/restDays
-// se ignoran). startTime/endTime son la jornada diaria "HH:mm"; dayNight marca turno
-// día o noche. Solo lo edita un admin (can_manage_users) desde el detalle del
-// trabajador; el propio trabajador aún no lo autoedita.
+// patrón ADMINISTRATIVO no rota: trabaja los días de la semana definidos en
+// weeklyHours (workDays/restDays se ignoran). startTime/endTime son la jornada
+// diaria "HH:mm"; en los cíclicos es la jornada en faena (en faena todos los días
+// son iguales) y en ADMINISTRATIVO queda sincronizada con el lunes de weeklyHours
+// para no romper lectores viejos. dayNight marca turno día o noche. Solo lo edita
+// un admin (can_manage_users) desde el detalle del trabajador; el propio
+// trabajador aún no lo autoedita.
 model WorkSchedule {
   id           String       @id @default(cuid())
   userId       String       @unique
@@ -382,6 +385,11 @@ model WorkSchedule {
   dayNight     DayNight     @default(DIA)
   startTime    String? // "HH:mm" jornada diaria (opcional)
   endTime      String? // "HH:mm" jornada diaria (opcional)
+  // Horario semanal por día (solo ADMINISTRATIVO): array de
+  // { weekday: 1..7 (ISO, 1=lunes), start: "HH:mm", end: "HH:mm" }; solo los días
+  // trabajados aparecen. null en patrones cíclicos y en filas ADMINISTRATIVO
+  // legacy, que se interpretan como lunes a viernes con startTime/endTime.
+  weeklyHours  Json?
   notes        String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

@@ -5,6 +5,7 @@ import {
   type DayNight,
   type ShiftPattern,
   type UpsertWorkScheduleInput,
+  type WeeklyHoursEntry,
   type WorkScheduleView,
 } from '@gmt-platform/contracts';
 import { Alert } from '@/components/ui/alert';
@@ -27,6 +28,28 @@ const PATTERN_OPTIONS: ReadonlyArray<ShiftPattern> = [
   'PERSONALIZADO',
 ];
 
+/** Días del editor semanal (índice 0 = lunes .. 6 = domingo, convención ISO - 1). */
+const WEEKDAY_NAMES = [
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo',
+] as const;
+
+/** Horas por defecto al activar un día del editor semanal. */
+const DEFAULT_START = '08:00';
+const DEFAULT_END = '18:00';
+
+/** Una fila del editor semanal: si se trabaja ese día y con qué horario. */
+interface WeeklyDayForm {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
 /** Estado editable de la jornada (todos como string para inputs controlados). */
 interface ScheduleForm {
   shiftPattern: ShiftPattern;
@@ -36,19 +59,33 @@ interface ScheduleForm {
   cycleStart: string; // "YYYY-MM-DD"
   workDays: string;
   restDays: string;
+  /** Editor semanal (solo ADMINISTRATIVO): 7 filas fijas, lunes a domingo. */
+  weekly: WeeklyDayForm[];
   notes: string;
 }
 
-const EMPTY_FORM: ScheduleForm = {
-  shiftPattern: 'ADMINISTRATIVO',
-  dayNight: 'DIA',
-  startTime: '',
-  endTime: '',
-  cycleStart: '',
-  workDays: '7',
-  restDays: '7',
-  notes: '',
-};
+/** Editor semanal por defecto: lunes a viernes activos, 08:00 a 18:00. */
+function defaultWeekly(): WeeklyDayForm[] {
+  return WEEKDAY_NAMES.map((_, index) => ({
+    enabled: index < 5,
+    start: DEFAULT_START,
+    end: DEFAULT_END,
+  }));
+}
+
+function emptyForm(): ScheduleForm {
+  return {
+    shiftPattern: 'ADMINISTRATIVO',
+    dayNight: 'DIA',
+    startTime: '',
+    endTime: '',
+    cycleStart: '',
+    workDays: '7',
+    restDays: '7',
+    weekly: defaultWeekly(),
+    notes: '',
+  };
+}
 
 /** Extrae "YYYY-MM-DD" de un ISO (para el input date), sin drift de zona horaria. */
 function isoToDateInput(iso: string | null): string {
@@ -57,8 +94,30 @@ function isoToDateInput(iso: string | null): string {
   return m?.[1] ?? '';
 }
 
+/**
+ * Editor semanal desde la vista guardada: `weeklyHours` si existe; una fila
+ * ADMINISTRATIVO legacy (sin `weeklyHours`) se interpreta como lunes a viernes
+ * con la jornada única (o las horas por defecto si no estaba definida).
+ */
+function seedWeekly(schedule: WorkScheduleView): WeeklyDayForm[] {
+  const saved = schedule.weeklyHours;
+  if (saved !== null && saved.length > 0) {
+    return WEEKDAY_NAMES.map((_, index) => {
+      const entry = saved.find((e) => e.weekday === index + 1);
+      return entry
+        ? { enabled: true, start: entry.start, end: entry.end }
+        : { enabled: false, start: DEFAULT_START, end: DEFAULT_END };
+    });
+  }
+  return WEEKDAY_NAMES.map((_, index) => ({
+    enabled: index < 5,
+    start: schedule.startTime ?? DEFAULT_START,
+    end: schedule.endTime ?? DEFAULT_END,
+  }));
+}
+
 function seed(schedule: WorkScheduleView | null): ScheduleForm {
-  if (!schedule) return EMPTY_FORM;
+  if (!schedule) return emptyForm();
   return {
     shiftPattern: schedule.shiftPattern,
     dayNight: schedule.dayNight,
@@ -67,8 +126,17 @@ function seed(schedule: WorkScheduleView | null): ScheduleForm {
     cycleStart: isoToDateInput(schedule.cycleStart),
     workDays: schedule.workDays != null ? String(schedule.workDays) : '7',
     restDays: schedule.restDays != null ? String(schedule.restDays) : '7',
+    weekly: seedWeekly(schedule),
     notes: schedule.notes ?? '',
   };
+}
+
+/** Entradas `weeklyHours` desde el editor semanal (solo los días activos). */
+function weeklyFromForm(weekly: WeeklyDayForm[]): WeeklyHoursEntry[] {
+  return weekly
+    .map((day, index) => ({ day, weekday: index + 1 }))
+    .filter(({ day }) => day.enabled)
+    .map(({ day, weekday }) => ({ weekday, start: day.start, end: day.end }));
 }
 
 /** Vista de jornada equivalente al formulario, para el preview en vivo. */
@@ -86,14 +154,16 @@ function formToScheduleView(form: ScheduleForm): WorkScheduleView {
     workDays = Number(form.workDays) || null;
     restDays = Number(form.restDays) || null;
   }
+  const isAdministrative = form.shiftPattern === 'ADMINISTRATIVO';
   return {
     shiftPattern: form.shiftPattern,
     workDays,
     restDays,
-    cycleStart: form.shiftPattern === 'ADMINISTRATIVO' ? null : form.cycleStart || null,
+    cycleStart: isAdministrative ? null : form.cycleStart || null,
     dayNight: form.dayNight,
     startTime: form.startTime || null,
     endTime: form.endTime || null,
+    weeklyHours: isAdministrative ? weeklyFromForm(form.weekly) : null,
     notes: form.notes || null,
     updatedAt: '',
   };
@@ -102,13 +172,14 @@ function formToScheduleView(form: ScheduleForm): WorkScheduleView {
 /**
  * Pestaña Horario del detalle del trabajador — jornada / turnos (admin). Trae la
  * jornada (`GET /users/:id/schedule`), permite configurarla (patrón de turno,
- * turno día/noche, jornada diaria, inicio de ciclo, notas) y la guarda con
+ * turno día/noche, horario semanal por día en ADMINISTRATIVO o jornada en faena
+ * en los cíclicos, inicio de ciclo, notas) y la guarda con
  * `PUT /users/:id/schedule`. Muestra un preview de los próximos 14 días marcando
- * faena / descanso según el ciclo.
+ * faena / descanso y el horario de cada día trabajado.
  */
 export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
   const baseId = useId();
-  const [form, setForm] = useState<ScheduleForm>(EMPTY_FORM);
+  const [form, setForm] = useState<ScheduleForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -142,6 +213,28 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  /** Actualiza una fila del editor semanal (inmutable). */
+  function updateWeekly(index: number, patch: Partial<WeeklyDayForm>): void {
+    setForm((prev) => ({
+      ...prev,
+      weekly: prev.weekly.map((day, i) => (i === index ? { ...day, ...patch } : day)),
+    }));
+  }
+
+  /** Copia las horas del lunes a todos los días activos del editor semanal. */
+  function applyMondayToActive(): void {
+    setForm((prev) => {
+      const monday = prev.weekly[0];
+      if (!monday) return prev;
+      return {
+        ...prev,
+        weekly: prev.weekly.map((day) =>
+          day.enabled ? { ...day, start: monday.start, end: monday.end } : day,
+        ),
+      };
+    });
+  }
+
   const isAdministrative = form.shiftPattern === 'ADMINISTRATIVO';
   const isCustom = form.shiftPattern === 'PERSONALIZADO';
 
@@ -151,8 +244,38 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
   );
 
   function validate(): string | null {
-    if (!isAdministrative && !form.cycleStart) {
+    // Turno NOCHE: la jornada puede cruzar medianoche (p. ej. 20:00 a 08:00);
+    // solo se rechaza que inicio y término sean iguales (espejo del service).
+    const isNight = form.dayNight === 'NOCHE';
+    if (isAdministrative) {
+      // Espejo de la validación del service: al menos 1 día, horas completas y
+      // término posterior al inicio (o distinto, en turno noche) por día activo.
+      if (!form.weekly.some((day) => day.enabled)) {
+        return 'La jornada administrativa requiere al menos un día trabajado en la semana.';
+      }
+      for (const [index, name] of WEEKDAY_NAMES.entries()) {
+        const day = form.weekly[index];
+        if (!day?.enabled) continue;
+        if (!day.start || !day.end) {
+          return `Completa las horas del día ${name.toLowerCase()} o desactívalo.`;
+        }
+        if (isNight ? day.end === day.start : day.end <= day.start) {
+          return isNight
+            ? `La hora de término del día ${name.toLowerCase()} no puede ser igual a la de inicio.`
+            : `La hora de término del día ${name.toLowerCase()} debe ser posterior a la de inicio.`;
+        }
+      }
+      return null;
+    }
+    if (!form.cycleStart) {
       return 'Define la fecha de inicio de ciclo para este turno.';
+    }
+    if (form.startTime && form.endTime) {
+      if (isNight ? form.endTime === form.startTime : form.endTime <= form.startTime) {
+        return isNight
+          ? 'La hora de término no puede ser igual a la de inicio.'
+          : 'La hora de término debe ser posterior a la hora de inicio.';
+      }
     }
     if (isCustom) {
       const w = Number(form.workDays);
@@ -173,19 +296,24 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
     setFormError(null);
     setSaving(true);
     try {
-      const input: UpsertWorkScheduleInput = {
-        shiftPattern: form.shiftPattern,
-        dayNight: form.dayNight,
-        startTime: form.startTime || null,
-        endTime: form.endTime || null,
-        notes: form.notes.trim() || null,
-        ...(isAdministrative
-          ? {}
-          : {
-              cycleStart: form.cycleStart || null,
-              ...(isCustom ? { workDays: Number(form.workDays), restDays: Number(form.restDays) } : {}),
-            }),
-      };
+      const input: UpsertWorkScheduleInput = isAdministrative
+        ? {
+            shiftPattern: form.shiftPattern,
+            dayNight: form.dayNight,
+            weeklyHours: weeklyFromForm(form.weekly),
+            notes: form.notes.trim() || null,
+          }
+        : {
+            shiftPattern: form.shiftPattern,
+            dayNight: form.dayNight,
+            startTime: form.startTime || null,
+            endTime: form.endTime || null,
+            cycleStart: form.cycleStart || null,
+            ...(isCustom
+              ? { workDays: Number(form.workDays), restDays: Number(form.restDays) }
+              : {}),
+            notes: form.notes.trim() || null,
+          };
       const saved = await upsertUserSchedule(userId, input);
       setForm(seed(saved));
       setUpdatedAt(saved.updatedAt);
@@ -230,33 +358,36 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
           </Select>
         </Field>
 
-        <Field id={`${baseId}-start`} label="Hora de inicio">
-          <Input
-            id={`${baseId}-start`}
-            type="time"
-            value={form.startTime}
-            onChange={(e) => update('startTime', e.target.value)}
-          />
-        </Field>
-
-        <Field id={`${baseId}-end`} label="Hora de término">
-          <Input
-            id={`${baseId}-end`}
-            type="time"
-            value={form.endTime}
-            onChange={(e) => update('endTime', e.target.value)}
-          />
-        </Field>
-
         {!isAdministrative && (
-          <Field id={`${baseId}-cyclestart`} label="Inicio de ciclo (día 1 en faena)">
-            <Input
-              id={`${baseId}-cyclestart`}
-              type="date"
-              value={form.cycleStart}
-              onChange={(e) => update('cycleStart', e.target.value)}
-            />
-          </Field>
+          <>
+            <Field id={`${baseId}-start`} label="Jornada en faena">
+              <div className="flex items-center gap-2">
+                <Input
+                  id={`${baseId}-start`}
+                  type="time"
+                  aria-label="Hora de inicio de la jornada en faena"
+                  value={form.startTime}
+                  onChange={(e) => update('startTime', e.target.value)}
+                />
+                <span className="text-sm text-muted-foreground">a</span>
+                <Input
+                  type="time"
+                  aria-label="Hora de término de la jornada en faena"
+                  value={form.endTime}
+                  onChange={(e) => update('endTime', e.target.value)}
+                />
+              </div>
+            </Field>
+
+            <Field id={`${baseId}-cyclestart`} label="Inicio de ciclo (día 1 en faena)">
+              <Input
+                id={`${baseId}-cyclestart`}
+                type="date"
+                value={form.cycleStart}
+                onChange={(e) => update('cycleStart', e.target.value)}
+              />
+            </Field>
+          </>
         )}
 
         {isCustom && (
@@ -284,6 +415,69 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
           </>
         )}
       </div>
+
+      {/* Editor semanal: horario por día de la semana (solo ADMINISTRATIVO). */}
+      {isAdministrative && (
+        <section className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-foreground">Horario semanal</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={applyMondayToActive}
+              disabled={!form.weekly[0]?.enabled}
+              title={
+                !form.weekly[0]?.enabled ? 'Activa el lunes para copiar su horario' : undefined
+              }
+            >
+              Aplicar lunes a todos los días activos
+            </Button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {WEEKDAY_NAMES.map((name, index) => {
+              const day = form.weekly[index] ?? {
+                enabled: false,
+                start: DEFAULT_START,
+                end: DEFAULT_END,
+              };
+              return (
+                <div key={name} className="flex flex-wrap items-center gap-2">
+                  <label className="flex w-28 shrink-0 items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4 rounded border-input"
+                      checked={day.enabled}
+                      onChange={(e) => updateWeekly(index, { enabled: e.target.checked })}
+                      aria-label={`Trabaja el día ${name.toLowerCase()}`}
+                    />
+                    {name}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      className="w-28"
+                      aria-label={`Hora de inicio del día ${name.toLowerCase()}`}
+                      value={day.start}
+                      disabled={!day.enabled}
+                      onChange={(e) => updateWeekly(index, { start: e.target.value })}
+                    />
+                    <span className="text-sm text-muted-foreground">a</span>
+                    <Input
+                      type="time"
+                      className="w-28"
+                      aria-label={`Hora de término del día ${name.toLowerCase()}`}
+                      value={day.end}
+                      disabled={!day.enabled}
+                      onChange={(e) => updateWeekly(index, { end: e.target.value })}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <Field id={`${baseId}-notes`} label="Notas">
         <Textarea
@@ -321,8 +515,8 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
                 key={day.date.toISOString()}
                 className={
                   day.working
-                    ? 'flex min-w-14 flex-col items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-center'
-                    : 'flex min-w-14 flex-col items-center rounded-md border border-border bg-muted/40 px-2 py-1.5 text-center'
+                    ? 'flex min-w-16 flex-col items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-center'
+                    : 'flex min-w-16 flex-col items-center rounded-md border border-border bg-muted/40 px-2 py-1.5 text-center'
                 }
               >
                 <span className="text-[11px] capitalize text-muted-foreground">
@@ -337,6 +531,11 @@ export function UserScheduleTab({ userId }: { userId: string }): ReactNode {
                 >
                   {day.working ? 'Faena' : 'Descanso'}
                 </span>
+                {day.hours && (
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    {day.hours}
+                  </span>
+                )}
               </div>
             ))}
           </div>

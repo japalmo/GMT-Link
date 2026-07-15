@@ -253,11 +253,13 @@ export class AssetsController {
   }
 
   /**
-   * Disputa "en uso": toma un activo para utilizarlo.
+   * Disputa "en uso": toma un activo para utilizarlo. Sin guard `can_view_list`
+   * (insatisfacible para los vehículos de flota sin proyecto): la autorización
+   * (funcional `asset:use:report` con respaldo de visibilidad) la resuelve el
+   * servicio.
    */
   @Post(':id/use')
   @HttpCode(200)
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
   takeUse(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
@@ -267,11 +269,12 @@ export class AssetsController {
   }
 
   /**
-   * Disputa "en uso": libera el activo.
+   * Disputa "en uso": libera el activo. Igual que `takeUse`, la autorización
+   * vive en el servicio (mismo gate de entrada + regla de quien lo tiene en uso
+   * u org_admin).
    */
   @Post(':id/release')
   @HttpCode(200)
-  @RequirePermission('can_view_list', { type: 'asset', param: 'id' })
   releaseUse(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,

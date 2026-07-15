@@ -174,4 +174,32 @@ describe('rbac-catalog — invariantes', () => {
       expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'inventory:access' && x.scope === 'GLOBAL')).toBe(true);
     }
   });
+
+  it('asset:use:report existe como permiso FUNCTIONAL del módulo recursos (siempre GLOBAL)', () => {
+    const p = PERMISSIONS.find((x) => x.key === 'asset:use:report');
+    expect(p, 'asset:use:report debe existir en el catálogo').toBeDefined();
+    expect(p!.kind).toBe('FUNCTIONAL');
+    expect(p!.module).toBe('recursos');
+    expect(p!.scopeable).toBe(false);
+  });
+
+  it('conductor es rol de sistema con EXACTAMENTE asset:use:report + asset:checklist:run:any, ambos GLOBAL', () => {
+    const role = roleByKey.get('conductor');
+    expect(role, 'el rol conductor debe existir').toBeDefined();
+    expect(new Set(role!.grants.map((x) => `${x.perm}@${x.scope}`))).toEqual(
+      new Set(['asset:use:report@GLOBAL', 'asset:checklist:run:any@GLOBAL']),
+    );
+  });
+
+  it('conductor NO otorga finance:request:create ni inventory:request:own (rol complementario, no rol base)', () => {
+    const grants = roleByKey.get('conductor')!.grants;
+    expect(grants.some((x) => x.perm === 'finance:request:create')).toBe(false);
+    expect(grants.some((x) => x.perm === 'inventory:request:own')).toBe(false);
+  });
+
+  it('org_admin y admin_ti incluyen asset:use:report (vía ALL_GLOBAL_EXCEPT_BETA)', () => {
+    for (const k of ['org_admin', 'admin_ti']) {
+      expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'asset:use:report' && x.scope === 'GLOBAL')).toBe(true);
+    }
+  });
 });

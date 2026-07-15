@@ -1,19 +1,48 @@
 import 'reflect-metadata';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { FinanceStatus } from '@prisma/client';
 import type { Reimbursement } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { NotificationsService } from '../../src/modules/notifications/notifications.service';
 import {
+  oneMonthAgoSantiago,
+  startOfTodaySantiago,
+} from '../../src/modules/finance/finance-time.util';
+import {
   ReimbursementsService,
   type UploadedReceiptFile,
 } from '../../src/modules/reimbursements/reimbursements.service';
+
+// Reloj fijo para toda la suite (solo `Date`): la ventana de la fecha del gasto
+// ("hasta 1 mes atrás, nada futuro") se calcula con `new Date()` tanto en las
+// constantes de abajo como dentro del servicio. Sin fijarlo, una corrida que cruce
+// la medianoche de Santiago entre la carga del módulo y la ejecución desincroniza
+// ambos y hace flakear las pruebas de la ventana. Mediodía UTC evita bordes de día.
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(new Date('2026-06-14T15:00:00.000Z'));
+
+afterAll(() => {
+  vi.useRealTimers();
+});
+
+/** Un día en milisegundos (para armar fechas relativas a la ventana). */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Fechas RELATIVAS a la ventana de la fecha del gasto (no hardcodeadas: la regla
+ * "hasta 1 mes hacia atrás, nada futuro" rompería cualquier fecha fija vieja).
+ */
+const TODAY_ISO = startOfTodaySantiago().toISOString();
+const WINDOW_LIMIT_ISO = oneMonthAgoSantiago().toISOString();
+const FUTURE_ISO = new Date(startOfTodaySantiago().getTime() + DAY_MS).toISOString();
+const TOO_OLD_ISO = new Date(oneMonthAgoSantiago().getTime() - DAY_MS).toISOString();
 
 /** Fila Reimbursement (sin solicitante incluido) con overrides. */
 function buildRow(overrides: Partial<Reimbursement> = {}): Reimbursement {
@@ -145,7 +174,7 @@ describe('ReimbursementsService', () => {
       'u1',
       {
         amount: 15000,
-        date: '2026-06-10T00:00:00.000Z',
+        date: TODAY_ISO,
         concept: 'Taxi',
         category: 'transporte',
       },
@@ -169,6 +198,68 @@ describe('ReimbursementsService', () => {
     expect(data.receiptKey).toBe('reimbursements/new.pdf');
     expect(data.receiptUrl).toBe('http://localhost:3001/files/reimbursements/new.pdf');
     expect(view.status).toBe(FinanceStatus.PENDIENTE);
+  });
+
+  it('create: fecha FUTURA → 400 y NO sube boleta ni inserta fila', async () => {
+    const create = vi.fn();
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    const promise = service.create(
+      'u1',
+      { amount: 15000, date: FUTURE_ISO, concept: 'Taxi' },
+      RECEIPT,
+    );
+    await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+    await expect(promise).rejects.toThrow('La fecha del gasto no puede ser futura.');
+    expect(storageBits.save).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('create: más de 1 mes de antigüedad → 400 y NO sube boleta ni inserta fila', async () => {
+    const create = vi.fn();
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    const promise = service.create(
+      'u1',
+      { amount: 15000, date: TOO_OLD_ISO, concept: 'Taxi' },
+      RECEIPT,
+    );
+    await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+    await expect(promise).rejects.toThrow(
+      'La fecha del gasto no puede tener más de 1 mes de antigüedad.',
+    );
+    expect(storageBits.save).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('create: EXACTAMENTE 1 mes atrás (límite inferior, inclusive) → OK', async () => {
+    const create = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...args.data, id: 'r-limit' })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    await expect(
+      service.create('u1', { amount: 15000, date: WINDOW_LIMIT_ISO, concept: 'Taxi' }, RECEIPT),
+    ).resolves.toMatchObject({ status: FinanceStatus.PENDIENTE });
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0]?.[0]?.data as { date: Date };
+    expect(data.date.toISOString()).toBe(WINDOW_LIMIT_ISO);
+  });
+
+  it('create: fecha dentro de la ventana (hoy) → OK', async () => {
+    const create = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...args.data, id: 'r-hoy' })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    await expect(
+      service.create('u1', { amount: 15000, date: TODAY_ISO, concept: 'Taxi' }, RECEIPT),
+    ).resolves.toMatchObject({ status: FinanceStatus.PENDIENTE });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('listMine filtra SOLO por el propio userId (más status opcional)', async () => {
@@ -404,7 +495,7 @@ describe('ReimbursementsService', () => {
 
     const view = await service.update('u1', 'r-1', {
       amount: 20000,
-      date: '2026-06-12T00:00:00.000Z',
+      date: TODAY_ISO,
       concept: 'Taxi de vuelta',
       category: 'transporte',
     });
@@ -437,7 +528,7 @@ describe('ReimbursementsService', () => {
     await expect(
       service.update('u1', 'ajeno', {
         amount: 100,
-        date: '2026-06-12T00:00:00.000Z',
+        date: TODAY_ISO,
         concept: 'X',
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -453,11 +544,81 @@ describe('ReimbursementsService', () => {
     await expect(
       service.update('u1', 'r-1', {
         amount: 100,
-        date: '2026-06-12T00:00:00.000Z',
+        date: TODAY_ISO,
         concept: 'X',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('update: fecha FUTURA → 400 y NO actualiza', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    const promise = service.update('u1', 'r-1', {
+      amount: 100,
+      date: FUTURE_ISO,
+      concept: 'X',
+    });
+    await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+    await expect(promise).rejects.toThrow('La fecha del gasto no puede ser futura.');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('update: más de 1 mes de antigüedad → 400 y NO actualiza', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    const promise = service.update('u1', 'r-1', {
+      amount: 100,
+      date: TOO_OLD_ISO,
+      concept: 'X',
+    });
+    await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+    await expect(promise).rejects.toThrow(
+      'La fecha del gasto no puede tener más de 1 mes de antigüedad.',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('update: un PENDIENTE cuyo gasto ya venció (>1 mes) sigue editable si NO cambia la fecha', async () => {
+    // Regresión: la ventana solo se revalida cuando la fecha del gasto cambia. Una
+    // solicitud que envejeció fuera de la ventana debe seguir corrigible en monto /
+    // concepto sin obligar a mover la fecha (que ya no cabría en la ventana).
+    const aged = buildRow({ status: FinanceStatus.PENDIENTE, date: new Date(TOO_OLD_ISO) });
+    const findFirst = vi.fn(() => Promise.resolve(aged));
+    const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...aged, ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    // Reenvía la MISMA fecha (mismo día date-only) y corrige solo el monto.
+    await expect(
+      service.update('u1', 'r-1', { amount: 99999, date: TOO_OLD_ISO, concept: 'Taxi al puerto' }),
+    ).resolves.toBeDefined();
+    expect(update).toHaveBeenCalled();
+    const data = update.mock.calls[0]?.[0]?.data as { amount: number };
+    expect(data.amount).toBe(99999);
+  });
+
+  it('update: EXACTAMENTE 1 mes atrás (límite inferior, inclusive) → OK', async () => {
+    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findFirst, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update('u1', 'r-1', { amount: 100, date: WINDOW_LIMIT_ISO, concept: 'X' }),
+    ).resolves.toBeDefined();
+    const data = update.mock.calls[0]?.[0]?.data as { date: Date };
+    expect(data.date.toISOString()).toBe(WINDOW_LIMIT_ISO);
   });
 
   it('remove: el dueño elimina un reembolso PENDIENTE (delete + borra la boleta del storage)', async () => {

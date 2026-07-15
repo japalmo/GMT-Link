@@ -52,7 +52,9 @@ describe('ReimbursementsController.create (boleta obligatoria)', () => {
   const user = { id: 'u1' } as AuthUser;
   const dto = {
     amount: 15000,
-    date: '2026-06-10T00:00:00.000Z',
+    // Fecha relativa (hoy): la ventana del service (máx. 1 mes atrás, nada
+    // futuro) rompería cualquier fecha fija vieja si este spec deja de mockear.
+    date: new Date().toISOString(),
     concept: 'Taxi',
   } as unknown as CreateReimbursementDto;
 

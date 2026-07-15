@@ -572,6 +572,26 @@ describe('AssetsService', () => {
       expect(fgaMock.check).not.toHaveBeenCalled();
     });
 
+    it('un conductor sin asset:read VE la ficha de un vehículo de flota (global) por asset:use:report', async () => {
+      // Regresión del hallazgo HIGH: el conductor toma el vehículo pero antes no
+      // podía abrir su ficha ni el checklist (canViewAsset devolvía false para el
+      // activo global). Ahora el permiso de conductor concede ver la flota.
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null); // sin asset:read
+      permissionsMock.can.mockResolvedValue({ effect: 'allow' }); // asset:use:report / checklist:run:any
+      prismaMock.asset.findUnique.mockResolvedValueOnce({
+        ...buildAssetRow({ projectId: null }),
+        project: null,
+        assignedTo: null,
+        inUseBy: null,
+      });
+
+      const asset = await service.getById('a-1', 'u-cond');
+
+      expect(asset.id).toBe('a-1');
+      // Se concede por el permiso funcional: no cae al respaldo estructural FGA.
+      expect(fgaMock.check).not.toHaveBeenCalled();
+    });
+
     it('sin asset:read pero con tupla can_view_list sigue viendo la ficha (fallback FGA)', async () => {
       permissionsMock.scopeFilter.mockResolvedValueOnce(null);
       prismaMock.asset.findUnique.mockResolvedValueOnce({
@@ -712,6 +732,8 @@ describe('AssetsService', () => {
   describe('disputa en uso', () => {
     it('takeUse permite tomar un activo disponible', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      // Model A: reportar uso exige asset:use:report (conductor/admin) Y visibilidad.
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
       prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
         ...buildAssetRow({ status: AssetStatus.EN_USO, inUseById: 'u-1' }),
         project: null,
@@ -735,6 +757,7 @@ describe('AssetsService', () => {
 
     it('takeUse lanza ConflictException si la toma atómica no encuentra el activo libre', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ inUseById: 'u-other' }));
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
       txMock.asset.updateMany.mockResolvedValueOnce({ count: 0 });
 
       await expect(service.takeUse('a-1', 'u-1')).rejects.toThrow(ConflictException);
@@ -744,8 +767,107 @@ describe('AssetsService', () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(
         buildAssetRow({ status: AssetStatus.DEFECTUOSO }),
       );
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
 
       await expect(service.takeUse('a-1', 'u-1')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('takeUse rechaza (403) sin el permiso asset:use:report (Model A: el permiso es obligatorio)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      // Sin el permiso funcional de reporte de uso => 403 inmediato, aunque el
+      // usuario pudiera VER el activo (la visibilidad sola ya no habilita tomar).
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
+
+      await expect(service.takeUse('a-1', 'u-x')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(permissionsMock.can).toHaveBeenCalledWith('u-x', 'asset:use:report');
+      expect(txMock.asset.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('takeUse rechaza (403) a un usuario cliente (client_ito) aunque pueda VER el activo de su proyecto', async () => {
+      // Regresión del hallazgo MEDIUM: el externo veía el activo (tupla FGA de su
+      // proyecto) y antes esa visibilidad bastaba para tomarlo; ahora se exige
+      // asset:use:report, que los bundles cliente (client_ito / viewer) no tienen.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE, projectId: 'p-cli' }),
+      );
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
+
+      await expect(service.takeUse('a-1', 'u-ito')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(permissionsMock.can).toHaveBeenCalledWith('u-ito', 'asset:use:report');
+      expect(txMock.asset.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('takeUse permite al conductor (asset:use:report) tomar un vehículo de flota (global) sin asset:read', async () => {
+      // Vehículo global (projectId null) y usuario SIN asset:read (scopeFilter null):
+      // canViewAsset lo concede por el permiso de conductor. Es el flujo tomar en uso
+      // -> checklist que el guard can_view_list dejaba insatisfacible.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE, projectId: null }),
+      );
+      permissionsMock.can.mockResolvedValue({ effect: 'allow' }); // asset:use:report y asset:checklist:run:any
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null); // no tiene asset:read
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
+        ...buildAssetRow({ status: AssetStatus.EN_USO, inUseById: 'u-cond', projectId: null }),
+        project: null,
+        assignedTo: null,
+        inUseBy: buildUserRow({ id: 'u-cond' }),
+      });
+
+      const updated = await service.takeUse('a-1', 'u-cond');
+
+      expect(permissionsMock.can).toHaveBeenCalledWith('u-cond', 'asset:use:report');
+      // canViewAsset SÍ se evalúa (Model A: permiso Y visibilidad); se concede por
+      // el permiso de conductor sobre el activo global, sin caer al respaldo FGA.
+      expect(permissionsMock.scopeFilter).toHaveBeenCalled();
+      expect(fgaMock.check).not.toHaveBeenCalled();
+      expect(updated.inUseById).toBe('u-cond');
+    });
+
+    it('releaseUse rechaza (403) sin el permiso asset:use:report (Model A: el permiso es obligatorio)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.EN_USO, inUseById: 'u-1' }),
+      );
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
+
+      await expect(service.releaseUse('a-1', 'u-x')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(txMock.asset.update).not.toHaveBeenCalled();
+    });
+
+    it('releaseUse permite al conductor (asset:use:report) liberar el activo que ÉL tiene en uso', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.EN_USO, inUseById: 'u-cond' }),
+      );
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
+        ...buildAssetRow({ status: AssetStatus.DISPONIBLE, inUseById: null }),
+        project: null,
+        assignedTo: null,
+        inUseBy: null,
+      });
+
+      const updated = await service.releaseUse('a-1', 'u-cond');
+
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: expect.objectContaining({ inUseById: null, status: AssetStatus.DISPONIBLE }),
+        }),
+      );
+      expect(updated.inUseById).toBeNull();
+    });
+
+    it('releaseUse con asset:use:report NO libera un activo tomado por otro (regla de negocio intacta)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.EN_USO, inUseById: 'u-otro', projectId: null }),
+      );
+      permissionsMock.can.mockResolvedValue({ effect: 'allow' }); // conductor: pasa el gate de reportar uso
+      // No es org_admin: el escape de admin se resuelve por FGA (no por Membership).
+      // Global + scopeFilter none (default) => canViewAsset no consulta FGA; el único
+      // fga.check es el de admin, que forzamos a false.
+      fgaMock.check.mockResolvedValueOnce(false);
+
+      await expect(service.releaseUse('a-1', 'u-cond')).rejects.toBeInstanceOf(BadRequestException);
+      expect(txMock.asset.update).not.toHaveBeenCalled();
     });
   });
 
@@ -989,6 +1111,36 @@ describe('AssetsService', () => {
         service.submitChecklist('a-1', 'tpl-1', 'u-x', [{ itemId: '1', value: true }]),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+    });
+
+    it('rechaza (403) a un conductor que ejecuta checklist sobre un activo de proyecto que NO puede ver', async () => {
+      // Regresión QA ciclo 2 #2: asset:checklist:run:any (conductor) SIN asset:read no
+      // basta para ESCRIBIR el checklist de un activo ajeno; exige además poder verlo.
+      permissionsMock.can.mockResolvedValue({ effect: 'allow' }); // checklist:run:any allow
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null); // sin asset:read
+      fgaMock.check.mockResolvedValueOnce(false); // ni can_view_list del proyecto ajeno
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ projectId: 'p-ajeno' }));
+
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-cond', [{ itemId: '1', value: true }]),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prismaMock.checklistTemplate.findUnique).not.toHaveBeenCalled();
+      expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
+    });
+
+    it('updateTelemetry rechaza (403) a un conductor sobre un vehículo de proyecto que NO puede ver', async () => {
+      // Misma asimetría Model A cerrada también en la escritura de telemetría.
+      permissionsMock.can.mockResolvedValue({ effect: 'allow' });
+      permissionsMock.scopeFilter.mockResolvedValueOnce(null);
+      fgaMock.check.mockResolvedValueOnce(false);
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO, projectId: 'p-ajeno' }),
+      );
+
+      await expect(
+        service.updateTelemetry('a-1', 'u-cond', { latitude: -33.4, longitude: -70.6, speed: 40 }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(txMock.asset.update).not.toHaveBeenCalled();
     });
 
     it('FIX3: un BOOLEAN con obsItemId que cae en falla sin observación rechaza (400)', async () => {

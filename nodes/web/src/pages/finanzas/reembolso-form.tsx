@@ -5,7 +5,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { Camera, Loader2, Upload } from 'lucide-react';
+import { Camera, Info, Loader2, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -31,7 +32,7 @@ import {
   type ReimbursementView,
   type VehicleSubcategory,
 } from '@/types/finance';
-import { todaySantiagoString } from '@/lib/santiago-time';
+import { oneMonthAgoSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
 
 /** MIME de imagen aceptado por el OCR/boleta (alineado con el backend). */
 const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/heic';
@@ -52,6 +53,9 @@ const SUBCATEGORY_ORDER: VehicleSubcategory[] = [
 function getTodayString(): string {
   return todaySantiagoString();
 }
+
+/** Formato YYYY-MM-DD (necesario para comparar fechas como strings). */
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Mapea el string de categoría del OCR a nuestro enum (best-effort). */
 function normalizeCategory(raw: string | undefined): ReimbursementCategory | '' {
@@ -131,6 +135,19 @@ export function ReembolsoFormDialog({
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
+  // Ventana de fecha del gasto (versión beta, misma regla que el backend):
+  // [hace 1 mes calendario, hoy], en día calendario de Chile. Comparables como
+  // strings por ser YYYY-MM-DD. Se recalculan en cada render (baratas) para no
+  // quedar obsoletas si el diálogo cruza la medianoche.
+  const minDate = oneMonthAgoSantiagoString();
+  const maxDate = getTodayString();
+  // En edición, la fecha original puede haber salido de la ventana (>1 mes) mientras
+  // la solicitud seguía pendiente. El backend (update) NO revalida la ventana si la
+  // fecha del gasto no cambia, así que aquí se permite conservarla: el `min` del
+  // selector no debe marcarla inválida y el submit solo revalida si la fecha cambió.
+  const originalDate = isEdit && initial ? initial.date.slice(0, 10) : null;
+  const effectiveMinDate = originalDate && originalDate < minDate ? originalDate : minDate;
+
   useEffect(() => {
     if (open) {
       // Al abrir en modo edición, precarga los campos desde el reembolso. La
@@ -192,7 +209,21 @@ export function ReembolsoFormDialog({
       const res = await scanReceipt(file);
       if (res.concept) setConcept(res.concept);
       if (typeof res.amount === 'number' && res.amount > 0) setAmount(String(Math.round(res.amount)));
-      if (res.date) setDate(res.date.slice(0, 10));
+      if (res.date) {
+        // Ventana beta: si la boleta trae una fecha fuera del plazo, NO se
+        // aplica (quedaría un 400 seguro al enviar); el usuario la corrige a
+        // mano. Una fecha malformada del OCR simplemente no se aplica.
+        const scanned = res.date.slice(0, 10);
+        if (DATE_ONLY_RE.test(scanned)) {
+          if (scanned >= minDate && scanned <= maxDate) {
+            setDate(scanned);
+          } else {
+            toast.warning(
+              'La boleta tiene fecha fuera del plazo permitido; ingresa la fecha manualmente.',
+            );
+          }
+        }
+      }
       const cat = normalizeCategory(res.category);
       if (cat) setCategory(cat);
     } catch {
@@ -222,6 +253,18 @@ export function ReembolsoFormDialog({
       return setError('El monto debe ser un número entero mayor a cero.');
     }
     if (!date) return setError('La fecha es obligatoria.');
+    // Ventana beta (el form es noValidate: min/max del input no bloquean solos).
+    // Mismos mensajes que el backend (400) para una experiencia consistente. En
+    // edición solo se revalida la ventana si la fecha del gasto CAMBIÓ respecto de la
+    // original (espeja el skip por día del backend): un PENDIENTE ya vencido sigue
+    // editable en monto/concepto sin obligar a mover la fecha.
+    const dateChanged = !originalDate || date !== originalDate;
+    if (dateChanged) {
+      if (date > maxDate) return setError('La fecha del gasto no puede ser futura.');
+      if (date < minDate) {
+        return setError('La fecha del gasto no puede tener más de 1 mes de antigüedad.');
+      }
+    }
     if (!category) return setError('La categoría es obligatoria.');
     if (category === 'VEHICULOS' && !vehicle.trim()) return setError('Indica el vehículo.');
     if (category === 'VEHICULOS' && !vehicleSubcategory) {
@@ -381,12 +424,32 @@ export function ReembolsoFormDialog({
               <Input
                 id="reim-date"
                 type="date"
+                min={effectiveMinDate}
+                max={maxDate}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
                 disabled={submitting}
               />
             </div>
+          </div>
+
+          {/* Aviso informativo de la ventana de fecha (versión beta): SIEMPRE
+              visible junto al campo fecha, en creación y edición. Mismo patrón
+              visual que el aviso de espera del OCR. */}
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground"
+          >
+            <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+            <span>
+              <span className="font-medium">Versión beta:</span>{' '}
+              <span className="text-muted-foreground">
+                puedes registrar gastos de hasta 1 mes de antigüedad. Te recomendamos crear la
+                solicitud dentro de 48 horas desde el gasto.
+              </span>
+            </span>
           </div>
 
           <div className="flex flex-col gap-1.5">
