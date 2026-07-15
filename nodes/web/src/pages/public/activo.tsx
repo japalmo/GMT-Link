@@ -7,6 +7,8 @@ import {
   Construction,
   Briefcase,
   Factory,
+  FileText,
+  ClipboardCheck,
   ShieldAlert,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -135,6 +137,42 @@ export default function PublicAssetPage(): ReactNode {
                   {asset.project?.name || 'Global / Sin asignar'}
                 </span>
               </div>
+
+              {/* Documentos aprobados (Tanda 5.2): prueba de documentación al día. */}
+              {asset.documents.length > 0 && (
+                <div className="border-b border-border/60 pb-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-muted-foreground">
+                    <FileText className="size-4" /> Documentos:
+                  </p>
+                  <ul className="flex flex-col gap-1.5">
+                    {asset.documents.map((doc, i) => (
+                      <li key={`${doc.name}-${i}`} className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">{doc.name}</span>
+                        {doc.expired ? (
+                          <Badge className="bg-rose-500/10 text-rose-500 border-rose-500/20">Vencido</Badge>
+                        ) : doc.expiringSoon ? (
+                          <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">Por vencer</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Vigente</Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Última inspección de checklist (Tanda 5.2). */}
+              {asset.lastChecklist && (
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <ClipboardCheck className="size-4" /> Última inspección:
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {asset.lastChecklist.templateName} ·{' '}
+                    {new Date(asset.lastChecklist.submittedAt).toLocaleDateString('es-CL')}
+                  </span>
+                </div>
+              )}
             </CardContent>
 
             <CardFooter className="bg-muted/30 border-t py-4 text-center justify-center">

@@ -8,7 +8,7 @@ import { ORG_ID } from '../../common/org.constant';
 import { StorageService } from '../../common/storage/storage.service';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
-import { CreateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
+import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
 import { composeChecklistPdf } from './checklist-pdf.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import {
@@ -622,6 +622,80 @@ export class AssetsService {
   }
 
   /**
+   * Edita los campos DESCRIPTIVOS de un activo (Tanda 5.2): nombre, descripción,
+   * fabricante, identificador/tipo, subtipo de vehículo y metadata. Exige
+   * `can_manage_assets` (mismo gate que las demás mutaciones de gestión). El tipo y
+   * el proyecto NO se tocan aquí. Conserva la unicidad blanda del identificador
+   * (excluyéndose a sí mismo) y registra una entrada de historial.
+   */
+  async update(id: string, userId: string, dto: UpdateAssetDto): Promise<AssetView> {
+    const asset = await this.prisma.asset.findUnique({ where: { id } });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+    await this.assertCanManageAsset(userId, asset);
+
+    if (dto.vehicleSubtype != null && asset.type !== AssetType.VEHICULO) {
+      throw new BadRequestException('El subtipo de vehículo solo aplica a activos de tipo VEHICULO.');
+    }
+
+    // Unicidad blanda del identificador (paridad con create), excluyéndose a sí mismo.
+    const nextIdentifier =
+      dto.identifier !== undefined ? dto.identifier?.trim() || null : asset.identifier;
+    const nextIdentifierType =
+      dto.identifierType !== undefined ? dto.identifierType : asset.identifierType;
+    if (
+      (dto.identifier !== undefined || dto.identifierType !== undefined) &&
+      nextIdentifier
+    ) {
+      const clash = await this.prisma.asset.findFirst({
+        where: {
+          id: { not: id },
+          identifier: nextIdentifier,
+          identifierType: nextIdentifierType,
+        },
+      });
+      if (clash) {
+        throw new ConflictException(
+          nextIdentifierType === AssetIdentifierType.PATENTE
+            ? 'Ya existe un activo con esa patente.'
+            : 'Ya existe un activo con ese número de serie.',
+        );
+      }
+    }
+
+    const data: Prisma.AssetUpdateInput = {};
+    if (dto.name !== undefined) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.manufacturer !== undefined) data.manufacturer = dto.manufacturer?.trim() || null;
+    if (dto.identifier !== undefined) data.identifier = dto.identifier?.trim() || null;
+    if (dto.identifierType !== undefined) data.identifierType = dto.identifierType;
+    if (dto.vehicleSubtype !== undefined) {
+      // Un no-vehículo nunca guarda subtipo (defensa extra a la validación de arriba).
+      data.vehicleSubtype = asset.type === AssetType.VEHICULO ? dto.vehicleSubtype : null;
+    }
+    if (dto.metadata !== undefined) {
+      // MERGE, no reemplazo: preserva claves escritas por otras vías (telemetría,
+      // checklist) que el editor descriptivo no toca. `null` limpia toda la metadata
+      // con el guard `Prisma.JsonNull` (Prisma rechaza un null JS plano en Json?).
+      data.metadata = dto.metadata
+        ? ({ ...((asset.metadata as Record<string, unknown> | null) ?? {}), ...dto.metadata } as Prisma.InputJsonValue)
+        : Prisma.JsonNull;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.asset.update({ where: { id }, data });
+      await this.createHistoryEntry(tx, id, 'EDITADO', 'Información del activo editada.', userId);
+    });
+
+    const row = await this.prisma.asset.findUniqueOrThrow({
+      where: { id },
+      include: { project: true, assignedTo: true, inUseBy: true },
+    });
+    return this.toAssetView(row);
+  }
+
+  /**
    * Ficha pública por TOKEN OPACO no enumerable (sin autenticación). El código
    * correlativo ya NO sirve para esta ruta: evita el raspado del parque (GAP3).
    */
@@ -630,6 +704,20 @@ export class AssetsService {
       where: { publicToken: token },
       include: {
         project: true,
+        // Documentos APROBADOS (Tanda 5.2): la ficha pública prueba que el activo
+        // tiene su documentación al día. Se ordenan por vencimiento (los que vencen
+        // antes primero) y solo se expone metadata (nombre/tipo/vencimiento), nunca
+        // el archivo, para no filtrar documentos en una ruta sin autenticación.
+        documents: {
+          where: { status: DocumentStatus.APROBADO },
+          orderBy: [{ expirationDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+        },
+        // Última inspección (checklist ejecutado): solo nombre de plantilla + fecha.
+        checklistSubmissions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { template: { select: { name: true } } },
+        },
       },
     });
 
@@ -637,8 +725,27 @@ export class AssetsService {
       throw new NotFoundException('Ficha técnica no encontrada.');
     }
 
-    // GAP 3: la ficha pública (sin autenticación) no debe filtrar datos personales
-    // ni el identificador. Solo expone información no sensible del activo.
+    const now = Date.now();
+    const EXPIRING_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+    const documents = asset.documents.map((d) => {
+      const expiresMs = d.expirationDate ? d.expirationDate.getTime() : null;
+      return {
+        name: d.name,
+        type: d.type,
+        expiresAt: d.expirationDate ? d.expirationDate.toISOString() : null,
+        expired: expiresMs !== null && expiresMs < now,
+        expiringSoon: expiresMs !== null && expiresMs >= now && expiresMs <= now + EXPIRING_WINDOW_MS,
+      };
+    });
+
+    const lastSubmission = asset.checklistSubmissions[0];
+    const lastChecklist = lastSubmission
+      ? { templateName: lastSubmission.template.name, submittedAt: lastSubmission.createdAt.toISOString() }
+      : null;
+
+    // GAP 3: la ficha pública (sin autenticación) no filtra datos personales ni el
+    // identificador. Expone info no sensible + prueba de documentación y última
+    // inspección (sin archivos ni respuestas del checklist).
     return {
       code: asset.code,
       type: asset.type,
@@ -648,6 +755,8 @@ export class AssetsService {
       vehicleSubtype: asset.vehicleSubtype,
       status: asset.status,
       project: asset.project ? { name: asset.project.name } : null,
+      documents,
+      lastChecklist,
     };
   }
 

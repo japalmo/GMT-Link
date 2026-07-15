@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -29,6 +30,7 @@ import { FgaService } from '../../fga/fga.service';
 import { AssetsService } from './assets.service';
 import {
   CreateAssetDto,
+  UpdateAssetDto,
   UpdateAssetStatusDto,
   AssignAssetDto,
   ReviewAssetDocDto,
@@ -183,6 +185,23 @@ export class AssetsController {
           object: 'organization:gmt',
         });
     return { ...asset, canManageAssets };
+  }
+
+  /**
+   * Edita los campos DESCRIPTIVOS del activo (Tanda 5.2): nombre, descripción,
+   * fabricante, identificador/tipo, subtipo de vehículo y metadata. El servicio
+   * exige `can_manage_assets`. `@Patch` no colisiona con `@Get`/`@Put` de `:id`.
+   */
+  @Patch(':id')
+  async update(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateAssetDto,
+  ): Promise<AssetView> {
+    const userId = this.requireUserId(authUser);
+    const updated = await this.assets.update(id, userId, dto);
+    // Quien editó cumplió `can_manage_assets`; el front conserva las acciones de gestión.
+    return { ...updated, canManageAssets: true };
   }
 
   /**

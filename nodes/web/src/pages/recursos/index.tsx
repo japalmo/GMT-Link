@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useId, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useId, useRef, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useAssets } from '@/hooks/use-assets';
 import { useDataTable } from '@/hooks/use-data-table';
@@ -33,6 +33,7 @@ import {
   ListTodo,
   ClipboardCheck,
   Settings,
+  Pencil,
   X,
   Construction,
 } from 'lucide-react';
@@ -55,6 +56,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { RejectDialog } from '@/components/ui/reject-dialog';
+import { AssetEditDialog } from './asset-edit-dialog';
 import type {
   AssetView,
   AssetType,
@@ -905,7 +907,12 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   const [newAssignId, setNewAssignId] = useState('');
 
   // Tabs for detailed view
-  const [detailTab, setDetailTab] = useState<'documentos' | 'accesorios' | 'checklist' | 'historial'>('documentos');
+  const [detailTab, setDetailTab] = useState<'informacion' | 'ficha' | 'historial'>('informacion');
+  const [editOpen, setEditOpen] = useState(false);
+  // Al "Reportar uso"/"Poner en uso" el operador debe aterrizar en el checklist, que
+  // vive en la pestaña Ficha pública; este flag hace scroll a esa tarjeta al montarse.
+  const [scrollToChecklist, setScrollToChecklist] = useState(false);
+  const checklistRef = useRef<HTMLDivElement>(null);
 
   // Descarga de PDF de una inspección (submissionId en curso).
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
@@ -1359,13 +1366,26 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
   // "Reportar uso": lleva al operador al checklist de operación. Si es vehículo y
   // aún no hay plantilla configurada, precarga la plantilla estándar de camioneta.
   const goToChecklist = (loadVehicleTemplate = false) => {
-    setDetailTab('checklist');
+    setDetailTab('ficha');
+    setScrollToChecklist(true);
     setShowTplConfig(false);
     if (loadVehicleTemplate && (!template || template.items.length === 0)) {
       setShowTplConfig(true);
       setTplItems(VEHICLE_CHECKLIST_DEFAULT);
     }
   };
+
+  // Tras "Reportar uso"/"Poner en uso", lleva el foco a la tarjeta del checklist
+  // dentro de la pestaña Ficha pública (que se monta al cambiar de pestaña).
+  useEffect(() => {
+    if (detailTab === 'ficha' && scrollToChecklist) {
+      const raf = requestAnimationFrame(() =>
+        checklistRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      );
+      setScrollToChecklist(false);
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [detailTab, scrollToChecklist]);
 
   if (loading) {
     return (
@@ -1404,16 +1424,57 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Info card & QR */}
-        <div className="flex flex-col gap-6 lg:col-span-2">
+      <div className="flex flex-col gap-6">
+        {/* Pestañas del detalle (Tanda 5.2): Información · Ficha pública · Historial. */}
+        <div className="flex border-b border-border gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setDetailTab('informacion')}
+            className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              detailTab === 'informacion'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Wrench className="size-3.5" /> Información
+          </button>
+          <button
+            type="button"
+            onClick={() => setDetailTab('ficha')}
+            className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              detailTab === 'ficha'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <QrCode className="size-3.5" /> Ficha pública
+          </button>
+          <button
+            type="button"
+            onClick={() => setDetailTab('historial')}
+            className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              detailTab === 'historial'
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <History className="size-3.5" /> Historial ({history.length})
+          </button>
+        </div>
+
+        {detailTab === 'informacion' && (
           <Card>
             <CardHeader className="pb-3 flex flex-row justify-between items-start gap-4">
               <div>
                 <CardTitle className="text-lg">Información General</CardTitle>
                 <CardDescription>Detalles técnicos y estado actual</CardDescription>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
+                {canManageAsset && (
+                  <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                    <Pencil className="size-3.5 mr-1.5" /> Editar
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" onClick={() => setStatusModalOpen(true)}>
                   Cambiar Estado
                 </Button>
@@ -1564,53 +1625,44 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               </div>
             </CardFooter>
           </Card>
+        )}
 
-          {/* Detail View Tab Header — scroll horizontal en móvil (barra oculta). */}
-          <div className="flex border-b border-border gap-2 mb-4 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              onClick={() => setDetailTab('documentos')}
-              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                detailTab === 'documentos'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <FileText className="size-3.5" /> Documentos
-            </button>
-            <button
-              onClick={() => setDetailTab('accesorios')}
-              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                detailTab === 'accesorios'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Package className="size-3.5" /> Accesorios ({accessories.length})
-            </button>
-            <button
-              onClick={() => setDetailTab('checklist')}
-              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                detailTab === 'checklist'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <ListTodo className="size-3.5" /> Checklist y Control
-            </button>
-            <button
-              onClick={() => setDetailTab('historial')}
-              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-                detailTab === 'historial'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <History className="size-3.5" /> Historial ({history.length})
-            </button>
-          </div>
+        {/* Ficha pública (Tanda 5.2): QR + acceso a la ficha, luego documentos y checklist. */}
+        {detailTab === 'ficha' && (
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <QrCode className="size-4 text-primary" /> Ficha pública
+                </CardTitle>
+                <CardDescription>
+                  Accesible sin credenciales por QR. Muestra los documentos aprobados y la última
+                  inspección. Imprime el código y pégalo en el activo.
+                </CardDescription>
+              </div>
+              <a
+                href={publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-xs font-medium text-primary hover:underline"
+              >
+                Abrir ficha: {asset.code}
+              </a>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center gap-2 sm:flex-row sm:items-center">
+              <div className="rounded-lg border bg-white p-3">
+                <img src={qrUrl} alt="Código QR de la ficha pública" className="size-32" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Los documentos aprobados y el último checklist de abajo son los que aparecen en la
+                ficha pública.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
           {/* Documents Tab */}
-          {detailTab === 'documentos' && (
+          {detailTab === 'ficha' && (
             <Card>
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
@@ -1755,8 +1807,8 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </Card>
           )}
 
-          {/* Accessories Tab */}
-          {detailTab === 'accesorios' && (
+          {/* Accessories — bajo Información (Tanda 5.2). */}
+          {detailTab === 'informacion' && (
             <Card>
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
@@ -1877,9 +1929,9 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
             </Card>
           )}
 
-          {/* Checklist Tab */}
-          {detailTab === 'checklist' && (
-            <Card>
+          {/* Checklist — bajo Ficha pública (Tanda 5.2). */}
+          {detailTab === 'ficha' && (
+            <Card ref={checklistRef}>
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -2332,7 +2384,7 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
                                 const display =
                                   ans.value === true ? 'Sí' :
                                   ans.value === false ? 'No' :
-                                  ans.value === null || ans.value === '' ? '—' :
+                                  ans.value === null || ans.value === '' ? 'Sin dato' :
                                   String(ans.value);
                                 return (
                                   <div key={idx} className="flex flex-col gap-0.5 text-[11px] border-b border-border/20 pb-1">
@@ -2415,63 +2467,15 @@ function AssetDetailView({ id, onBack }: AssetDetailViewProps): ReactNode {
               </CardContent>
             </Card>
           )}
-
-        </div>
-
-        {/* Timeline & QR Panel */}
-        <div className="flex flex-col gap-6">
-          {/* QR Code Card */}
-          <Card className="flex flex-col items-center justify-center text-center p-6 bg-card/30">
-            <QrCode className="size-8 text-primary mb-2" />
-            <h3 className="font-semibold text-sm">Código QR Público</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-              Ficha pública accesible sin credenciales. Imprimir y pegar en el equipo.
-            </p>
-            <div className="mt-4 p-3 bg-white rounded-lg border flex items-center justify-center">
-              <img src={qrUrl} alt="Código QR del Activo" className="size-32" />
-            </div>
-            <a
-              href={publicUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-primary hover:underline font-medium mt-3"
-            >
-              Ficha pública: {asset.code}
-            </a>
-          </Card>
-
-          {/* Timeline History */}
-          <Card className="flex-1 flex flex-col">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <History className="size-4 text-primary" /> Historial de Eventos
-              </CardTitle>
-              <CardDescription>Trazabilidad completa en terreno</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 max-h-[350px] overflow-y-auto pr-1">
-              {history.length === 0 ? (
-                <p className="text-xs text-muted-foreground py-6 text-center">No hay registros.</p>
-              ) : (
-                <div className="relative border-l border-border ml-2 pl-4 space-y-4 py-2">
-                  {history.map((h) => (
-                    <div key={h.id} className="relative text-xs">
-                      {/* marker dot */}
-                      <span className="absolute -left-[21px] top-1 size-2 rounded-full bg-primary border border-background" />
-                      <div className="flex flex-col">
-                        <span className="font-medium text-foreground">{h.description}</span>
-                        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                          <span>Por {h.actor ? `${h.actor.firstName} ${h.actor.lastName}` : 'Sistema'}</span>
-                          <span>{new Date(h.createdAt).toLocaleDateString('es-CL')}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
+
+      {/* Diálogo de edición de campos del activo (Tanda 5.2). */}
+      <AssetEditDialog
+        open={editOpen}
+        asset={asset}
+        onOpenChange={setEditOpen}
+        onSaved={(updated) => setAsset(updated)}
+      />
 
       {/* DIALOG EDIT STATUS */}
       {statusModalOpen && (

@@ -103,6 +103,7 @@ import type {
 import type {
   AssetView,
   AssetPublicView,
+  UpdateAssetInput,
   AssetDocumentView,
   AssetHistoryEntryView,
   AssetType,
@@ -1856,6 +1857,14 @@ export function createAsset(dto: CreateAssetInput): Promise<AssetView> {
 
 export function getAsset(id: string): Promise<AssetView> {
   return request<AssetView>(`/assets/${encodeURIComponent(id)}`);
+}
+
+/** `PATCH /assets/:id` — edita los campos descriptivos del activo (Tanda 5.2). */
+export function updateAsset(id: string, input: UpdateAssetInput): Promise<AssetView> {
+  return request<AssetView>(`/assets/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
 }
 
 export function getPublicAsset(token: string): Promise<AssetPublicView> {

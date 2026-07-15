@@ -63,6 +63,45 @@ export class CreateAssetDto {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * Edición de los campos DESCRIPTIVOS de un activo (Tanda 5.2). Parcial: solo se
+ * aplican los presentes. NO incluye type, projectId, assignedToId ni status: el
+ * tipo y el proyecto quedan fijos (cambiarlos re-sincroniza FGA y el código), y
+ * estado/responsable/uso siguen con sus endpoints dedicados.
+ */
+export class UpdateAssetDto {
+  @IsString()
+  @IsNotEmpty({ message: 'El nombre del activo no puede quedar vacío' })
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string | null;
+
+  @IsString()
+  @IsOptional()
+  manufacturer?: string | null;
+
+  @IsString()
+  @IsOptional()
+  identifier?: string | null;
+
+  @IsEnum(AssetIdentifierType, { message: 'El tipo de identificador debe ser PATENTE o NUMERO_SERIE' })
+  @IsOptional()
+  identifierType?: AssetIdentifierType | null;
+
+  @IsEnum(VehicleSubtype, {
+    message: 'El subtipo debe ser PICKUP, FURGON, AUTO, AUTOBUS o CAMION',
+  })
+  @IsOptional()
+  vehicleSubtype?: VehicleSubtype | null;
+
+  @IsObject()
+  @IsOptional()
+  metadata?: Record<string, unknown>;
+}
+
 export class UpdateAssetStatusDto {
   @IsEnum(AssetStatus, { message: 'Estado del activo inválido' })
   status!: AssetStatus;

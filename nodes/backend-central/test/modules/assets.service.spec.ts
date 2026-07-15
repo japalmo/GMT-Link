@@ -615,6 +615,8 @@ describe('AssetsService', () => {
         project: { id: 'p-1', name: 'Proyecto Norte' },
         assignedTo: buildUserRow({ firstName: 'Juan', lastName: 'Pérez' }),
         inUseBy: buildUserRow({ id: 'u-2', firstName: 'Ana', lastName: 'Soto' }),
+        documents: [],
+        checklistSubmissions: [],
       });
 
       const view = await service.getPublicByToken('tok-xyz');
@@ -630,6 +632,37 @@ describe('AssetsService', () => {
       expect(view).not.toHaveProperty('identifierType');
       expect(view).not.toHaveProperty('assignedTo');
       expect(view).not.toHaveProperty('inUseBy');
+      // Tanda 5.2: sin docs ni inspecciones → arrays/null vacíos.
+      expect(view.documents).toEqual([]);
+      expect(view.lastChecklist).toBeNull();
+    });
+
+    it('expone documentos aprobados (metadata sin archivo) y la última inspección', async () => {
+      const past = new Date(Date.now() - 24 * 60 * 60 * 1000); // ayer → vencido
+      const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000); // en 10 días → por vencer
+      prismaMock.asset.findUnique.mockResolvedValueOnce({
+        ...buildAssetRow({ code: 'GMT-VH-0002', publicToken: 'tok-2' }),
+        project: null,
+        documents: [
+          { name: 'Seguro', type: 'SEGURO', fileUrl: 'https://x/secreto.pdf', expirationDate: future, createdAt: past },
+          { name: 'Revisión técnica', type: 'CERT', fileUrl: 'https://x/rt.pdf', expirationDate: past, createdAt: past },
+        ],
+        checklistSubmissions: [
+          { createdAt: future, template: { name: 'Checklist camioneta' } },
+        ],
+      });
+
+      const view = await service.getPublicByToken('tok-2');
+
+      expect(view.documents).toHaveLength(2);
+      // No se filtra el archivo en la ruta pública.
+      expect(view.documents[0]).not.toHaveProperty('fileUrl');
+      expect(view.documents[0]).toMatchObject({ name: 'Seguro', type: 'SEGURO', expired: false, expiringSoon: true });
+      expect(view.documents[1]).toMatchObject({ name: 'Revisión técnica', expired: true, expiringSoon: false });
+      expect(view.lastChecklist).toEqual({
+        templateName: 'Checklist camioneta',
+        submittedAt: future.toISOString(),
+      });
     });
 
     it('lanza NotFoundException cuando el token no existe', async () => {
