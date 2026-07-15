@@ -20,6 +20,11 @@ import type {
   ChecklistItemConfig,
   ChecklistTemplateItem,
   ChecklistAnswer,
+  UsageCycleView,
+  UsageCycleStatus,
+  UsageEndKind,
+  EndUsageCycleInput,
+  UsageCyclePerson,
 } from '@gmt-platform/contracts';
 
 export type {
@@ -36,7 +41,21 @@ export type {
   ChecklistItemConfig,
   ChecklistTemplateItem,
   ChecklistAnswer,
+  UsageCycleView,
+  UsageCycleStatus,
+  UsageEndKind,
+  EndUsageCycleInput,
+  UsageCyclePerson,
 };
+
+/**
+ * Resultado de las mutaciones del ciclo de uso (reportar / confirmar / cancelar /
+ * terminar): el backend devuelve el activo actualizado junto con el ciclo afectado.
+ */
+export interface UsageCycleResult {
+  asset: AssetView;
+  cycle: UsageCycleView;
+}
 
 /** Estado de un documento/checklist de activo (local; aún no en contracts). */
 export type DocumentStatus = 'BORRADOR' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO';

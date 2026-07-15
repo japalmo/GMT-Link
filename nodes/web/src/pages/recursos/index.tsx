@@ -53,6 +53,10 @@ import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { RejectDialog } from '@/components/ui/reject-dialog';
 import { AssetEditDialog } from './asset-edit-dialog';
+import { useUsageCycles } from '@/hooks/use-usage-cycles';
+import { UsageCycleTimerCard } from './usage-cycle-card';
+import { EndUsageForm } from './end-usage-form';
+import { UsageHistory } from './usage-history';
 import type {
   AssetView,
   AssetType,
@@ -67,6 +71,8 @@ import type {
   ChecklistAnswer,
   VehicleSubtype,
   AssetIdentifierType,
+  UsageCycleView,
+  EndUsageCycleInput,
 } from '@/types/assets';
 import {
   ASSET_TYPE_LABELS,
@@ -879,7 +885,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     getById,
     updateStatus,
     assign,
-    takeUse,
     releaseUse,
     uploadDoc,
     listDocs,
@@ -896,6 +901,13 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     listSubmissions,
     getSubmissionPdf,
   } = useAssets();
+  const {
+    start: startCycle,
+    confirm: confirmCycle,
+    cancel: cancelCycle,
+    end: endCycle,
+    list: listCycles,
+  } = useUsageCycles();
 
   const [asset, setAsset] = useState<AssetView | null>(null);
   const [docs, setDocs] = useState<AssetDocumentView[]>([]);
@@ -903,6 +915,14 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   const [accessories, setAccessories] = useState<AssetAccessoryView[]>([]);
   const [template, setTemplate] = useState<ChecklistTemplateView | null>(null);
   const [submissions, setSubmissions] = useState<ChecklistSubmissionView[]>([]);
+
+  // Ciclo de uso: lista de ciclos (historial) + el activo derivado (a lo más uno
+  // EN_PREPARACION o EN_CURSO). El diálogo de "Terminar uso" y el flag de acción
+  // en curso viven aparte para no bloquear el resto de las acciones del detalle.
+  const [cycles, setCycles] = useState<UsageCycleView[]>([]);
+  const [activeCycle, setActiveCycle] = useState<UsageCycleView | null>(null);
+  const [endFormOpen, setEndFormOpen] = useState(false);
+  const [cycleActioning, setCycleActioning] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -961,12 +981,15 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       setNewStatus(a.status);
       setNewAssignId(a.assignedToId || '');
 
-      const [dList, hList, accList, tpl, subList] = await Promise.all([
+      const [dList, hList, accList, tpl, subList, cycList] = await Promise.all([
         listDocs(id),
         getHistory(id),
         listAccessories(id),
         getTemplate(id),
         listSubmissions(id),
+        // Los ciclos de uso son un endpoint nuevo: si fallara (backend viejo) NO
+        // debe tumbar la carga del detalle, así que cae a lista vacía.
+        listCycles(id).catch(() => [] as UsageCycleView[]),
       ]);
       setDocs(dList);
       setHistory(hList);
@@ -975,12 +998,18 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       setSubmissions(subList);
       setTplName(tpl?.name || '');
       setTplItems(tpl?.items || []);
+      setCycles(cycList);
+      // A lo más un ciclo vigente (el backend lo garantiza): el que esté
+      // EN_PREPARACION o EN_CURSO manda el timer / las acciones de cierre.
+      setActiveCycle(
+        cycList.find((c) => c.status === 'EN_PREPARACION' || c.status === 'EN_CURSO') ?? null,
+      );
     } catch {
       toast.error('No se pudieron cargar los datos del activo.');
     } finally {
       setLoading(false);
     }
-  }, [id, getById, listDocs, getHistory, listAccessories, getTemplate, listSubmissions]);
+  }, [id, getById, listDocs, getHistory, listAccessories, getTemplate, listSubmissions, listCycles]);
 
   useEffect(() => {
     void loadData();
@@ -1006,19 +1035,49 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     if (actioning) return;
     setActioning('takeUse');
     try {
-      await takeUse(id);
-      toast.success('Activo puesto en uso con éxito.');
+      // Reportar uso reclama el activo y abre un ciclo. Con checklist aprobado
+      // nace EN_PREPARACION (hay que firmarlo para confirmar); sin plantilla nace
+      // EN_CURSO directo. `loadData` re-deriva `activeCycle` y refresca el historial.
+      const { cycle } = await startCycle(id);
       await loadData();
-      // Para vehículos, abrir el checklist tras ponerlo en uso: el operador debe
-      // registrar el estado del vehículo al recibirlo.
-      if (asset?.type === 'VEHICULO') {
+      if (cycle.status === 'EN_PREPARACION') {
+        toast.success('Uso reportado. Completa el checklist para confirmar.');
         goToChecklist(false);
+      } else {
+        toast.success('Activo puesto en uso con éxito.');
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
+      toast.error(err instanceof Error ? err.message : 'Error al reportar el uso del activo.');
     } finally {
       setActioning(null);
     }
+  };
+
+  // "Cancelar" un ciclo EN_PREPARACION (el operador desiste antes de firmar el
+  // checklist): el activo vuelve a Disponible. `cycleActioning` bloquea el botón.
+  const handleCancelCycle = async () => {
+    if (!activeCycle || cycleActioning) return;
+    setCycleActioning(true);
+    try {
+      await cancelCycle(id, activeCycle.id);
+      toast.success('Reporte de uso cancelado.');
+      await loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al cancelar el reporte de uso.');
+    } finally {
+      setCycleActioning(false);
+    }
+  };
+
+  // "Terminar uso": cierra el ciclo EN_CURSO (GPS / estacionamiento / traspaso) con
+  // foto final opcional. Lanza si falla para que el diálogo muestre el error y siga
+  // abierto; en éxito lo cierra y recarga.
+  const handleEndCycle = async (dto: EndUsageCycleInput, photo?: File) => {
+    if (!activeCycle) return;
+    await endCycle(id, activeCycle.id, dto, photo);
+    setEndFormOpen(false);
+    toast.success('Uso terminado con éxito.');
+    await loadData();
   };
 
   const handleReleaseUse = async () => {
@@ -1330,6 +1389,39 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
         return answer;
       });
 
+      // DOBLE VÍA: si hay un ciclo EN_PREPARACION, firmar el checklist CONFIRMA el
+      // ciclo (pasa a EN_CURSO) en vez de registrar una inspección suelta. Si el
+      // checklist reporta una falla, el backend puede dejar el activo en
+      // MANTENIMIENTO: reflejamos el estado real (loadData) y avisamos por toast.
+      if (activeCycle && activeCycle.status === 'EN_PREPARACION') {
+        const { asset: updated, cycle } = await confirmCycle(
+          id,
+          activeCycle.id,
+          template.id,
+          answers,
+        );
+        setExecutionAnswers({});
+        await loadData();
+        if (updated.status === 'MANTENIMIENTO') {
+          toast.warning('El checklist reportó una falla: el activo quedó en mantenimiento.');
+        } else {
+          toast.success(
+            'Checklist firmado. El activo quedó en uso.',
+            cycle.checklistSubmissionId
+              ? {
+                  action: {
+                    label: 'Descargar PDF',
+                    onClick: () => void handleDownloadPdf(cycle.checklistSubmissionId as string),
+                  },
+                }
+              : undefined,
+          );
+        }
+        return;
+      }
+
+      // Checklist standalone (admin/gerencia sin ciclo de uso): comportamiento
+      // intacto — registra la inspección en el historial y ofrece el PDF.
       const submission = await submitChecklistAnswers(id, { templateId: template.id, answers });
       setExecutionAnswers({});
       void loadData();
@@ -1442,6 +1534,17 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
         </div>
       </div>
 
+      {/* Timer EN VIVO del uso activo (ciclo EN_PREPARACION o EN_CURSO). Va arriba
+          del detalle para verse en cualquier pestaña, incluida Ficha (checklist). */}
+      {activeCycle && (
+        <UsageCycleTimerCard
+          cycle={activeCycle}
+          busy={cycleActioning}
+          onCancel={() => void handleCancelCycle()}
+          onEnd={() => setEndFormOpen(true)}
+        />
+      )}
+
       <div className="flex flex-col gap-6">
         {/* Pestañas del detalle (Tanda 5.2): Información · Ficha pública · Historial. */}
         <div className="flex border-b border-border gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1526,7 +1629,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                     {asset.assignedTo ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName}` : 'Sin asignar'}
                   </span>
                 </div>
-                {asset.status === 'EN_USO' && (
+                {asset.status === 'EN_USO' && !activeCycle && (
                   <>
                     <div className="flex justify-between border-b pb-2">
                       <span className="text-muted-foreground">Uso actual por:</span>
@@ -1607,10 +1710,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 );
               })()}
             </CardContent>
-            <CardFooter className="bg-muted/10 border-t flex justify-between gap-4 items-center">
-              <div>
-                <p className="text-xs text-muted-foreground">Control de disputa en vivo</p>
-              </div>
+            <CardFooter className="bg-muted/10 border-t flex justify-end gap-4 items-center">
               <div className="flex flex-wrap gap-2 justify-end">
                 <Button
                   size="sm"
@@ -1630,12 +1730,14 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                     Checklist de camioneta
                   </Button>
                 )}
-                {asset.status === 'DISPONIBLE' && (
+                {asset.status === 'DISPONIBLE' && !activeCycle && (
                   <Button size="sm" onClick={() => void handleTakeUse()} disabled={actioning !== null}>
                     {actioning === 'takeUse' ? 'Poniendo en uso...' : 'Poner en uso'}
                   </Button>
                 )}
-                {asset.status === 'EN_USO' && (asset.inUseById === profile?.id || isAdmin) && (
+                {/* "Liberar" legacy: solo para activos EN_USO SIN ciclo (flujo viejo
+                    takeUse). Con ciclo activo el cierre es "Terminar uso" (timer). */}
+                {asset.status === 'EN_USO' && !activeCycle && (asset.inUseById === profile?.id || isAdmin) && (
                   <Button size="sm" variant="outline" onClick={() => void handleReleaseUse()} disabled={actioning !== null}>
                     {actioning === 'releaseUse' ? 'Liberando...' : 'Liberar'}
                   </Button>
@@ -2447,45 +2549,73 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
           {/* Historial de Uso Tab */}
           {detailTab === 'historial' && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <History className="size-4 text-primary" /> Historial de Uso
-                </CardTitle>
-                <CardDescription>
-                  Bitácora de eventos del activo: tomas, liberaciones, checklists y cambios de estado.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {history.length === 0 ? (
-                  <p className="text-center text-xs text-muted-foreground border border-dashed py-8 rounded">
-                    No hay registros de uso para este activo todavía.
-                  </p>
-                ) : (
-                  <div className="relative border-l border-border ml-2 pl-4 space-y-4 py-2">
-                    {history.map((h) => (
-                      <div key={h.id} className="relative text-xs">
-                        <span className="absolute -left-[21px] top-1 size-2 rounded-full bg-primary border border-background" />
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="outline" className="text-[10px] py-0">{h.type}</Badge>
-                            <span className="font-medium text-foreground">{h.description}</span>
-                          </div>
-                          <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                            <span>Por {h.actor ? `${h.actor.firstName} ${h.actor.lastName}` : 'Sistema'}</span>
-                            <span className="font-mono">
-                              {new Date(h.createdAt).toLocaleDateString('es-CL')} {new Date(h.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+            <div className="flex flex-col gap-6">
+              {/* Ciclos de uso: tabla principal del historial (clic en fila = detalle). */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <History className="size-4 text-primary" /> Ciclos de uso
+                  </CardTitle>
+                  <CardDescription>
+                    Cada uso del activo (reporte, checklist, término) con su forma de cierre.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <UsageHistory cycles={cycles} onRetry={() => void loadData()} />
+                </CardContent>
+              </Card>
+
+              {/* Bitácora de eventos (timeline): subsección con el historial crudo. */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <History className="size-4 text-muted-foreground" /> Bitácora de eventos
+                  </CardTitle>
+                  <CardDescription>
+                    Tomas, liberaciones, checklists y cambios de estado del activo.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {history.length === 0 ? (
+                    <p className="text-center text-xs text-muted-foreground border border-dashed py-8 rounded">
+                      No hay registros de uso para este activo todavía.
+                    </p>
+                  ) : (
+                    <div className="relative border-l border-border ml-2 pl-4 space-y-4 py-2">
+                      {history.map((h) => (
+                        <div key={h.id} className="relative text-xs">
+                          <span className="absolute -left-[21px] top-1 size-2 rounded-full bg-primary border border-background" />
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="text-[10px] py-0">{h.type}</Badge>
+                              <span className="font-medium text-foreground">{h.description}</span>
+                            </div>
+                            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                              <span>Por {h.actor ? `${h.actor.firstName} ${h.actor.lastName}` : 'Sistema'}</span>
+                              <span className="font-mono">
+                                {new Date(h.createdAt).toLocaleDateString('es-CL')} {new Date(h.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
       </div>
+
+      {/* Diálogo "Terminar uso": cierra el ciclo EN_CURSO (GPS / estacionamiento /
+          traspaso) con foto final opcional. Recibe la lista de usuarios ya cargada. */}
+      <EndUsageForm
+        open={endFormOpen}
+        onOpenChange={setEndFormOpen}
+        users={users}
+        currentUserId={profile?.id}
+        onSubmit={handleEndCycle}
+      />
 
       {/* Diálogo de edición de campos del activo (Tanda 5.2). */}
       <AssetEditDialog

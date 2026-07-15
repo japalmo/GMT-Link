@@ -123,11 +123,15 @@ import type {
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
+  ChecklistAnswer,
   CreateAccessoryInput,
   UpdateAccessoryInput,
   UpdateChecklistTemplateInput,
   ReviewChecklistTemplateInput,
   SubmitChecklistInput,
+  UsageCycleView,
+  UsageCycleResult,
+  EndUsageCycleInput,
 } from '@/types/assets';
 
 /** Base de la API (NestJS). Cae a localhost si la var no está definida. */
@@ -2072,6 +2076,103 @@ export function submitTelemetry(
     method: 'POST',
     body: JSON.stringify(dto),
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ciclo de uso de activos (reportar -> checklist -> en uso -> terminar)        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `POST /assets/:id/usage-cycles` — reporta uso (reclama el activo). Si el activo
+ * tiene checklist aprobado, el ciclo nace `EN_PREPARACION` (hay que firmar el
+ * checklist para confirmar); si no tiene plantilla, nace `EN_CURSO` directo. La
+ * foto inicial es opcional (multipart, campo `photo`).
+ */
+export function startUsageCycle(id: string, photo?: File): Promise<UsageCycleResult> {
+  if (photo) {
+    const formData = new FormData();
+    formData.append('photo', photo);
+    return uploadRequest<UsageCycleResult>(
+      `/assets/${encodeURIComponent(id)}/usage-cycles`,
+      formData,
+    );
+  }
+  return request<UsageCycleResult>(`/assets/${encodeURIComponent(id)}/usage-cycles`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * `POST /assets/:id/usage-cycles/:cycleId/confirm` — firma el checklist inicial y
+ * confirma el ciclo (pasa a `EN_CURSO`). Si el checklist reporta una falla, el
+ * backend puede dejar el activo en `MANTENIMIENTO`; el resultado refleja el estado
+ * real del activo y del ciclo.
+ */
+export function confirmUsageCycle(
+  id: string,
+  cycleId: string,
+  templateId: string,
+  answers: ChecklistAnswer[],
+): Promise<UsageCycleResult> {
+  return request<UsageCycleResult>(
+    `/assets/${encodeURIComponent(id)}/usage-cycles/${encodeURIComponent(cycleId)}/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ templateId, answers }),
+    },
+  );
+}
+
+/**
+ * `POST /assets/:id/usage-cycles/:cycleId/cancel` — cancela un ciclo `EN_PREPARACION`
+ * (el operador desiste antes de firmar el checklist). El activo vuelve a `DISPONIBLE`.
+ */
+export function cancelUsageCycle(id: string, cycleId: string): Promise<UsageCycleResult> {
+  return request<UsageCycleResult>(
+    `/assets/${encodeURIComponent(id)}/usage-cycles/${encodeURIComponent(cycleId)}/cancel`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * `POST /assets/:id/usage-cycles/:cycleId/end` — termina el uso (cierra el ciclo)
+ * con GPS / estacionamiento / traspaso, y foto final opcional. Con foto se envía
+ * multipart (campo `photo` + los campos del dto como strings; el backend parsea
+ * `latitude`/`longitude`); sin foto se envía JSON.
+ */
+export function endUsageCycle(
+  id: string,
+  cycleId: string,
+  dto: EndUsageCycleInput,
+  photo?: File,
+): Promise<UsageCycleResult> {
+  const path = `/assets/${encodeURIComponent(id)}/usage-cycles/${encodeURIComponent(cycleId)}/end`;
+  if (photo) {
+    const formData = new FormData();
+    formData.append('photo', photo);
+    formData.append('endKind', dto.endKind);
+    if (dto.latitude !== undefined) formData.append('latitude', String(dto.latitude));
+    if (dto.longitude !== undefined) formData.append('longitude', String(dto.longitude));
+    if (dto.text !== undefined) formData.append('text', dto.text);
+    if (dto.handoffToUserId !== undefined) formData.append('handoffToUserId', dto.handoffToUserId);
+    return uploadRequest<UsageCycleResult>(path, formData);
+  }
+  return request<UsageCycleResult>(path, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `GET /assets/:id/usage-cycles` — historial de ciclos de uso del activo. */
+export function listUsageCycles(id: string): Promise<UsageCycleView[]> {
+  return request<UsageCycleView[]>(`/assets/${encodeURIComponent(id)}/usage-cycles`);
+}
+
+/** `GET /assets/:id/usage-cycles/:cycleId` — detalle de un ciclo de uso. */
+export function getUsageCycle(id: string, cycleId: string): Promise<UsageCycleView> {
+  return request<UsageCycleView>(
+    `/assets/${encodeURIComponent(id)}/usage-cycles/${encodeURIComponent(cycleId)}`,
+  );
 }
 
 // ============ RECURSOS: BODEGAS, INSUMOS, PROVEEDORES Y HERRAMIENTAS GIS ============
