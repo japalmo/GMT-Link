@@ -26,6 +26,8 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   gerencia_rh: 'Gerencia de RH',
   gerencia_general: 'Gerencia General',
   admin_ti: 'Administrador TI',
+  // Rol de sistema Logística (módulo Inventario).
+  logistica: 'Logística',
   // Legacy: etiquetas de rol de trabajador a nivel PROYECTO (no bundles de org).
   supervisor: 'Supervisor',
   operador: 'Operador',
@@ -60,6 +62,7 @@ export const MODULE_LABELS: Record<string, string> = {
   finanzas: 'Finanzas',
   activos: 'Activos',
   recursos: 'Recursos',
+  inventario: 'Inventario',
 };
 
 /**

@@ -14,9 +14,7 @@ import {
 } from '@/lib/api';
 import { useProfile } from '@/hooks/use-profile';
 import { useHasPermission } from '@/hooks/use-has-permission';
-import InsumosPage from '@/pages/insumos';
-import ProveedoresPage from '@/pages/proveedores';
-import BodegasPage from '@/pages/bodegas';
+import { MisInsumos } from './mis-insumos';
 import {
   Wrench,
   Car,
@@ -28,8 +26,6 @@ import {
   QrCode,
   AlertCircle,
   Package,
-  FileSpreadsheet,
-  Building,
   ListTodo,
   ClipboardCheck,
   Settings,
@@ -86,7 +82,7 @@ interface UserOption {
   lastName: string;
 }
 
-type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria' | 'insumos' | 'proveedores' | 'bodegas';
+type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria' | 'insumos';
 
 // Plantilla estándar de inspección de camioneta. Fuente única del front (mismo
 // contenido que el default del backend). Cada punto crítico es un ESTADO
@@ -136,21 +132,13 @@ const VEHICLE_CHECKLIST_DEFAULT: ChecklistTemplateItem[] = [
 ];
 
 export default function RecursosPage(): ReactNode {
-  // Proveedores y Bodegas solo son visibles para roles de gestión (§ gating de
-  // demo). Equipos, Vehículos e Insumos son visibles para cualquier usuario.
-  const canManageSupplyChain = useHasPermission('warehouse:access');
-
+  // Todas las pestañas son visibles para cualquier usuario. La gestión de la
+  // cadena de suministro (bodegas, proveedores, catálogo) vive en el módulo
+  // Inventario; aquí Insumos es la vista PROPIA del trabajador (mis entregas y
+  // mis solicitudes).
   const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const idBase = useId();
-
-  // Si el usuario pierde el rol estando en una pestaña restringida, lo devolvemos
-  // a una pestaña pública (fail-closed) para no dejar contenido gateado a la vista.
-  useEffect(() => {
-    if (!canManageSupplyChain && (activeTab === 'proveedores' || activeTab === 'bodegas')) {
-      setActiveTab('equipos');
-    }
-  }, [canManageSupplyChain, activeTab]);
 
   const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos' || activeTab === 'maquinaria';
 
@@ -159,19 +147,13 @@ export default function RecursosPage(): ReactNode {
     { value: 'vehiculos', label: 'Vehículos', icon: Car },
     { value: 'maquinaria', label: 'Maquinaria', icon: Construction },
     { value: 'insumos', label: 'Insumos', icon: Package },
-    ...(canManageSupplyChain
-      ? ([
-          { value: 'proveedores', label: 'Proveedores', icon: Building },
-          { value: 'bodegas', label: 'Bodegas', icon: FileSpreadsheet },
-        ] as const)
-      : []),
   ];
 
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
         title="Recursos Físicos"
-        description="Administra los activos, vehículos, herramientas y la cadena de suministro de GMT."
+        description="Administra los activos, vehículos y herramientas de GMT, y revisa tus insumos."
       />
 
       <Tabs<RecursosTab>
@@ -212,15 +194,7 @@ export default function RecursosPage(): ReactNode {
         )}
 
         {activeTab === 'insumos' && (
-          <InsumosPage />
-        )}
-
-        {canManageSupplyChain && activeTab === 'proveedores' && (
-          <ProveedoresPage />
-        )}
-
-        {canManageSupplyChain && activeTab === 'bodegas' && (
-          <BodegasPage />
+          <MisInsumos />
         )}
       </div>
     </PageContainer>

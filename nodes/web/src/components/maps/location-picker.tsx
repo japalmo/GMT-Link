@@ -303,7 +303,7 @@ export function LocationPicker({
         {!leaflet && (
           <div
             className="absolute inset-0 flex animate-pulse items-center justify-center rounded-md bg-muted/60 text-sm text-muted-foreground"
-            aria-hidden
+            role="status"
           >
             Cargando mapa…
           </div>

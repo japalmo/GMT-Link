@@ -42,6 +42,20 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'provider:access', label: 'Acceder a Proveedores', module: 'proveedores', kind: 'FUNCTIONAL', scopeable: false },
   // Acceso a la subsección Bodegas/Insumos (bodegas: list/detalle/crear/transacciones; insumos: list/crear/importar).
   { key: 'warehouse:access', label: 'Acceder a Bodegas', module: 'bodegas', kind: 'FUNCTIONAL', scopeable: false },
+  // ── inventario ──
+  // Acceso al módulo Inventario (catálogo de artículos, import CSV, proveedores por
+  // artículo y gestión de solicitudes de insumos). FUNCTIONAL org-scope (siempre
+  // GLOBAL): visible solo para admins/gerencia/logística. Los endpoints propios
+  // (/inventory/me/*) NO lo exigen: catálogo liviano y solicitudes propias se
+  // gatean con inventory:request:own (abajo); /inventory/me/assignments queda
+  // solo-sesión (comprobante propio).
+  { key: 'inventory:access', label: 'Acceder a Inventario', module: 'inventario', kind: 'FUNCTIONAL', scopeable: false },
+  // Derecho BASE de los roles internos: crear/ver solicitudes de insumos PROPIAS
+  // y el catálogo liviano (GET /inventory/me/catalog, GET/POST /inventory/me/requests).
+  // Espejo EXACTO de finance:request:create (mismos roles, mismo scope GLOBAL);
+  // NO lo reciben los externos (client_ito) ni viewer. Además enciende el módulo
+  // Recursos (pestaña Mis insumos) vía PERMISSION_MODULE en auth.controller.
+  { key: 'inventory:request:own', label: 'Solicitar insumos propios', module: 'inventario', kind: 'FUNCTIONAL', scopeable: false },
   // ── proyectos ──
   { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'faena:create', label: 'Crear faena', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
@@ -154,7 +168,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'department_admin',
     label: 'Administrador de departamento',
-    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('provider:access', 'GLOBAL'), g('warehouse:access', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:delete'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
+    grants: [g('project:create', 'GLOBAL'), g('client:create', 'GLOBAL'), g('faena:create', 'GLOBAL'), g('provider:access', 'GLOBAL'), g('warehouse:access', 'GLOBAL'), g('inventory:access', 'GLOBAL'), g('project:team:manage'), g('asset:fields:edit'), g('project:read'), g('project:update'), g('project:delete'), g('project:kpi:define'), g('task:create'), g('task:assign'), g('task:read'), g('asset:manage'), g('asset:create')],
   },
   {
     key: 'project_creator',
@@ -175,13 +189,20 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     grants: [g('project:read'), g('document:read'), g('document:sign:client'), g('task:read'), g('vmetric:view'), g('vmetric:dem:view'), g('vmetric:dem:compare')],
   },
   // ── Roles de sistema Fase 1 (spec §2.3) — bundles GLOBAL. `finance:request:create`
-  //    va en LOS 10 (RESOLUCIÓN #2). ──
-  { key: 'trabajador', label: 'Trabajador', grants: [g('finance:request:create', 'GLOBAL')] },
+  //    va en LOS 10 (RESOLUCIÓN #2), y `inventory:request:own` lo ESPEJA rol a rol
+  //    (mismo scope): todo rol interno que crea solicitudes propias de finanzas
+  //    también solicita insumos propios. ──
+  {
+    key: 'trabajador',
+    label: 'Trabajador',
+    grants: [g('finance:request:create', 'GLOBAL'), g('inventory:request:own', 'GLOBAL')],
+  },
   {
     key: 'admin_contrato',
     label: 'Administrador de Contrato',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:request:approve', 'GLOBAL'),
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
@@ -195,6 +216,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Administrador de Finanzas',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:request:approve', 'GLOBAL'),
       g('finance:payment:register', 'GLOBAL'),
@@ -211,6 +233,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Analista de RH',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
       g('finance:overtime:view:all', 'GLOBAL'),
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:worker', 'GLOBAL'),
@@ -221,6 +244,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Analista de Finanzas',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:payment:register', 'GLOBAL'),
       g('finance:print:batch', 'GLOBAL'),
@@ -231,6 +255,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Asesor HSE',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:hse', 'GLOBAL'),
     ],
@@ -240,6 +265,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Gerencia de Proyectos',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:request:approve', 'GLOBAL'),
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
@@ -248,7 +274,21 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('asset:checklist:run:any', 'GLOBAL'),
     ],
   },
-  { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
-  { key: 'gerencia_general', label: 'Gerencia General', grants: [g('finance:request:create', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
+  { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), g('inventory:request:own', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
+  { key: 'gerencia_general', label: 'Gerencia General', grants: [g('finance:request:create', 'GLOBAL'), g('inventory:request:own', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
   { key: 'admin_ti', label: 'Administrador TI', grants: ALL_GLOBAL_EXCEPT_BETA() },
+  // ── Rol de sistema Logística (módulo Inventario): catálogo de artículos +
+  //    bodegas + proveedores, más el derecho base de crear solicitudes propias
+  //    (RESOLUCIÓN #2 aplica también a este rol). ──
+  {
+    key: 'logistica',
+    label: 'Logística',
+    grants: [
+      g('inventory:access', 'GLOBAL'),
+      g('warehouse:access', 'GLOBAL'),
+      g('provider:access', 'GLOBAL'),
+      g('finance:request:create', 'GLOBAL'),
+      g('inventory:request:own', 'GLOBAL'),
+    ],
+  },
 ];

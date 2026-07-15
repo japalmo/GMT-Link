@@ -54,6 +54,27 @@ export function toDateInputValue(iso: string | null | undefined): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Formateador de fecha + hora corta es-CL ("15-07-2026, 09:30") para timestamps
+ * con hora local (entregas y solicitudes de insumos). A diferencia de
+ * `formatDate`, NO ancla en UTC: estos valores son instantes reales, no fechas
+ * de calendario.
+ */
+const dateTimeFormatter = new Intl.DateTimeFormat('es-CL', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Formatea un timestamp ISO a fecha + hora corta es-CL. Devuelve '' si es inválido. */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return dateTimeFormatter.format(date);
+}
+
 /** Formateador de tiempo relativo en español de Chile ("hace 5 min"). */
 const relativeFormatter = new Intl.RelativeTimeFormat('es-CL', {
   numeric: 'auto',

@@ -51,14 +51,15 @@ interface WarehouseDetail {
 }
 
 /**
- * Vista dedicada de Bodegas (warehouses) para la sub-pestaña "bodegas" de
- * Recursos. Lista las bodegas de la organización y, al seleccionar una, muestra
- * su stock actual (insumo / cantidad / unidad) y sus movimientos recientes.
+ * Vista dedicada de Bodegas (warehouses) para la pestaña "Bodegas" del módulo
+ * Inventario (ver `pages/inventario/index.tsx`). Lista las bodegas de la
+ * organización y, al seleccionar una, muestra su stock actual (insumo /
+ * cantidad / unidad) y sus movimientos recientes.
  *
- * El botón "Nueva bodega" se gatea en la UI por el MISMO permiso que usa la
- * pestaña padre (`canManageSupplyChain`, ver `pages/recursos/index.tsx`):
- * `warehouse:access`. La autorización real la aplica el backend (`warehouse:access`,
- * ver `warehouses.controller.ts`); este gating solo decide si se muestra la acción.
+ * El botón "Nueva bodega" se gatea en la UI con `canManageSupplyChain`
+ * (`useHasPermission('warehouse:access')`, variable local de esta página).
+ * La autorización real la aplica el backend (`warehouse:access`, ver
+ * `warehouses.controller.ts`); este gating solo decide si se muestra la acción.
  */
 export default function BodegasPage(): ReactNode {
   const canManageSupplyChain = useHasPermission('warehouse:access');

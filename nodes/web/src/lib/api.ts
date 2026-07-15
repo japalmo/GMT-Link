@@ -34,9 +34,15 @@ import type {
   AssignRoleInput,
   CloneRoleResponse,
   CreateRoleInput,
+  CreateSupplyRequestInput,
   DirectoryEntry,
   DirectoryEntryExtended,
   EmailKind,
+  InventoryCatalogItem,
+  InventoryImportItemInput,
+  InventoryImportResult,
+  InventoryItemDetail,
+  InventoryItemView,
   Paginated,
   PermissionCatalogGroup,
   ProfileMe,
@@ -45,6 +51,10 @@ import type {
   ResendInviteResult,
   RoleDetail,
   RoleKey,
+  SupplyAssignmentView,
+  SupplyProviderLinkInput,
+  SupplyProviderLinkView,
+  SupplyRequestView,
   TablePage,
   TableRequest,
   UpdateProfileInput,
@@ -2183,45 +2193,6 @@ export function fetchWarehouseTransactionsTable(
   );
 }
 
-export function createSupply(dto: {
-  code: string;
-  name: string;
-  description?: string;
-  category?: string;
-  unit?: string;
-  providerId?: string;
-}): Promise<SupplyView> {
-  return request<SupplyView>('/supplies', {
-    method: 'POST',
-    body: JSON.stringify(dto),
-  });
-}
-
-export function listSupplies(search?: string, category?: string): Promise<SupplyView[]> {
-  const params = new URLSearchParams();
-  if (search) params.append('search', search);
-  if (category) params.append('category', category);
-  const queryStr = params.toString();
-  return request<SupplyView[]>(`/supplies${queryStr ? `?${queryStr}` : ''}`);
-}
-
-export function registerWarehouseTransaction(
-  warehouseId: string,
-  dto: { supplyId: string; type: 'ENTRY' | 'EXIT'; quantity: number; reason?: string },
-): Promise<WarehouseTransactionView> {
-  return request<WarehouseTransactionView>(`/warehouses/${encodeURIComponent(warehouseId)}/transactions`, {
-    method: 'POST',
-    body: JSON.stringify(dto),
-  });
-}
-
-export function importSupplies(dto: { items: unknown[] }): Promise<{ count: number }> {
-  return request<{ count: number }>('/supplies/import', {
-    method: 'POST',
-    body: JSON.stringify(dto),
-  });
-}
-
 export function createProvider(dto: {
   rut?: string;
   name: string;
@@ -2292,6 +2263,203 @@ export function cleanProviderDataWithIA(dto: { rawData: string }): Promise<{
   });
 }
 
+// ============ INVENTARIO (catálogo de artículos, solicitudes y entregas) ============
+
+/**
+ * Serializa un {@link TableRequest} al query string canónico del MOTOR de tablas
+ * (mismo formato que `fetchUsersTable`): los filtros viajan como
+ * `filters[clave]=valor`.
+ */
+function tableRequestQuery(req: TableRequest): string {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return query.toString();
+}
+
+/** Campos descriptivos de un artículo de inventario (`POST /inventory/items`). */
+export interface CreateInventoryItemInput {
+  code: string;
+  name: string;
+  brand?: string;
+  category?: string;
+  color?: string;
+  size?: string;
+  model?: string;
+  unit?: string;
+  description?: string;
+}
+
+/** Edición parcial de los descriptivos (`PATCH /inventory/items/:id`; sin `code`). */
+export type UpdateInventoryItemInput = Partial<Omit<CreateInventoryItemInput, 'code'>>;
+
+/**
+ * `GET /inventory/items/table`: catálogo de artículos con el MOTOR de tablas
+ * (búsqueda por código/nombre/marca/modelo, filtro `category`, orden
+ * nombre/código/categoría/creado). Gate `inventory:access` en el backend.
+ */
+export function fetchInventoryItemsTable(req: TableRequest): Promise<TablePage<InventoryItemView>> {
+  return request<TablePage<InventoryItemView>>(`/inventory/items/table?${tableRequestQuery(req)}`);
+}
+
+/** `POST /inventory/items`: crea un artículo (sin stock). 409 si el código ya existe. */
+export function createInventoryItem(dto: CreateInventoryItemInput): Promise<InventoryItemView> {
+  return request<InventoryItemView>('/inventory/items', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `PATCH /inventory/items/:id`: edita los campos descriptivos de un artículo. */
+export function updateInventoryItem(
+  id: string,
+  dto: UpdateInventoryItemInput,
+): Promise<InventoryItemView> {
+  return request<InventoryItemView>(`/inventory/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `GET /inventory/items/:id`: detalle: stocks por bodega + total + proveedores. */
+export function getInventoryItemDetail(id: string): Promise<InventoryItemDetail> {
+  return request<InventoryItemDetail>(`/inventory/items/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `POST /inventory/items/import`: import masivo por CSV: upsert por código +
+ * stock inicial opcional en hasta 4 bodegas (por código de bodega). Los errores
+ * por fila no abortan el lote.
+ */
+export function importInventoryItems(
+  items: InventoryImportItemInput[],
+): Promise<InventoryImportResult> {
+  return request<InventoryImportResult>('/inventory/items/import', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}
+
+/** `POST /inventory/items/:id/providers`: vincula un proveedor. 409 si ya está vinculado. */
+export function addSupplyProviderLink(
+  itemId: string,
+  dto: SupplyProviderLinkInput,
+): Promise<SupplyProviderLinkView> {
+  return request<SupplyProviderLinkView>(
+    `/inventory/items/${encodeURIComponent(itemId)}/providers`,
+    { method: 'POST', body: JSON.stringify(dto) },
+  );
+}
+
+/**
+ * `PATCH /inventory/items/:id/providers/:linkId`: edita precio/URL del vínculo.
+ * `price: null` LIMPIA el precio registrado (ausente lo conserva); la URL se
+ * limpia con string vacío.
+ */
+export function updateSupplyProviderLink(
+  itemId: string,
+  linkId: string,
+  dto: { price?: number | null; url?: string },
+): Promise<SupplyProviderLinkView> {
+  return request<SupplyProviderLinkView>(
+    `/inventory/items/${encodeURIComponent(itemId)}/providers/${encodeURIComponent(linkId)}`,
+    { method: 'PATCH', body: JSON.stringify(dto) },
+  );
+}
+
+/** `DELETE /inventory/items/:id/providers/:linkId`: quita el vínculo artículo-proveedor. */
+export function removeSupplyProviderLink(
+  itemId: string,
+  linkId: string,
+): Promise<{ ok: true }> {
+  return request<{ ok: true }>(
+    `/inventory/items/${encodeURIComponent(itemId)}/providers/${encodeURIComponent(linkId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+/**
+ * `GET /inventory/requests/table`: TODAS las solicitudes de insumos con el
+ * MOTOR de tablas (filtro `status`, orden fecha/estado), con solicitante e ítems.
+ */
+export function fetchSupplyRequestsTable(req: TableRequest): Promise<TablePage<SupplyRequestView>> {
+  return request<TablePage<SupplyRequestView>>(
+    `/inventory/requests/table?${tableRequestQuery(req)}`,
+  );
+}
+
+/**
+ * `POST /inventory/requests/:id/deliver`: entrega una solicitud descontando el
+ * stock de la bodega indicada. 400 con detalle si falta stock; 409 si no está
+ * pendiente.
+ */
+export function deliverSupplyRequest(
+  id: string,
+  dto: { warehouseId: string; note?: string },
+): Promise<SupplyRequestView> {
+  return request<SupplyRequestView>(`/inventory/requests/${encodeURIComponent(id)}/deliver`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `POST /inventory/requests/:id/reject`: rechaza una solicitud (motivo opcional). */
+export function rejectSupplyRequest(
+  id: string,
+  dto: { reason?: string },
+): Promise<SupplyRequestView> {
+  return request<SupplyRequestView>(`/inventory/requests/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/**
+ * `GET /inventory/assignments/table`: historial COMPLETO de entregas con el
+ * MOTOR de tablas: búsqueda por artículo o trabajador, orden fecha/cantidad.
+ * Cada fila incluye al trabajador receptor (`worker`).
+ */
+export function fetchAssignmentsTable(req: TableRequest): Promise<TablePage<SupplyAssignmentView>> {
+  return request<TablePage<SupplyAssignmentView>>(
+    `/inventory/assignments/table?${tableRequestQuery(req)}`,
+  );
+}
+
+/** `GET /inventory/me/assignments`: mis insumos entregados (comprobante del trabajador). */
+export function fetchMyAssignments(): Promise<SupplyAssignmentView[]> {
+  return request<SupplyAssignmentView[]>('/inventory/me/assignments');
+}
+
+/** `GET /inventory/me/requests`: mis solicitudes de insumos con estado e ítems. */
+export function fetchMyRequests(): Promise<SupplyRequestView[]> {
+  return request<SupplyRequestView[]>('/inventory/me/requests');
+}
+
+/** `POST /inventory/me/requests`: crea una solicitud de insumos propia (mínimo 1 ítem). */
+export function createMySupplyRequest(dto: CreateSupplyRequestInput): Promise<SupplyRequestView> {
+  return request<SupplyRequestView>('/inventory/me/requests', {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/**
+ * `GET /inventory/me/catalog`: catálogo LIVIANO (id/código/nombre/unidad/tipo)
+ * para armar la solicitud de insumos. Gate `inventory:request:own` en el backend
+ * (derecho base de los roles internos; los externos quedan fuera).
+ */
+export function fetchInventoryCatalog(): Promise<InventoryCatalogItem[]> {
+  return request<InventoryCatalogItem[]>('/inventory/me/catalog');
+}
+
 export interface ConvertPointInput {
   direction: 'UTM_TO_LL' | 'LL_TO_UTM';
   latitude?: number;
@@ -2321,13 +2489,6 @@ export function convertCoordinate(dto: ConvertPointInput): Promise<ConvertPointR
 
 export function convertCoordinatesBulk(dto: { points: ConvertPointInput[] }): Promise<ConvertPointResult[]> {
   return request<ConvertPointResult[]>('/tools/coords/convert/bulk', {
-    method: 'POST',
-    body: JSON.stringify(dto),
-  });
-}
-
-export function detectShorelineWithIA(dto: { fileBase64: string }): Promise<{ polygon: Array<{ x: number; y: number }> }> {
-  return request<{ polygon: Array<{ x: number; y: number }> }>('/tools/gis/shore-detect', {
     method: 'POST',
     body: JSON.stringify(dto),
   });

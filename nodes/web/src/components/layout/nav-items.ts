@@ -5,6 +5,7 @@ import {
   Wallet,
   Boxes,
   Package,
+  Warehouse,
   Wrench,
   Gauge,
   FolderKanban,
@@ -40,6 +41,7 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },
   { label: 'Recursos', to: '/recursos', icon: Package, module: 'recursos' },
+  { label: 'Inventario', to: '/inventario', icon: Warehouse, module: 'inventario' },
 ];
 
 /**

@@ -71,6 +71,10 @@ model User {
   submittedChecklists    ChecklistSubmission[]     @relation("ChecklistSubmitter")
   providerRatings        ProviderRating[]          @relation("ProviderRatingActor")
   warehouseTransactions  WarehouseTransaction[]    @relation("WarehouseTransactionActor")
+  supplyRequests         SupplyRequest[]           @relation("SupplyRequester")
+  decidedSupplyRequests  SupplyRequest[]           @relation("SupplyRequestDecider")
+  supplyAssignments      SupplyAssignment[]        @relation("SupplyAssignee")
+  deliveredSupplies      SupplyAssignment[]        @relation("SupplyDeliverer")
   geminiUsages           GeminiUsage[]             @relation("GeminiUsageActor")
   pointsLogs             PointsLog[]               @relation("PointsLogUser")
   achievements           UserAchievement[]         @relation("UserAchievements")
@@ -849,12 +853,13 @@ model Provider {
   email     String?
   phone     String?
   address   String?
-  score     Float             @default(0.0)
-  products  ProviderProduct[]
-  ratings   ProviderRating[]
-  supplies  Supply[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  score       Float             @default(0.0)
+  products    ProviderProduct[]
+  ratings     ProviderRating[]
+  supplies    Supply[]
+  supplyLinks SupplyProvider[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@map("providers")
 }
@@ -888,32 +893,41 @@ model ProviderRating {
 
 // ============ INSUMOS (Etapa 5.4) ============
 model Supply {
-  id           String                 @id @default(cuid())
-  code         String                 @unique
-  name         String
-  description  String?
-  category     String?
-  unit         String                 @default("unidades")
-  providerId   String?
-  provider     Provider?              @relation(fields: [providerId], references: [id], onDelete: SetNull)
-  stocks       WarehouseStock[]
-  transactions WarehouseTransaction[]
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
+  id              String                 @id @default(cuid())
+  code            String                 @unique
+  name            String
+  description     String?
+  category        String? // hace de "tipo" del artículo en la UI de Inventario
+  unit            String                 @default("unidades")
+  // Detalle descriptivo del artículo (módulo Inventario)
+  brand           String?
+  color           String?
+  size            String?
+  model           String?
+  providerId      String?
+  provider        Provider?              @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  stocks          WarehouseStock[]
+  transactions    WarehouseTransaction[]
+  supplyProviders SupplyProvider[]
+  assignments     SupplyAssignment[]
+  requestItems    SupplyRequestItem[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
   @@map("supplies")
 }
 
 // ============ BODEGAS (Etapa 5.6) ============
 model Warehouse {
-  id           String                 @id @default(cuid())
-  code         String                 @unique // máx 4 chars
-  name         String
-  location     String?
-  stocks       WarehouseStock[]
-  transactions WarehouseTransaction[]
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
+  id                String                 @id @default(cuid())
+  code              String                 @unique // máx 4 chars
+  name              String
+  location          String?
+  stocks            WarehouseStock[]
+  transactions      WarehouseTransaction[]
+  supplyAssignments SupplyAssignment[]
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@map("warehouses")
 }
@@ -948,6 +962,93 @@ model WarehouseTransaction {
 enum WarehouseTxType {
   ENTRY
   EXIT
+}
+
+// ============ INVENTARIO (catálogo de artículos + solicitudes de insumos) ============
+
+// Vínculo artículo-proveedor: precio referencial en CLP y URL opcional del
+// producto (base para el monitoreo futuro de precios con IA).
+model SupplyProvider {
+  id         String   @id @default(cuid())
+  supplyId   String
+  supply     Supply   @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  price      Int? // CLP sin decimales
+  url        String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([supplyId, providerId])
+  // Postgres NO indexa las FK: providerId necesita índice propio (el unique
+  // compuesto ya cubre supplyId como prefijo).
+  @@index([providerId])
+  @@map("supply_providers")
+}
+
+enum SupplyRequestStatus {
+  PENDIENTE
+  ENTREGADA
+  RECHAZADA
+}
+
+// Solicitud de insumos de un trabajador. Admin/gerencia/logística la ENTREGA
+// (descuenta stock y crea un SupplyAssignment por ítem) o la RECHAZA.
+model SupplyRequest {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation("SupplyRequester", fields: [userId], references: [id], onDelete: Cascade)
+  status          SupplyRequestStatus @default(PENDIENTE)
+  note            String?
+  rejectionReason String?
+  decidedById     String?
+  decidedBy       User?               @relation("SupplyRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt       DateTime?
+  items           SupplyRequestItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([userId, status])
+  @@index([status])
+  @@map("supply_requests")
+}
+
+model SupplyRequestItem {
+  id        String        @id @default(cuid())
+  requestId String
+  request   SupplyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  supplyId  String
+  supply    Supply        @relation(fields: [supplyId], references: [id], onDelete: Restrict)
+  quantity  Float
+
+  // Postgres NO indexa las FK: requestId lo golpea cada include de ítems por
+  // solicitud y supplyId el chequeo del RESTRICT al borrar supplies.
+  @@index([requestId])
+  @@index([supplyId])
+  @@map("supply_request_items")
+}
+
+// Una ENTREGA de artículo a un trabajador ("mis artículos asignados").
+// `requestId` es traza suave hacia la solicitud origen (sin FK: la entrega
+// directa sin solicitud también es válida y la solicitud puede depurarse).
+model SupplyAssignment {
+  id            String     @id @default(cuid())
+  supplyId      String
+  supply        Supply     @relation(fields: [supplyId], references: [id], onDelete: Restrict)
+  userId        String
+  user          User       @relation("SupplyAssignee", fields: [userId], references: [id], onDelete: Cascade)
+  quantity      Float
+  warehouseId   String?
+  warehouse     Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  deliveredById String?
+  deliveredBy   User?      @relation("SupplyDeliverer", fields: [deliveredById], references: [id], onDelete: SetNull)
+  requestId     String?
+  note          String?
+  createdAt     DateTime   @default(now())
+
+  @@index([userId])
+  @@index([supplyId])
+  @@map("supply_assignments")
 }
 
 // ============ IA / USO (Etapa 6.2) ============
