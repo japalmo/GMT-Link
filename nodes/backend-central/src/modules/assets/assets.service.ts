@@ -829,8 +829,14 @@ export class AssetsService {
     // ver el activo (hallazgo de auditoría: escalada desde permiso de solo lectura).
     await this.assertCanManageAsset(userId, asset);
 
-    // Si transiciona a un estado no operativo y estaba en uso, liberarlo primero.
-    const needsRelease = NON_OPERATIONAL_STATUSES.includes(dto.status) && asset.inUseById;
+    // Cualquier cambio MANUAL de estado sobre un activo en uso es un override de
+    // gestión: se libera y se cierra el ciclo activo (no solo al pasar a no operativo).
+    // EN_USO/EN_PREPARACION los maneja el flujo del ciclo, no este modal, así que se
+    // excluyen para no liberar por un no-op.
+    const needsRelease =
+      !!asset.inUseById &&
+      dto.status !== AssetStatus.EN_USO &&
+      dto.status !== AssetStatus.EN_PREPARACION;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.asset.update({
@@ -1358,11 +1364,23 @@ export class AssetsService {
     }
 
     const endPhoto = photo ? await this.saveUsageCyclePhoto(assetId, photo) : null;
+    // Si mientras estaba en uso el activo cayó a un estado no operativo (p.ej. un
+    // checklist de gestión reportó falla -> MANTENIMIENTO), terminar el uso NO debe
+    // devolverlo a DISPONIBLE: se respeta el estado no operativo y solo se libera.
+    const current = await this.prisma.asset.findUniqueOrThrow({
+      where: { id: assetId },
+      select: { status: true },
+    });
+    const keepStatus = NON_OPERATIONAL_STATUSES.includes(current.status);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.asset.update({
         where: { id: assetId },
-        data: { inUseById: null, inUseSince: null, status: AssetStatus.DISPONIBLE },
+        data: {
+          inUseById: null,
+          inUseSince: null,
+          ...(keepStatus ? {} : { status: AssetStatus.DISPONIBLE }),
+        },
       });
       await tx.usageCycle.update({
         where: { id: cycleId },
@@ -1382,7 +1400,11 @@ export class AssetsService {
         tx,
         assetId,
         'CICLO',
-        handoffToUserId ? 'Terminó uso; traspasó el activo.' : 'Terminó uso; activo disponible.',
+        handoffToUserId
+          ? 'Terminó uso; traspasó el activo.'
+          : keepStatus
+            ? `Terminó uso; el activo queda en ${current.status}.`
+            : 'Terminó uso; activo disponible.',
         userId,
       );
     });
