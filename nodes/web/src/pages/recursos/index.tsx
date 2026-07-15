@@ -8,7 +8,6 @@ import {
   listUsers,
   fetchAssetsTable,
   createAsset,
-  takeAssetUse,
   releaseAssetUse,
   type TableRequest,
 } from '@/lib/api';
@@ -32,6 +31,7 @@ import {
   Pencil,
   X,
   Construction,
+  ImagePlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -136,6 +136,19 @@ const VEHICLE_CHECKLIST_DEFAULT: ChecklistTemplateItem[] = [
   },
   { id: 'observaciones', label: 'Observaciones generales', type: 'TEXTO', required: false },
 ];
+
+// Etiquetas es-CL de los estados de un activo. Se usan en los labels sueltos del
+// detalle (donde no va el Badge). Incluye EN_PREPARACION (alguien reportó uso y
+// está llenando el checklist inicial) para no mostrar el enum crudo.
+const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
+  DISPONIBLE: 'Disponible',
+  EN_PREPARACION: 'En preparación',
+  EN_USO: 'En uso',
+  MANTENIMIENTO: 'Mantenimiento',
+  BAJA: 'De baja',
+  DEFECTUOSO: 'Defectuoso',
+  NO_DISPONIBLE: 'No disponible',
+};
 
 export default function RecursosPage(): ReactNode {
   // Todas las pestañas son visibles para cualquier usuario. La gestión de la
@@ -316,26 +329,6 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     }
   };
 
-  const handleTakeUse = async (id: string) => {
-    if (actioning) return;
-    setActioning(id);
-    try {
-      const asset = await takeAssetUse(id);
-      reconcileRow(id, asset);
-      toast.success('Activo puesto en uso con éxito.');
-      // Para vehículos, el operador debe registrar el estado al recibirlo: se abre
-      // el detalle directo al checklist (misma conducta que "Poner en uso" desde
-      // el detalle del activo).
-      if (asset.type === 'VEHICULO') {
-        onSelectAsset(id, 'checklist');
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al poner el activo en uso.');
-    } finally {
-      setActioning(null);
-    }
-  };
-
   const handleReleaseUse = async (id: string) => {
     if (actioning) return;
     setActioning(id);
@@ -427,6 +420,8 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     switch (status) {
       case 'DISPONIBLE':
         return <Badge variant="success">Disponible</Badge>;
+      case 'EN_PREPARACION':
+        return <Badge variant="warning">En preparación</Badge>;
       case 'EN_USO':
         return <Badge variant="info">En Uso</Badge>;
       case 'MANTENIMIENTO':
@@ -458,6 +453,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     allLabel: 'Todos los estados',
     options: [
       { value: 'DISPONIBLE', label: 'Disponibles' },
+      { value: 'EN_PREPARACION', label: 'En preparación' },
       { value: 'EN_USO', label: 'En uso' },
       { value: 'MANTENIMIENTO', label: 'En mantenimiento' },
       { value: 'BAJA', label: 'De baja' },
@@ -564,14 +560,16 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const rowActions = (a: AssetView): ReactNode => (
     <>
       {a.status === 'DISPONIBLE' && (
+        // Reportar uso desde la tabla abre el detalle del activo: el reporte de uso
+        // (que reclama + abre el checklist con ciclo) se hace desde ahí, sin flujo
+        // legacy. Flujo único con ciclo de uso.
         <Button
           size="sm"
           variant="outline"
           className="h-8 text-xs"
-          disabled={actioning !== null}
-          onClick={() => void handleTakeUse(a.id)}
+          onClick={() => onSelectAsset(a.id)}
         >
-          {actioning === a.id ? 'Poniendo en uso...' : 'Poner en uso'}
+          Reportar uso
         </Button>
       )}
       {a.status === 'EN_USO' && (a.inUseById === profile?.id || isAdmin) && (
@@ -970,6 +968,14 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
   // Checklist execution answers state
   const [executionAnswers, setExecutionAnswers] = useState<Record<string, unknown>>({});
+  // Guarda de doble envío del checklist ("Firmar y Enviar Inspección"): bloquea el
+  // botón y descarta clics repetidos mientras la firma está en vuelo.
+  const [submittingChecklist, setSubmittingChecklist] = useState(false);
+
+  // Diálogo de "Reportar uso": entrada única al ciclo (reclama el activo + abre el
+  // checklist). Permite adjuntar una foto inicial OPCIONAL antes de iniciar el ciclo.
+  const [reportUseOpen, setReportUseOpen] = useState(false);
+  const [reportUsePhoto, setReportUsePhoto] = useState<File | null>(null);
 
   const [actioning, setActioning] = useState<string | null>(null);
 
@@ -1031,14 +1037,17 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   // checklist. Cae a `isAdmin` mientras carga el detalle.
   const canManageAsset = asset?.canManageAssets ?? isAdmin;
 
-  const handleTakeUse = async () => {
+  const handleTakeUse = async (photo?: File) => {
     if (actioning) return;
     setActioning('takeUse');
     try {
-      // Reportar uso reclama el activo y abre un ciclo. Con checklist aprobado
-      // nace EN_PREPARACION (hay que firmarlo para confirmar); sin plantilla nace
-      // EN_CURSO directo. `loadData` re-deriva `activeCycle` y refresca el historial.
-      const { cycle } = await startCycle(id);
+      // Reportar uso reclama el activo y abre un ciclo, con foto inicial opcional.
+      // Con checklist aprobado nace EN_PREPARACION (hay que firmarlo para confirmar);
+      // sin plantilla nace EN_CURSO directo. `loadData` re-deriva `activeCycle` y
+      // refresca el historial.
+      const { cycle } = await startCycle(id, photo);
+      setReportUseOpen(false);
+      setReportUsePhoto(null);
       await loadData();
       if (cycle.status === 'EN_PREPARACION') {
         toast.success('Uso reportado. Completa el checklist para confirmar.');
@@ -1342,7 +1351,10 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   const handleSubmitChecklistAnswers = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!template) return;
+    // Guarda de doble envío: descarta clics repetidos mientras la firma está en vuelo.
+    if (submittingChecklist) return;
 
+    setSubmittingChecklist(true);
     try {
       const answers: ChecklistAnswer[] = template.items.map((item) => {
         const raw = executionAnswers[item.id];
@@ -1434,6 +1446,8 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al enviar checklist.');
+    } finally {
+      setSubmittingChecklist(false);
     }
   };
 
@@ -1614,7 +1628,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Estado actual:</span>
-                  <span className="font-semibold">{asset.status}</span>
+                  <span className="font-semibold">{ASSET_STATUS_LABELS[asset.status]}</span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Proyecto asignado:</span>
@@ -1712,27 +1726,26 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
             </CardContent>
             <CardFooter className="bg-muted/10 border-t flex justify-end gap-4 items-center">
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => goToChecklist(false)}
-                >
-                  <ClipboardCheck className="size-3.5 mr-1.5" />
-                  Reportar uso
-                </Button>
-                {asset.type === 'VEHICULO' && (
+                {/* Entrada ÚNICA al ciclo de uso: "Reportar uso" reclama el activo y
+                    abre el checklist inicial (con foto opcional). Es lo que ve el
+                    conductor en un activo DISPONIBLE sin ciclo vigente. */}
+                {asset.status === 'DISPONIBLE' && !activeCycle && (
+                  <Button size="sm" onClick={() => setReportUseOpen(true)} disabled={actioning !== null}>
+                    <ClipboardCheck className="size-3.5 mr-1.5" />
+                    Reportar uso
+                  </Button>
+                )}
+                {/* Checklist STANDALONE (correr una revisión sin abrir ciclo): solo
+                    gestión (admin/gerencia con canManageAsset). No se muestra a un
+                    conductor puro. En vehículo sin plantilla siembra la estándar. */}
+                {canManageAsset && (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => goToChecklist(true)}
+                    onClick={() => goToChecklist(asset.type === 'VEHICULO')}
                   >
                     <ListTodo className="size-3.5 mr-1.5" />
-                    Checklist de camioneta
-                  </Button>
-                )}
-                {asset.status === 'DISPONIBLE' && !activeCycle && (
-                  <Button size="sm" onClick={() => void handleTakeUse()} disabled={actioning !== null}>
-                    {actioning === 'takeUse' ? 'Poniendo en uso...' : 'Poner en uso'}
+                    Ejecutar checklist
                   </Button>
                 )}
                 {/* "Liberar" legacy: solo para activos EN_USO SIN ciclo (flujo viejo
@@ -2438,7 +2451,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                           </div>
 
                           <div className="flex justify-end mt-2">
-                            <Button type="submit" size="sm">
+                            <Button type="submit" size="sm" loading={submittingChecklist}>
                               Firmar y Enviar Inspección
                             </Button>
                           </div>
@@ -2608,14 +2621,71 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       </div>
 
       {/* Diálogo "Terminar uso": cierra el ciclo EN_CURSO (GPS / estacionamiento /
-          traspaso) con foto final opcional. Recibe la lista de usuarios ya cargada. */}
+          traspaso) con foto final opcional. Recibe la lista de usuarios ya cargada.
+          El traspaso excluye al TITULAR del ciclo (no a quien cierra): así un admin
+          que cierra el ciclo de otro no lo traspasa de vuelta al mismo titular. */}
       <EndUsageForm
         open={endFormOpen}
         onOpenChange={setEndFormOpen}
         users={users}
-        currentUserId={profile?.id}
+        currentUserId={activeCycle?.user?.id ?? profile?.id}
         onSubmit={handleEndCycle}
       />
+
+      {/* DIALOG REPORTAR USO: entrada única al ciclo. Reclama el activo + abre el
+          checklist; permite adjuntar una foto inicial OPCIONAL antes de iniciar. */}
+      {reportUseOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <Card className="w-full max-w-sm bg-card shadow-lg border border-border animate-in fade-in zoom-in duration-200">
+            <CardHeader>
+              <CardTitle>Reportar uso</CardTitle>
+              <CardDescription>
+                Reclamas el activo y abres el checklist inicial. La foto es opcional.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="report-use-photo">Foto inicial (opcional)</Label>
+                <input
+                  id="report-use-photo"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => setReportUsePhoto(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
+                />
+                {reportUsePhoto && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <ImagePlus className="size-3.5 text-primary" aria-hidden />
+                    {reportUsePhoto.name}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setReportUseOpen(false);
+                  setReportUsePhoto(null);
+                }}
+                disabled={actioning !== null}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleTakeUse(reportUsePhoto ?? undefined)}
+                loading={actioning === 'takeUse'}
+              >
+                <ClipboardCheck className="size-3.5 mr-1.5" />
+                Reportar uso
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
 
       {/* Diálogo de edición de campos del activo (Tanda 5.2). */}
       <AssetEditDialog

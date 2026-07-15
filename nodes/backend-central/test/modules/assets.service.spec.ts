@@ -319,10 +319,12 @@ describe('AssetsService', () => {
       },
       checklistSubmission: {
         create: vi.fn((args) => Promise.resolve(buildSubmissionRow(args.data))),
+        delete: vi.fn(() => Promise.resolve(undefined)),
       },
       usageCycle: {
         create: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
         update: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
+        updateMany: vi.fn(() => Promise.resolve({ count: 1 })),
       },
     };
 
@@ -781,6 +783,37 @@ describe('AssetsService', () => {
       });
       expect(txMock.assetHistoryEntry.create).toHaveBeenCalled();
       expect(updated.status).toBe(AssetStatus.MANTENIMIENTO);
+    });
+
+    it('a estado no operativo con activo en uso: cierra el ciclo activo (no lo deja huérfano)', async () => {
+      // Regresión QA #1: un gestor pasa a MANTENIMIENTO un activo EN_USO; el ciclo
+      // activo debe cerrarse en la misma transacción, si no "terminar uso" lo sacaría
+      // del estado no operativo sin permiso de gestión.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.EN_USO, inUseById: 'u-cond' }),
+      );
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
+        ...buildAssetRow({ status: AssetStatus.MANTENIMIENTO, inUseById: null }),
+        project: null,
+        assignedTo: null,
+        inUseBy: null,
+      });
+
+      await service.updateStatus('a-1', 'u-admin', { status: AssetStatus.MANTENIMIENTO });
+
+      expect(txMock.asset.update).toHaveBeenCalledWith({
+        where: { id: 'a-1' },
+        data: expect.objectContaining({ status: AssetStatus.MANTENIMIENTO, inUseById: null }),
+      });
+      expect(txMock.usageCycle.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            assetId: 'a-1',
+            status: { in: [UsageCycleStatus.EN_PREPARACION, UsageCycleStatus.EN_CURSO] },
+          }),
+          data: expect.objectContaining({ status: UsageCycleStatus.CERRADO }),
+        }),
+      );
     });
 
     it('rechaza (403) si el usuario no puede gestionar el activo (solo lectura)', async () => {
@@ -1450,10 +1483,10 @@ describe('AssetsService', () => {
 
         const res = await service.startUsageCycle('a-1', 'u-1');
 
-        // Reclamo ATÓMICO (inUseById:null en el mismo UPDATE) hacia EN_PREPARACION.
+        // Reclamo ATÓMICO (inUseById:null + estado operativo en el mismo UPDATE) hacia EN_PREPARACION.
         expect(txMock.asset.updateMany).toHaveBeenCalledWith(
           expect.objectContaining({
-            where: { id: 'a-1', inUseById: null },
+            where: expect.objectContaining({ id: 'a-1', inUseById: null }),
             data: expect.objectContaining({ status: AssetStatus.EN_PREPARACION, inUseById: 'u-1' }),
           }),
         );
@@ -1532,9 +1565,10 @@ describe('AssetsService', () => {
         expect(txMock.asset.update).toHaveBeenCalledWith(
           expect.objectContaining({ where: { id: 'a-1' }, data: { status: AssetStatus.EN_USO } }),
         );
-        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+        // Avance ATÓMICO: updateMany condicionado a que siga EN_PREPARACION.
+        expect(txMock.usageCycle.updateMany).toHaveBeenCalledWith(
           expect.objectContaining({
-            where: { id: 'cyc-1' },
+            where: { id: 'cyc-1', status: UsageCycleStatus.EN_PREPARACION },
             data: expect.objectContaining({
               status: UsageCycleStatus.EN_CURSO,
               checklistSubmissionId: 'sub-1',
@@ -1565,9 +1599,9 @@ describe('AssetsService', () => {
           { itemId: '1', label: 'Freno de Mano', value: false },
         ]);
 
-        expect(txMock.usageCycle.update).toHaveBeenCalledWith(
+        expect(txMock.usageCycle.updateMany).toHaveBeenCalledWith(
           expect.objectContaining({
-            where: { id: 'cyc-1' },
+            where: { id: 'cyc-1', status: UsageCycleStatus.EN_PREPARACION },
             data: expect.objectContaining({
               status: UsageCycleStatus.CANCELADO,
               checklistSubmissionId: 'sub-1',

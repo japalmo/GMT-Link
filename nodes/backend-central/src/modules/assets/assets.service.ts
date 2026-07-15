@@ -851,6 +851,16 @@ export class AssetsService {
       );
 
       if (needsRelease) {
+        // Cierra el ciclo de uso activo en la MISMA transacción: si no, el ciclo
+        // quedaría huérfano (EN_CURSO/EN_PREPARACION) y "terminar uso" sacaría al
+        // activo del estado no operativo sin permiso de gestión.
+        await tx.usageCycle.updateMany({
+          where: {
+            assetId: id,
+            status: { in: [UsageCycleStatus.EN_PREPARACION, UsageCycleStatus.EN_CURSO] },
+          },
+          data: { status: UsageCycleStatus.CERRADO, endedAt: new Date() },
+        });
         await this.createHistoryEntry(
           tx,
           id,
@@ -1169,9 +1179,15 @@ export class AssetsService {
     const now = new Date();
 
     const cycleId = await this.prisma.$transaction(async (tx) => {
-      // Reclamo ATÓMICO: la condición inUseById:null va en el mismo UPDATE (anti TOCTOU).
+      // Reclamo ATÓMICO: inUseById:null Y estado operativo van en el mismo UPDATE, para
+      // que un cambio concurrente a un estado no operativo (MANTENIMIENTO, etc.) no se
+      // pierda por TOCTOU entre la lectura y el reclamo.
       const claimed = await tx.asset.updateMany({
-        where: { id: assetId, inUseById: null },
+        where: {
+          id: assetId,
+          inUseById: null,
+          status: { notIn: NON_OPERATIONAL_STATUSES },
+        },
         data: {
           inUseById: userId,
           inUseSince: now,
@@ -1237,19 +1253,34 @@ export class AssetsService {
     const failed = asset.status === AssetStatus.MANTENIMIENTO;
 
     await this.prisma.$transaction(async (tx) => {
+      // Avance ATÓMICO del ciclo: updateMany condicionado a que siga EN_PREPARACION. Si
+      // otro confirm concurrente ya lo avanzó (count 0), esta submission es duplicada:
+      // se borra y no se toca el activo (idempotencia ante doble envío).
+      const advanced = await tx.usageCycle.updateMany({
+        where: { id: cycleId, status: UsageCycleStatus.EN_PREPARACION },
+        data: failed
+          ? {
+              status: UsageCycleStatus.CANCELADO,
+              endedAt: new Date(),
+              checklistSubmissionId: submission.id,
+            }
+          : {
+              status: UsageCycleStatus.EN_CURSO,
+              confirmedAt: new Date(),
+              checklistSubmissionId: submission.id,
+            },
+      });
+      if (advanced.count === 0) {
+        await tx.checklistSubmission
+          .delete({ where: { id: submission.id } })
+          .catch(() => undefined);
+        return;
+      }
       if (failed) {
         // Checklist con falla: el activo ya quedó en mantenimiento; el ciclo se cancela y se libera.
         await tx.asset.update({
           where: { id: assetId },
           data: { inUseById: null, inUseSince: null },
-        });
-        await tx.usageCycle.update({
-          where: { id: cycleId },
-          data: {
-            status: UsageCycleStatus.CANCELADO,
-            endedAt: new Date(),
-            checklistSubmissionId: submission.id,
-          },
         });
         await this.createHistoryEntry(
           tx,
@@ -1260,14 +1291,6 @@ export class AssetsService {
         );
       } else {
         await tx.asset.update({ where: { id: assetId }, data: { status: AssetStatus.EN_USO } });
-        await tx.usageCycle.update({
-          where: { id: cycleId },
-          data: {
-            status: UsageCycleStatus.EN_CURSO,
-            confirmedAt: new Date(),
-            checklistSubmissionId: submission.id,
-          },
-        });
         await this.createHistoryEntry(tx, assetId, 'CICLO', 'Confirmó uso; activo en uso.', userId);
       }
     });

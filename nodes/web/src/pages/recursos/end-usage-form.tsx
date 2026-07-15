@@ -25,7 +25,11 @@ export interface EndUsageFormProps {
   onOpenChange: (open: boolean) => void;
   /** Usuarios candidatos para un traspaso. */
   users: UserOption[];
-  /** Usuario actual: se excluye de la lista de traspaso (no puede traspasarse a sí mismo). */
+  /**
+   * Titular del ciclo (quien tiene el uso): se excluye de la lista de traspaso para
+   * no traspasarle el activo de vuelta a sí mismo. Ojo: es el titular, NO quien cierra
+   * el ciclo (un admin puede cerrar el ciclo de otro).
+   */
   currentUserId?: string;
   /** Envía el cierre. Debe lanzar si falla para mantener el diálogo abierto. */
   onSubmit: (dto: EndUsageCycleInput, photo?: File) => Promise<void>;
@@ -70,6 +74,8 @@ export function EndUsageForm({
     }
   }, [open]);
 
+  // Excluye al titular del ciclo (currentUserId): no tiene sentido traspasarle el
+  // activo de vuelta a quien ya lo tenía.
   const handoffCandidates = users.filter((u) => u.id !== currentUserId);
 
   const requestLocation = () => {
