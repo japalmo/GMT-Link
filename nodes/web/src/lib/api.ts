@@ -1,5 +1,6 @@
 import type {
   PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
 } from '@simplewebauthn/browser';
 import { getToken, setToken } from '@/lib/auth-token';
@@ -133,6 +134,7 @@ import type {
   UpdateChecklistTemplateInput,
   ReviewChecklistTemplateInput,
   SubmitChecklistInput,
+  ChecklistSignatureInput,
   UsageCycleView,
   UsageCycleResult,
   EndUsageCycleInput,
@@ -271,6 +273,7 @@ export async function getMe(): Promise<AuthedUser> {
   return {
     ...me,
     canManageRoles: me.canManageRoles ?? false,
+    checklistSignatureRequired: me.checklistSignatureRequired ?? false,
     permissions: me.permissions ?? [],
   };
 }
@@ -2114,6 +2117,20 @@ export function submitChecklist(id: string, dto: SubmitChecklistInput): Promise<
   });
 }
 
+/** `POST /assets/:id/checklist/sign-options` — arranca la firma (biometría u OTP). */
+export function prepareChecklistSignature(
+  id: string,
+  dto: { templateId: string; answers: ChecklistAnswer[]; method: 'WEBAUTHN' | 'EMAIL_OTP' },
+): Promise<
+  | { method: 'WEBAUTHN'; options: PublicKeyCredentialRequestOptionsJSON }
+  | { method: 'EMAIL_OTP'; maskedEmail: string }
+> {
+  return request(`/assets/${encodeURIComponent(id)}/checklist/sign-options`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
 export function listChecklistSubmissions(id: string): Promise<ChecklistSubmissionView[]> {
   return request<ChecklistSubmissionView[]>(`/assets/${encodeURIComponent(id)}/checklist/submissions`);
 }
@@ -2232,12 +2249,13 @@ export function confirmUsageCycle(
   cycleId: string,
   templateId: string,
   answers: ChecklistAnswer[],
+  signature?: ChecklistSignatureInput,
 ): Promise<UsageCycleResult> {
   return request<UsageCycleResult>(
     `/assets/${encodeURIComponent(id)}/usage-cycles/${encodeURIComponent(cycleId)}/confirm`,
     {
       method: 'POST',
-      body: JSON.stringify({ templateId, answers }),
+      body: JSON.stringify({ templateId, answers, signature }),
     },
   );
 }

@@ -124,6 +124,7 @@ describe('AuthController · GET /auth/me', () => {
       modules: ['dashboard', 'finanzas'],
       permissions: [],
       canManageRoles: false,
+      checklistSignatureRequired: false,
     });
   });
 

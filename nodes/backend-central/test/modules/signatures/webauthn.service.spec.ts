@@ -6,10 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@simplewebauthn/server', () => ({
   generateRegistrationOptions: vi.fn(),
   verifyRegistrationResponse: vi.fn(),
+  generateAuthenticationOptions: vi.fn(),
+  verifyAuthenticationResponse: vi.fn(),
 }));
 
 import {
+  generateAuthenticationOptions,
   generateRegistrationOptions,
+  verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
 import { WebAuthnService } from '../../../src/modules/signatures/webauthn.service';
@@ -26,6 +30,7 @@ interface Mocks {
   credCount: ReturnType<typeof vi.fn>;
   credCreate: ReturnType<typeof vi.fn>;
   credDelete: ReturnType<typeof vi.fn>;
+  credUpdate: ReturnType<typeof vi.fn>;
   chalUpdateMany: ReturnType<typeof vi.fn>;
   chalCreate: ReturnType<typeof vi.fn>;
   chalFindFirst: ReturnType<typeof vi.fn>;
@@ -48,6 +53,7 @@ function build(): Mocks {
     }),
   );
   const credDelete = vi.fn(() => Promise.resolve({}));
+  const credUpdate = vi.fn(() => Promise.resolve({}));
   // Consumo atómico: por defecto el "claim" del desafío gana (count 1).
   const chalUpdateMany = vi.fn(() => Promise.resolve({ count: 1 }));
   const chalCreate = vi.fn(() => Promise.resolve({ id: 'ch-1' }));
@@ -63,6 +69,7 @@ function build(): Mocks {
       count: credCount,
       create: credCreate,
       delete: credDelete,
+      update: credUpdate,
     },
     webAuthnChallenge: {
       updateMany: chalUpdateMany,
@@ -80,6 +87,7 @@ function build(): Mocks {
     credCount,
     credCreate,
     credDelete,
+    credUpdate,
     chalUpdateMany,
     chalCreate,
     chalFindFirst,
@@ -88,6 +96,8 @@ function build(): Mocks {
 
 const genOpts = vi.mocked(generateRegistrationOptions);
 const verifyReg = vi.mocked(verifyRegistrationResponse);
+const genAuth = vi.mocked(generateAuthenticationOptions);
+const verifyAuth = vi.mocked(verifyAuthenticationResponse);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -264,5 +274,81 @@ describe('WebAuthnService credenciales', () => {
     expect(list).toEqual([
       { id: 'dev-1', deviceName: 'Notebook', createdAt: '2026-07-15T00:00:00.000Z', lastUsedAt: null },
     ]);
+  });
+});
+
+describe('WebAuthnService firma (#68 Fase 2)', () => {
+  it('generateSignOptions lanza si el usuario no tiene dispositivos', async () => {
+    const m = build();
+    m.credFindMany.mockResolvedValue([]);
+    await expect(
+      m.service.generateSignOptions('u1', ORIGIN, 'CHECKLIST_SUBMISSION', 'HASH'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(genAuth).not.toHaveBeenCalled();
+  });
+
+  it('generateSignOptions usa el contentHash como challenge y guarda la sesión', async () => {
+    const m = build();
+    m.credFindMany.mockResolvedValue([{ credentialId: 'CREDID', transports: 'internal' }]);
+    genAuth.mockResolvedValue({ challenge: 'HASH' } as never);
+    await m.service.generateSignOptions('u1', ORIGIN, 'CHECKLIST_SUBMISSION', 'HASH');
+    expect(genAuth).toHaveBeenCalledWith(expect.objectContaining({ challenge: 'HASH' }));
+    // Sesión de firma guardada con el contextHash.
+    expect(m.chalCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        purpose: 'SIGN',
+        contextType: 'CHECKLIST_SUBMISSION',
+        contextHash: 'HASH',
+      }),
+    });
+  });
+
+  it('consumeSignSession rechaza si otra petición ya la consumió (replay)', async () => {
+    const m = build();
+    m.chalFindFirst.mockResolvedValue({ id: 'ch-1', challenge: 'HASH', expiresAt: new Date(Date.now() + 60_000) });
+    m.chalUpdateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      m.service.consumeSignSession('u1', 'CHECKLIST_SUBMISSION', 'HASH'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('verifySignAssertion: verifica, actualiza el contador y devuelve el material', async () => {
+    const m = build();
+    m.chalFindFirst.mockResolvedValue({ id: 'ch-1', challenge: 'HASH', expiresAt: new Date(Date.now() + 60_000) });
+    m.credFindFirst.mockResolvedValue({
+      id: 'dev-1',
+      credentialId: 'CREDID',
+      deviceName: 'Celular',
+      publicKey: new Uint8Array([1, 2]),
+      counter: 3,
+      transports: 'internal',
+    });
+    verifyAuth.mockResolvedValue({ verified: true, authenticationInfo: { newCounter: 4 } } as never);
+
+    const proof = await m.service.verifySignAssertion(
+      'u1',
+      ORIGIN,
+      'CHECKLIST_SUBMISSION',
+      'HASH',
+      { id: 'CREDID', response: { signature: 'AA', authenticatorData: 'BB', clientDataJSON: 'CC' } } as never,
+    );
+
+    // Se actualizó el contador anti-clonación.
+    expect(m.credUpdate).toHaveBeenCalledWith({
+      where: { id: 'dev-1' },
+      data: expect.objectContaining({ counter: 4, lastUsedAt: expect.any(Date) }),
+    });
+    expect(proof.credentialId).toBe('CREDID');
+    expect(proof.signature).toBeInstanceOf(Uint8Array);
+  });
+
+  it('verifySignAssertion: rechaza si la llave no es del usuario', async () => {
+    const m = build();
+    m.chalFindFirst.mockResolvedValue({ id: 'ch-1', challenge: 'HASH', expiresAt: new Date(Date.now() + 60_000) });
+    m.credFindFirst.mockResolvedValue(null);
+    await expect(
+      m.service.verifySignAssertion('u1', ORIGIN, 'CHECKLIST_SUBMISSION', 'HASH', { id: 'X' } as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(verifyAuth).not.toHaveBeenCalled();
   });
 });

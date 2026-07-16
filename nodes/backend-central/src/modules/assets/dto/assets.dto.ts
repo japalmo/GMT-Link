@@ -197,6 +197,15 @@ export class ReviewChecklistTemplateDto {
   reason?: string;
 }
 
+/** Firma entrante en el envío de un checklist (#68 Fase 2). */
+export interface ChecklistSignatureInput {
+  method: 'WEBAUTHN' | 'EMAIL_OTP';
+  /** WEBAUTHN: aserción cruda de `startAuthentication()`. */
+  response?: Record<string, unknown>;
+  /** EMAIL_OTP: código de 6 dígitos recibido por correo. */
+  code?: string;
+}
+
 export class SubmitChecklistDto {
   @IsString()
   @IsNotEmpty({ message: 'El ID de la plantilla es requerido' })
@@ -205,6 +214,25 @@ export class SubmitChecklistDto {
   @IsArray()
   @IsNotEmpty({ message: 'Las respuestas son requeridas' })
   answers!: Record<string, unknown>[];
+
+  /** Firma verificada (opcional si el flag de obligatoriedad está apagado). */
+  @IsOptional()
+  @IsObject()
+  signature?: ChecklistSignatureInput;
+}
+
+/** Body de `POST /assets/:id/checklist/sign-options`: pide la firma del contenido. */
+export class PrepareChecklistSignatureDto {
+  @IsString()
+  @IsNotEmpty({ message: 'El ID de la plantilla es requerido' })
+  templateId!: string;
+
+  @IsArray()
+  @IsNotEmpty({ message: 'Las respuestas son requeridas' })
+  answers!: Record<string, unknown>[];
+
+  @IsIn(['WEBAUTHN', 'EMAIL_OTP'], { message: 'Método de firma inválido.' })
+  method!: 'WEBAUTHN' | 'EMAIL_OTP';
 }
 
 export class SubmitTelemetryDto {
@@ -231,6 +259,11 @@ export class ConfirmUsageCycleDto {
   @IsArray()
   @IsNotEmpty({ message: 'Las respuestas son requeridas' })
   answers!: Record<string, unknown>[];
+
+  /** Firma verificada (opcional si el flag de obligatoriedad está apagado). */
+  @IsOptional()
+  @IsObject()
+  signature?: ChecklistSignatureInput;
 }
 
 /**

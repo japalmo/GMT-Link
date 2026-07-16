@@ -416,6 +416,14 @@ describe('AssetsService', () => {
       storageMock as unknown as StorageService,
       { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService,
       permissionsMock as unknown as PermissionService,
+      // Firma verificada (#68): sin firma (flag apagado por defecto en los tests), así
+      // submitChecklist sigue funcionando sin firma como hoy.
+      {
+        verify: vi.fn(),
+        generateWebAuthnSignOptions: vi.fn(),
+        startOtpSignature: vi.fn(),
+        hasBiometric: vi.fn(() => Promise.resolve(false)),
+      } as unknown as import('../../src/modules/signatures/signature.service').SignatureService,
     );
   });
 

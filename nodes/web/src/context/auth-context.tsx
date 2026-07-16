@@ -9,6 +9,13 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   completeFirstLogin: (currentPassword: string, newPassword: string) => Promise<void>;
+  /**
+   * Refresca el perfil (getMe) y devuelve el usuario actualizado. Útil para leer
+   * flags que pueden cambiar en el servidor durante una sesión larga (p. ej. si la
+   * firma del checklist pasa a ser obligatoria a mitad de un rollout). Devuelve el
+   * usuario o `null` si no hay sesión; ante un error transitorio conserva el actual.
+   */
+  refreshUser: () => Promise<AuthedUser | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -63,9 +70,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const refreshUser = useCallback(async (): Promise<AuthedUser | null> => {
+    if (!getToken()) {
+      setUser(null);
+      return null;
+    }
+    try {
+      const me = await getMe();
+      setUser(me);
+      return me;
+    } catch {
+      // Error transitorio (no 401): conserva el usuario actual en vez de expulsar.
+      return user;
+    }
+  }, [user]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, logout, completeFirstLogin }),
-    [user, loading, login, logout, completeFirstLogin],
+    () => ({ user, loading, login, logout, completeFirstLogin, refreshUser }),
+    [user, loading, login, logout, completeFirstLogin, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

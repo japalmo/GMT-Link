@@ -22,6 +22,8 @@ export const OTP_PURPOSES = {
   CHANGE_PASSWORD: 'CHANGE_PASSWORD',
   /** Recuperación de contraseña de una cuenta ACTIVA (usuario olvidó su clave). */
   RESET_PASSWORD: 'RESET_PASSWORD',
+  /** Firma de un checklist por código al correo (fallback sin biometría, #68). */
+  SIGN_CHECKLIST: 'SIGN_CHECKLIST',
 } as const;
 
 /** SHA-256 hex del código: nunca se persiste el OTP en claro. */

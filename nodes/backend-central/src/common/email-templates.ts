@@ -117,6 +117,20 @@ export function passwordResetCodeEmail(code: string): EmailContent {
   };
 }
 
+/** Correo con el OTP para FIRMAR un checklist (fallback sin biometría, #68). */
+export function checklistSignatureCodeEmail(code: string): EmailContent {
+  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Firma tu checklist</p>
+              <p style="margin:0;color:#475569;">Usa este código para firmar el checklist que estás enviando en GMT Link:</p>
+              ${codeBox(code)}
+              <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;">Si no estás enviando un checklist, ignora este mensaje.</p>`);
+
+  return {
+    subject: 'Tu código para firmar el checklist en GMT Link',
+    body: `Tu código para firmar el checklist es ${code}. Vence en 5 minutos.\n\nSi no estás enviando un checklist, ignora este mensaje.`,
+    html,
+  };
+}
+
 /** Fila etiqueta/valor para la caja de credenciales. */
 function credentialRow(label: string, value: string): string {
   return `<p style="margin:0 0 4px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(label)}</p>

@@ -1,16 +1,40 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  generateAuthenticationOptions,
   generateRegistrationOptions,
+  verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
 import type {
+  AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
   RegistrationResponseJSON,
   AuthenticatorTransportFuture,
 } from '@simplewebauthn/server';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RP_NAME, resolveRp } from './webauthn.config';
+
+/** Material de una firma biométrica verificada, para persistir como prueba. */
+export interface WebAuthnSignatureProof {
+  credentialId: string;
+  deviceName: string | null;
+  signature: Uint8Array<ArrayBuffer>;
+  authenticatorData: Uint8Array<ArrayBuffer>;
+  clientDataJSON: Uint8Array<ArrayBuffer>;
+}
+
+/**
+ * Decodifica base64url a un `Uint8Array<ArrayBuffer>` con backing NO compartido
+ * (lo exige el tipo de entrada Bytes de Prisma). Se copia sobre un ArrayBuffer nuevo.
+ */
+function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
+  const buf = Buffer.from(value, 'base64url');
+  const out = new Uint8Array(buf.byteLength);
+  out.set(buf);
+  return out;
+}
 
 /** TTL de un desafío WebAuthn: 5 minutos. */
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -145,6 +169,155 @@ export class WebAuthnService {
     return this.toView(created);
   }
 
+  /* --------------------------------- firma ---------------------------------- */
+
+  /** ¿El usuario tiene al menos un dispositivo para firmar con biometría? */
+  async hasCredentials(userId: string): Promise<boolean> {
+    const count = await this.prisma.webAuthnCredential.count({ where: { userId } });
+    return count > 0;
+  }
+
+  /**
+   * Opciones para FIRMAR con biometría (#68 Fase 2). El desafío ES el `contentHash`,
+   * así la aserción cubre criptográficamente el contenido firmado. Lanza si el usuario
+   * no tiene dispositivos (el llamador cae al fallback por correo).
+   */
+  async generateSignOptions(
+    userId: string,
+    originHeader: string | undefined,
+    contextType: string,
+    contentHash: string,
+  ): Promise<PublicKeyCredentialRequestOptionsJSON> {
+    const { rpID } = resolveRp(originHeader);
+    const creds = await this.prisma.webAuthnCredential.findMany({
+      where: { userId },
+      select: { credentialId: true, transports: true },
+    });
+    if (creds.length === 0) {
+      throw new BadRequestException('No tienes un dispositivo registrado para firmar.');
+    }
+    const options = await generateAuthenticationOptions({
+      rpID,
+      challenge: contentHash,
+      userVerification: 'required',
+      allowCredentials: creds.map((c) => ({
+        id: c.credentialId,
+        transports: this.parseTransports(c.transports),
+      })),
+    });
+    await this.storeChallenge(userId, options.challenge, CHALLENGE_PURPOSES.SIGN, {
+      contextType,
+      contextHash: contentHash,
+    });
+    return options;
+  }
+
+  /**
+   * Registra una sesión de firma para el camino OTP (sin ceremonia WebAuthn): guarda
+   * el `contentHash` como desafío single-use, para verificar luego que el contenido
+   * enviado coincide exactamente con el que se autorizó por código.
+   */
+  async storeSignSession(userId: string, contextType: string, contentHash: string): Promise<void> {
+    await this.storeChallenge(userId, contentHash, CHALLENGE_PURPOSES.SIGN, {
+      contextType,
+      contextHash: contentHash,
+    });
+  }
+
+  /** Consume (atómico, single-use) la sesión de firma ligada al contextType + contentHash. */
+  async consumeSignSession(
+    userId: string,
+    contextType: string,
+    contentHash: string,
+  ): Promise<string> {
+    const record = await this.prisma.webAuthnChallenge.findFirst({
+      where: {
+        userId,
+        purpose: CHALLENGE_PURPOSES.SIGN,
+        contextType,
+        contextHash: contentHash,
+        consumedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!record) {
+      throw new BadRequestException(
+        'No hay una firma pendiente para este contenido. Vuelve a intentarlo.',
+      );
+    }
+    const claimed = await this.prisma.webAuthnChallenge.updateMany({
+      where: { id: record.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      throw new BadRequestException(
+        'No hay una firma pendiente para este contenido. Vuelve a intentarlo.',
+      );
+    }
+    if (record.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('La firma expiró. Vuelve a intentarla.');
+    }
+    return record.challenge;
+  }
+
+  /**
+   * Verifica una aserción de firma biométrica contra el `contentHash`. Consume la
+   * sesión (single-use, ligada al contenido), verifica la aserción con la llave
+   * guardada, actualiza el contador anti-clonación y devuelve el material de la prueba.
+   */
+  async verifySignAssertion(
+    userId: string,
+    originHeader: string | undefined,
+    contextType: string,
+    contentHash: string,
+    response: AuthenticationResponseJSON,
+  ): Promise<WebAuthnSignatureProof> {
+    const { origin, rpID } = resolveRp(originHeader);
+    const expectedChallenge = await this.consumeSignSession(userId, contextType, contentHash);
+
+    const cred = await this.prisma.webAuthnCredential.findFirst({
+      where: { userId, credentialId: response.id },
+    });
+    if (!cred) {
+      throw new BadRequestException('La llave usada para firmar no está registrada a tu nombre.');
+    }
+
+    let verification;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response,
+        expectedChallenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        requireUserVerification: true,
+        credential: {
+          id: cred.credentialId,
+          publicKey: new Uint8Array(cred.publicKey),
+          counter: cred.counter,
+          transports: this.parseTransports(cred.transports),
+        },
+      });
+    } catch {
+      throw new BadRequestException('No se pudo verificar la firma.');
+    }
+    if (!verification.verified) {
+      throw new BadRequestException('La firma no pudo verificarse.');
+    }
+
+    await this.prisma.webAuthnCredential.update({
+      where: { id: cred.id },
+      data: { counter: verification.authenticationInfo.newCounter, lastUsedAt: new Date() },
+    });
+
+    return {
+      credentialId: cred.credentialId,
+      deviceName: cred.deviceName,
+      signature: fromBase64Url(response.response.signature),
+      authenticatorData: fromBase64Url(response.response.authenticatorData),
+      clientDataJSON: fromBase64Url(response.response.clientDataJSON),
+    };
+  }
+
   /** Dispositivos registrados por el usuario. */
   async listCredentials(userId: string): Promise<WebAuthnDeviceView[]> {
     const rows = await this.prisma.webAuthnCredential.findMany({
@@ -174,6 +347,7 @@ export class WebAuthnService {
     userId: string,
     challenge: string,
     purpose: string,
+    context?: { contextType: string; contextId?: string; contextHash: string },
   ): Promise<void> {
     await this.prisma.$transaction([
       this.prisma.webAuthnChallenge.updateMany({
@@ -181,7 +355,15 @@ export class WebAuthnService {
         data: { consumedAt: new Date() },
       }),
       this.prisma.webAuthnChallenge.create({
-        data: { userId, challenge, purpose, expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS) },
+        data: {
+          userId,
+          challenge,
+          purpose,
+          contextType: context?.contextType ?? null,
+          contextId: context?.contextId ?? null,
+          contextHash: context?.contextHash ?? null,
+          expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS),
+        },
       }),
     ]);
   }

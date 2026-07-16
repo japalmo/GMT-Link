@@ -50,6 +50,8 @@ interface MeResponse {
   permissions: string[];
   /** true si el usuario tiene `can_manage_roles` sobre `organization:gmt` (§8, Fase 4 RBAC). */
   canManageRoles: boolean;
+  /** true si firmar el checklist es obligatorio (#68 Fase 2; controlado por env). */
+  checklistSignatureRequired: boolean;
 }
 
 /** Todos los módulos del sidebar. */
@@ -225,6 +227,7 @@ export class AuthController {
       modules,
       permissions,
       canManageRoles,
+      checklistSignatureRequired: process.env.CHECKLIST_SIGNATURE_REQUIRED === 'true',
     };
   }
 

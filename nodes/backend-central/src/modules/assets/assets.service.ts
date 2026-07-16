@@ -1,7 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ZodError } from 'zod';
-import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus } from '@prisma/client';
+import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus, SignatureContextType, SignatureMethod } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SignatureService } from '../signatures/signature.service';
+import type { IncomingSignature, VerifiedSignature } from '../signatures/signature.service';
+import { computeContentHash } from '../signatures/content-hash';
 import { FgaService } from '../../fga/fga.service';
 import { PermissionService } from '../../authz/permission.service';
 import { ORG_ID } from '../../common/org.constant';
@@ -80,7 +83,19 @@ export class AssetsService {
     private readonly storage: StorageService,
     private readonly gamification: GamificationService,
     private readonly permissions: PermissionService,
+    private readonly signatures: SignatureService,
   ) {}
+
+  /**
+   * ¿La firma verificada del checklist es OBLIGATORIA? Se controla por env
+   * (`CHECKLIST_SIGNATURE_REQUIRED`) para un rollout seguro: por defecto NO, así el
+   * flujo en vivo sigue igual mientras los usuarios enrolan; se activa cuando el
+   * dueño da la luz verde. Con el flag apagado la firma es OPCIONAL (se registra si
+   * viene). Juan decidió: obligatoria con fallback OTP.
+   */
+  private checklistSignatureRequired(): boolean {
+    return process.env.CHECKLIST_SIGNATURE_REQUIRED === 'true';
+  }
 
   /**
    * ¿Puede el usuario VER la ficha (y sub-recursos de lectura) de este activo?
@@ -1251,6 +1266,8 @@ export class AssetsService {
     userId: string,
     templateId: string,
     answers: Record<string, unknown>[],
+    signature?: IncomingSignature,
+    originHeader?: string,
   ): Promise<UsageCycleResult> {
     const cycle = await this.prisma.usageCycle.findUnique({ where: { id: cycleId } });
     if (!cycle || cycle.assetId !== assetId) {
@@ -1263,7 +1280,16 @@ export class AssetsService {
       throw new ConflictException('El ciclo ya no está en preparación.');
     }
 
-    const submission = await this.submitChecklist(assetId, templateId, userId, answers);
+    // La firma (biometría/OTP) se verifica dentro de submitChecklist, que es el punto
+    // único de escritura del checklist (confirmar ciclo pasa por aquí igual).
+    const submission = await this.submitChecklist(
+      assetId,
+      templateId,
+      userId,
+      answers,
+      signature,
+      originHeader,
+    );
     const asset = await this.prisma.asset.findUniqueOrThrow({ where: { id: assetId } });
     const failed = asset.status === AssetStatus.MANTENIMIENTO;
 
@@ -1286,6 +1312,17 @@ export class AssetsService {
             },
       });
       if (advanced.count === 0) {
+        // Submission duplicada (otro confirm ya avanzó el ciclo): se descarta junto
+        // con su prueba de firma (SignatureProof es polimórfico, sin FK a la
+        // submission, así que no cae por cascada; se borra a mano para no dejarla huérfana).
+        await tx.signatureProof
+          .deleteMany({
+            where: {
+              contextType: SignatureContextType.CHECKLIST_SUBMISSION,
+              contextId: submission.id,
+            },
+          })
+          .catch(() => undefined);
         await tx.checklistSubmission
           .delete({ where: { id: submission.id } })
           .catch(() => undefined);
@@ -1994,11 +2031,101 @@ export class AssetsService {
     };
   }
 
+  /**
+   * Valida que el usuario pueda enviar el checklist de este activo con esta plantilla,
+   * y devuelve el activo + la plantilla. Chequeos compartidos por `prepareChecklistSignature`
+   * (pedir la firma) y `submitChecklist` (enviar), para que ambos apliquen exactamente
+   * las mismas reglas de acceso.
+   */
+  private async assertCanSubmitChecklist(
+    assetId: string,
+    templateId: string,
+    userId: string,
+  ): Promise<{ asset: import('@prisma/client').Asset; template: ChecklistTemplate }> {
+    const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+    if (!(await this.canRunChecklist(userId, assetId))) {
+      throw new ForbiddenException('No tienes permiso para ejecutar el checklist de este activo.');
+    }
+    // Ejecutar el checklist es una ESCRITURA: además de poder ejecutarlo, exige poder
+    // VER el activo (misma asimetría que cierra assertCanReportUse en tomar/liberar).
+    if (!(await this.canViewAsset(userId, asset))) {
+      throw new ForbiddenException('No tienes acceso a este activo.');
+    }
+    const template = await this.prisma.checklistTemplate.findUnique({ where: { id: templateId } });
+    if (!template || template.assetId !== assetId) {
+      throw new NotFoundException('La plantilla no corresponde a este activo.');
+    }
+    if (template.status !== DocumentStatus.APROBADO) {
+      throw new BadRequestException('Solo se pueden enviar checklists basados en plantillas aprobadas.');
+    }
+    return { asset, template };
+  }
+
+  /**
+   * Hash canónico del contenido a firmar. DEBE computarse igual al pedir la firma y
+   * al enviarla (mismo templateId + userId + respuestas validadas), para que la firma
+   * quede ligada exactamente al contenido enviado.
+   */
+  private checklistContentHash(
+    templateId: string,
+    userId: string,
+    parsedAnswers: ChecklistAnswer[],
+  ): string {
+    return computeContentHash({
+      contextType: 'CHECKLIST_SUBMISSION',
+      templateId,
+      userId,
+      answers: parsedAnswers,
+    });
+  }
+
+  /**
+   * Prepara la firma de un checklist (#68 Fase 2): valida acceso + respuestas, calcula
+   * el `contentHash` y arranca la vía elegida. WEBAUTHN devuelve las opciones para la
+   * ceremonia biométrica; EMAIL_OTP envía un código al correo y devuelve el enmascarado.
+   */
+  async prepareChecklistSignature(
+    assetId: string,
+    templateId: string,
+    userId: string,
+    answers: Record<string, unknown>[],
+    method: 'WEBAUTHN' | 'EMAIL_OTP',
+    originHeader: string | undefined,
+  ): Promise<
+    | { method: 'WEBAUTHN'; options: import('@simplewebauthn/server').PublicKeyCredentialRequestOptionsJSON }
+    | { method: 'EMAIL_OTP'; maskedEmail: string }
+  > {
+    await this.assertCanSubmitChecklist(assetId, templateId, userId);
+    const parsedAnswers = this.validateAnswers(answers);
+    const contentHash = this.checklistContentHash(templateId, userId, parsedAnswers);
+
+    if (method === 'WEBAUTHN') {
+      const options = await this.signatures.generateWebAuthnSignOptions(
+        userId,
+        originHeader,
+        SignatureContextType.CHECKLIST_SUBMISSION,
+        contentHash,
+      );
+      return { method: 'WEBAUTHN', options };
+    }
+    const { maskedEmail } = await this.signatures.startOtpSignature(
+      userId,
+      SignatureContextType.CHECKLIST_SUBMISSION,
+      contentHash,
+    );
+    return { method: 'EMAIL_OTP', maskedEmail };
+  }
+
   async submitChecklist(
     assetId: string,
     templateId: string,
     userId: string,
     answers: Record<string, unknown>[],
+    signature?: IncomingSignature,
+    originHeader?: string,
   ): Promise<ChecklistSubmissionView> {
     const asset = await this.prisma.asset.findUnique({ where: { id: assetId } });
     if (!asset) {
@@ -2027,6 +2154,25 @@ export class AssetsService {
     // Valida las respuestas con Zod ANTES de persistir. Los ítems de la plantilla
     // se leen normalizados (legacy → union nuevo) para la lógica de falla/odómetro.
     const parsedAnswers = this.validateAnswers(answers);
+
+    // Firma verificada (#68 Fase 2). El contentHash liga la firma a ESTAS respuestas.
+    // Si el flag la exige, DEBE venir una firma válida; si está apagado, se registra
+    // igual cuando el cliente la envía (rollout progresivo). Se verifica ANTES de la
+    // transacción y su prueba se persiste dentro (atómica con la submission).
+    const contentHash = this.checklistContentHash(templateId, userId, parsedAnswers);
+    let verifiedSig: VerifiedSignature | null = null;
+    if (signature) {
+      verifiedSig = await this.signatures.verify(
+        userId,
+        originHeader,
+        SignatureContextType.CHECKLIST_SUBMISSION,
+        contentHash,
+        signature,
+      );
+    } else if (this.checklistSignatureRequired()) {
+      throw new BadRequestException('Debes firmar el checklist para poder enviarlo.');
+    }
+
     const templateItems = this.readTemplateItems(template.items);
     const itemById = new Map(templateItems.map((item) => [item.id, item] as const));
     const answerByItemId = new Map(parsedAnswers.map((answer) => [answer.itemId, answer] as const));
@@ -2136,6 +2282,24 @@ export class AssetsService {
           user: true,
         },
       });
+
+      // Prueba de firma verificada, pegada a la submission (misma transacción).
+      if (verifiedSig) {
+        await tx.signatureProof.create({
+          data: {
+            userId,
+            method: verifiedSig.method as SignatureMethod,
+            contextType: SignatureContextType.CHECKLIST_SUBMISSION,
+            contextId: row.id,
+            contextHash: contentHash,
+            credentialId: verifiedSig.credentialId,
+            deviceName: verifiedSig.deviceName,
+            signature: verifiedSig.signature,
+            authenticatorData: verifiedSig.authenticatorData,
+            clientDataJSON: verifiedSig.clientDataJSON,
+          },
+        });
+      }
 
       if (updatedOdometerKm !== null) {
         const currentMeta = (asset.metadata as Record<string, unknown> | null) || {};

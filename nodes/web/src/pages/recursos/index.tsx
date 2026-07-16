@@ -10,6 +10,7 @@ import {
   fetchAssetsTable,
   createAsset,
   releaseAssetUse,
+  ApiError,
   type TableRequest,
 } from '@/lib/api';
 import { useProfile } from '@/hooks/use-profile';
@@ -61,6 +62,8 @@ import { EndUsageForm } from './end-usage-form';
 import { UsageHistory } from './usage-history';
 import { SvgChecklistInput, parseCommentMap } from './svg-checklist-input';
 import { ChecklistFillBody } from './checklist-fill-body';
+import { useChecklistSignature } from './checklist-signature-dialog';
+import { useAuth } from '@/context/auth-context';
 import type {
   AssetView,
   AssetType,
@@ -74,6 +77,7 @@ import type {
   ChecklistItemConfig,
   ChecklistSection,
   ChecklistAnswer,
+  ChecklistSignatureInput,
   VehicleSubtype,
   AssetIdentifierType,
   UsageCycleView,
@@ -946,6 +950,8 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     end: endCycle,
     list: listCycles,
   } = useUsageCycles();
+  const { user, refreshUser } = useAuth();
+  const { requestSignature, dialog: signatureDialog } = useChecklistSignature();
 
   const [asset, setAsset] = useState<AssetView | null>(null);
   const [docs, setDocs] = useState<AssetDocumentView[]>([]);
@@ -1527,6 +1533,16 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
         return answer;
       });
 
+      // Firma verificada (#68): si el usuario tiene la firma obligatoria, abre el
+      // diálogo (biometría u OTP al correo) con el MISMO {templateId, answers} que
+      // irá al submit/confirm. Si cancela, no se envía nada.
+      let signature: ChecklistSignatureInput | undefined;
+      if (user?.checklistSignatureRequired) {
+        const sig = await requestSignature(id, template.id, answers);
+        if (!sig) return; // usuario canceló la firma; no se envía
+        signature = sig;
+      }
+
       // DOBLE VÍA: si hay un ciclo EN_PREPARACION, firmar el checklist CONFIRMA el
       // ciclo (pasa a EN_CURSO) en vez de registrar una inspección suelta. Si el
       // checklist reporta una falla, el backend puede dejar el activo en
@@ -1537,6 +1553,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
           activeCycle.id,
           template.id,
           answers,
+          signature,
         );
         setExecutionAnswers({});
         await loadData();
@@ -1560,7 +1577,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
       // Checklist standalone (admin/gerencia sin ciclo de uso): comportamiento
       // intacto — registra la inspección en el historial y ofrece el PDF.
-      const submission = await submitChecklistAnswers(id, { templateId: template.id, answers });
+      const submission = await submitChecklistAnswers(id, { templateId: template.id, answers, signature });
       setExecutionAnswers({});
       void loadData();
       // Confirmamos que quedó en el historial y ofrecemos la descarga del PDF.
@@ -1571,6 +1588,14 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
         },
       });
     } catch (err) {
+      // Si la firma pasó a ser obligatoria a mitad de la sesión (rollout), el backend
+      // rechaza el envío sin firma. Refrescamos el perfil para que el próximo envío
+      // abra el diálogo de firma, y lo explicamos en vez de mostrar el error crudo.
+      if (err instanceof ApiError && /firmar el checklist/i.test(err.message)) {
+        await refreshUser();
+        toast.info('La firma del checklist pasó a ser obligatoria. Vuelve a enviarlo para firmarlo.');
+        return;
+      }
       toast.error(err instanceof Error ? err.message : 'Error al enviar checklist.');
     } finally {
       setSubmittingChecklist(false);
@@ -2974,6 +2999,8 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
           await handleReviewTpl('RECHAZADO', reason);
         }}
       />
+
+      {signatureDialog}
     </div>
   );
 }

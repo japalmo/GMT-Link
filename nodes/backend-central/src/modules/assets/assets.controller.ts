@@ -5,6 +5,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
@@ -40,10 +41,12 @@ import {
   UpdateChecklistTemplateDto,
   ReviewChecklistTemplateDto,
   SubmitChecklistDto,
+  PrepareChecklistSignatureDto,
   SubmitTelemetryDto,
   ConfirmUsageCycleDto,
   EndUsageCycleDto,
 } from './dto/assets.dto';
+import type { IncomingSignature } from '../signatures/signature.service';
 import {
   AssetDocumentView,
   AssetHistoryEntryView,
@@ -323,9 +326,18 @@ export class AssetsController {
     @Param('id') id: string,
     @Param('cycleId') cycleId: string,
     @Body() dto: ConfirmUsageCycleDto,
+    @Headers('origin') origin: string | undefined,
   ): Promise<UsageCycleResult> {
     const userId = this.requireUserId(authUser);
-    return this.assets.confirmUsageCycle(id, cycleId, userId, dto.templateId, dto.answers);
+    return this.assets.confirmUsageCycle(
+      id,
+      cycleId,
+      userId,
+      dto.templateId,
+      dto.answers,
+      dto.signature as IncomingSignature | undefined,
+      origin,
+    );
   }
 
   /**
@@ -679,16 +691,48 @@ export class AssetsController {
   }
 
   /**
-   * Envía las respuestas de un checklist ejecutado.
+   * Prepara la firma de un checklist (#68 Fase 2): valida el contenido y arranca la
+   * vía elegida. WEBAUTHN devuelve las opciones de la ceremonia biométrica; EMAIL_OTP
+   * envía un código al correo y devuelve el correo enmascarado.
+   */
+  @Post(':id/checklist/sign-options')
+  prepareChecklistSignature(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: PrepareChecklistSignatureDto,
+    @Headers('origin') origin: string | undefined,
+  ): Promise<unknown> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.prepareChecklistSignature(
+      id,
+      dto.templateId,
+      userId,
+      dto.answers,
+      dto.method,
+      origin,
+    );
+  }
+
+  /**
+   * Envía las respuestas de un checklist ejecutado. Si la firma es obligatoria (o si
+   * el cliente la adjunta) se verifica y se guarda como prueba junto a la submission.
    */
   @Post(':id/checklist/submit')
   submitChecklist(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
     @Body() dto: SubmitChecklistDto,
+    @Headers('origin') origin: string | undefined,
   ): Promise<ChecklistSubmissionView> {
     const userId = this.requireUserId(authUser);
-    return this.assets.submitChecklist(id, dto.templateId, userId, dto.answers);
+    return this.assets.submitChecklist(
+      id,
+      dto.templateId,
+      userId,
+      dto.answers,
+      dto.signature as IncomingSignature | undefined,
+      origin,
+    );
   }
 
   /**

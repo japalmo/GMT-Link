@@ -9,6 +9,7 @@ import {
 } from '@/lib/api';
 import type {
   ChecklistAnswer,
+  ChecklistSignatureInput,
   EndUsageCycleInput,
   UsageCycleResult,
   UsageCycleView,
@@ -29,6 +30,7 @@ export interface UseUsageCyclesResult {
     cycleId: string,
     templateId: string,
     answers: ChecklistAnswer[],
+    signature?: ChecklistSignatureInput,
   ) => Promise<UsageCycleResult>;
   /** Cancela un ciclo EN_PREPARACION (el activo vuelve a DISPONIBLE). */
   cancel: (id: string, cycleId: string) => Promise<UsageCycleResult>;
@@ -49,8 +51,13 @@ export function useUsageCycles(): UseUsageCyclesResult {
   const start = useCallback((id: string, photo?: File) => startUsageCycle(id, photo), []);
 
   const confirm = useCallback(
-    (id: string, cycleId: string, templateId: string, answers: ChecklistAnswer[]) =>
-      confirmUsageCycle(id, cycleId, templateId, answers),
+    (
+      id: string,
+      cycleId: string,
+      templateId: string,
+      answers: ChecklistAnswer[],
+      signature?: ChecklistSignatureInput,
+    ) => confirmUsageCycle(id, cycleId, templateId, answers, signature),
     [],
   );
 

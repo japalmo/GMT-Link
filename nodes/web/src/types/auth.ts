@@ -23,4 +23,6 @@ export interface AuthedUser {
   permissions: string[];
   /** `true` si el usuario tiene la relación FGA `can_manage_roles` (org_admin). Gatea `/roles` en el nav. */
   canManageRoles: boolean;
+  /** true si firmar el checklist es obligatorio (#68). */
+  checklistSignatureRequired: boolean;
 }

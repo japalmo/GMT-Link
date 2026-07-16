@@ -195,9 +195,17 @@ export interface ReviewChecklistTemplateInput {
   reason?: string;
 }
 
+/** Firma verificada entrante de un checklist (#68). */
+export interface ChecklistSignatureInput {
+  method: 'WEBAUTHN' | 'EMAIL_OTP';
+  response?: Record<string, unknown>; // WEBAUTHN: aserción de startAuthentication()
+  code?: string; // EMAIL_OTP: código de 6 dígitos
+}
+
 export interface SubmitChecklistInput {
   templateId: string;
   answers: ChecklistAnswer[];
+  signature?: ChecklistSignatureInput;
 }
 
 export interface SubmitTelemetryInput {
