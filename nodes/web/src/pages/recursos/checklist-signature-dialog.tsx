@@ -220,12 +220,15 @@ export function useChecklistSignature(): UseChecklistSignatureResult {
 
         {mode === 'otp' && (
           <div className="flex flex-col gap-3">
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Mail className="size-4 shrink-0" aria-hidden />
-              {maskedEmail
-                ? `Enviamos un código a ${maskedEmail}.`
-                : 'Enviamos un código a tu correo.'}
-            </p>
+            {busy && !maskedEmail ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden /> Enviando el código…
+              </p>
+            ) : maskedEmail ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Mail className="size-4 shrink-0" aria-hidden /> Enviamos un código a {maskedEmail}.
+              </p>
+            ) : null}
             <div className="flex flex-col gap-2">
               <Label htmlFor={otpId}>Código de verificación</Label>
               <Input

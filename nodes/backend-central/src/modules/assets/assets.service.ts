@@ -2155,23 +2155,12 @@ export class AssetsService {
     // se leen normalizados (legacy → union nuevo) para la lógica de falla/odómetro.
     const parsedAnswers = this.validateAnswers(answers);
 
-    // Firma verificada (#68 Fase 2). El contentHash liga la firma a ESTAS respuestas.
-    // Si el flag la exige, DEBE venir una firma válida; si está apagado, se registra
-    // igual cuando el cliente la envía (rollout progresivo). Se verifica ANTES de la
-    // transacción y su prueba se persiste dentro (atómica con la submission).
+    // Hash del contenido a firmar: liga la firma a ESTAS respuestas exactas. Se calcula
+    // ahora (de parsedAnswers), pero la firma se VERIFICA más abajo, recién tras pasar
+    // las validaciones de negocio, para no quemar una firma de un solo uso (ni avanzar
+    // el contador WebAuthn) si el envío se va a rechazar igual.
     const contentHash = this.checklistContentHash(templateId, userId, parsedAnswers);
     let verifiedSig: VerifiedSignature | null = null;
-    if (signature) {
-      verifiedSig = await this.signatures.verify(
-        userId,
-        originHeader,
-        SignatureContextType.CHECKLIST_SUBMISSION,
-        contentHash,
-        signature,
-      );
-    } else if (this.checklistSignatureRequired()) {
-      throw new BadRequestException('Debes firmar el checklist para poder enviarlo.');
-    }
 
     const templateItems = this.readTemplateItems(template.items);
     const itemById = new Map(templateItems.map((item) => [item.id, item] as const));
@@ -2268,6 +2257,22 @@ export class AssetsService {
           break;
         }
       }
+    }
+
+    // Firma verificada (#68 Fase 2), DESPUÉS de todas las validaciones de negocio: así
+    // una validación que falla (p. ej. odómetro que retrocede, ítem obligatorio vacío)
+    // NO consume la firma de un solo uso ni sube el contador WebAuthn. Si el flag la
+    // exige, DEBE venir una firma válida. Su prueba se persiste dentro de la transacción.
+    if (signature) {
+      verifiedSig = await this.signatures.verify(
+        userId,
+        originHeader,
+        SignatureContextType.CHECKLIST_SUBMISSION,
+        contentHash,
+        signature,
+      );
+    } else if (this.checklistSignatureRequired()) {
+      throw new BadRequestException('Debes firmar el checklist para poder enviarlo.');
     }
 
     const submission = await this.prisma.$transaction(async (tx) => {
