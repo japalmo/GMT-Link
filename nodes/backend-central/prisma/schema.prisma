@@ -87,8 +87,94 @@ model User {
   projectAssignments     ProjectWorkerAssignment[] @relation("ProjectAssignments")
   usageCycles            UsageCycle[]              @relation("UsageCycleUser")
   handoffUsageCycles     UsageCycle[]              @relation("UsageCycleHandoff")
+  webAuthnCredentials    WebAuthnCredential[]      @relation("UserWebAuthnCredentials")
+  webAuthnChallenges     WebAuthnChallenge[]       @relation("UserWebAuthnChallenges")
+  signatureProofs        SignatureProof[]          @relation("UserSignatureProofs")
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
+}
+
+// ============ FIRMA VERIFICADA (#68 — biometría WebAuthn + OTP fallback) ============
+
+/** Método con que se obtuvo una firma verificada. */
+enum SignatureMethod {
+  WEBAUTHN // biometría / passkey del dispositivo (no-repudio fuerte)
+  EMAIL_OTP // código al correo (fallback para dispositivos compartidos / sin biometría)
+}
+
+/**
+ * Tipo de artefacto firmado. Polimórfico a propósito: hoy solo CHECKLIST_SUBMISSION,
+ * pero la abstracción permite adoptar PROJECT_DOCUMENT (u otros) sin migrar el modelo.
+ */
+enum SignatureContextType {
+  CHECKLIST_SUBMISSION
+  PROJECT_DOCUMENT
+}
+
+/**
+ * Llave WebAuthn (passkey) registrada por un usuario en un dispositivo. La llave
+ * privada nunca sale del equipo; aquí se guarda solo la pública para verificar.
+ */
+model WebAuthnCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation("UserWebAuthnCredentials", fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String    @unique // base64url del credential id del autenticador
+  publicKey    Bytes // llave pública COSE (la usa el server para verificar aserciones)
+  counter      Int       @default(0) // contador anti-clonación reportado por el autenticador
+  deviceName   String? // nombre legible ("Celular de Felipe"), fijado al registrar
+  transports   String? // CSV de transports (internal, hybrid, usb, nfc, ble)
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@index([userId])
+  @@map("webauthn_credentials")
+}
+
+/**
+ * Desafío de un solo uso (registro o firma), con TTL corto. Single-use = anti-replay.
+ * En SIGN, `contextHash` sella el contenido que se firma (sha256 base64url).
+ */
+model WebAuthnChallenge {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("UserWebAuthnChallenges", fields: [userId], references: [id], onDelete: Cascade)
+  challenge   String // base64url; para SIGN es el propio contextHash (la firma lo cubre)
+  purpose     String // REGISTER | SIGN
+  contextType String? // en SIGN
+  contextId   String? // en SIGN
+  contextHash String? // en SIGN: sha256 base64url del contenido firmado
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, purpose])
+  @@map("webauthn_challenges")
+}
+
+/**
+ * Prueba de firma verificada, pegada al artefacto (polimórfica por contextType +
+ * contextId). Para WEBAUTHN guarda la evidencia criptográfica re-verificable; para
+ * EMAIL_OTP la atribución es el usuario + el momento (el OTP se validó server-side).
+ */
+model SignatureProof {
+  id                String               @id @default(cuid())
+  userId            String
+  user              User                 @relation("UserSignatureProofs", fields: [userId], references: [id], onDelete: Cascade)
+  method            SignatureMethod
+  contextType       SignatureContextType
+  contextId         String
+  contextHash       String // sha256 base64url del contenido sellado
+  credentialId      String? // WEBAUTHN: id de la llave usada
+  deviceName        String? // WEBAUTHN: nombre del dispositivo
+  signature         Bytes? // WEBAUTHN: firma de la aserción (re-verificable)
+  authenticatorData Bytes? // WEBAUTHN: authenticatorData de la aserción
+  clientDataJSON    Bytes? // WEBAUTHN: clientDataJSON de la aserción
+  signedAt          DateTime             @default(now())
+
+  @@index([contextType, contextId])
+  @@index([userId])
+  @@map("signature_proofs")
 }
 
 enum UserStatus {

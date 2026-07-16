@@ -39,6 +39,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { FaenasModule } from './modules/faenas/faenas.module';
 import { ServiceTypesModule } from './modules/service-types/service-types.module';
+import { SignaturesModule } from './modules/signatures/signatures.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { ServiceTypesModule } from './modules/service-types/service-types.module
     MetricsModule,
     ClientsModule,
     FaenasModule,
+    SignaturesModule,
   ],
   controllers: [HealthController],
   providers: [

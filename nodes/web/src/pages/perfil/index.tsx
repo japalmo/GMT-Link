@@ -15,6 +15,7 @@ import { RoleChips } from '@/pages/usuarios/role-chips';
 import { PersonAvatar } from '@/pages/directorio/person-avatar';
 import { ProfileForm } from './profile-form';
 import { ChangePasswordForm } from './change-password-form';
+import { WebAuthnDevicesCard } from './webauthn-devices-card';
 import { ProfileTabs } from './profile-tabs';
 
 /** Skeleton de carga del perfil, con la forma de la cabecera + tarjetas. */
@@ -126,6 +127,8 @@ export default function PerfilPage(): ReactNode {
               />
             </CardContent>
           </Card>
+
+          <WebAuthnDevicesCard />
         </>
       )}
     </PageContainer>

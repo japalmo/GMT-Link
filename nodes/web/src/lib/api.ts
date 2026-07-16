@@ -1,3 +1,7 @@
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  RegistrationResponseJSON,
+} from '@simplewebauthn/browser';
 import { getToken, setToken } from '@/lib/auth-token';
 import type { AuthedUser } from '@/types/auth';
 import type {
@@ -331,6 +335,49 @@ export async function resetPassword(input: {
   await request<{ ok: true }>('/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify(input),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Firma verificada — WebAuthn (#68)                                           */
+/* -------------------------------------------------------------------------- */
+
+/** Dispositivo WebAuthn registrado (sin exponer la llave). */
+export interface WebAuthnDeviceView {
+  id: string;
+  deviceName: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/** `POST /webauthn/register/options` — opciones para registrar este dispositivo. */
+export async function getWebAuthnRegistrationOptions(): Promise<PublicKeyCredentialCreationOptionsJSON> {
+  return request<PublicKeyCredentialCreationOptionsJSON>('/webauthn/register/options', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+/** `POST /webauthn/register/verify` — verifica y guarda la llave del dispositivo. */
+export async function verifyWebAuthnRegistration(
+  response: RegistrationResponseJSON,
+  deviceName?: string,
+): Promise<WebAuthnDeviceView> {
+  return request<WebAuthnDeviceView>('/webauthn/register/verify', {
+    method: 'POST',
+    body: JSON.stringify({ response, deviceName }),
+  });
+}
+
+/** `GET /webauthn/credentials` — dispositivos registrados por el usuario. */
+export async function listWebAuthnCredentials(): Promise<WebAuthnDeviceView[]> {
+  return request<WebAuthnDeviceView[]>('/webauthn/credentials');
+}
+
+/** `DELETE /webauthn/credentials/:id` — elimina un dispositivo propio. */
+export async function deleteWebAuthnCredential(id: string): Promise<void> {
+  await request<{ ok: true }>(`/webauthn/credentials/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }
 

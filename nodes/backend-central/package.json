@@ -29,6 +29,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@openfga/sdk": "^0.9.6",
     "@prisma/client": "^6.19.0",
+    "@simplewebauthn/server": "^13.3.2",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
