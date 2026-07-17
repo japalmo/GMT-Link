@@ -21,6 +21,16 @@ const TASK_INCLUDE = {
 /** Estados válidos de tarea (whitelist del filtro de estado de la tabla). */
 const VALID_TASK_STATUSES: readonly string[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
 
+/**
+ * Estrecha un valor de query a string no vacío ('all' = sin filtro). NO confiar en
+ * el tipo declarado: el query parser entrega lo que mande el cliente, y con el
+ * parser extendido `?serviceId[x]=1` llega como objeto y `?serviceId=a&serviceId=b`
+ * como arreglo. Sin estrechar, eso viaja tal cual al `where` de Prisma y revienta
+ * en 500 (o aplicaría un operador que la API no expone).
+ */
+const asQueryString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() && value !== 'all' ? value.trim() : undefined;
+
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
@@ -113,20 +123,16 @@ export class TasksService {
   async listTable(userId: string, req: TableRequest): Promise<TablePage<unknown>> {
     const { page, pageSize, skip, take } = tableSkipTake(req);
     const f = req.filters ?? {};
-    const asStr = (v: unknown): string | undefined =>
-      typeof v === 'string' && v.trim() && v !== 'all' ? v.trim() : undefined;
-    const rawStatus = asStr(f.status);
 
+    // El estrechamiento (string / enum) lo hace `buildTaskWhere`, que es el punto
+    // común con la lista keyset. Aquí solo se mapean los nombres de filtro de la
+    // tabla y su regla propia: 'unassigned' (como 'all') no filtra.
     const where = await this.buildTaskWhere(userId, {
-      projectId: asStr(f.project),
-      serviceId: asStr(f.service),
-      // 'unassigned'/'all' no filtran (paridad con la lista keyset actual).
-      assignedToId: (() => {
-        const a = asStr(f.assignee);
-        return a && a !== 'unassigned' ? a : undefined;
-      })(),
-      status: rawStatus && VALID_TASK_STATUSES.includes(rawStatus) ? (rawStatus as TaskStatus) : undefined,
-      search: typeof req.search === 'string' ? req.search : undefined,
+      projectId: f.project,
+      serviceId: f.service,
+      assignedToId: asQueryString(f.assignee) === 'unassigned' ? undefined : f.assignee,
+      status: f.status,
+      search: req.search,
     });
     if (where === null) {
       return tablePage([], 0, page, pageSize);
@@ -161,12 +167,15 @@ export class TasksService {
    */
   private async buildTaskWhere(
     userId: string,
+    // `unknown` a propósito: estos valores vienen de la query y NO están tipados de
+    // verdad (el cliente manda lo que quiera). Se estrechan aquí, que es el punto
+    // común de la lista keyset y la de tabla.
     filters: {
-      projectId?: string;
-      serviceId?: string;
-      status?: TaskStatus;
-      assignedToId?: string;
-      search?: string;
+      projectId?: unknown;
+      serviceId?: unknown;
+      status?: unknown;
+      assignedToId?: unknown;
+      search?: unknown;
     },
   ): Promise<Prisma.TaskWhereInput | null> {
     const scope = await this.permissions.scopeFilter(userId, 'task:read');
@@ -183,26 +192,32 @@ export class TasksService {
     }
     // scope.kind === 'none' (GLOBAL): sin restricción de fila.
 
-    if (filters.projectId) {
-      if (scope.kind === 'projects' && !scope.ids.includes(filters.projectId)) {
+    const projectId = asQueryString(filters.projectId);
+    if (projectId) {
+      if (scope.kind === 'projects' && !scope.ids.includes(projectId)) {
         throw new BadRequestException('No tienes acceso a este proyecto.');
       }
-      where.projectId = filters.projectId;
+      where.projectId = projectId;
     }
 
-    if (filters.serviceId) {
-      where.serviceId = filters.serviceId;
+    const serviceId = asQueryString(filters.serviceId);
+    if (serviceId) {
+      where.serviceId = serviceId;
     }
 
-    if (filters.status) {
-      where.status = filters.status;
+    // El estado además debe pertenecer al enum: un valor libre no filtra (en vez de
+    // colarse como operador o reventar la consulta).
+    const status = asQueryString(filters.status);
+    if (status && VALID_TASK_STATUSES.includes(status)) {
+      where.status = status as TaskStatus;
     }
 
-    if (filters.assignedToId) {
-      where.assignedToId = filters.assignedToId;
+    const assignedToId = asQueryString(filters.assignedToId);
+    if (assignedToId) {
+      where.assignedToId = assignedToId;
     }
 
-    const search = typeof filters.search === 'string' ? filters.search.trim() : '';
+    const search = asQueryString(filters.search) ?? '';
     if (search.length > 0) {
       const searchOr = [
         { name: { contains: search, mode: 'insensitive' as const } },

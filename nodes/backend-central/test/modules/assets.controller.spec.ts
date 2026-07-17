@@ -226,10 +226,17 @@ describe('AssetsController — ciclo de uso (autorización en el servicio)', () 
       templateId: 'tpl-1',
       answers: [{ itemId: '1', value: true }],
     });
-    await controller.confirmUsageCycle(USER, 'a-1', 'cyc-1', dto);
-    expect(service.confirmUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1', 'tpl-1', [
-      { itemId: '1', value: true },
-    ]);
+    // Sin firma (flag apagado) y sin header Origin: la firma viaja como undefined.
+    await controller.confirmUsageCycle(USER, 'a-1', 'cyc-1', dto, undefined);
+    expect(service.confirmUsageCycle).toHaveBeenCalledWith(
+      'a-1',
+      'cyc-1',
+      'u1',
+      'tpl-1',
+      [{ itemId: '1', value: true }],
+      undefined,
+      undefined,
+    );
   });
 
   it('cancelUsageCycle delega con el userId de la sesión', async () => {

@@ -63,6 +63,8 @@ import { UsageHistory } from './usage-history';
 import { SvgChecklistInput, parseCommentMap } from './svg-checklist-input';
 import { ChecklistFillBody } from './checklist-fill-body';
 import { useChecklistSignature } from './checklist-signature-dialog';
+import { buildChecklistAnswers } from './checklist-answers';
+import { ReportarUsoOverlay } from './reportar-uso-overlay';
 import { useAuth } from '@/context/auth-context';
 import type {
   AssetView,
@@ -344,6 +346,14 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const [actioning, setActioning] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Activo del overlay de "Reportar uso" (`null` = cerrado): el flujo completo
+  // (reclamar + checklist + firma) se resuelve sobre la tabla, sin navegar.
+  const [reportUseAsset, setReportUseAsset] = useState<{
+    id: string;
+    name: string;
+    code: string;
+  } | null>(null);
+
   // Load directory users. `listUsers` está paginado (keyset): para poblar el
   // picker se pide la página más grande permitida (tope 100).
   useEffect(() => {
@@ -602,14 +612,17 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
   const rowActions = (a: AssetView): ReactNode => (
     <>
       {a.status === 'DISPONIBLE' && (
-        // Reportar uso desde la tabla abre el detalle del activo: el reporte de uso
-        // (que reclama + abre el checklist con ciclo) se hace desde ahí, sin flujo
-        // legacy. Flujo único con ciclo de uso.
+        // Reportar uso desde la tabla abre el OVERLAY: reclama el activo y resuelve
+        // el checklist ahí mismo, sin navegar al detalle. Flujo único con ciclo de
+        // uso (el detalle sigue ofreciendo la misma entrada para quien ya está ahí).
         <Button
           size="sm"
           variant="outline"
           className="h-8 text-xs"
-          onClick={() => onSelectAsset(a.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setReportUseAsset({ id: a.id, name: a.name, code: a.code });
+          }}
         >
           Reportar uso
         </Button>
@@ -901,6 +914,21 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
           </Card>
         </div>
       )}
+
+      {/* OVERLAY REPORTAR USO: reclama el activo y resuelve el checklist inicial
+          sobre la tabla. Al completar/cancelar se recarga la página del motor (el
+          activo cambió de estado y pudo dejar de matchear el filtro). */}
+      {/* `key` por activo: remonta el overlay en cada apertura, así nunca se pinta un
+          frame con el checklist/respuestas del activo anterior. */}
+      <ReportarUsoOverlay
+        key={reportUseAsset?.id ?? 'closed'}
+        asset={reportUseAsset}
+        onClose={() => setReportUseAsset(null)}
+        onCompleted={() => {
+          setReportUseAsset(null);
+          table.refetch();
+        }}
+      />
     </div>
   );
 }
@@ -1482,56 +1510,8 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
     setSubmittingChecklist(true);
     try {
-      const answers: ChecklistAnswer[] = template.items.map((item) => {
-        const raw = executionAnswers[item.id];
-        const missing = raw === undefined || raw === null || raw === '';
-        // Los SVG son opcionales (un diagrama sin observaciones es válido): no se
-        // exige aunque el ítem esté marcado como requerido.
-        if (item.required && missing && item.type !== 'SVG') {
-          throw new Error(`El ítem "${item.label}" es requerido.`);
-        }
-
-        // Valor tipado según el tipo del ítem (null si quedó vacío). SVG guarda el
-        // JSON string del mapa de comentarios tal cual (o '{}' si quedó vacío).
-        let value: string | number | boolean | null;
-        switch (item.type) {
-          case 'BOOLEAN':
-            value = typeof raw === 'boolean' ? raw : null;
-            break;
-          case 'ENTERO':
-            value = missing ? null : Number(raw);
-            break;
-          case 'SVG':
-            value = missing ? '{}' : String(raw);
-            break;
-          default: // ESTADO, FECHA, TEXTO
-            value = missing ? null : String(raw);
-        }
-
-        const answer: ChecklistAnswer = { itemId: item.id, label: item.label, value };
-
-        // La observación companion de un ESTADO (textarea de falla) se guarda
-        // como `comment` de su respuesta, además de poblar el ítem TEXTO
-        // vinculado por `obsItemId`. El backend exige observación cuando el
-        // estado cae en falla O `requireObs` está activo (showObs): se valida
-        // aquí para dar la señal inline antes de enviar.
-        if (item.type === 'ESTADO') {
-          const obsKey = item.config?.obsItemId ?? `${item.id}__obs`;
-          const obs = executionAnswers[obsKey];
-          const obsText = typeof obs === 'string' ? obs.trim() : '';
-          const chosen = typeof value === 'string' ? value : '';
-          const isFail = item.config?.failOptions?.includes(chosen) ?? false;
-          const showObs = isFail || (item.config?.requireObs ?? false);
-          if (showObs && obsText === '') {
-            throw new Error(`Debes registrar una observación para "${item.label}".`);
-          }
-          if (obsText !== '') {
-            answer.comment = obsText;
-          }
-        }
-
-        return answer;
-      });
+      // Misma construcción/validación que usa el overlay de "Reportar uso".
+      const answers: ChecklistAnswer[] = buildChecklistAnswers(template, executionAnswers);
 
       // Firma verificada (#68): si el usuario tiene la firma obligatoria, abre el
       // diálogo (biometría u OTP al correo) con el MISMO {templateId, answers} que

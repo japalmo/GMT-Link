@@ -1805,9 +1805,12 @@ describe('AssetsService', () => {
       it('con checklist APROBADO deja el activo EN_PREPARACION y el ciclo EN_PREPARACION', async () => {
         prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
         permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' }); // asset:use:report
-        // hasApprovedChecklist => plantilla aprobada => withChecklist = true.
+        // hasApprovedChecklist => plantilla aprobada CON ítems (contestable) => withChecklist = true.
         prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
-          buildTemplateRow({ status: DocumentStatus.APROBADO }),
+          buildTemplateRow({
+            status: DocumentStatus.APROBADO,
+            items: [{ id: 'luces', label: 'Luces', type: 'BOOLEAN', required: true }],
+          }),
         );
 
         const res = await service.startUsageCycle('a-1', 'u-1');
@@ -1831,6 +1834,33 @@ describe('AssetsService', () => {
         );
         expect(res.asset).toBeDefined();
         expect(res.cycle).toBeDefined();
+      });
+
+      it('con plantilla APROBADA pero SIN ítems arranca EN_CURSO (no deja el activo trabado)', async () => {
+        // Abrir el detalle de un EQUIPO/MAQUINARIA auto-crea su plantilla vacía y
+        // aprobada. Si esa plantilla contara como "checklist", el ciclo nacería
+        // EN_PREPARACION y el formulario no tendría NADA que enviar: el activo
+        // quedaría trabado y jamás podría ponerse en uso. Sin ítems => sin checklist.
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
+        permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' }); // asset:use:report
+        prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+          buildTemplateRow({ status: DocumentStatus.APROBADO, items: [] }),
+        );
+
+        await service.startUsageCycle('a-1', 'u-1');
+
+        expect(txMock.asset.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: AssetStatus.EN_USO, inUseById: 'u-1' }),
+          }),
+        );
+        expect(txMock.usageCycle.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: UsageCycleStatus.EN_CURSO }),
+          }),
+        );
       });
 
       it('SIN plantilla deja el activo EN_USO y el ciclo EN_CURSO con confirmedAt seteado', async () => {

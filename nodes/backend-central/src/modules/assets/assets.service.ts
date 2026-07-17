@@ -1125,10 +1125,21 @@ export class AssetsService {
     };
   }
 
-  /** ¿Tiene el activo una plantilla de checklist APROBADA (flujo con checklist inicial)? */
+  /**
+   * ¿Tiene el activo una plantilla de checklist APROBADA y CONTESTABLE (flujo con
+   * checklist inicial)?
+   *
+   * Una plantilla aprobada SIN ítems NO es contestable: el formulario no tendría
+   * nada que responder ni que enviar, así que el ciclo quedaría trabado
+   * EN_PREPARACION para siempre y el activo nunca podría ponerse en uso. Pasa de
+   * verdad: abrir el detalle de un EQUIPO/MAQUINARIA auto-crea su plantilla vacía.
+   * En ese caso se trata como "sin checklist" y el ciclo nace EN_CURSO directo
+   * (cubre también las plantillas vacías ya persistidas, sin migrar datos).
+   */
   private async hasApprovedChecklist(assetId: string): Promise<boolean> {
     const tpl = await this.prisma.checklistTemplate.findUnique({ where: { assetId } });
-    return !!tpl && tpl.status === DocumentStatus.APROBADO;
+    if (!tpl || tpl.status !== DocumentStatus.APROBADO) return false;
+    return this.readTemplateItems(tpl.items).length > 0;
   }
 
   /** Guarda una foto del ciclo en el storage (carpeta propia del activo). */
