@@ -253,6 +253,52 @@ export class OvertimeService {
   }
 
   /**
+   * Recalcula el desglose (`hours`/`totalHours`/`shiftLabel`) de las horas extra
+   * PENDIENTES (no borrador) del trabajador, desde su `startTime`/`endTime` FIJOS
+   * (los reporta el usuario) y el turno VIGENTE. Hace que el total sea DINÁMICO: se
+   * dispara cuando se configura/cambia el turno (`upsertSchedule`), de modo que una
+   * HE creada sin turno se corrija apenas se define. Las solicitudes ya resueltas
+   * (APROBADO/PAGADO/RECHAZADO) NO se tocan: conservan el valor con que se
+   * decidieron o pagaron (integridad contable). Se ejecuta best-effort DESPUÉS de
+   * guardar el turno (FUERA de transacción, para no arriesgar timeout ni bloquear el
+   * guardado): es idempotente y, si falla, las HE conservan su valor previo. Devuelve
+   * cuántas solicitudes se recalcularon.
+   */
+  async recomputePendingForWorker(workerId: string): Promise<number> {
+    const pending = await this.prisma.overtimeRequest.findMany({
+      where: {
+        userId: workerId,
+        status: FinanceStatus.PENDIENTE,
+        isDraft: false,
+        startTime: { not: null },
+        endTime: { not: null },
+      },
+    });
+    if (pending.length === 0) return 0;
+
+    // El turno vigente se lee UNA vez; el desglose de cada solicitud depende de su
+    // propia fecha (día de faena vs. descanso) y de su marca fin de semana/feriado.
+    const schedule = await this.prisma.workSchedule.findUnique({ where: { userId: workerId } });
+    for (const row of pending) {
+      const shift = row.weekendOrHoliday ? null : resolveShiftForDate(schedule, row.date);
+      const breakdown = computeOvertimeBreakdown(
+        row.startTime as string,
+        row.endTime as string,
+        shift,
+      );
+      await this.prisma.overtimeRequest.update({
+        where: { id: row.id },
+        data: {
+          hours: breakdown.overtimeHours,
+          totalHours: breakdown.totalHours,
+          shiftLabel: breakdown.shiftLabel,
+        },
+      });
+    }
+    return pending.length;
+  }
+
+  /**
    * Elimina una solicitud de horas extra: la borra el DUEÑO o quien GESTIONA
    * finanzas (`canManage`, que el controller resuelve con `finance:request:approve`),
    * por si se creó un duplicado o un error. Se permite en cualquier estado SALVO

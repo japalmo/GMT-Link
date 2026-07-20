@@ -8,6 +8,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { RolesService } from '../../src/modules/roles/roles.service';
 import type { EmailService } from '../../src/common/email.service';
+import type { OvertimeService } from '../../src/modules/overtime/overtime.service';
 import { UsersService } from '../../src/modules/users/users.service';
 
 /** Data que UsersService pasa a workSchedule.upsert (create = userId + update). */
@@ -51,7 +52,7 @@ function buildScheduleHarness(): {
     }),
   );
 
-  const prismaLike = {
+  const prismaLike: Record<string, unknown> = {
     user: {
       findUnique: vi.fn(() => Promise.resolve({ id: 'user-1' })),
     },
@@ -60,6 +61,15 @@ function buildScheduleHarness(): {
       upsert,
     },
   };
+  // upsertSchedule guarda el turno y recalcula las HE pendientes en una MISMA
+  // transacción: el tx reusa los mismos mocks.
+  prismaLike.$transaction = vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(prismaLike));
+
+  // El recálculo de HE al cambiar el turno se stubbea (su lógica se prueba en
+  // overtime.service.spec); aquí solo interesa el flujo de la jornada.
+  const overtime = {
+    recomputePendingForWorker: vi.fn(() => Promise.resolve(0)),
+  } as unknown as OvertimeService;
 
   const service = new UsersService(
     prismaLike as unknown as PrismaService,
@@ -67,6 +77,7 @@ function buildScheduleHarness(): {
     {} as StorageService,
     {} as RolesService,
     {} as EmailService,
+    overtime,
   );
 
   const lastData = (): UpsertScheduleData => {

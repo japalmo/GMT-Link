@@ -169,6 +169,112 @@ describe('OvertimeService', () => {
     expect(data.shiftLabel).toBe('08:00-18:00');
   });
 
+  it('recomputePendingForWorker recalcula las HE PENDIENTES con el turno vigente (06:00-18:00 sin turno => 2h extra al configurar 08:00-18:00)', async () => {
+    // Escenario del dueño: la HE se creó SIN turno (todo el período = extra) y luego
+    // se configura el turno; el total debe recalcularse dinámicamente contra el
+    // inicio/fin FIJOS que reportó el usuario.
+    const pendingRow = buildRow({
+      id: 'o-din',
+      userId: 'felipe',
+      date: new Date('2026-07-13T00:00:00.000Z'), // lunes
+      startTime: '06:00',
+      endTime: '18:00',
+      hours: 12, // congelado sin turno (12 h de período completo)
+      totalHours: 12,
+      shiftLabel: null,
+      status: FinanceStatus.PENDIENTE,
+      isDraft: false,
+    });
+    const findMany = vi.fn(() => Promise.resolve([pendingRow]));
+    const update = vi.fn();
+    const workSchedule = vi.fn(() =>
+      Promise.resolve({
+        shiftPattern: 'ADMINISTRATIVO',
+        workDays: null,
+        restDays: null,
+        cycleStart: null,
+        startTime: '08:00',
+        endTime: '18:00',
+        weeklyHours: [{ weekday: 1, start: '08:00', end: '18:00' }],
+      }),
+    );
+    const { prisma } = buildPrisma({ findMany, update, workSchedule });
+    const service = makeService(prisma);
+
+    const count = await service.recomputePendingForWorker('felipe');
+
+    expect(count).toBe(1);
+    // Solo pendientes no borrador y con inicio/fin definidos: NO toca resueltas.
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'felipe',
+        status: FinanceStatus.PENDIENTE,
+        isDraft: false,
+        startTime: { not: null },
+        endTime: { not: null },
+      },
+    });
+    const data = update.mock.calls[0]?.[0]?.data as {
+      hours: number;
+      totalHours: number;
+      shiftLabel: string;
+    };
+    expect(data.hours).toBe(2); // hora extra real tras aplicar el turno
+    expect(data.totalHours).toBe(12);
+    expect(data.shiftLabel).toBe('08:00-18:00');
+  });
+
+  it('recomputePendingForWorker respeta la marca fin de semana/feriado: no descuenta turno', async () => {
+    const pendingRow = buildRow({
+      id: 'o-fin',
+      userId: 'felipe',
+      date: new Date('2026-07-13T00:00:00.000Z'),
+      startTime: '06:00',
+      endTime: '18:00',
+      weekendOrHoliday: true,
+      status: FinanceStatus.PENDIENTE,
+      isDraft: false,
+    });
+    const findMany = vi.fn(() => Promise.resolve([pendingRow]));
+    const update = vi.fn();
+    const workSchedule = vi.fn(() =>
+      Promise.resolve({
+        shiftPattern: 'ADMINISTRATIVO',
+        workDays: null,
+        restDays: null,
+        cycleStart: null,
+        startTime: '08:00',
+        endTime: '18:00',
+        weeklyHours: [{ weekday: 1, start: '08:00', end: '18:00' }],
+      }),
+    );
+    const { prisma } = buildPrisma({ findMany, update, workSchedule });
+    const service = makeService(prisma);
+
+    await service.recomputePendingForWorker('felipe');
+
+    const data = update.mock.calls[0]?.[0]?.data as {
+      hours: number;
+      shiftLabel: string | null;
+    };
+    expect(data.hours).toBe(12); // feriado: todo el período es hora extra
+    expect(data.shiftLabel).toBeNull();
+  });
+
+  it('recomputePendingForWorker sin pendientes devuelve 0 y no consulta el turno', async () => {
+    const findMany = vi.fn(() => Promise.resolve([]));
+    const workSchedule = vi.fn(() => Promise.resolve(null));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findMany, update, workSchedule });
+    const service = makeService(prisma);
+
+    const count = await service.recomputePendingForWorker('felipe');
+
+    expect(count).toBe(0);
+    expect(workSchedule).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('create sin permiso onBehalf: respeta la fecha elegida dentro del mes en curso (ya no la fuerza a hoy)', async () => {
     // Cambio "todo el mes en curso": cualquier trabajador puede elegir el día del
     // mes en que hizo la HE (antes, sin permiso onBehalf, la fecha se forzaba a hoy).

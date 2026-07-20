@@ -33,6 +33,7 @@ import { FgaService } from '../../fga/fga.service';
 import type { TupleKey } from '../../fga/fga.types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RolesService } from '../roles/roles.service';
+import { OvertimeService } from '../overtime/overtime.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import type { ResendInviteDto } from './dto/resend-invite.dto';
 import {
@@ -106,6 +107,7 @@ export class UsersService {
     private readonly storage: StorageService,
     private readonly roles: RolesService,
     private readonly emailService: EmailService,
+    private readonly overtime: OvertimeService,
   ) {}
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
@@ -705,6 +707,24 @@ export class UsersService {
       create: { userId: id, ...data },
       update: data,
     });
+
+    // El turno cambió: recalcula las horas extra PENDIENTES del trabajador contra el
+    // turno nuevo (cálculo dinámico: solo inicio/fin son fijos; las resueltas no se
+    // tocan). Se hace FUERA de la transacción del turno y best-effort: el guardado del
+    // turno es la acción primaria y no debe fallar ni quedar bloqueado por el
+    // recálculo (que es idempotente y se puede reintentar volviendo a guardar). Si
+    // falla, las HE conservan su valor previo (comportamiento anterior al cálculo
+    // dinámico), y se registra el motivo.
+    try {
+      await this.overtime.recomputePendingForWorker(id);
+    } catch (err) {
+      this.logger.warn(
+        `No se pudieron recalcular las horas extra pendientes de ${id} tras cambiar el turno: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
     return this.toScheduleView(row);
   }
 
