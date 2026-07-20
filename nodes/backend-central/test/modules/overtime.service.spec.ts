@@ -66,6 +66,7 @@ interface PrismaParts {
   findUnique: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  deleteMany: ReturnType<typeof vi.fn>;
   /** workSchedule.findUnique del trabajador (para el desglose de horas extra). Default null. */
   workSchedule: ReturnType<typeof vi.fn>;
 }
@@ -78,6 +79,7 @@ function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService;
     findUnique: parts.findUnique ?? vi.fn(() => Promise.resolve(null)),
     update: parts.update ?? vi.fn(),
     delete: parts.delete ?? vi.fn(),
+    deleteMany: parts.deleteMany ?? vi.fn(() => Promise.resolve({ count: 1 })),
     workSchedule: parts.workSchedule ?? vi.fn(() => Promise.resolve(null)),
   };
   const prisma = {
@@ -480,36 +482,68 @@ describe('OvertimeService', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('remove: elimina una solicitud propia PENDIENTE (hard delete por id)', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
-    const del = vi.fn(() => Promise.resolve(buildRow()));
-    const { prisma } = buildPrisma({ findFirst, delete: del });
+  const OT_PAID_GUARD = { where: { id: 'o-1', status: { not: FinanceStatus.PAGADO } } };
+
+  it('remove: el dueño elimina su solicitud PENDIENTE (borrado condicionado por estado)', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'u1' })));
+    const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
+    const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
 
-    await service.remove('u1', 'o-1');
+    await service.remove('u1', 'o-1', false);
 
-    expect(findFirst).toHaveBeenCalledWith({ where: { id: 'o-1', userId: 'u1' } });
-    expect(del).toHaveBeenCalledWith({ where: { id: 'o-1' } });
+    expect(deleteMany).toHaveBeenCalledWith(OT_PAID_GUARD);
   });
 
-  it('remove de una solicitud ajena => 404 y no borra', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(null));
-    const del = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, delete: del });
+  it('remove: el dueño elimina su solicitud RECHAZADA (ya no se bloquea por estado)', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.RECHAZADO, userId: 'u1' })));
+    const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
+    const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
 
-    await expect(service.remove('intruso', 'o-1')).rejects.toBeInstanceOf(NotFoundException);
-    expect(del).not.toHaveBeenCalled();
+    await service.remove('u1', 'o-1', false);
+
+    expect(deleteMany).toHaveBeenCalledWith(OT_PAID_GUARD);
   });
 
-  it('remove de una solicitud ya resuelta (no PENDIENTE) => 409 y no borra', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PAGADO })));
-    const del = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, delete: del });
+  it('remove de una solicitud AJENA sin gestión => 404 y no borra', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })));
+    const deleteMany = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
 
-    await expect(service.remove('u1', 'o-1')).rejects.toBeInstanceOf(ConflictException);
-    expect(del).not.toHaveBeenCalled();
+    await expect(service.remove('intruso', 'o-1', false)).rejects.toBeInstanceOf(NotFoundException);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('remove: un GESTOR (canManage) elimina una solicitud APROBADA ajena', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })));
+    const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
+    const { prisma } = buildPrisma({ findUnique, deleteMany });
+    const service = makeService(prisma);
+
+    await service.remove('gestor', 'o-1', true);
+
+    expect(deleteMany).toHaveBeenCalledWith(OT_PAID_GUARD);
+  });
+
+  it('remove de una solicitud PAGADA => 409 y no borra (ni el gestor)', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PAGADO, userId: 'u1' })));
+    const deleteMany = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, deleteMany });
+    const service = makeService(prisma);
+
+    await expect(service.remove('u1', 'o-1', true)).rejects.toBeInstanceOf(ConflictException);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('remove: carrera con pay (deleteMany count=0) => 409', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'u1' })));
+    const deleteMany = vi.fn(() => Promise.resolve({ count: 0 }));
+    const { prisma } = buildPrisma({ findUnique, deleteMany });
+    const service = makeService(prisma);
+
+    await expect(service.remove('u1', 'o-1', false)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('reject persiste rejectionReason en la fila', async () => {

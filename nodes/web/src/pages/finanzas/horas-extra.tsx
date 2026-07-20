@@ -14,6 +14,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { RejectDialog } from '@/components/ui/reject-dialog';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import {
   Table,
   TableBody,
@@ -67,6 +68,10 @@ export function HorasExtraTab(): ReactNode {
   const [deleteTarget, setDeleteTarget] = useState<OvertimeView | null>(null);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
+  // Gestión de finanzas (aprobar/rechazar/borrar solicitudes ajenas). Espeja el gate
+  // del backend para el borrado de gestión (el borrado de la solicitud propia vive en
+  // "Mis Horas Extra" y no lo exige).
+  const canApprove = useHasPermission('finance:request:approve');
 
   const handleApprove = async (id: string) => {
     if (actioning) return;
@@ -203,8 +208,22 @@ export function HorasExtraTab(): ReactNode {
           )}
         </Button>
       )}
-      {(item.status === 'PAGADO' || item.status === 'RECHAZADO') && (
-        <span className="text-xs italic text-muted-foreground">Completado</span>
+      {item.status === 'PAGADO' && (
+        <span className="text-xs italic text-muted-foreground">Pagado</span>
+      )}
+      {/* Gestión: borrar una solicitud errada o duplicada (cualquier estado salvo
+          pagada). Solo quien aprueba (espeja el gate del backend). */}
+      {canApprove && item.status !== 'PAGADO' && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
+          onClick={() => setDeleteTarget(item)}
+          disabled={actioning !== null}
+        >
+          <Trash2 className="size-3.5" aria-hidden />
+          Borrar
+        </Button>
       )}
     </>
   );
@@ -273,29 +292,29 @@ export function HorasExtraTab(): ReactNode {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1.5">
-                        {item.status === 'PENDIENTE' ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 text-xs"
-                              onClick={() => setEditTarget(item)}
-                            >
-                              <Pencil className="size-3.5" aria-hidden />
-                              Editar
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
-                              onClick={() => setDeleteTarget(item)}
-                            >
-                              <Trash2 className="size-3.5" aria-hidden />
-                              Borrar
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                        {/* Editar solo mientras está pendiente; borrar en cualquier
+                            estado salvo pagada (por si se equivocan o duplican). */}
+                        {item.status === 'PENDIENTE' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 text-xs"
+                            onClick={() => setEditTarget(item)}
+                          >
+                            <Pencil className="size-3.5" aria-hidden />
+                            Editar
+                          </Button>
+                        )}
+                        {item.status !== 'PAGADO' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 text-xs text-destructive hover:bg-destructive/5"
+                            onClick={() => setDeleteTarget(item)}
+                          >
+                            <Trash2 className="size-3.5" aria-hidden />
+                            Borrar
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -363,6 +382,9 @@ export function HorasExtraTab(): ReactNode {
         onConfirm={async () => {
           if (!deleteTarget) return;
           await remove(deleteTarget.id);
+          // Refresca también la tabla de Gestión (motor aparte) para que la fila
+          // borrada desaparezca sin recargar la página.
+          managerTable.refetch();
         }}
       />
 

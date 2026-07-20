@@ -121,6 +121,19 @@ export function VistaGeneralTab(): ReactNode {
     }
   };
 
+  // Borrado de gestión (#): finanzas/gerencia elimina una solicitud errada o
+  // duplicada. El backend permite cualquier estado salvo PAGADO y valida el permiso.
+  const handleDelete = async (row: FinanceRow): Promise<void> => {
+    try {
+      if (row.kind === 'REEMBOLSO') await reimb.remove(row.id);
+      else await ot.remove(row.id);
+      toast.success('Solicitud eliminada.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar la solicitud.');
+      throw err;
+    }
+  };
+
   if (loading) return <LoadingState rows={6} />;
   if (error) {
     return (
@@ -189,6 +202,7 @@ export function VistaGeneralTab(): ReactNode {
         canApprove={canApprove}
         onApprove={handleApprove}
         onReject={handleReject}
+        onDelete={canApprove ? handleDelete : undefined}
       />
     </div>
   );

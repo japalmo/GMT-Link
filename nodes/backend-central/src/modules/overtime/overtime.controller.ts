@@ -155,14 +155,24 @@ export class OvertimeController {
     return this.overtime.update(this.requireUserId(authUser), id, dto);
   }
 
-  /** Elimina una solicitud propia aún PENDIENTE (solo dueño; el service valida). */
+  /**
+   * Elimina una solicitud de horas extra: el DUEÑO borra la suya, o quien GESTIONA
+   * finanzas (`finance:request:approve`) borra cualquiera. En cualquier estado salvo
+   * PAGADO. La autorización la decide EL SERVICE (ADR-0001): 404 para quien no es
+   * dueño ni gestor, 409 si está pagada.
+   */
   @Delete(':id')
   @HttpCode(204)
-  remove(
+  async remove(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
   ): Promise<void> {
-    return this.overtime.remove(this.requireUserId(authUser), id);
+    const userId = this.requireUserId(authUser);
+    // El SERVICE es el único gate (ADR-0001): borra el dueño (aunque no tenga
+    // finance:request:create, p.ej. una HE cargada a su nombre) o quien gestiona
+    // finanzas; 404 para el resto, 409 si está pagada.
+    const canManage = (await this.permissions.can(userId, P_APPROVE)).effect === 'allow';
+    await this.overtime.remove(userId, id, canManage);
   }
 
   @Post(':id/approve')

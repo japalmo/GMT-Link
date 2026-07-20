@@ -253,19 +253,32 @@ export class OvertimeService {
   }
 
   /**
-   * Elimina una solicitud PROPIA aún PENDIENTE (spec §5.6). Mismo guard que
-   * `update` (solo dueño, solo pendiente). `OvertimeRequest` no tiene hijos, así
-   * que el hard delete es seguro.
+   * Elimina una solicitud de horas extra: la borra el DUEÑO o quien GESTIONA
+   * finanzas (`canManage`, que el controller resuelve con `finance:request:approve`),
+   * por si se creó un duplicado o un error. Se permite en cualquier estado SALVO
+   * PAGADO. `OvertimeRequest` no tiene hijos, así que el hard delete es seguro.
+   * 404 si no existe o el usuario no puede tocarlo; 409 si ya está pagada.
    */
-  async remove(userId: string, id: string): Promise<void> {
-    const current = await this.prisma.overtimeRequest.findFirst({ where: { id, userId } });
-    if (!current) {
-      throw new NotFoundException('La solicitud de horas extra no existe o no te pertenece.');
+  async remove(userId: string, id: string, canManage: boolean): Promise<void> {
+    const current = await this.prisma.overtimeRequest.findUnique({ where: { id } });
+    if (!current || (current.userId !== userId && !canManage)) {
+      throw new NotFoundException('La solicitud de horas extra no existe o no puedes eliminarla.');
     }
-    if (current.status !== FinanceStatus.PENDIENTE) {
-      throw new ConflictException('No se puede eliminar una solicitud ya resuelta.');
+    if (current.status === FinanceStatus.PAGADO) {
+      throw new ConflictException('No puedes eliminar una solicitud de horas extra ya pagada.');
     }
-    await this.prisma.overtimeRequest.delete({ where: { id } });
+    // Borrado condicionado por estado: cierra la ventana de carrera con `pay` (si pasa
+    // a PAGADO entre el findUnique y el delete, `count` es 0). También da 0 si otra
+    // petición la borró antes; por eso el mensaje es neutro (el caso PAGADO claro ya
+    // lo cubre el pre-check de arriba).
+    const deleted = await this.prisma.overtimeRequest.deleteMany({
+      where: { id, status: { not: FinanceStatus.PAGADO } },
+    });
+    if (deleted.count === 0) {
+      throw new ConflictException(
+        'No se pudo eliminar la solicitud: cambió de estado o ya no existe. Actualiza la lista.',
+      );
+    }
   }
 
   /**

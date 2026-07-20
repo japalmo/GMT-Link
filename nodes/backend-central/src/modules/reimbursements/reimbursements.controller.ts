@@ -222,7 +222,12 @@ export class ReimbursementsController {
     return this.reimbursements.update(userId, id, dto);
   }
 
-  /** Elimina un reembolso propio. Solo el dueño y solo mientras sigue PENDIENTE. */
+  /**
+   * Elimina un reembolso: el DUEÑO borra el suyo, o quien GESTIONA finanzas
+   * (`finance:request:approve`) borra cualquiera. En cualquier estado salvo PAGADO.
+   * La autorización la decide EL SERVICE (ADR-0001): 404 para quien no es dueño ni
+   * gestor, 409 si está pagada.
+   */
   @Delete(':id')
   @HttpCode(204)
   async remove(
@@ -230,8 +235,10 @@ export class ReimbursementsController {
     @Param('id') id: string,
   ): Promise<void> {
     const userId = this.requireUserId(authUser);
-    await this.require(userId, P_CREATE);
-    await this.reimbursements.remove(userId, id);
+    // El SERVICE es el único gate (ADR-0001): borra el dueño o quien gestiona finanzas;
+    // 404 para el resto, 409 si está pagada.
+    const canManage = (await this.permissions.can(userId, P_APPROVE)).effect === 'allow';
+    await this.reimbursements.remove(userId, id, canManage);
   }
 
   @Post(':id/approve')

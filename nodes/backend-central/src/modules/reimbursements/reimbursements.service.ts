@@ -488,22 +488,35 @@ export class ReimbursementsService {
   }
 
   /**
-   * Elimina un reembolso propio (§5). SOLO el dueño y SOLO mientras sigue
-   * PENDIENTE. Tras borrar la fila, elimina la boleta del storage best-effort
-   * (la `key` estable vive en `receiptKey`; para filas viejas/local se deriva de
-   * la URL). Si ese borrado falla, se registra y se ignora: la fila ya no existe.
-   * 404 si no existe o es ajeno; 409 si ya no está PENDIENTE.
+   * Elimina un reembolso (§5). Lo puede borrar el DUEÑO o quien GESTIONA finanzas
+   * (`canManage`, que el controller resuelve con `finance:request:approve`), por si
+   * se creó un duplicado o un error. Se permite en cualquier estado SALVO PAGADO:
+   * una vez pagado queda como registro contable y no se borra. Tras borrar la fila,
+   * elimina la boleta del storage best-effort (la `key` estable vive en `receiptKey`;
+   * para filas viejas/local se deriva de la URL). 404 si no existe o el usuario no
+   * puede tocarlo; 409 si ya está pagado.
    */
-  async remove(userId: string, id: string): Promise<void> {
-    const current = await this.prisma.reimbursement.findFirst({ where: { id, userId } });
-    if (!current) {
-      throw new NotFoundException('El reembolso no existe o no te pertenece.');
+  async remove(userId: string, id: string, canManage: boolean): Promise<void> {
+    const current = await this.prisma.reimbursement.findUnique({ where: { id } });
+    if (!current || (current.userId !== userId && !canManage)) {
+      throw new NotFoundException('El reembolso no existe o no puedes eliminarlo.');
     }
-    if (current.status !== FinanceStatus.PENDIENTE) {
-      throw new ConflictException('Solo puedes eliminar un reembolso mientras está pendiente.');
+    if (current.status === FinanceStatus.PAGADO) {
+      throw new ConflictException('No puedes eliminar un reembolso que ya fue pagado.');
     }
 
-    await this.prisma.reimbursement.delete({ where: { id } });
+    // Borrado condicionado por estado: cierra la ventana de carrera con `pay` (si el
+    // reembolso pasa a PAGADO entre el findUnique y el delete, `count` es 0). `count`
+    // 0 también ocurre si otra petición lo borró antes; por eso el mensaje es neutro
+    // (el caso PAGADO claro ya lo cubre el pre-check de arriba).
+    const deleted = await this.prisma.reimbursement.deleteMany({
+      where: { id, status: { not: FinanceStatus.PAGADO } },
+    });
+    if (deleted.count === 0) {
+      throw new ConflictException(
+        'No se pudo eliminar el reembolso: cambió de estado o ya no existe. Actualiza la lista.',
+      );
+    }
 
     const key =
       current.receiptKey ?? (current.receiptUrl ? extractStorageKey(current.receiptUrl) : null);
