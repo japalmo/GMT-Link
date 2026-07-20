@@ -153,7 +153,7 @@ export class ListOvertimeQueryDto {
   date?: string; // fecha exacta (día)
 
   @IsOptional()
-  @Matches(/^\d{4}-\d{2}$/, { message: 'month debe ser "YYYY-MM".' })
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'month debe ser "YYYY-MM" (mes 01-12).' })
   month?: string; // mes contable (cierre día 20)
 
   @IsOptional()

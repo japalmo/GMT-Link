@@ -1535,6 +1535,38 @@ export function listAllOvertime(
 }
 
 /**
+ * `GET /overtime/report/monthly?month=YYYY-MM` — descarga el Excel del reporte
+ * mensual de HE APROBADAS del mes contable (cierre día 20). Devuelve el blob del
+ * archivo para gatillar la descarga en el cliente. Gate `finance:request:approve`.
+ */
+export async function downloadOvertimeMonthlyReport(month: string): Promise<Blob> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  let res: Response;
+  try {
+    res = await fetch(
+      `${API_URL}/overtime/report/monthly?month=${encodeURIComponent(month)}`,
+      { headers },
+    );
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', 0);
+  }
+
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // sin cuerpo JSON
+    }
+    throw new ApiError(extractMessage(body, `Error ${res.status} al generar el reporte.`), res.status);
+  }
+  return res.blob();
+}
+
+/**
  * `GET /overtime/table` — MOTOR de tablas server-side (offset) para la Gestión de
  * horas extra. Filtro por estado y orden sobre TODAS las horas extra. Mismo gate
  * que `listAllOvertime` (403 si no es gestor). Los filtros viajan como

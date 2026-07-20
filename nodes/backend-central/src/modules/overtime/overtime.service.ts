@@ -18,6 +18,8 @@ import { monthRange } from '../finance/finance-month.util';
 import { startOfMonthSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
+import { buildOvertimeReportWorkbook } from './overtime-report.util';
+import type { OvertimeReportRow } from './overtime-report.util';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import type { CreateOvertimeDto, UpdateOvertimeDto } from './dto/overtime.dto';
@@ -512,6 +514,55 @@ export class OvertimeService {
   }
 
   /**
+   * Reporte mensual (Excel) de las horas extra APROBADAS del mes contable (cierre
+   * día 20). Dos hojas: totalizado de horas por trabajador y detalle de cada
+   * solicitud. Solo APROBADAS: es la planilla de lo que hay que pagar. La
+   * autorización (aprobar) la valida el controller. Devuelve el buffer + el nombre
+   * sugerido del archivo.
+   */
+  async monthlyApprovedReport(month: string): Promise<{ buffer: Buffer; filename: string }> {
+    const { gte, lt } = monthRange(month);
+    const rows = await this.prisma.overtimeRequest.findMany({
+      where: { status: FinanceStatus.APROBADO, date: { gte, lt } },
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        project: { select: { name: true } },
+        authorizedBy: { select: { firstName: true, lastName: true } },
+        decidedBy: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: [{ userId: 'asc' }, { date: 'asc' }],
+    });
+
+    const fullName = (u: { firstName: string; lastName: string } | null): string | null =>
+      u ? `${u.firstName} ${u.lastName}` : null;
+
+    const reportRows: OvertimeReportRow[] = rows.map((r) => {
+      const overtimeHours = r.hours;
+      const totalHours = r.totalHours;
+      const regularHours =
+        totalHours !== null && overtimeHours !== null
+          ? Math.round((totalHours - overtimeHours) * 100) / 100
+          : null;
+      return {
+        dateIso: r.date.toISOString(),
+        workerName: `${r.user.firstName} ${r.user.lastName}`,
+        projectName: r.project?.name ?? r.projectOther ?? null,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        totalHours,
+        regularHours,
+        overtimeHours,
+        reason: r.reason,
+        authorizedByName: fullName(r.authorizedBy),
+        approvedByName: fullName(r.decidedBy),
+      };
+    });
+
+    const buffer = await buildOvertimeReportWorkbook(reportRows, monthLabelEs(month));
+    return { buffer, filename: `horas-extra-${month}.xlsx` };
+  }
+
+  /**
    * Detalle visible para el DUEÑO o un GESTOR. `isManager` lo resuelve el
    * controller (check de permiso inline); si no es ninguno, 404. El gestor recibe los datos del
    * solicitante.
@@ -609,6 +660,18 @@ export class OvertimeService {
       link: OVERTIME_LINK,
     });
   }
+}
+
+/** "YYYY-MM" → rótulo del período en es-CL, p. ej. "julio 2026 (cierre 20)". */
+function monthLabelEs(month: string): string {
+  const [y, m] = month.split('-');
+  const names = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
+  const idx = Number(m) - 1;
+  const name = idx >= 0 && idx < 12 ? names[idx] : m;
+  return `${name} ${y} (cierre 20)`;
 }
 
 /** Etiqueta legible del estado para el texto de la notificación. */

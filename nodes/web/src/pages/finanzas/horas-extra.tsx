@@ -5,6 +5,7 @@ import {
   Check,
   Clock,
   DollarSign,
+  FileSpreadsheet,
   Pencil,
   Plus,
   Trash2,
@@ -36,6 +37,7 @@ import { formatDate, formatHours } from '@/lib/format';
 import type { OvertimeView, FinanceRow } from '@/types/finance';
 import { HorasExtraFormDialog } from './horas-extra-form';
 import { RequestDetailDialog } from './request-detail-dialog';
+import { MonthlyReportDialog } from './monthly-report-dialog';
 import { toFinanceRows } from './finance-overview';
 import { useFinanceProjects } from './use-finance-projects';
 
@@ -74,6 +76,8 @@ export function HorasExtraTab(): ReactNode {
   // Solicitud abierta en el diálogo de detalle. `mine` distingue si viene de "Mis
   // Horas Extra" (el dueño edita/borra) o de Gestión (aprobar/rechazar/borrar).
   const [detail, setDetail] = useState<{ view: OvertimeView; mine: boolean } | null>(null);
+  // Cierre mensual / reporte Excel de HE aprobadas.
+  const [reportOpen, setReportOpen] = useState(false);
   // Gestión de finanzas (aprobar/rechazar/borrar solicitudes ajenas). Espeja el gate
   // del backend para el borrado de gestión (el borrado de la solicitud propia vive en
   // "Mis Horas Extra" y no lo exige).
@@ -389,9 +393,22 @@ export function HorasExtraTab(): ReactNode {
       {/* Sección de Gestión */}
       {isManager && (
         <section className="flex flex-col gap-4">
-          <div className="border-t border-border pt-6">
-            <h2 className="text-lg font-semibold tracking-tight">Gestión de Horas Extra</h2>
-            <p className="text-sm text-muted-foreground">Aprobación, rechazo y pago de horas extra de la organización.</p>
+          <div className="border-t border-border pt-6 flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Gestión de Horas Extra</h2>
+              <p className="text-sm text-muted-foreground">Aprobación, rechazo y pago de horas extra de la organización.</p>
+            </div>
+            {canApprove && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-primary border-primary/45 hover:bg-primary/5"
+                onClick={() => setReportOpen(true)}
+              >
+                <FileSpreadsheet className="size-4" aria-hidden />
+                Reporte mensual
+              </Button>
+            )}
           </div>
 
           <DataTable<OvertimeView>
@@ -483,6 +500,16 @@ export function HorasExtraTab(): ReactNode {
               }
             : undefined
         }
+      />
+
+      {/* Cierre mensual: resolver pendientes del período + descargar Excel de aprobadas. */}
+      <MonthlyReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        onResolved={() => {
+          managerTable.refetch();
+          void refetch();
+        }}
       />
     </div>
   );

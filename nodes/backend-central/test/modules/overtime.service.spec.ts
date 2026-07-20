@@ -275,6 +275,36 @@ describe('OvertimeService', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('monthlyApprovedReport filtra APROBADO dentro del mes contable (cierre 20) y devuelve un buffer', async () => {
+    const findMany = vi.fn(() =>
+      Promise.resolve([
+        {
+          ...buildRow({ hours: 2, totalHours: 10, status: FinanceStatus.APROBADO }),
+          user: { firstName: 'Ana', lastName: 'Pérez' },
+          project: { name: 'Traslado personal' },
+          authorizedBy: { firstName: 'Juan', lastName: 'Apalmo' },
+          decidedBy: { firstName: 'Juan', lastName: 'Apalmo' },
+        },
+      ]),
+    );
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    const { buffer, filename } = await service.monthlyApprovedReport('2026-07');
+
+    expect(filename).toBe('horas-extra-2026-07.xlsx');
+    expect(Buffer.isBuffer(buffer)).toBe(true);
+    expect(buffer.length).toBeGreaterThan(0);
+    // El mes contable 2026-07 abarca [21-jun, 21-jul) y solo trae APROBADAS.
+    const where = findMany.mock.calls[0]?.[0]?.where as {
+      status: FinanceStatus;
+      date: { gte: Date; lt: Date };
+    };
+    expect(where.status).toBe(FinanceStatus.APROBADO);
+    expect(where.date.gte.toISOString()).toBe('2026-06-21T00:00:00.000Z');
+    expect(where.date.lt.toISOString()).toBe('2026-07-21T00:00:00.000Z');
+  });
+
   it('create sin permiso onBehalf: respeta la fecha elegida dentro del mes en curso (ya no la fuerza a hoy)', async () => {
     // Cambio "todo el mes en curso": cualquier trabajador puede elegir el día del
     // mes en que hizo la HE (antes, sin permiso onBehalf, la fecha se forzaba a hoy).

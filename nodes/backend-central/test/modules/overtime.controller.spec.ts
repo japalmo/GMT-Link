@@ -1,5 +1,6 @@
 import 'reflect-metadata';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, StreamableFile } from '@nestjs/common';
+import type { Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { OvertimeController } from '../../src/modules/overtime/overtime.controller';
 import type { OvertimeService } from '../../src/modules/overtime/overtime.service';
@@ -12,6 +13,9 @@ function make(effects: Record<string, 'allow' | 'deny'>) {
     create: vi.fn(() => Promise.resolve({ id: 'o-1' })),
     listAll: vi.fn(() => Promise.resolve([])),
     approve: vi.fn(() => Promise.resolve({ id: 'o-1' })),
+    monthlyApprovedReport: vi.fn(() =>
+      Promise.resolve({ buffer: Buffer.from('xlsx'), filename: 'horas-extra-2026-07.xlsx' }),
+    ),
   } as unknown as OvertimeService;
   const can = vi.fn((_u: string, key: string) =>
     Promise.resolve({ effect: effects[key] ?? 'deny', filter: { kind: 'none' } }),
@@ -64,5 +68,37 @@ describe('OvertimeController gating', () => {
     await expect(controller.listAll(user, {} as ListOvertimeQueryDto)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it('monthlyReport denegado sin finance:request:approve => Forbidden y no genera nada', async () => {
+    const { controller, service } = make({ 'finance:request:approve': 'deny' });
+    const res = { set: vi.fn() } as unknown as Response;
+    await expect(controller.monthlyReport(user, res, '2026-07')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(service.monthlyApprovedReport).not.toHaveBeenCalled();
+  });
+
+  it('monthlyReport rechaza month ausente o mal formado (400) sin llamar al servicio', async () => {
+    const { controller, service } = make({ 'finance:request:approve': 'allow' });
+    const res = { set: vi.fn() } as unknown as Response;
+    for (const bad of [undefined, '2026-7', '2026-13', '2026-00', 'abc']) {
+      await expect(controller.monthlyReport(user, res, bad)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    }
+    expect(service.monthlyApprovedReport).not.toHaveBeenCalled();
+  });
+
+  it('monthlyReport OK: fija cabeceras de descarga y devuelve el archivo', async () => {
+    const { controller, service } = make({ 'finance:request:approve': 'allow' });
+    const set = vi.fn();
+    const res = { set } as unknown as Response;
+    const file = await controller.monthlyReport(user, res, '2026-07');
+    expect(service.monthlyApprovedReport).toHaveBeenCalledWith('2026-07');
+    expect(file).toBeInstanceOf(StreamableFile);
+    const headers = set.mock.calls[0]?.[0] as Record<string, string>;
+    expect(headers['Content-Type']).toContain('spreadsheetml');
+    expect(headers['Content-Disposition']).toContain('horas-extra-2026-07.xlsx');
   });
 });

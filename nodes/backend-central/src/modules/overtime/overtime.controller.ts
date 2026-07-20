@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,10 +10,13 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  StreamableFile,
   UnauthorizedException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FinanceStatus } from '@prisma/client';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -122,6 +126,32 @@ export class OvertimeController {
       ? (rawStatus as FinanceStatus)
       : undefined;
     return this.overtime.listAllTable({ status }, req);
+  }
+
+  /**
+   * Reporte mensual (Excel) de las HE APROBADAS del mes contable (cierre día 20). Lo
+   * genera quien puede APROBAR (admin de contrato / gerencia): `finance:request:approve`.
+   * `month` = "YYYY-MM" obligatorio. DEBE declararse antes de `@Get(':id')` para que
+   * "report" no lo capture la ruta con parámetro. Sin extensión en la ruta (el nombre
+   * del archivo va en Content-Disposition) para no depender del match de "." en la ruta.
+   */
+  @Get('report/monthly')
+  async monthlyReport(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Res({ passthrough: true }) res: Response,
+    @Query('month') month?: string,
+  ): Promise<StreamableFile> {
+    const userId = this.requireUserId(authUser);
+    await this.require(userId, P_APPROVE);
+    if (!month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new BadRequestException('Debes indicar el mes en formato "YYYY-MM" (mes 01-12).');
+    }
+    const { buffer, filename } = await this.overtime.monthlyApprovedReport(month);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    return new StreamableFile(buffer);
   }
 
   @Get(':id')
