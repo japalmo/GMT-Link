@@ -35,11 +35,13 @@ import { useHasPermission } from '@/hooks/use-has-permission';
 import { errorToMessage, fetchReimbursementsTable } from '@/lib/api';
 import type { TableRequest } from '@gmt-platform/contracts';
 import { formatCLP, formatDate } from '@/lib/format';
-import type { CreateReimbursementInput, ReimbursementView } from '@/types/finance';
+import type { CreateReimbursementInput, ReimbursementView, FinanceRow } from '@/types/finance';
 import { DOC_ACCEPT, validateFile } from '../perfil/file-field';
 import { ConfirmDialog } from '../perfil/confirm-dialog';
 import { ReembolsoFormDialog } from './reembolso-form';
 import { BatchPrintDialog } from './batch-print-dialog';
+import { RequestDetailDialog } from './request-detail-dialog';
+import { toFinanceRows } from './finance-overview';
 
 export function ReembolsosTab(): ReactNode {
   const {
@@ -83,6 +85,9 @@ export function ReembolsosTab(): ReactNode {
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
+  // Solicitud abierta en el diálogo de detalle. `mine` distingue si viene de "Mis
+  // Reembolsos" (el dueño puede editar/borrar) o de Gestión (aprobar/rechazar/borrar).
+  const [detail, setDetail] = useState<{ view: ReimbursementView; mine: boolean } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,6 +133,43 @@ export function ReembolsosTab(): ReactNode {
       toast.error(err instanceof Error ? err.message : 'Error al registrar pago.');
     } finally {
       setActioning(null);
+    }
+  };
+
+  // Fila del diálogo de detalle (reusa la conversión de la Vista general). Los
+  // reembolsos no llevan proyecto, así que no se necesita el catálogo de proyectos.
+  const detailRow: FinanceRow | null = detail ? toFinanceRows([detail.view], [], [])[0] ?? null : null;
+
+  const handleDetailApprove = async (r: FinanceRow): Promise<void> => {
+    try {
+      await approve(r.id);
+      managerTable.refetch();
+      toast.success('Reembolso aprobado con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo aprobar.');
+      throw err;
+    }
+  };
+
+  const handleDetailReject = async (r: FinanceRow, reason?: string): Promise<void> => {
+    try {
+      await reject(r.id, reason);
+      managerTable.refetch();
+      toast.success('Reembolso rechazado.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo rechazar.');
+      throw err;
+    }
+  };
+
+  const handleDetailDelete = async (r: FinanceRow): Promise<void> => {
+    try {
+      await remove(r.id);
+      managerTable.refetch();
+      toast.success('Reembolso eliminado.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar la solicitud.');
+      throw err;
     }
   };
 
@@ -196,6 +238,7 @@ export function ReembolsosTab(): ReactNode {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
           >
             <FileText className="size-3.5" aria-hidden />
             Ver boleta
@@ -336,7 +379,11 @@ export function ReembolsosTab(): ReactNode {
               </TableHeader>
               <TableBody>
                 {mine.map((item) => (
-                  <TableRow key={item.id}>
+                  <TableRow
+                    key={item.id}
+                    className="cursor-pointer"
+                    onClick={() => setDetail({ view: item, mine: true })}
+                  >
                     <TableCell>{formatDate(item.date)}</TableCell>
                     <TableCell className="font-medium">{item.concept}</TableCell>
                     <TableCell className="text-muted-foreground">{item.category || '—'}</TableCell>
@@ -344,7 +391,7 @@ export function ReembolsosTab(): ReactNode {
                     <TableCell>
                       <StatusBadge type="finance" status={item.status} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         {item.receiptUrl ? (
                           <a
@@ -381,7 +428,7 @@ export function ReembolsosTab(): ReactNode {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Editar solo mientras está pendiente; borrar en cualquier
                             estado salvo pagado (por si se equivocan o duplican). */}
@@ -455,6 +502,7 @@ export function ReembolsosTab(): ReactNode {
             getRowId={(item) => item.id}
             filters={[managerStatusFilter]}
             rowActions={managerRowActions}
+            onRowClick={(item) => setDetail({ view: item, mine: false })}
             emptyMessage="No hay reembolsos pendientes ni registrados en el sistema."
             caption="Gestión de reembolsos"
           />
@@ -531,6 +579,29 @@ export function ReembolsosTab(): ReactNode {
             setActioning(null);
           }
         }}
+      />
+
+      {/* Detalle de la solicitud (mismo diálogo que la Vista general). Desde "Mis
+          Reembolsos" el DUEÑO puede editar (pendiente) o borrar; desde Gestión, quien
+          aprueba resuelve o borra. */}
+      <RequestDetailDialog
+        row={detailRow}
+        onClose={() => setDetail(null)}
+        canApprove={detail?.mine ? false : canApprove}
+        onApprove={handleDetailApprove}
+        onReject={handleDetailReject}
+        // El dueño borra la suya; en gestión solo quien aprueba (espeja el gate del
+        // backend: un gestor de solo lectura sin approve no debe ver "Borrar").
+        onDelete={detail?.mine || canApprove ? handleDetailDelete : undefined}
+        mine={detail?.mine ?? false}
+        onEdit={
+          detail?.mine
+            ? () => {
+                if (detail) setEditTarget(detail.view);
+                setDetail(null);
+              }
+            : undefined
+        }
       />
     </div>
   );

@@ -33,8 +33,11 @@ import { useOvertime } from '@/hooks/use-overtime';
 import { errorToMessage, fetchOvertimeTable } from '@/lib/api';
 import type { TableRequest } from '@gmt-platform/contracts';
 import { formatDate, formatHours } from '@/lib/format';
-import type { OvertimeView } from '@/types/finance';
+import type { OvertimeView, FinanceRow } from '@/types/finance';
 import { HorasExtraFormDialog } from './horas-extra-form';
+import { RequestDetailDialog } from './request-detail-dialog';
+import { toFinanceRows } from './finance-overview';
+import { useFinanceProjects } from './use-finance-projects';
 
 export function HorasExtraTab(): ReactNode {
   const {
@@ -68,10 +71,15 @@ export function HorasExtraTab(): ReactNode {
   const [deleteTarget, setDeleteTarget] = useState<OvertimeView | null>(null);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [actioning, setActioning] = useState<string | null>(null);
+  // Solicitud abierta en el diálogo de detalle. `mine` distingue si viene de "Mis
+  // Horas Extra" (el dueño edita/borra) o de Gestión (aprobar/rechazar/borrar).
+  const [detail, setDetail] = useState<{ view: OvertimeView; mine: boolean } | null>(null);
   // Gestión de finanzas (aprobar/rechazar/borrar solicitudes ajenas). Espeja el gate
   // del backend para el borrado de gestión (el borrado de la solicitud propia vive en
   // "Mis Horas Extra" y no lo exige).
   const canApprove = useHasPermission('finance:request:approve');
+  // Catálogo de proyectos para hidratar el nombre/cliente en el detalle de HE.
+  const { projects } = useFinanceProjects();
 
   const handleApprove = async (id: string) => {
     if (actioning) return;
@@ -98,6 +106,45 @@ export function HorasExtraTab(): ReactNode {
       toast.error(err instanceof Error ? err.message : 'Error al registrar pago.');
     } finally {
       setActioning(null);
+    }
+  };
+
+  // Fila del diálogo de detalle (reusa la conversión de la Vista general, hidratando
+  // el proyecto con el catálogo). Solo hay HE en la lista, por eso reembolsos = [].
+  const detailRow: FinanceRow | null = detail
+    ? toFinanceRows([], [detail.view], projects)[0] ?? null
+    : null;
+
+  const handleDetailApprove = async (r: FinanceRow): Promise<void> => {
+    try {
+      await approve(r.id);
+      managerTable.refetch();
+      toast.success('Horas extra aprobadas con éxito.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo aprobar.');
+      throw err;
+    }
+  };
+
+  const handleDetailReject = async (r: FinanceRow, reason?: string): Promise<void> => {
+    try {
+      await reject(r.id, reason);
+      managerTable.refetch();
+      toast.success('Horas extra rechazadas.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo rechazar.');
+      throw err;
+    }
+  };
+
+  const handleDetailDelete = async (r: FinanceRow): Promise<void> => {
+    try {
+      await remove(r.id);
+      managerTable.refetch();
+      toast.success('Solicitud eliminada.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar la solicitud.');
+      throw err;
     }
   };
 
@@ -273,7 +320,11 @@ export function HorasExtraTab(): ReactNode {
               </TableHeader>
               <TableBody>
                 {mine.map((item) => (
-                  <TableRow key={item.id}>
+                  <TableRow
+                    key={item.id}
+                    className="cursor-pointer"
+                    onClick={() => setDetail({ view: item, mine: true })}
+                  >
                     <TableCell>{formatDate(item.date)}</TableCell>
                     <TableCell className="font-semibold">
                       {item.hours != null ? formatHours(item.hours) : '—'}
@@ -290,7 +341,7 @@ export function HorasExtraTab(): ReactNode {
                         <StatusBadge type="finance" status={item.status} />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Editar solo mientras está pendiente; borrar en cualquier
                             estado salvo pagada (por si se equivocan o duplican). */}
@@ -349,6 +400,7 @@ export function HorasExtraTab(): ReactNode {
             getRowId={(item) => item.id}
             filters={[managerStatusFilter]}
             rowActions={managerRowActions}
+            onRowClick={(item) => setDetail({ view: item, mine: false })}
             emptyMessage="No hay solicitudes de horas extra pendientes ni registradas en el sistema."
             caption="Gestión de horas extra"
           />
@@ -408,6 +460,29 @@ export function HorasExtraTab(): ReactNode {
             setActioning(null);
           }
         }}
+      />
+
+      {/* Detalle de la solicitud (mismo diálogo que la Vista general): desglose de
+          horario/turno/horas. Desde "Mis Horas Extra" el DUEÑO edita (pendiente) o
+          borra; desde Gestión, quien aprueba resuelve o borra. */}
+      <RequestDetailDialog
+        row={detailRow}
+        onClose={() => setDetail(null)}
+        canApprove={detail?.mine ? false : canApprove}
+        onApprove={handleDetailApprove}
+        onReject={handleDetailReject}
+        // El dueño borra la suya; en gestión solo quien aprueba (espeja el gate del
+        // backend: un gestor de solo lectura sin approve no debe ver "Borrar").
+        onDelete={detail?.mine || canApprove ? handleDetailDelete : undefined}
+        mine={detail?.mine ?? false}
+        onEdit={
+          detail?.mine
+            ? () => {
+                if (detail) setEditTarget(detail.view);
+                setDetail(null);
+              }
+            : undefined
+        }
       />
     </div>
   );

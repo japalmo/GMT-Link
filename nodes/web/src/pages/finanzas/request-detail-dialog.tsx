@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Ban, Check, Trash2 } from 'lucide-react';
+import { Ban, Check, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { RejectDialog } from '@/components/ui/reject-dialog';
@@ -25,11 +25,24 @@ export interface RequestDetailDialogProps {
   onApprove: (row: FinanceRow) => Promise<void>;
   onReject: (row: FinanceRow, reason?: string) => Promise<void>;
   /**
-   * Borra la solicitud (por si se equivocan o duplican). Lo puede hacer quien
-   * gestiona finanzas (`canApprove`), en cualquier estado salvo PAGADO. Si se omite,
-   * no se muestra el botón.
+   * Borra la solicitud (por si se equivocan o duplican). La visibilidad la decide el
+   * caller pasando (o no) el handler: el DUEÑO puede borrar la suya y quien gestiona
+   * finanzas cualquiera, siempre en cualquier estado salvo PAGADO. Si se omite, no se
+   * muestra el botón.
    */
   onDelete?: (row: FinanceRow) => Promise<void>;
+  /**
+   * Edita la solicitud. Solo lo pasa el DUEÑO desde "Mis solicitudes"; abre el
+   * formulario de edición. El botón aparece solo si la solicitud está PENDIENTE y no
+   * es borrador. Si se omite, no se muestra "Editar".
+   */
+  onEdit?: (row: FinanceRow) => void;
+  /**
+   * `true` cuando la solicitud la abre su propio DUEÑO ("Mis solicitudes"): el título
+   * y la confirmación de borrado omiten el nombre del solicitante (es el usuario
+   * actual, y las listas propias no traen `requester`, así que quedaría "—").
+   */
+  mine?: boolean;
 }
 
 /**
@@ -44,6 +57,8 @@ export function RequestDetailDialog({
   onApprove,
   onReject,
   onDelete,
+  onEdit,
+  mine = false,
 }: RequestDetailDialogProps): ReactNode {
   const [rejecting, setRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -69,7 +84,8 @@ export function RequestDetailDialog({
         <ModalContent>
           <ModalHeader>
             <ModalTitle>
-              {isReimb ? 'Reembolso' : 'Horas extra'}: {row.requesterName}
+              {isReimb ? 'Reembolso' : 'Horas extra'}
+              {mine ? '' : `: ${row.requesterName}`}
             </ModalTitle>
             <ModalDescription>{formatDate(row.date)}</ModalDescription>
           </ModalHeader>
@@ -154,8 +170,21 @@ export function RequestDetailDialog({
             <ModalClose asChild>
               <Button type="button" variant="outline">Cerrar</Button>
             </ModalClose>
-            {/* Borrar: gestión de finanzas, en cualquier estado salvo pagada. */}
-            {canApprove && onDelete && row.status !== 'PAGADO' && (
+            {/* Editar: solo el DUEÑO (el caller pasa onEdit), y solo si sigue
+                PENDIENTE y no es borrador. Abre el formulario de edición. */}
+            {onEdit && row.status === 'PENDIENTE' && !row.isDraft && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onEdit(row)}
+                disabled={busy}
+              >
+                <Pencil className="size-4" aria-hidden /> Editar
+              </Button>
+            )}
+            {/* Borrar: la visibilidad la controla el caller (dueño o gestión), en
+                cualquier estado salvo pagada. */}
+            {onDelete && row.status !== 'PAGADO' && (
               <Button
                 type="button"
                 variant="outline"
@@ -202,7 +231,11 @@ export function RequestDetailDialog({
         open={deleting}
         onOpenChange={setDeleting}
         title={`Borrar ${isReimb ? 'reembolso' : 'horas extra'}`}
-        description={`Se eliminará de forma permanente la solicitud de ${row.requesterName}. Esta acción no se puede deshacer.`}
+        description={
+          mine
+            ? 'Se eliminará esta solicitud de forma permanente. Esta acción no se puede deshacer.'
+            : `Se eliminará de forma permanente la solicitud de ${row.requesterName}. Esta acción no se puede deshacer.`
+        }
         confirmLabel="Borrar"
         onConfirm={async () => {
           if (onDelete) await onDelete(row);
