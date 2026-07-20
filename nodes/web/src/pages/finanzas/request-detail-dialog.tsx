@@ -100,7 +100,11 @@ export function RequestDetailDialog({
                 )}
                 <div>
                   <dt className="text-muted-foreground">Turno del día</dt>
-                  <dd>{row.shiftLabel ?? 'Sin turno / descanso'}</dd>
+                  <dd>
+                    {row.weekendOrHoliday
+                      ? 'Fin de semana o feriado (no se descuenta)'
+                      : (row.shiftLabel ?? 'Sin turno / descanso')}
+                  </dd>
                 </div>
                 {row.totalHours != null && (
                   <div>

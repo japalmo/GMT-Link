@@ -73,6 +73,7 @@ export function toFinanceRows(
     totalHours: null,
     regularHours: null,
     shiftLabel: null,
+    weekendOrHoliday: false,
   }));
 
   const oRows: FinanceRow[] = overtime.map((o) => {
@@ -101,6 +102,7 @@ export function toFinanceRows(
       totalHours: o.totalHours,
       regularHours: o.regularHours,
       shiftLabel: o.shiftLabel,
+      weekendOrHoliday: o.weekendOrHoliday,
     };
   });
 

@@ -45,19 +45,12 @@ export function startOfTodaySantiago(instant: Date = new Date()): Date {
 }
 
 /**
- * Medianoche UTC ancla del día que queda EXACTAMENTE 1 mes CALENDARIO antes del
- * día chileno del instante dado (límite inferior de la ventana de fecha de los
- * reembolsos en versión beta). Mismo día del mes anterior, inclusive: hoy 15-jul
- * permite desde el 15-jun. Si el mes anterior no tiene ese día (p. ej. 31-mar),
- * se ajusta al último día de ese mes (28/29-feb). Conserva la convención
- * date-only de `startOfTodaySantiago` (comparable con `parseDate('YYYY-MM-DD')`).
+ * Medianoche UTC ancla del DÍA 1 del mes CALENDARIO de Chile del instante dado
+ * (límite inferior de la ventana "todo el mes en curso" para reembolsos y HE). Con
+ * esto se puede reportar cualquier día del mes actual, del 1 hasta hoy. Conserva la
+ * convención date-only de `startOfTodaySantiago`.
  */
-export function oneMonthAgoSantiago(instant: Date = new Date()): Date {
-  const { year, month, day } = santiagoDateParts(instant);
-  const prevYear = month === 1 ? year - 1 : year;
-  const prevMonth = month === 1 ? 12 : month - 1; // 1-based
-  // Día 0 del mes SIGUIENTE al anterior (índice 0-based = prevMonth) = último día
-  // del mes anterior; con eso se clampa un 31 a 28/29/30 según corresponda.
-  const lastDayOfPrev = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
-  return new Date(Date.UTC(prevYear, prevMonth - 1, Math.min(day, lastDayOfPrev), 0, 0, 0, 0));
+export function startOfMonthSantiago(instant: Date = new Date()): Date {
+  const { year, month } = santiagoDateParts(instant);
+  return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
 }

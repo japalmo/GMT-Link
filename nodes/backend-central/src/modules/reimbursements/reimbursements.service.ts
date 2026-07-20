@@ -16,7 +16,7 @@ import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
-import { oneMonthAgoSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
+import { startOfMonthSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateReimbursementDto, UpdateReimbursementDto } from './dto/reimbursements.dto';
@@ -654,19 +654,20 @@ function parseDate(value: string): Date {
 }
 
 /**
- * Ventana de la fecha del gasto (versión beta, spec de la dueña): no puede ser
- * FUTURA ni tener más de 1 MES CALENDARIO de antigüedad, ambos medidos en día
- * calendario de Chile (`finance-time.util`, ancla DST-safe). Se compara solo la
- * parte de día (UTC) del valor ya parseado, coherente con la convención
- * date-only del almacenamiento. Fuera de la ventana → 400.
+ * Ventana de la fecha del gasto (spec de la dueña): abarca todo el mes en curso,
+ * desde el DÍA 1 del mes hasta HOY, medido en día calendario de Chile
+ * (`finance-time.util`, ancla DST-safe). No puede ser futura ni anterior al día 1
+ * del mes actual. Se compara solo la parte de día (UTC) del valor ya parseado,
+ * coherente con la convención date-only del almacenamiento. Fuera de la ventana → 400.
  */
 function assertExpenseDateWithinWindow(date: Date): void {
   const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
   if (day > startOfTodaySantiago().getTime()) {
     throw new BadRequestException('La fecha del gasto no puede ser futura.');
   }
-  if (day < oneMonthAgoSantiago().getTime()) {
-    throw new BadRequestException('La fecha del gasto no puede tener más de 1 mes de antigüedad.');
+  // Todo el mes en curso: desde el día 1 del mes hasta hoy (día calendario de Chile).
+  if (day < startOfMonthSantiago().getTime()) {
+    throw new BadRequestException('Solo puedes reportar gastos del mes en curso.');
   }
 }
 

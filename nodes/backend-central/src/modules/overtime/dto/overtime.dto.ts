@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsIn,
@@ -22,8 +23,9 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 /**
  * Body de `POST /overtime` (spec §5.6). El `userId` NUNCA viene del body: lo
  * deriva el controller de la sesión. Las horas se COMPUTAN de `startTime`/`endTime`
- * (no las envía el cliente). `endTime` ausente => borrador. La fecha se fuerza a hoy
- * salvo que el creador tenga `finance:overtime:create:onbehalf` (lo resuelve el service).
+ * (no las envía el cliente). `endTime` ausente => borrador. La fecha debe caer en el
+ * mes en curso, salvo que el creador tenga `finance:overtime:create:onbehalf` (que lo
+ * exime de la ventana y puede fijar cualquier fecha; lo resuelve el service).
  */
 export class CreateOvertimeDto {
   @IsISO8601({ strict: true }, { message: 'date debe ser una fecha ISO-8601.' })
@@ -55,6 +57,14 @@ export class CreateOvertimeDto {
   @IsOptional()
   @IsString()
   onBehalfOfUserId?: string; // id del TRABAJADOR objetivo (requiere permiso; el service valida)
+
+  /**
+   * Fin de semana o feriado: cuando es true, NO se descuenta el turno; todo el
+   * periodo entra como hora extra (el service pasa shift=null al cálculo).
+   */
+  @IsOptional()
+  @IsBoolean()
+  weekendOrHoliday?: boolean;
 
   @IsOptional()
   @trim()
@@ -92,6 +102,11 @@ export class UpdateOvertimeDto {
   @IsOptional()
   @IsString()
   authorizedById?: string;
+
+  /** Fin de semana o feriado: todo el periodo entra como hora extra (shift=null). */
+  @IsOptional()
+  @IsBoolean()
+  weekendOrHoliday?: boolean;
 
   @IsOptional()
   @trim()

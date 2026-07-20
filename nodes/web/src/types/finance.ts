@@ -111,6 +111,8 @@ export interface OvertimeView {
   regularHours: number | null;
   /** Turno usado ese día "HH:mm-HH:mm"; `null` si descanso / sin turno configurado. */
   shiftLabel: string | null;
+  /** Fin de semana o feriado: no se descuenta turno; todo el periodo es hora extra. */
+  weekendOrHoliday: boolean;
   /** Opcional: el formulario nuevo no lo exige (retrocompat). */
   reason: string | null;
   /** "HH:mm" hora de inicio; `null` en filas legacy. */
@@ -184,6 +186,8 @@ export interface CreateOvertimeInput {
   authorizedById?: string;
   /** Solo con permiso `finance:overtime:create:onbehalf`: crea a nombre de otro. */
   onBehalfOfUserId?: string;
+  /** Fin de semana o feriado: no descuenta el turno; todo el periodo es hora extra. */
+  weekendOrHoliday?: boolean;
   /** Motivo/descripción opcional (≤ 500 caracteres). */
   reason?: string;
 }
@@ -205,6 +209,8 @@ export interface UpdateOvertimeInput {
   projectOther?: string;
   /** "Autorizado por" (admin_contrato / gerencias). */
   authorizedById?: string;
+  /** Fin de semana o feriado: no descuenta el turno; todo el periodo es hora extra. */
+  weekendOrHoliday?: boolean;
   /** Motivo/descripción opcional (≤ 500 caracteres). */
   reason?: string;
 }
@@ -262,6 +268,8 @@ export interface FinanceRow {
   regularHours?: number | null;
   /** Turno usado ese día "HH:mm-HH:mm"; `null` si descanso / sin turno. */
   shiftLabel?: string | null;
+  /** Fin de semana o feriado: no se descontó turno; todo el periodo es hora extra. */
+  weekendOrHoliday?: boolean;
 }
 
 /** Filtros de la tabla histórica (§5.3). `null` = sin filtro. El filtro por

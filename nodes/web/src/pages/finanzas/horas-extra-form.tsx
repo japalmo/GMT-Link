@@ -23,7 +23,7 @@ import {
 import { useDirectory } from '@/hooks/use-directory';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { useFinanceProjects } from './use-finance-projects';
-import { todaySantiagoString } from '@/lib/santiago-time';
+import { startOfMonthSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
 import type {
   CreateOvertimeInput,
   OvertimeView,
@@ -92,6 +92,7 @@ export function HorasExtraFormDialog({
   const [projectOther, setProjectOther] = useState('');
   const [authorizedById, setAuthorizedById] = useState('');
   const [onBehalfOfUserId, setOnBehalfOfUserId] = useState('');
+  const [weekendOrHoliday, setWeekendOrHoliday] = useState(false);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +106,7 @@ export function HorasExtraFormDialog({
       setProjectOther('');
       setAuthorizedById('');
       setOnBehalfOfUserId('');
+      setWeekendOrHoliday(false);
       setReason('');
       setError(null);
       return;
@@ -122,6 +124,7 @@ export function HorasExtraFormDialog({
         setProjectOther('');
       }
       setAuthorizedById(initial.authorizedById ?? '');
+      setWeekendOrHoliday(initial.weekendOrHoliday);
       setReason(initial.reason ?? '');
       setError(null);
     }
@@ -151,6 +154,18 @@ export function HorasExtraFormDialog({
     setError(null);
 
     if (!isEdit && !date) return setError('La fecha es obligatoria.');
+    // Ventana de fecha (espejo del backend): solo el trabajador normal queda acotado
+    // al mes en curso. Los gestores con permiso "a nombre de" están exentos y pueden
+    // fijar cualquier fecha. El form es noValidate, así que revalidamos en el submit
+    // (el min/max del input no frena una fecha tipeada a mano).
+    if (!isEdit && !canOnBehalf) {
+      if (date > getTodayString()) {
+        return setError('La fecha de la hora extra no puede ser futura.');
+      }
+      if (date < startOfMonthSantiagoString()) {
+        return setError('Solo puedes reportar horas extra del mes en curso.');
+      }
+    }
     if (!startTime) return setError('La hora de inicio es obligatoria.');
     if (endTime && endTime <= startTime) {
       return setError('La hora de término debe ser posterior a la de inicio.');
@@ -170,6 +185,7 @@ export function HorasExtraFormDialog({
           projectId: !isOther && projectValue ? projectValue : undefined,
           projectOther: isOther ? projectOther.trim() : undefined,
           authorizedById: authorizedById || undefined,
+          weekendOrHoliday,
           reason: reason.trim() || undefined,
         };
         await onUpdate(initial.id, update);
@@ -182,6 +198,7 @@ export function HorasExtraFormDialog({
           projectOther: isOther ? projectOther.trim() : undefined,
           authorizedById: authorizedById || undefined,
           onBehalfOfUserId: canOnBehalf && onBehalfOfUserId ? onBehalfOfUserId : undefined,
+          weekendOrHoliday,
           reason: reason.trim() || undefined,
         };
         await onSubmit(input);
@@ -242,11 +259,15 @@ export function HorasExtraFormDialog({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                min={canOnBehalf ? undefined : startOfMonthSantiagoString()}
+                max={canOnBehalf ? undefined : getTodayString()}
                 required
-                disabled={submitting || !canOnBehalf}
+                disabled={submitting}
               />
               {!canOnBehalf && (
-                <p className="text-xs text-muted-foreground">Solo puedes registrar horas extra de hoy.</p>
+                <p className="text-xs text-muted-foreground">
+                  Puedes registrar horas extra de cualquier día del mes en curso.
+                </p>
               )}
             </div>
           )}
@@ -280,6 +301,23 @@ export function HorasExtraFormDialog({
               Sin hora de término la solicitud se guardará como <strong>borrador</strong>.
             </p>
           )}
+
+          <div className="flex flex-col gap-1">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 rounded border-input"
+                checked={weekendOrHoliday}
+                onChange={(e) => setWeekendOrHoliday(e.target.checked)}
+                disabled={submitting}
+              />
+              <span>Fin de semana o feriado</span>
+            </label>
+            <p className="pl-6 text-xs text-muted-foreground">
+              Al marcarla, no se descuenta el turno: todo el periodo trabajado se cuenta como hora
+              extra.
+            </p>
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ot-project">Proyecto</Label>

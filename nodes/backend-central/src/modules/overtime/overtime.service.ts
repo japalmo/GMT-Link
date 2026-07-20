@@ -15,7 +15,7 @@ import type { FinanceTransition } from '../finance/finance-status.util';
 import { computeOvertimeBreakdown, resolveShiftForDate } from './overtime-hours.util';
 import type { OvertimeBreakdown } from './overtime-hours.util';
 import { monthRange } from '../finance/finance-month.util';
-import { startOfTodaySantiago } from '../finance/finance-time.util';
+import { startOfMonthSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
@@ -85,17 +85,38 @@ export class OvertimeService {
     date: Date,
     startTime: string,
     endTime: string,
+    weekendOrHoliday: boolean,
   ): Promise<OvertimeBreakdown> {
+    // Fin de semana o feriado: no hay turno que descontar, todo el periodo es HE.
+    if (weekendOrHoliday) {
+      return computeOvertimeBreakdown(startTime, endTime, null);
+    }
     const schedule = await this.prisma.workSchedule.findUnique({ where: { userId: workerId } });
     const shift = resolveShiftForDate(schedule, date);
     return computeOvertimeBreakdown(startTime, endTime, shift);
   }
 
   /**
+   * Ventana de la fecha de una HE: todo el mes en curso (del día 1 al día de hoy,
+   * en día calendario de Chile). Fuera de la ventana => 400.
+   */
+  private assertOvertimeDateWithinWindow(date: Date): void {
+    const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    if (day > startOfTodaySantiago().getTime()) {
+      throw new BadRequestException('La fecha de la hora extra no puede ser futura.');
+    }
+    if (day < startOfMonthSantiago().getTime()) {
+      throw new BadRequestException('Solo puedes reportar horas extra del mes en curso.');
+    }
+  }
+
+  /**
    * Crea una HE. `canOnBehalf` lo resuelve el controller (permiso
    * `finance:overtime:create:onbehalf`):
-   *  - sin permiso: la fecha se FUERZA al día en curso y no puede crear a nombre de otro.
-   *  - con permiso: puede fijar cualquier fecha y `onBehalfOfUserId` (trabajador objetivo).
+   *  - sin permiso: la fecha debe caer dentro del mes en curso (día 1 al día de hoy,
+   *    hora de Chile) y no puede crear a nombre de otro.
+   *  - con permiso: EXENTO de la ventana (puede fijar cualquier fecha, p. ej. corregir
+   *    o cargar HE atrasada) y puede fijar `onBehalfOfUserId` (trabajador objetivo).
    * `endTime` ausente => borrador (isDraft=true, hours=null).
    */
   async create(
@@ -105,11 +126,28 @@ export class OvertimeService {
   ): Promise<OvertimeView> {
     const targetWorkerId = canOnBehalf && dto.onBehalfOfUserId ? dto.onBehalfOfUserId : creatorId;
     const filedBy = targetWorkerId !== creatorId ? creatorId : null;
-    const date = canOnBehalf ? parseDate(dto.date) : startOfTodaySantiago();
-    const isDraft = dto.endTime === undefined;
+    const date = parseDate(dto.date);
+    // Ventana de fecha: el trabajador normal reporta cualquier día del mes en curso
+    // (antes se forzaba a hoy). Los gestores con permiso "a nombre de" quedan EXENTOS
+    // de la ventana: pueden fijar cualquier fecha para corregir o cargar HE atrasada
+    // de meses anteriores.
+    if (!canOnBehalf) {
+      this.assertOvertimeDateWithinWindow(date);
+    }
+    const weekendOrHoliday = dto.weekendOrHoliday ?? false;
+    // `== null` cubre endTime ausente O null (un body de API con "endTime": null es
+    // borrador igual que si se omite; el estricto === undefined dejaba pasar el null
+    // al cálculo y reventaba en toMinutes).
+    const isDraft = dto.endTime == null;
     const breakdown = isDraft
       ? null
-      : await this.breakdownFor(targetWorkerId, date, dto.startTime, dto.endTime as string);
+      : await this.breakdownFor(
+          targetWorkerId,
+          date,
+          dto.startTime,
+          dto.endTime as string,
+          weekendOrHoliday,
+        );
 
     const row = await this.prisma.overtimeRequest.create({
       data: {
@@ -120,6 +158,7 @@ export class OvertimeService {
         hours: breakdown ? breakdown.overtimeHours : null,
         totalHours: breakdown ? breakdown.totalHours : null,
         shiftLabel: breakdown ? breakdown.shiftLabel : null,
+        weekendOrHoliday,
         isDraft,
         reason: dto.reason ?? null,
         projectId: dto.projectId ?? null,
@@ -149,6 +188,7 @@ export class OvertimeService {
       current.date,
       current.startTime,
       endTime,
+      current.weekendOrHoliday,
     );
     const row = await this.prisma.overtimeRequest.update({
       where: { id },
@@ -177,10 +217,21 @@ export class OvertimeService {
     if (current.status !== FinanceStatus.PENDIENTE) {
       throw new ConflictException('No se puede editar una solicitud ya resuelta.');
     }
-    const isDraft = dto.endTime === undefined;
+    // El editor puede cambiar la marca de fin de semana/feriado; si no la envía, se
+    // conserva la que ya tenía la solicitud.
+    const weekendOrHoliday = dto.weekendOrHoliday ?? current.weekendOrHoliday;
+    // `== null` cubre endTime ausente O null (mismo criterio que create): un null
+    // explícito vuelve a borrador en vez de reventar en el cálculo de horas.
+    const isDraft = dto.endTime == null;
     const breakdown = isDraft
       ? null
-      : await this.breakdownFor(current.userId, current.date, dto.startTime, dto.endTime as string);
+      : await this.breakdownFor(
+          current.userId,
+          current.date,
+          dto.startTime,
+          dto.endTime as string,
+          weekendOrHoliday,
+        );
 
     const row = await this.prisma.overtimeRequest.update({
       where: { id },
@@ -190,6 +241,7 @@ export class OvertimeService {
         hours: breakdown ? breakdown.overtimeHours : null,
         totalHours: breakdown ? breakdown.totalHours : null,
         shiftLabel: breakdown ? breakdown.shiftLabel : null,
+        weekendOrHoliday,
         isDraft,
         reason: dto.reason ?? null,
         projectId: dto.projectId ?? null,
@@ -528,6 +580,7 @@ function toView(row: OvertimeRequest): OvertimeView {
         ? Math.round((row.totalHours - row.hours) * 100) / 100
         : null,
     shiftLabel: row.shiftLabel,
+    weekendOrHoliday: row.weekendOrHoliday,
     reason: row.reason,
     startTime: row.startTime,
     endTime: row.endTime,

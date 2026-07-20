@@ -2,15 +2,27 @@ import 'reflect-metadata';
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FinanceStatus } from '@prisma/client';
 import type { OvertimeRequest } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { NotificationsService } from '../../src/modules/notifications/notifications.service';
 import { OvertimeService } from '../../src/modules/overtime/overtime.service';
 import { startOfTodaySantiago } from '../../src/modules/finance/finance-time.util';
 
+// Reloj fijo para toda la suite (solo `Date`): la ventana de la fecha de la HE
+// ("todo el mes en curso, nada futuro") se calcula con `new Date()` dentro del
+// servicio. Se fija a mediados de julio para que las fechas de prueba (días 3-13
+// de julio) caigan dentro de la ventana de forma determinista, sin depender del
+// mes real de ejecución. Mediodía UTC evita bordes de día.
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(new Date('2026-07-15T15:00:00.000Z'));
+
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 /** Fila OvertimeRequest (sin solicitante) con overrides. */
 function buildRow(overrides: Partial<OvertimeRequest> = {}): OvertimeRequest {
-  const now = new Date('2026-06-14T00:00:00.000Z');
+  const now = new Date('2026-07-10T00:00:00.000Z');
   return {
     id: 'o-1',
     userId: 'u1',
@@ -20,6 +32,7 @@ function buildRow(overrides: Partial<OvertimeRequest> = {}): OvertimeRequest {
     hours: 2.5,
     totalHours: 2.5,
     shiftLabel: null,
+    weekendOrHoliday: false,
     isDraft: false,
     reason: 'Cierre de informe',
     projectId: null,
@@ -102,7 +115,7 @@ describe('OvertimeService', () => {
 
     const view = await service.create(
       'u1',
-      { date: '2026-06-10T00:00:00.000Z', startTime: '09:00', endTime: '12:00' },
+      { date: '2026-07-08T00:00:00.000Z', startTime: '09:00', endTime: '12:00' },
       true,
     );
 
@@ -154,24 +167,122 @@ describe('OvertimeService', () => {
     expect(data.shiftLabel).toBe('08:00-18:00');
   });
 
-  it('create sin permiso onBehalf: FUERZA la fecha al día de hoy', async () => {
+  it('create sin permiso onBehalf: respeta la fecha elegida dentro del mes en curso (ya no la fuerza a hoy)', async () => {
+    // Cambio "todo el mes en curso": cualquier trabajador puede elegir el día del
+    // mes en que hizo la HE (antes, sin permiso onBehalf, la fecha se forzaba a hoy).
+    // El permiso onBehalf ahora solo decide a nombre de QUIÉN, no la fecha.
     const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
       Promise.resolve(buildRow({ ...args.data })),
     );
     const { prisma } = buildPrisma({ create });
     const service = makeService(prisma);
 
+    // Un día del mes distinto de hoy (hoy = 15/07 en el reloj fijo) para probar que
+    // NO se ancla al día de hoy.
     await service.create(
       'u1',
-      { date: '2020-01-01T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
+      { date: '2026-07-05T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
       false,
     );
 
     const savedDate = (create.mock.calls[0]?.[0]?.data as { date: Date }).date;
-    // La fecha se ancla al día CALENDARIO de Chile (helper DST-safe), no al día UTC:
-    // comparar contra el mismo helper hace el test determinista incluso cerca de
-    // medianoche (antes comparaba contra new Date() UTC y era flaky en el borde de día).
-    expect(savedDate.toISOString()).toBe(startOfTodaySantiago().toISOString());
+    expect(savedDate.toISOString()).toBe('2026-07-05T00:00:00.000Z');
+    expect(savedDate.toISOString()).not.toBe(startOfTodaySantiago().toISOString());
+  });
+
+  it('create sin onBehalf: fecha anterior al mes en curso → 400 y NO inserta', async () => {
+    const create = vi.fn();
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    const promise = service.create(
+      'u1',
+      { date: '2026-06-30T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
+      false,
+    );
+    await expect(promise).rejects.toThrow('Solo puedes reportar horas extra del mes en curso.');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('create sin onBehalf: fecha futura → 400 y NO inserta', async () => {
+    const create = vi.fn();
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    const promise = service.create(
+      'u1',
+      { date: '2026-07-31T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
+      false,
+    );
+    await expect(promise).rejects.toThrow('La fecha de la hora extra no puede ser futura.');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('create con onBehalf: EXENTO de la ventana, puede fijar fecha de un mes anterior', async () => {
+    // Decisión del dueño: los gestores con permiso onBehalf pueden cargar HE atrasada
+    // (cualquier fecha), a diferencia del trabajador normal acotado al mes en curso.
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data, id: 'o-backfill' })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    // 2026-05-03 está fuera del mes en curso (reloj fijo 15/07); con onBehalf debe pasar.
+    await service.create(
+      'admin-1',
+      { date: '2026-05-03T00:00:00.000Z', startTime: '09:00', endTime: '11:00', onBehalfOfUserId: 'worker-9' },
+      true,
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0]?.[0]?.data as { date: Date; userId: string };
+    expect(data.date.toISOString()).toBe('2026-05-03T00:00:00.000Z');
+    expect(data.userId).toBe('worker-9');
+  });
+
+  it('create con weekendOrHoliday=true: NO descuenta el turno, todo el periodo es HE', async () => {
+    // Fin de semana/feriado: aunque el trabajador tenga turno ese día, no se descuenta;
+    // todo el periodo trabajado entra como hora extra (shift=null en el cálculo).
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data, id: 'o-finde' })),
+    );
+    const workSchedule = vi.fn(() =>
+      Promise.resolve({
+        shiftPattern: 'ADMINISTRATIVO',
+        workDays: null,
+        restDays: null,
+        cycleStart: null,
+        startTime: '08:00',
+        endTime: '18:00',
+        weeklyHours: [{ weekday: 1, start: '08:00', end: '18:00' }],
+      }),
+    );
+    const { prisma } = buildPrisma({ create, workSchedule });
+    const service = makeService(prisma);
+
+    await service.create(
+      'felipe',
+      {
+        date: '2026-07-13T00:00:00.000Z', // lunes con turno 08:00-18:00
+        startTime: '08:00',
+        endTime: '18:00',
+        weekendOrHoliday: true,
+      },
+      true,
+    );
+
+    // No consulta el turno (se saltó por el flag) y todo el periodo es HE.
+    expect(workSchedule).not.toHaveBeenCalled();
+    const data = create.mock.calls[0]?.[0]?.data as {
+      hours: number;
+      totalHours: number;
+      shiftLabel: string | null;
+      weekendOrHoliday: boolean;
+    };
+    expect(data.hours).toBe(10); // 08:00-18:00 completo como hora extra
+    expect(data.totalHours).toBe(10);
+    expect(data.shiftLabel).toBeNull();
+    expect(data.weekendOrHoliday).toBe(true);
   });
 
   it('create con permiso onBehalf y trabajador objetivo: userId=objetivo, onBehalfOfUserId=creador, respeta fecha', async () => {
@@ -183,7 +294,7 @@ describe('OvertimeService', () => {
 
     await service.create(
       'admin-1',
-      { date: '2026-05-03T00:00:00.000Z', startTime: '08:00', endTime: '10:00', onBehalfOfUserId: 'worker-9' },
+      { date: '2026-07-03T00:00:00.000Z', startTime: '08:00', endTime: '10:00', onBehalfOfUserId: 'worker-9' },
       true,
     );
 
@@ -194,7 +305,7 @@ describe('OvertimeService', () => {
     };
     expect(data.userId).toBe('worker-9');
     expect(data.onBehalfOfUserId).toBe('admin-1');
-    expect(data.date.toISOString()).toBe('2026-05-03T00:00:00.000Z');
+    expect(data.date.toISOString()).toBe('2026-07-03T00:00:00.000Z');
   });
 
   it('create sin endTime => borrador (isDraft, hours null)', async () => {
@@ -209,6 +320,61 @@ describe('OvertimeService', () => {
     const data = create.mock.calls[0]?.[0]?.data as { isDraft: boolean; hours: number | null };
     expect(data.isDraft).toBe(true);
     expect(data.hours).toBeNull();
+  });
+
+  it('create con endTime:null explícito => borrador (no revienta el cálculo)', async () => {
+    // Un body de API con "endTime": null pasa la validación @IsOptional; debe tratarse
+    // como borrador (== null), no colarse al cálculo y reventar en toMinutes.
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    const dto = { date: '2026-07-10T00:00:00.000Z', startTime: '09:00', endTime: null };
+    await service.create('u1', dto as unknown as Parameters<typeof service.create>[1], false);
+
+    const data = create.mock.calls[0]?.[0]?.data as { isDraft: boolean; hours: number | null };
+    expect(data.isDraft).toBe(true);
+    expect(data.hours).toBeNull();
+  });
+
+  it('close: respeta weekendOrHoliday del borrador (no descuenta turno; todo el periodo es HE)', async () => {
+    // El flag se fija al crear el borrador y se conserva al cerrarlo: close() usa
+    // current.weekendOrHoliday, así que NO consulta el turno y todo entra como HE.
+    const findFirst = vi.fn(() =>
+      Promise.resolve(
+        buildRow({ isDraft: true, endTime: null, hours: null, startTime: '08:00', weekendOrHoliday: true }),
+      ),
+    );
+    const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const workSchedule = vi.fn(() =>
+      Promise.resolve({
+        shiftPattern: 'ADMINISTRATIVO',
+        workDays: null,
+        restDays: null,
+        cycleStart: null,
+        startTime: '08:00',
+        endTime: '18:00',
+        weeklyHours: [{ weekday: 1, start: '08:00', end: '18:00' }],
+      }),
+    );
+    const { prisma } = buildPrisma({ findFirst, update, workSchedule });
+    const service = makeService(prisma);
+
+    await service.close('u1', 'o-1', '18:00');
+
+    expect(workSchedule).not.toHaveBeenCalled();
+    const data = update.mock.calls[0]?.[0]?.data as {
+      hours: number;
+      totalHours: number;
+      shiftLabel: string | null;
+    };
+    expect(data.hours).toBe(10); // 08:00-18:00 completo como hora extra
+    expect(data.totalHours).toBe(10);
+    expect(data.shiftLabel).toBeNull();
   });
 
   it('approve sobre borrador => 409', async () => {

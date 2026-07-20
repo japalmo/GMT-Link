@@ -32,7 +32,7 @@ import {
   type ReimbursementView,
   type VehicleSubcategory,
 } from '@/types/finance';
-import { oneMonthAgoSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
+import { startOfMonthSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
 
 /** MIME de imagen aceptado por el OCR/boleta (alineado con el backend). */
 const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/heic';
@@ -135,15 +135,15 @@ export function ReembolsoFormDialog({
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  // Ventana de fecha del gasto (versión beta, misma regla que el backend):
-  // [hace 1 mes calendario, hoy], en día calendario de Chile. Comparables como
-  // strings por ser YYYY-MM-DD. Se recalculan en cada render (baratas) para no
-  // quedar obsoletas si el diálogo cruza la medianoche.
-  const minDate = oneMonthAgoSantiagoString();
+  // Ventana de fecha del gasto (misma regla que el backend): todo el mes en curso,
+  // [día 1 del mes, hoy], en día calendario de Chile. Comparables como strings por
+  // ser YYYY-MM-DD. Se recalculan en cada render (baratas) para no quedar obsoletas
+  // si el diálogo cruza la medianoche.
+  const minDate = startOfMonthSantiagoString();
   const maxDate = getTodayString();
-  // En edición, la fecha original puede haber salido de la ventana (>1 mes) mientras
-  // la solicitud seguía pendiente. El backend (update) NO revalida la ventana si la
-  // fecha del gasto no cambia, así que aquí se permite conservarla: el `min` del
+  // En edición, la fecha original puede haber salido de la ventana (mes anterior)
+  // mientras la solicitud seguía pendiente. El backend (update) NO revalida la ventana
+  // si la fecha del gasto no cambia, así que aquí se permite conservarla: el `min` del
   // selector no debe marcarla inválida y el submit solo revalida si la fecha cambió.
   const originalDate = isEdit && initial ? initial.date.slice(0, 10) : null;
   const effectiveMinDate = originalDate && originalDate < minDate ? originalDate : minDate;
@@ -262,7 +262,7 @@ export function ReembolsoFormDialog({
     if (dateChanged) {
       if (date > maxDate) return setError('La fecha del gasto no puede ser futura.');
       if (date < minDate) {
-        return setError('La fecha del gasto no puede tener más de 1 mes de antigüedad.');
+        return setError('Solo puedes reportar gastos del mes en curso.');
       }
     }
     if (!category) return setError('La categoría es obligatoria.');
@@ -446,8 +446,8 @@ export function ReembolsoFormDialog({
             <span>
               <span className="font-medium">Versión beta:</span>{' '}
               <span className="text-muted-foreground">
-                puedes registrar gastos de hasta 1 mes de antigüedad. Te recomendamos crear la
-                solicitud dentro de 48 horas desde el gasto.
+                puedes registrar gastos del mes en curso. Te recomendamos crear la solicitud dentro
+                de 48 horas desde el gasto.
               </span>
             </span>
           </div>

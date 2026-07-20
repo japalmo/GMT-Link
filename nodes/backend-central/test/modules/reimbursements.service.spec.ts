@@ -12,7 +12,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { NotificationsService } from '../../src/modules/notifications/notifications.service';
 import {
-  oneMonthAgoSantiago,
+  startOfMonthSantiago,
   startOfTodaySantiago,
 } from '../../src/modules/finance/finance-time.util';
 import {
@@ -21,10 +21,12 @@ import {
 } from '../../src/modules/reimbursements/reimbursements.service';
 
 // Reloj fijo para toda la suite (solo `Date`): la ventana de la fecha del gasto
-// ("hasta 1 mes atrás, nada futuro") se calcula con `new Date()` tanto en las
+// ("todo el mes en curso, nada futuro") se calcula con `new Date()` tanto en las
 // constantes de abajo como dentro del servicio. Sin fijarlo, una corrida que cruce
 // la medianoche de Santiago entre la carga del módulo y la ejecución desincroniza
 // ambos y hace flakear las pruebas de la ventana. Mediodía UTC evita bordes de día.
+// Se fija a mediados de mes (día 14) para que "primer día del mes" y "día anterior
+// al mes" queden bien separados de hoy.
 vi.useFakeTimers({ toFake: ['Date'] });
 vi.setSystemTime(new Date('2026-06-14T15:00:00.000Z'));
 
@@ -37,12 +39,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Fechas RELATIVAS a la ventana de la fecha del gasto (no hardcodeadas: la regla
- * "hasta 1 mes hacia atrás, nada futuro" rompería cualquier fecha fija vieja).
+ * "todo el mes en curso, nada futuro" rompería cualquier fecha fija vieja).
+ * `WINDOW_LIMIT_ISO` = primer día del mes en curso (límite inferior inclusive);
+ * `TOO_OLD_ISO` = el día anterior (último día del mes pasado, ya fuera de ventana).
  */
 const TODAY_ISO = startOfTodaySantiago().toISOString();
-const WINDOW_LIMIT_ISO = oneMonthAgoSantiago().toISOString();
+const WINDOW_LIMIT_ISO = startOfMonthSantiago().toISOString();
 const FUTURE_ISO = new Date(startOfTodaySantiago().getTime() + DAY_MS).toISOString();
-const TOO_OLD_ISO = new Date(oneMonthAgoSantiago().getTime() - DAY_MS).toISOString();
+const TOO_OLD_ISO = new Date(startOfMonthSantiago().getTime() - DAY_MS).toISOString();
 
 /** Fila Reimbursement (sin solicitante incluido) con overrides. */
 function buildRow(overrides: Partial<Reimbursement> = {}): Reimbursement {
@@ -216,7 +220,7 @@ describe('ReimbursementsService', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('create: más de 1 mes de antigüedad → 400 y NO sube boleta ni inserta fila', async () => {
+  it('create: anterior al mes en curso → 400 y NO sube boleta ni inserta fila', async () => {
     const create = vi.fn();
     const { prisma } = buildPrisma({ create });
     const service = makeService(prisma);
@@ -227,14 +231,12 @@ describe('ReimbursementsService', () => {
       RECEIPT,
     );
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
-    await expect(promise).rejects.toThrow(
-      'La fecha del gasto no puede tener más de 1 mes de antigüedad.',
-    );
+    await expect(promise).rejects.toThrow('Solo puedes reportar gastos del mes en curso.');
     expect(storageBits.save).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('create: EXACTAMENTE 1 mes atrás (límite inferior, inclusive) → OK', async () => {
+  it('create: primer día del mes en curso (límite inferior, inclusive) → OK', async () => {
     const create = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data, id: 'r-limit' })),
     );
@@ -567,7 +569,7 @@ describe('ReimbursementsService', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('update: más de 1 mes de antigüedad → 400 y NO actualiza', async () => {
+  it('update: anterior al mes en curso → 400 y NO actualiza', async () => {
     const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn();
     const { prisma } = buildPrisma({ findFirst, update });
@@ -579,13 +581,11 @@ describe('ReimbursementsService', () => {
       concept: 'X',
     });
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
-    await expect(promise).rejects.toThrow(
-      'La fecha del gasto no puede tener más de 1 mes de antigüedad.',
-    );
+    await expect(promise).rejects.toThrow('Solo puedes reportar gastos del mes en curso.');
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('update: un PENDIENTE cuyo gasto ya venció (>1 mes) sigue editable si NO cambia la fecha', async () => {
+  it('update: un PENDIENTE cuyo gasto ya venció (mes anterior) sigue editable si NO cambia la fecha', async () => {
     // Regresión: la ventana solo se revalida cuando la fecha del gasto cambia. Una
     // solicitud que envejeció fuera de la ventana debe seguir corrigible en monto /
     // concepto sin obligar a mover la fecha (que ya no cabría en la ventana).
@@ -606,7 +606,7 @@ describe('ReimbursementsService', () => {
     expect(data.amount).toBe(99999);
   });
 
-  it('update: EXACTAMENTE 1 mes atrás (límite inferior, inclusive) → OK', async () => {
+  it('update: primer día del mes en curso (límite inferior, inclusive) → OK', async () => {
     const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data })),

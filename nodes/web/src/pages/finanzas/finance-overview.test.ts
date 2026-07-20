@@ -72,6 +72,7 @@ function ot(over: Partial<OvertimeView>): OvertimeView {
     totalHours: 12,
     regularHours: 10,
     shiftLabel: '08:00-18:00',
+    weekendOrHoliday: false,
     reason: 'Cierre',
     startTime: '18:00',
     endTime: '20:00',

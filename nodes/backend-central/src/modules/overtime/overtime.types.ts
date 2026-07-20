@@ -21,6 +21,8 @@ export interface OvertimeView {
   regularHours: number | null;
   /** Turno usado ese día "HH:mm-HH:mm"; null si descanso / sin turno configurado. */
   shiftLabel: string | null;
+  /** Fin de semana o feriado: no se descuenta turno; todo el periodo es hora extra. */
+  weekendOrHoliday: boolean;
   /** Opcional: el nuevo formulario no lo pide (se conserva por retrocompat). */
   reason: string | null;
   /** "HH:mm" hora de inicio; null en filas legacy. */
