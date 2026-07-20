@@ -19,7 +19,6 @@ import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagin
 import {
   AssetDocumentView,
   AssetHistoryEntryView,
-  AssetPublicView,
   AssetView,
   AssetAccessoryView,
   ChecklistTemplateView,
@@ -772,72 +771,73 @@ export class AssetsService {
   }
 
   /**
-   * Ficha pública por TOKEN OPACO no enumerable (sin autenticación). El código
-   * correlativo ya NO sirve para esta ruta: evita el raspado del parque (GAP3).
+   * Elimina un activo COMPLETO (admin/gerencia; mismo gate `can_manage_assets`
+   * que editar). La cascada del esquema (`onDelete: Cascade`) borra sus hijos:
+   * documentos, accesorios, historial, plantilla + submissions y ciclos de uso.
+   * Antes limpia a mano las pruebas de firma de sus checklists (`SignatureProof`
+   * es polimórfico, sin FK, así que no cae por cascada) y, best-effort, borra las
+   * fotos de los ciclos del storage. Los archivos de documentos no guardan `key`
+   * en el modelo (solo `fileUrl`), así que quedan como huérfanos inertes en el
+   * storage; es aceptable (no rompen nada y el borrado no debe fallar por eso).
    */
-  async getPublicByToken(token: string): Promise<AssetPublicView> {
-    const asset = await this.prisma.asset.findUnique({
-      where: { publicToken: token },
-      include: {
-        project: true,
-        // Documentos APROBADOS (Tanda 5.2): la ficha pública prueba que el activo
-        // tiene su documentación al día. Se ordenan por vencimiento (los que vencen
-        // antes primero) y solo se expone metadata (nombre/tipo/vencimiento), nunca
-        // el archivo, para no filtrar documentos en una ruta sin autenticación.
-        documents: {
-          where: { status: DocumentStatus.APROBADO },
-          orderBy: [{ expirationDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
-        },
-        // Última inspección (checklist ejecutado): solo nombre de plantilla + fecha.
-        checklistSubmissions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: { template: { select: { name: true } } },
-        },
-      },
+  async remove(id: string, userId: string): Promise<void> {
+    const asset = await this.prisma.asset.findUnique({ where: { id } });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+    await this.assertCanManageAsset(userId, asset);
+
+    // Se recogen ANTES de la cascada: ids de submissions (para borrar sus pruebas de
+    // firma polimórficas) y keys de fotos de ciclos (para limpiar el storage).
+    const submissions = await this.prisma.checklistSubmission.findMany({
+      where: { assetId: id },
+      select: { id: true },
+    });
+    const cycles = await this.prisma.usageCycle.findMany({
+      where: { assetId: id },
+      select: { startPhotoKey: true, endPhotoKey: true },
     });
 
-    if (!asset) {
-      throw new NotFoundException('Ficha técnica no encontrada.');
+    await this.prisma.$transaction(async (tx) => {
+      if (submissions.length > 0) {
+        await tx.signatureProof.deleteMany({
+          where: {
+            contextType: SignatureContextType.CHECKLIST_SUBMISSION,
+            contextId: { in: submissions.map((s) => s.id) },
+          },
+        });
+      }
+      // La cascada del esquema borra documentos/accesorios/historial/plantilla/
+      // submissions/ciclos al eliminar el activo.
+      await tx.asset.delete({ where: { id } });
+    });
+
+    // Espejo FGA↔Postgres: retira las tuplas estructurales que escribieron
+    // create()/assign() (proyecto/responsable). OpenFGA es un store aparte y NO cae
+    // por la cascada de Postgres, así que sin esto quedarían colgando apuntando a un
+    // activo inexistente. Best-effort: un fallo del store no revierte el borrado ya
+    // confirmado (el id es cuid y no se reutiliza, así que una tupla colgada nunca
+    // coincide con un activo vivo).
+    const fgaDeletes: { user: string; relation: string; object: string }[] = [];
+    if (asset.projectId) {
+      fgaDeletes.push({ user: `project:${asset.projectId}`, relation: 'project', object: `asset:${id}` });
+    }
+    if (asset.assignedToId) {
+      fgaDeletes.push({ user: `user:${asset.assignedToId}`, relation: 'assigned', object: `asset:${id}` });
+    }
+    // Una a una y tolerante: el Write de borrado de OpenFGA es atómico, así que si una
+    // tupla ya no existe (drift) reventaría el batch entero y dejaría la otra colgada.
+    // Borrando de a una, cada fallo se aísla y la que sí existe se retira igual.
+    for (const tuple of fgaDeletes) {
+      await this.fga.deleteTuples([tuple]).catch(() => undefined);
     }
 
-    const now = Date.now();
-    const EXPIRING_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-    const documents = asset.documents.map((d) => {
-      const expiresMs = d.expirationDate ? d.expirationDate.getTime() : null;
-      return {
-        name: d.name,
-        type: d.type,
-        expiresAt: d.expirationDate ? d.expirationDate.toISOString() : null,
-        expired: expiresMs !== null && expiresMs < now,
-        expiringSoon: expiresMs !== null && expiresMs >= now && expiresMs <= now + EXPIRING_WINDOW_MS,
-      };
-    });
-
-    const lastSubmission = asset.checklistSubmissions[0];
-    const lastChecklist = lastSubmission
-      ? { templateName: lastSubmission.template.name, submittedAt: lastSubmission.createdAt.toISOString() }
-      : null;
-
-    // GAP 3: la ficha pública (sin autenticación) no filtra datos personales ni el
-    // identificador. Expone info no sensible + prueba de documentación y última
-    // inspección (sin archivos ni respuestas del checklist).
-    return {
-      // Id interno: SOLO para el deep-link post-login desde la ficha pública (QR)
-      // hacia la app autenticada (`/recursos?asset=<id>`). No es sensible: la app
-      // autenticada igual exige login + permiso para operar el activo.
-      id: asset.id,
-      code: asset.code,
-      type: asset.type,
-      name: asset.name,
-      description: asset.description,
-      manufacturer: asset.manufacturer,
-      vehicleSubtype: asset.vehicleSubtype,
-      status: asset.status,
-      project: asset.project ? { name: asset.project.name } : null,
-      documents,
-      lastChecklist,
-    };
+    // Best-effort (idempotente): limpia las fotos de ciclos del storage. No falla el
+    // borrado del activo si el storage no responde.
+    const photoKeys = cycles.flatMap((c) =>
+      [c.startPhotoKey, c.endPhotoKey].filter((k): k is string => !!k),
+    );
+    await Promise.all(photoKeys.map((key) => this.storage.delete(key).catch(() => undefined)));
   }
 
   /**
@@ -1614,10 +1614,29 @@ export class AssetsService {
   }
 
   /**
+   * Carga la referencia mínima del activo y exige `can_manage_assets` (admin/gerencia
+   * sobre el proyecto, o admin de la organización para activos globales). Gate de los
+   * sub-recursos que la dueña restringió a admin/gerencia (documentos, historial):
+   * la restricción vive en el BACKEND, no solo en el render del front (ADR-0001).
+   * 404 si no existe; 403 si el usuario no gestiona el activo.
+   */
+  private async assertCanManageAssetById(id: string, userId: string): Promise<void> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { id },
+      select: { id: true, projectId: true },
+    });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+    await this.assertCanManageAsset(userId, asset);
+  }
+
+  /**
    * Obtiene la lista de documentos de un activo.
    */
   async listDocuments(id: string, userId: string): Promise<AssetDocumentView[]> {
-    await this.assertCanViewAsset(id, userId);
+    // Documentos: solo admin/gerencia (decisión de la dueña), gateado en el backend.
+    await this.assertCanManageAssetById(id, userId);
     const rows = await this.prisma.assetDocument.findMany({
       where: { assetId: id },
       include: { reviewedBy: true },
@@ -1630,7 +1649,8 @@ export class AssetsService {
    * Obtiene la línea de tiempo de eventos históricos de un activo.
    */
   async getHistory(id: string, userId: string): Promise<AssetHistoryEntryView[]> {
-    await this.assertCanViewAsset(id, userId);
+    // Historial: solo admin/gerencia (decisión de la dueña), gateado en el backend.
+    await this.assertCanManageAssetById(id, userId);
     const rows = await this.prisma.assetHistoryEntry.findMany({
       where: { assetId: id },
       include: { actor: true },

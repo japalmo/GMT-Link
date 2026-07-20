@@ -908,50 +908,6 @@ export interface EndUsageCycleInput {
 }
 
 /**
- * Documento aprobado en la ficha pública (Tanda 5.2). Solo metadata: NO expone el
- * archivo (ruta sin autenticación). Sirve como prueba de documentación al día.
- */
-export interface AssetPublicDocument {
-  name: string;
-  type: string;
-  /** ISO-8601 o null. */
-  expiresAt: string | null;
-  /** Ya vencido. */
-  expired: boolean;
-  /** Vence en <= 30 días (y aún no vencido). */
-  expiringSoon: boolean;
-}
-
-/** Última inspección (checklist ejecutado) en la ficha pública. */
-export interface AssetPublicLastChecklist {
-  templateName: string;
-  /** ISO-8601. */
-  submittedAt: string;
-}
-
-/** Ficha pública de un activo (respuesta del endpoint público por token, GAP3). */
-export interface AssetPublicView {
-  /**
-   * Id interno del activo. Se expone SOLO para el deep-link post-login desde la
-   * ficha pública (QR) hacia la app autenticada (`/recursos?asset=<id>`); no es
-   * sensible por sí mismo: la app autenticada igual exige login + permiso.
-   */
-  id: string;
-  code: string;
-  type: AssetType;
-  name: string;
-  description: string | null;
-  manufacturer: string | null;
-  vehicleSubtype: VehicleSubtype | null;
-  status: AssetStatus;
-  project?: { name: string } | null;
-  /** Documentos APROBADOS (metadata; sin archivo). Tanda 5.2. */
-  documents: AssetPublicDocument[];
-  /** Última inspección de checklist, o null. Tanda 5.2. */
-  lastChecklist: AssetPublicLastChecklist | null;
-}
-
-/**
  * Edición de los campos DESCRIPTIVOS de un activo (`PATCH /assets/:id`, Tanda 5.2).
  * Parcial: solo se aplican los presentes. NO incluye type, projectId, assignedToId
  * ni status (esos siguen con sus flujos dedicados).

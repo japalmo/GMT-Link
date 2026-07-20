@@ -9,6 +9,7 @@ import {
   listUsers,
   fetchAssetsTable,
   createAsset,
+  deleteAsset,
   releaseAssetUse,
   ApiError,
   type TableRequest,
@@ -24,16 +25,15 @@ import {
   FileText,
   Clock,
   ArrowLeft,
-  QrCode,
   AlertCircle,
   Package,
   ListTodo,
   ClipboardCheck,
   Settings,
   Pencil,
+  Trash2,
   X,
   Construction,
-  ImagePlus,
   Layers,
   FileDown,
 } from 'lucide-react';
@@ -353,6 +353,8 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     name: string;
     code: string;
   } | null>(null);
+  // Activo pendiente de eliminación (admin/gerencia); abre el ConfirmDialog.
+  const [assetToDelete, setAssetToDelete] = useState<AssetView | null>(null);
 
   // Load directory users. `listUsers` está paginado (keyset): para poblar el
   // picker se pide la página más grande permitida (tope 100).
@@ -641,6 +643,20 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
       <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => onSelectAsset(a.id)}>
         Detalle
       </Button>
+      {isAdmin && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+          title="Eliminar"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAssetToDelete(a);
+          }}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      )}
     </>
   );
 
@@ -929,6 +945,26 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
           table.refetch();
         }}
       />
+
+      {/* Eliminar activo (admin/gerencia): borra en cascada sus hijos. Al confirmar
+          se recarga la página del motor para que la fila desaparezca. */}
+      <ConfirmDialog
+        open={assetToDelete !== null}
+        onOpenChange={(open) => !open && setAssetToDelete(null)}
+        title="¿Eliminar activo?"
+        description={
+          assetToDelete
+            ? `Se eliminará de forma permanente ${assetToDelete.name} (${assetToDelete.code}) junto con sus documentos, accesorios, checklists e historial de uso. Esta acción no se puede deshacer.`
+            : ''
+        }
+        onConfirm={async () => {
+          if (!assetToDelete) return;
+          await deleteAsset(assetToDelete.id);
+          toast.success('Activo eliminado.');
+          setAssetToDelete(null);
+          table.refetch();
+        }}
+      />
     </div>
   );
 }
@@ -1019,7 +1055,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   );
   const [editOpen, setEditOpen] = useState(false);
   // Al "Reportar uso"/"Poner en uso" el operador debe aterrizar en el checklist, que
-  // vive en la pestaña Ficha pública; este flag hace scroll a esa tarjeta al montarse.
+  // vive en la pestaña Operación; este flag hace scroll a esa tarjeta al montarse.
   const [scrollToChecklist, setScrollToChecklist] = useState(initialTarget === 'checklist');
   const checklistRef = useRef<HTMLDivElement>(null);
   // Deep-link 'documentos' (botón "Ver documentos" de la ficha pública): aterriza en
@@ -1065,11 +1101,15 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   }, []);
 
   // Diálogo de "Reportar uso": entrada única al ciclo (reclama el activo + abre el
-  // checklist). Permite adjuntar una foto inicial OPCIONAL antes de iniciar el ciclo.
+  // checklist). Confirmación simple, sin foto.
   const [reportUseOpen, setReportUseOpen] = useState(false);
-  const [reportUsePhoto, setReportUsePhoto] = useState<File | null>(null);
 
   const [actioning, setActioning] = useState<string | null>(null);
+
+  const isAdmin =
+    profile?.roleKeys.includes('org_admin') ||
+    profile?.roleKeys.includes('department_admin') ||
+    profile?.roleKeys.includes('project_creator');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -1079,9 +1119,19 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       setNewStatus(a.status);
       setNewAssignId(a.assignedToId || '');
 
-      const [dList, hList, accList, tpl, subList, cycList] = await Promise.all([
-        listDocs(id),
-        getHistory(id),
+      // Documentos e historial son admin/gerencia (el backend los gatea con
+      // can_manage_assets). Se ramifica sobre `a.canManageAssets` — el flag
+      // AUTORITATIVO que devuelve getById, idéntico al gate del backend — y NO sobre
+      // el rol coarse: así un gestor del proyecto los ve y un no-gestor no los pide.
+      // El `.catch` cierra cualquier borde (403 por carrera) para que jamás tumbe la
+      // carga del resto del detalle (operación), que es visible para todos.
+      const [dList, hList] = a.canManageAssets
+        ? await Promise.all([
+            listDocs(id).catch(() => [] as AssetDocumentView[]),
+            getHistory(id).catch(() => [] as AssetHistoryEntryView[]),
+          ])
+        : [[] as AssetDocumentView[], [] as AssetHistoryEntryView[]];
+      const [accList, tpl, subList, cycList] = await Promise.all([
         listAccessories(id),
         getTemplate(id),
         listSubmissions(id),
@@ -1121,26 +1171,19 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       .catch(() => toast.error('No se pudieron cargar los usuarios del directorio.'));
   }, [loadData]);
 
-  const isAdmin =
-    profile?.roleKeys.includes('org_admin') ||
-    profile?.roleKeys.includes('department_admin') ||
-    profile?.roleKeys.includes('project_creator');
-
   // Permiso real (del backend) para gestionar el activo: accesorios, asignación,
   // checklist. Cae a `isAdmin` mientras carga el detalle.
   const canManageAsset = asset?.canManageAssets ?? isAdmin;
 
-  const handleTakeUse = async (photo?: File) => {
+  const handleTakeUse = async () => {
     if (actioning) return;
     setActioning('takeUse');
     try {
-      // Reportar uso reclama el activo y abre un ciclo, con foto inicial opcional.
-      // Con checklist aprobado nace EN_PREPARACION (hay que firmarlo para confirmar);
-      // sin plantilla nace EN_CURSO directo. `loadData` re-deriva `activeCycle` y
-      // refresca el historial.
-      const { cycle } = await startCycle(id, photo);
+      // Reportar uso reclama el activo y abre un ciclo. Con checklist aprobado nace
+      // EN_PREPARACION (hay que firmarlo para confirmar); sin plantilla nace EN_CURSO
+      // directo. `loadData` re-deriva `activeCycle` y refresca el historial.
+      const { cycle } = await startCycle(id);
       setReportUseOpen(false);
-      setReportUsePhoto(null);
       await loadData();
       if (cycle.status === 'EN_PREPARACION') {
         toast.success('Uso reportado. Completa el checklist para confirmar.');
@@ -1630,7 +1673,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   };
 
   // Tras "Reportar uso"/"Poner en uso", lleva el foco a la tarjeta del checklist
-  // dentro de la pestaña Ficha pública (que se monta al cambiar de pestaña). El
+  // dentro de la pestaña Operación (que se monta al cambiar de pestaña). El
   // gate `!loading` cubre el aterrizaje con `initialTarget='checklist'`: espera a
   // que el detalle cargue (la tarjeta aún no existe) sin consumir el flag antes.
   useEffect(() => {
@@ -1684,9 +1727,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     );
   }
 
-  const publicUrl = `${window.location.origin}/public/activos/${asset.publicToken}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(publicUrl)}`;
-
   return (
     <div className="flex flex-col gap-6">
       {/* Header back button */}
@@ -1715,7 +1755,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       )}
 
       <div className="flex flex-col gap-6">
-        {/* Pestañas del detalle (Tanda 5.2): Información · Ficha pública · Historial. */}
+        {/* Pestañas del detalle: Información · Operación · Historial (docs+historial solo admin). */}
         <div className="flex border-b border-border gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
@@ -1737,19 +1777,22 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            <QrCode className="size-3.5" /> Ficha pública
+            <ClipboardCheck className="size-3.5" /> Operación
           </button>
-          <button
-            type="button"
-            onClick={() => setDetailTab('historial')}
-            className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-              detailTab === 'historial'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <History className="size-3.5" /> Historial ({history.length})
-          </button>
+          {/* Historial: solo quien gestiona el activo (backend: can_manage_assets). */}
+          {canManageAsset && (
+            <button
+              type="button"
+              onClick={() => setDetailTab('historial')}
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+                detailTab === 'historial'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <History className="size-3.5" /> Historial ({history.length})
+            </button>
+          )}
         </div>
 
         {detailTab === 'informacion' && (
@@ -1915,42 +1958,8 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
           </Card>
         )}
 
-        {/* Ficha pública (Tanda 5.2): QR + acceso a la ficha, luego documentos y checklist. */}
-        {detailTab === 'ficha' && (
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <QrCode className="size-4 text-primary" /> Ficha pública
-                </CardTitle>
-                <CardDescription>
-                  Accesible sin credenciales por QR. Muestra los documentos aprobados y la última
-                  inspección. Imprime el código y pégalo en el activo.
-                </CardDescription>
-              </div>
-              <a
-                href={publicUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
-              >
-                Abrir ficha: {asset.code}
-              </a>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center gap-2 sm:flex-row sm:items-center">
-              <div className="rounded-lg border bg-white p-3">
-                <img src={qrUrl} alt="Código QR de la ficha pública" className="size-32" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Los documentos aprobados y el último checklist de abajo son los que aparecen en la
-                ficha pública.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-          {/* Documents Tab */}
-          {detailTab === 'ficha' && (
+          {/* Documentos del activo: solo quien gestiona (backend: can_manage_assets). */}
+          {detailTab === 'ficha' && canManageAsset && (
             <Card ref={docsRef}>
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
@@ -2217,7 +2226,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
             </Card>
           )}
 
-          {/* Checklist — bajo Ficha pública (Tanda 5.2). */}
+          {/* Checklist — bajo la pestaña Operación (visible para todos). */}
           {detailTab === 'ficha' && (
             <Card ref={checklistRef}>
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -2724,8 +2733,8 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
             </Card>
           )}
 
-          {/* Historial de Uso Tab */}
-          {detailTab === 'historial' && (
+          {/* Historial de Uso: solo quien gestiona el activo (backend: can_manage_assets). */}
+          {detailTab === 'historial' && canManageAsset && (
             <div className="flex flex-col gap-6">
               {/* Ciclos de uso: tabla principal del historial (clic en fila = detalle). */}
               <Card>
@@ -2797,50 +2806,34 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       />
 
       {/* DIALOG REPORTAR USO: entrada única al ciclo. Reclama el activo + abre el
-          checklist; permite adjuntar una foto inicial OPCIONAL antes de iniciar. */}
+          checklist inicial. Confirmación simple, sin foto. */}
       {reportUseOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <Card className="w-full max-w-sm bg-card shadow-lg border border-border animate-in fade-in zoom-in duration-200">
             <CardHeader>
               <CardTitle>Reportar uso</CardTitle>
               <CardDescription>
-                Reclamas el activo y abres el checklist inicial. La foto es opcional.
+                Reclamas el activo y abres el checklist inicial.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="report-use-photo">Foto inicial (opcional)</Label>
-                <input
-                  id="report-use-photo"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => setReportUsePhoto(e.target.files?.[0] ?? null)}
-                  className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
-                />
-                {reportUsePhoto && (
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <ImagePlus className="size-3.5 text-primary" aria-hidden />
-                    {reportUsePhoto.name}
-                  </p>
-                )}
-              </div>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">
+                Al confirmar, el activo queda reclamado a tu nombre y se abre el checklist de
+                operación para dejarlo en uso.
+              </p>
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  setReportUseOpen(false);
-                  setReportUsePhoto(null);
-                }}
+                onClick={() => setReportUseOpen(false)}
                 disabled={actioning !== null}
               >
                 Cancelar
               </Button>
               <Button
                 type="button"
-                onClick={() => void handleTakeUse(reportUsePhoto ?? undefined)}
+                onClick={() => void handleTakeUse()}
                 loading={actioning === 'takeUse'}
               >
                 <ClipboardCheck className="size-3.5 mr-1.5" />

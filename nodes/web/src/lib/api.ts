@@ -117,7 +117,6 @@ import type {
 } from '@gmt-platform/contracts';
 import type {
   AssetView,
-  AssetPublicView,
   UpdateAssetInput,
   AssetDocumentView,
   AssetHistoryEntryView,
@@ -1981,8 +1980,9 @@ export function updateAsset(id: string, input: UpdateAssetInput): Promise<AssetV
   });
 }
 
-export function getPublicAsset(token: string): Promise<AssetPublicView> {
-  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(token)}`);
+/** `DELETE /assets/:id` — elimina un activo completo (admin/gerencia). */
+export function deleteAsset(id: string): Promise<void> {
+  return request<void>(`/assets/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function updateAssetStatus(

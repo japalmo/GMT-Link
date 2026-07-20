@@ -13,7 +13,6 @@ export type {
   VehicleSubtype,
   AssetIdentifierType,
   AssetView,
-  AssetPublicView,
   ChecklistItemType,
   ChecklistItemConfig,
   ChecklistSvgPart,

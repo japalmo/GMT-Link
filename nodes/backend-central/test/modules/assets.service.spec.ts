@@ -196,6 +196,10 @@ interface MockTx {
     create: MockFunction;
     update: MockFunction;
     updateMany: MockFunction;
+    delete: MockFunction;
+  };
+  signatureProof: {
+    deleteMany: MockFunction;
   };
   assetDocument: {
     create: MockFunction;
@@ -284,6 +288,7 @@ interface MockFga {
 
 interface MockStorage {
   save: MockFunction;
+  delete: MockFunction;
 }
 
 interface MockPermissions {
@@ -305,6 +310,10 @@ describe('AssetsService', () => {
         create: vi.fn((args) => Promise.resolve(buildAssetRow(args.data))),
         update: vi.fn((args) => Promise.resolve(buildAssetRow(args.data))),
         updateMany: vi.fn(() => Promise.resolve({ count: 1 })),
+        delete: vi.fn(() => Promise.resolve(undefined)),
+      },
+      signatureProof: {
+        deleteMany: vi.fn(() => Promise.resolve({ count: 0 })),
       },
       assetDocument: {
         create: vi.fn((args) => Promise.resolve(buildDocRow(args.data))),
@@ -399,6 +408,7 @@ describe('AssetsService', () => {
 
     storageMock = {
       save: vi.fn(() => Promise.resolve({ url: 'http://localhost/new.pdf' })),
+      delete: vi.fn(() => Promise.resolve(undefined)),
     };
 
     // Por defecto: lector GLOBAL (asset:read con scope none) => ve todo. Cada
@@ -706,74 +716,140 @@ describe('AssetsService', () => {
     });
   });
 
-  describe('getPublicByToken', () => {
-    it('busca por token opaco (no por código) y devuelve solo campos no sensibles', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce({
-        ...buildAssetRow({
-          code: 'GMT-EQ-0001',
-          publicToken: 'tok-xyz',
-          identifier: 'ABCD12',
-          identifierType: 'PATENTE',
-          assignedToId: 'u-1',
-          inUseById: 'u-2',
+  describe('remove', () => {
+    it('borra el activo (cascada) y limpia pruebas de firma + fotos del storage', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-del', projectId: null }));
+      prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([{ id: 's-1' }, { id: 's-2' }]);
+      prismaMock.usageCycle.findMany.mockResolvedValueOnce([
+        { startPhotoKey: 'photos/a.jpg', endPhotoKey: null },
+        { startPhotoKey: null, endPhotoKey: 'photos/b.jpg' },
+      ]);
+
+      await service.remove('a-del', 'admin-1');
+
+      // Pruebas de firma polimórficas de sus checklists (no caen por cascada).
+      expect(txMock.signatureProof.deleteMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ contextId: { in: ['s-1', 's-2'] } }),
         }),
-        project: { id: 'p-1', name: 'Proyecto Norte' },
-        assignedTo: buildUserRow({ firstName: 'Juan', lastName: 'Pérez' }),
-        inUseBy: buildUserRow({ id: 'u-2', firstName: 'Ana', lastName: 'Soto' }),
-        documents: [],
-        checklistSubmissions: [],
-      });
-
-      const view = await service.getPublicByToken('tok-xyz');
-
-      // GAP 3: la consulta pública es por publicToken opaco, NO por el code enumerable.
-      expect(prismaMock.asset.findUnique).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { publicToken: 'tok-xyz' } }),
       );
-      expect(view.code).toBe('GMT-EQ-0001');
-      expect(view.project).toEqual({ name: 'Proyecto Norte' });
-      // No debe filtrar el identificador ni nombres de personas.
-      expect(view).not.toHaveProperty('identifier');
-      expect(view).not.toHaveProperty('identifierType');
-      expect(view).not.toHaveProperty('assignedTo');
-      expect(view).not.toHaveProperty('inUseBy');
-      // Tanda 5.2: sin docs ni inspecciones → arrays/null vacíos.
-      expect(view.documents).toEqual([]);
-      expect(view.lastChecklist).toBeNull();
+      // El activo se borra dentro de la transacción (la cascada del esquema hace el resto).
+      expect(txMock.asset.delete).toHaveBeenCalledWith({ where: { id: 'a-del' } });
+      // Best-effort: cada foto de ciclo se borra del storage por su key.
+      expect(storageMock.delete).toHaveBeenCalledWith('photos/a.jpg');
+      expect(storageMock.delete).toHaveBeenCalledWith('photos/b.jpg');
     });
 
-    it('expone documentos aprobados (metadata sin archivo) y la última inspección', async () => {
-      const past = new Date(Date.now() - 24 * 60 * 60 * 1000); // ayer → vencido
-      const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000); // en 10 días → por vencer
-      prismaMock.asset.findUnique.mockResolvedValueOnce({
-        ...buildAssetRow({ code: 'GMT-VH-0002', publicToken: 'tok-2' }),
-        project: null,
-        documents: [
-          { name: 'Seguro', type: 'SEGURO', fileUrl: 'https://x/secreto.pdf', expirationDate: future, createdAt: past },
-          { name: 'Revisión técnica', type: 'CERT', fileUrl: 'https://x/rt.pdf', expirationDate: past, createdAt: past },
-        ],
-        checklistSubmissions: [
-          { createdAt: future, template: { name: 'Checklist camioneta' } },
-        ],
-      });
+    it('sin submissions: NO llama a signatureProof.deleteMany, pero igual borra el activo', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-2', projectId: null }));
+      prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([]);
+      prismaMock.usageCycle.findMany.mockResolvedValueOnce([]);
 
-      const view = await service.getPublicByToken('tok-2');
+      await service.remove('a-2', 'admin-1');
 
-      expect(view.documents).toHaveLength(2);
-      // No se filtra el archivo en la ruta pública.
-      expect(view.documents[0]).not.toHaveProperty('fileUrl');
-      expect(view.documents[0]).toMatchObject({ name: 'Seguro', type: 'SEGURO', expired: false, expiringSoon: true });
-      expect(view.documents[1]).toMatchObject({ name: 'Revisión técnica', expired: true, expiringSoon: false });
-      expect(view.lastChecklist).toEqual({
-        templateName: 'Checklist camioneta',
-        submittedAt: future.toISOString(),
-      });
+      expect(txMock.signatureProof.deleteMany).not.toHaveBeenCalled();
+      expect(txMock.asset.delete).toHaveBeenCalledWith({ where: { id: 'a-2' } });
     });
 
-    it('lanza NotFoundException cuando el token no existe', async () => {
+    it('activo inexistente → 404 y NO borra', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.getPublicByToken('tok-inexistente')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('a-x', 'admin-1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(txMock.asset.delete).not.toHaveBeenCalled();
+    });
+
+    it('sin permiso de gestión → 403 y NO borra', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-3', projectId: null }));
+      fgaMock.check.mockResolvedValueOnce(false); // assertCanManageAsset: gate estructural denegado
+
+      await expect(service.remove('a-3', 'sin-permiso')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(txMock.asset.delete).not.toHaveBeenCalled();
+    });
+
+    it('limpia las tuplas FGA del activo (proyecto + responsable) una a una', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-fga', projectId: 'p-1', assignedToId: 'u-9' }),
+      );
+      prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([]);
+      prismaMock.usageCycle.findMany.mockResolvedValueOnce([]);
+
+      await service.remove('a-fga', 'admin-1');
+
+      // Borrado tolerante de a una: cada tupla estructural en su propia llamada.
+      expect(fgaMock.deleteTuples).toHaveBeenCalledWith([
+        { user: 'project:p-1', relation: 'project', object: 'asset:a-fga' },
+      ]);
+      expect(fgaMock.deleteTuples).toHaveBeenCalledWith([
+        { user: 'user:u-9', relation: 'assigned', object: 'asset:a-fga' },
+      ]);
+    });
+  });
+
+  describe('listDocuments / getHistory — solo admin/gerencia (gate backend)', () => {
+    it('un gestor (can_manage_assets) obtiene los documentos', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      prismaMock.assetDocument.findMany.mockResolvedValueOnce([]);
+      await expect(service.listDocuments('a-1', 'mgr')).resolves.toEqual([]);
+    });
+
+    it('un NO gestor recibe 403 y NO consulta los documentos', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      fgaMock.check.mockResolvedValueOnce(false); // sin can_manage_assets
+      await expect(service.listDocuments('a-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prismaMock.assetDocument.findMany).not.toHaveBeenCalled();
+    });
+
+    it('getHistory exige can_manage_assets igual que documentos', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      fgaMock.check.mockResolvedValueOnce(false);
+      await expect(service.getHistory('a-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prismaMock.assetHistoryEntry.findMany).not.toHaveBeenCalled();
+    });
+
+    it('activo inexistente → 404', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(null);
+      await expect(service.listDocuments('a-x', 'mgr')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('activo GLOBAL (projectId null): exige admin de la ORGANIZACIÓN', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'g-1', projectId: null });
+      prismaMock.assetDocument.findMany.mockResolvedValueOnce([]);
+      await expect(service.listDocuments('g-1', 'org-admin')).resolves.toEqual([]);
+      expect(fgaMock.check).toHaveBeenCalledWith({
+        user: 'user:org-admin',
+        relation: 'admin',
+        object: 'organization:gmt',
+      });
+    });
+
+    it('activo GLOBAL: un NO org-admin recibe 403 en historial', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'g-1', projectId: null });
+      fgaMock.check.mockResolvedValueOnce(false);
+      await expect(service.getHistory('g-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('remove con proyecto — gate can_manage_assets sobre el proyecto', () => {
+    it('gestor del proyecto: borra y consulta el gate con la relación/objeto correctos', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-p', projectId: 'p-1' }));
+      prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([]);
+      prismaMock.usageCycle.findMany.mockResolvedValueOnce([]);
+
+      await service.remove('a-p', 'mgr');
+
+      expect(fgaMock.check).toHaveBeenCalledWith({
+        user: 'user:mgr',
+        relation: 'can_manage_assets',
+        object: 'project:p-1',
+      });
+      expect(txMock.asset.delete).toHaveBeenCalledWith({ where: { id: 'a-p' } });
+    });
+
+    it('sin can_manage_assets sobre el proyecto → 403 y NO borra', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-p', projectId: 'p-1' }));
+      fgaMock.check.mockResolvedValueOnce(false);
+      await expect(service.remove('a-p', 'ajeno')).rejects.toBeInstanceOf(ForbiddenException);
+      expect(txMock.asset.delete).not.toHaveBeenCalled();
     });
   });
 

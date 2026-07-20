@@ -39,6 +39,7 @@ function buildController(options: { allowed?: boolean } = {}): Mocks {
     addAccessory: vi.fn(() => Promise.resolve({ id: 'acc-1' })),
     updateAccessory: vi.fn(() => Promise.resolve({ id: 'acc-1' })),
     removeAccessory: vi.fn(() => Promise.resolve(undefined)),
+    remove: vi.fn(() => Promise.resolve(undefined)),
     updateChecklistTemplate: vi.fn(() => Promise.resolve({ id: 'tpl-1' })),
     listDocuments: vi.fn(() => Promise.resolve([])),
     getHistory: vi.fn(() => Promise.resolve([])),
@@ -110,6 +111,12 @@ describe('AssetsController — gate FGA propio de activos (can_manage_assets)', 
     await controller.removeAccessory(USER, 'a-1', 'acc-1');
     expect(check).toHaveBeenCalledWith(MANAGE_GATE);
     expect(service.removeAccessory).toHaveBeenCalledWith('a-1', 'acc-1', 'u1');
+  });
+
+  it('remove delega en el servicio (que resuelve la autorización, como @Patch)', async () => {
+    const { controller, service } = buildController();
+    await controller.remove(USER, 'a-1');
+    expect(service.remove).toHaveBeenCalledWith('a-1', 'u1');
   });
 
   it('updateChecklistTemplate gatea con can_manage_assets', async () => {

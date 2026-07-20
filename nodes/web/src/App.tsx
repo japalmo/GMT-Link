@@ -13,7 +13,6 @@ import RecoverPasswordPage from '@/pages/recuperar-clave';
 import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
 import SuspendedPage from '@/pages/suspended';
-import PublicAssetPage from '@/pages/public/activo';
 
 // Páginas secundarias y pesadas (lazy): se cargan al navegar. Esto saca del
 // bundle inicial las dependencias grandes (Three.js en v-metric, mapas en
@@ -85,7 +84,6 @@ const router = createBrowserRouter([
   // Cuenta suspendida: se auto-guarda (requiere sesión + status SUSPENDED),
   // fuera de ProtectedRoute para no entrar en bucle de redirección.
   { path: '/suspended', element: <SuspendedPage /> },
-  { path: '/public/activos/:token', element: <PublicAssetPage /> },
   {
     element: <ProtectedRoute />,
     children: [

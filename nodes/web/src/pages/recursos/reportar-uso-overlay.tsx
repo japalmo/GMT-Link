@@ -2,25 +2,25 @@
  * Overlay de "Reportar uso" del catálogo de Recursos: corre TODO el ciclo sin
  * navegar al detalle del activo.
  *
- * Máquina de dos pasos:
- * - `foto`: reclama el activo (`start`) con una foto inicial OPCIONAL. Si el activo
- *   no tiene checklist el backend devuelve el ciclo ya EN_CURSO y se termina ahí.
- * - `checklist`: si el ciclo quedó EN_PREPARACION, se carga la plantilla y se
- *   resuelve el checklist aquí mismo (firma incluida).
+ * Al abrirse reclama el activo de una (`start`, sin foto) y decide el paso:
+ * - Si el activo NO tiene checklist, el backend devuelve el ciclo ya EN_CURSO y
+ *   el overlay termina ahí (paso `starting`).
+ * - Si quedó EN_PREPARACION, carga la plantilla y resuelve el checklist aquí
+ *   mismo, firma incluida (paso `checklist`).
  *
- * Una vez abierto el ciclo el activo queda RECLAMADO: en el paso `checklist` el
- * overlay no se cierra por backdrop ni Escape, solo confirmando o cancelando el
- * reporte (si no, el activo quedaría trabado en EN_PREPARACION).
+ * Reclamado el activo, el paso `checklist` no se cierra por backdrop ni Escape:
+ * solo confirmando o cancelando el reporte (si no, el activo quedaría trabado en
+ * EN_PREPARACION). El reclamo (sin foto) es una petición rápida, así que durante
+ * `starting` solo se puede cerrar si falló (no llegó a reclamarse el activo).
  *
  * La construcción/validación de respuestas (`buildChecklistAnswers`) y el cuerpo
  * del formulario (`ChecklistFillBody`) son los MISMOS que usa el detalle del
  * activo: las dos entradas al checklist no se desincronizan.
  */
-import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { ClipboardCheck, ImagePlus, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
@@ -57,7 +57,7 @@ export interface ReportarUsoOverlayProps {
 }
 
 /** Paso activo del overlay. */
-type Step = 'foto' | 'checklist';
+type Step = 'starting' | 'checklist';
 
 export function ReportarUsoOverlay({
   asset,
@@ -67,41 +67,88 @@ export function ReportarUsoOverlay({
   const { start, confirm, cancel } = useUsageCycles();
   const { user } = useAuth();
   const { requestSignature, dialog: signatureDialog } = useChecklistSignature();
-  const photoInputId = useId();
 
-  const [step, setStep] = useState<Step>('foto');
-  const [photo, setPhoto] = useState<File | null>(null);
+  const [step, setStep] = useState<Step>('starting');
   const [cycle, setCycle] = useState<UsageCycleView | null>(null);
   const [template, setTemplate] = useState<ChecklistTemplateView | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   // Guarda de doble envío: cubre reportar, confirmar y cancelar (la firma puede
   // tardar, y el ciclo no admite dos mutaciones en vuelo).
   const [submitting, setSubmitting] = useState(false);
+  // Reclamo idempotente: garantiza que el activo se reclame UNA sola vez por
+  // apertura, aunque el efecto se re-ejecute por cambios de identidad de props.
+  const claimedFor = useRef<string | null>(null);
 
   const assetId = asset?.id ?? null;
 
-  // Cada apertura arranca limpia: el overlay vive montado en la tabla y se reusa
-  // para cualquier fila, así que no puede heredar el ciclo/plantilla del anterior.
-  useEffect(() => {
-    if (assetId === null) return;
-    setStep('foto');
-    setPhoto(null);
-    setCycle(null);
-    setTemplate(null);
-    setTemplateError(null);
-    setLoadingTemplate(false);
-    setAnswers({});
-    setSubmitting(false);
-  }, [assetId]);
+  /** Cierra tras una acción exitosa, avisando al contenedor para que recargue. */
+  const finish = useCallback(() => {
+    onCompleted();
+    onClose();
+  }, [onCompleted, onClose]);
 
-  // Escape solo cierra en el paso 'foto' y SOLO si no hay nada en vuelo: si se cierra
-  // mientras `start` está reclamando el activo (una foto por 4G tarda segundos), el
-  // ciclo igual se crea y el activo queda trabado EN_PREPARACION sin overlay que lo
-  // confirme ni lo cancele. Mismo criterio que el backdrop.
+  /** Carga la plantilla del checklist del activo (reutilizable para reintentar). */
+  const loadTemplate = useCallback(async (assetIdArg: string): Promise<void> => {
+    setLoadingTemplate(true);
+    setTemplateError(null);
+    try {
+      setTemplate(await getChecklistTemplate(assetIdArg));
+    } catch (err) {
+      setTemplateError(
+        err instanceof Error ? err.message : 'No se pudo cargar el checklist del activo.',
+      );
+    } finally {
+      setLoadingTemplate(false);
+    }
+  }, []);
+
+  /** Reclama el activo (sin foto) y decide el paso: EN_CURSO termina, EN_PREPARACION abre el checklist. */
+  const runStart = useCallback(
+    async (a: ReportarUsoAsset): Promise<void> => {
+      setSubmitting(true);
+      setStartError(null);
+      try {
+        const { cycle: started } = await start(a.id);
+        // Sin checklist configurado el backend deja el ciclo EN_CURSO de una: no hay
+        // nada más que preguntar.
+        if (started.status === 'EN_CURSO') {
+          toast.success('Activo puesto en uso con éxito.');
+          finish();
+          return;
+        }
+        setCycle(started);
+        setStep('checklist');
+        await loadTemplate(a.id);
+      } catch (err) {
+        setStartError(err instanceof Error ? err.message : 'No se pudo reportar el uso del activo.');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [start, finish, loadTemplate],
+  );
+
+  // El overlay se REMONTA por activo (el padre lo monta con key={asset.id}), así que
+  // cada apertura arranca con el estado inicial limpio: no hace falta un efecto de
+  // reset (que además, en StrictMode, reescribiría `submitting` a false y podría
+  // abrir la puerta a cerrar durante el reclamo). `submitting` lo maneja runStart.
+
+  // Reclama el activo apenas se abre, una sola vez por apertura (el ref evita el
+  // doble reclamo aunque runStart cambie de identidad al re-renderizar el padre).
   useEffect(() => {
-    if (assetId === null || step !== 'foto' || submitting) return;
+    if (!asset || claimedFor.current === asset.id) return;
+    claimedFor.current = asset.id;
+    void runStart(asset);
+  }, [asset, runStart]);
+
+  // Escape solo cierra en el paso 'starting' y SOLO si no hay nada en vuelo: durante
+  // el reclamo (submitting) cerrar dejaría el activo trabado EN_PREPARACION; una vez
+  // en 'checklist' el activo ya está reclamado y solo se sale confirmando/cancelando.
+  useEffect(() => {
+    if (assetId === null || step !== 'starting' || submitting) return;
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose();
     };
@@ -113,50 +160,6 @@ export function ReportarUsoOverlay({
   const setAnswer = useCallback((key: string, value: unknown) => {
     setAnswers((prev) => ({ ...prev, [key]: value }));
   }, []);
-
-  /** Cierra tras una acción exitosa, avisando al contenedor para que recargue. */
-  const finish = useCallback(() => {
-    onCompleted();
-    onClose();
-  }, [onCompleted, onClose]);
-
-  /** Carga la plantilla del checklist del activo (paso 'checklist'). */
-  const loadTemplate = async (id: string): Promise<void> => {
-    setLoadingTemplate(true);
-    setTemplateError(null);
-    try {
-      setTemplate(await getChecklistTemplate(id));
-    } catch (err) {
-      setTemplateError(
-        err instanceof Error ? err.message : 'No se pudo cargar el checklist del activo.',
-      );
-    } finally {
-      setLoadingTemplate(false);
-    }
-  };
-
-  /** Paso 'foto': reclama el activo y decide si hay checklist que completar. */
-  const handleStart = async (): Promise<void> => {
-    if (!asset || submitting) return;
-    setSubmitting(true);
-    try {
-      const { cycle: started } = await start(asset.id, photo ?? undefined);
-      // Sin checklist configurado el backend deja el ciclo EN_CURSO de una: no hay
-      // nada más que preguntar.
-      if (started.status === 'EN_CURSO') {
-        toast.success('Activo puesto en uso con éxito.');
-        finish();
-        return;
-      }
-      setCycle(started);
-      setStep('checklist');
-      await loadTemplate(asset.id);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'No se pudo reportar el uso del activo.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   /**
    * Paso 'checklist': firma (si es obligatoria) y confirma el ciclo. El `<form>` y
@@ -214,13 +217,14 @@ export function ReportarUsoOverlay({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
-      // El backdrop solo cierra en el paso 'foto': en 'checklist' el activo ya está
-      // reclamado y salir sin cancelar lo dejaría trabado.
+      // El backdrop solo cierra en el paso 'starting' sin nada en vuelo (el reclamo
+      // falló o aún no empezó): en 'checklist' el activo ya está reclamado y salir sin
+      // cancelar lo dejaría trabado.
       onClick={(e) => {
-        if (step === 'foto' && e.target === e.currentTarget && !submitting) onClose();
+        if (step === 'starting' && !submitting && e.target === e.currentTarget) onClose();
       }}
     >
-      {step === 'foto' ? (
+      {step === 'starting' ? (
         <Card className="w-full max-w-sm bg-card shadow-lg border border-border animate-in fade-in zoom-in duration-200">
           <CardHeader>
             <CardTitle>Reportar uso</CardTitle>
@@ -229,36 +233,30 @@ export function ReportarUsoOverlay({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <p className="text-xs text-muted-foreground">
-              Reclamas el activo y completas el checklist inicial. La foto es opcional.
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={photoInputId}>Foto inicial (opcional)</Label>
-              <input
-                id={photoInputId}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
-                className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
-              />
-              {photo && (
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <ImagePlus className="size-3.5 text-primary" aria-hidden />
-                  {photo.name}
-                </p>
-              )}
-            </div>
+            {startError ? (
+              <div
+                role="alert"
+                className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive"
+              >
+                {startError}
+              </div>
+            ) : (
+              <p className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                Reclamando el activo…
+              </p>
+            )}
           </CardContent>
-          <CardFooter className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
-            </Button>
-            <Button type="button" onClick={() => void handleStart()} loading={submitting}>
-              <ClipboardCheck className="size-3.5 mr-1.5" />
-              Reportar uso
-            </Button>
-          </CardFooter>
+          {startError && (
+            <CardFooter className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Cerrar
+              </Button>
+              <Button type="button" onClick={() => void runStart(asset)}>
+                Reintentar
+              </Button>
+            </CardFooter>
+          )}
         </Card>
       ) : (
         <Card className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-card shadow-lg border border-border animate-in fade-in zoom-in duration-200">
@@ -280,9 +278,20 @@ export function ReportarUsoOverlay({
               {templateError && (
                 <div
                   role="alert"
-                  className="p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive"
+                  className="flex flex-col gap-2 p-3 text-xs rounded-lg border border-destructive/20 bg-destructive/5 text-destructive"
                 >
-                  {templateError}
+                  <span>{templateError}</span>
+                  <div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={loadingTemplate}
+                      onClick={() => void loadTemplate(asset.id)}
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
                 </div>
               )}
 

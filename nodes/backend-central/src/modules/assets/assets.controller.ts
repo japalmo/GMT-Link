@@ -20,7 +20,6 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AssetStatus, AssetType } from '@prisma/client';
 import type { TablePage, TableRequest, UsageCycleView } from '@gmt-platform/contracts';
@@ -50,7 +49,6 @@ import type { IncomingSignature } from '../signatures/signature.service';
 import {
   AssetDocumentView,
   AssetHistoryEntryView,
-  AssetPublicView,
   AssetView,
   AssetAccessoryView,
   ChecklistTemplateView,
@@ -157,15 +155,6 @@ export class AssetsController {
   }
 
   /**
-   * Ficha pública accesible sin autenticación por código QR.
-   */
-  @Throttle({ default: { limit: 20, ttl: 60_000 } }) // 20/min por IP: endpoint sin auth
-  @Get('public/:token')
-  getPublicByToken(@Param('token') token: string): Promise<AssetPublicView> {
-    return this.assets.getPublicByToken(token);
-  }
-
-  /**
    * Detalle de un activo. Lectura pura: la autorización (funcional `asset:read`
    * con respaldo estructural por-activo) la resuelve el servicio, no el guard.
    */
@@ -208,6 +197,21 @@ export class AssetsController {
     const updated = await this.assets.update(id, userId, dto);
     // Quien editó cumplió `can_manage_assets`; el front conserva las acciones de gestión.
     return { ...updated, canManageAssets: true };
+  }
+
+  /**
+   * Elimina un activo COMPLETO (admin/gerencia). La autorización (`can_manage_assets`
+   * sobre el proyecto, o admin de la organización para activos globales) la resuelve
+   * el servicio, igual que `@Patch`. Borra en cascada sus hijos.
+   */
+  @Delete(':id')
+  @HttpCode(204)
+  async remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<void> {
+    const userId = this.requireUserId(authUser);
+    await this.assets.remove(id, userId);
   }
 
   /**
