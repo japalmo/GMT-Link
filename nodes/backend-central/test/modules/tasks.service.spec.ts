@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TaskStatus } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FgaService } from '../../src/fga/fga.service';
@@ -101,6 +101,22 @@ describe('TasksService', () => {
 
       await expect(service.create('u1', dto)).rejects.toThrow(BadRequestException);
     });
+
+    it('persiste las fechas de revisión y entrega (#76)', async () => {
+      const dto = {
+        name: 'Tarea con fechas',
+        projectId: 'p1',
+        reviewDate: '2026-07-20',
+        dueDate: '2026-07-25',
+      };
+      prismaMock.task.create.mockResolvedValue({ id: 't1', ...dto });
+
+      await service.create('u1', dto);
+
+      const data = prismaMock.task.create.mock.calls[0][0].data as { reviewDate: Date; dueDate: Date };
+      expect(data.reviewDate).toEqual(new Date('2026-07-20'));
+      expect(data.dueDate).toEqual(new Date('2026-07-25'));
+    });
   });
 
   describe('list', () => {
@@ -181,9 +197,86 @@ describe('TasksService', () => {
         data: {
           status: TaskStatus.COMPLETADO,
           actualPoints: 12,
+          rejectionReason: null, // aprobar limpia cualquier motivo previo (#77)
         },
       }));
       expect(gamificationMock.awardPoints).toHaveBeenCalledWith('u2', 'COMPLETE_TASK');
+    });
+
+    it('rechazar (REVISADO→EN_PROGRESO) exige gestión y guarda el motivo', async () => {
+      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.REVISADO, assignedToId: 'u2', createdById: 'u1' };
+      prismaMock.task.findUnique.mockResolvedValue(mockTask);
+      fgaMock.check.mockResolvedValue(true);
+      prismaMock.task.update.mockResolvedValue({ ...mockTask, status: TaskStatus.EN_PROGRESO });
+
+      await service.updateStatus('t1', 'u1', {
+        status: TaskStatus.EN_PROGRESO,
+        rejectionReason: 'Falta el informe firmado',
+      });
+
+      expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { status: TaskStatus.EN_PROGRESO, rejectionReason: 'Falta el informe firmado' },
+      }));
+    });
+
+    it('el responsable NO puede aprobar su propia tarea (solo gestión)', async () => {
+      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.REVISADO, assignedToId: 'u2', createdById: 'u9' };
+      prismaMock.task.findUnique.mockResolvedValue(mockTask);
+      // can_view + can_create_task = true (ve el proyecto y pasa el gate base como asignado);
+      // solo can_assign_task = false → no es gestión → no puede aprobar.
+      fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
+        Promise.resolve(relation !== 'can_assign_task'),
+      );
+
+      await expect(
+        service.updateStatus('t1', 'u2', { status: TaskStatus.COMPLETADO }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prismaMock.task.update).not.toHaveBeenCalled();
+    });
+
+    it('reabrir una tarea COMPLETADO exige gestión (un no-gestor no revierte la aprobación)', async () => {
+      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.COMPLETADO, assignedToId: 'u2', createdById: 'u9' };
+      prismaMock.task.findUnique.mockResolvedValue(mockTask);
+      // asignado con can_view + can_create_task, pero sin can_assign_task → no gestiona.
+      fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
+        Promise.resolve(relation !== 'can_assign_task'),
+      );
+
+      await expect(
+        service.updateStatus('t1', 'u2', { status: TaskStatus.EN_PROGRESO }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prismaMock.task.update).not.toHaveBeenCalled();
+    });
+
+    it('el responsable envía a revisión (EN_PROGRESO→REVISADO) y limpia el motivo previo', async () => {
+      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.EN_PROGRESO, assignedToId: 'u2', createdById: 'u9' };
+      prismaMock.task.findUnique.mockResolvedValue(mockTask);
+      // asignado sin can_create_task ni can_assign_task (solo can_view para getById).
+      fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
+        Promise.resolve(relation === 'can_view'),
+      );
+      prismaMock.task.update.mockResolvedValue({ ...mockTask, status: TaskStatus.REVISADO });
+
+      await service.updateStatus('t1', 'u2', { status: TaskStatus.REVISADO });
+
+      expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { status: TaskStatus.REVISADO, rejectionReason: null },
+      }));
+    });
+
+    it('un gestor con SOLO can_assign_task (sin can_create_task ni ser asignado) puede aprobar', async () => {
+      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.REVISADO, assignedToId: 'u2', createdById: 'u9' };
+      prismaMock.task.findUnique.mockResolvedValue(mockTask);
+      // u3 no es asignado ni creador; can_view + can_assign_task = true, can_create_task = false.
+      fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
+        Promise.resolve(relation === 'can_view' || relation === 'can_assign_task'),
+      );
+      prismaMock.task.update.mockResolvedValue({ ...mockTask, status: TaskStatus.COMPLETADO });
+
+      const res = await service.updateStatus('t1', 'u3', { status: TaskStatus.COMPLETADO });
+
+      expect(res.status).toBe(TaskStatus.COMPLETADO);
+      expect(prismaMock.task.update).toHaveBeenCalled();
     });
   });
 

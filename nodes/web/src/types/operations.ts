@@ -64,6 +64,12 @@ export interface TaskView {
   createdBy: { id: string; firstName: string; lastName: string; email: string };
   estimatedPoints: number;
   actualPoints: number | null;
+  /** Fecha de revisión planificada (#76), ISO-8601 o null. */
+  reviewDate: string | null;
+  /** Fecha de entrega comprometida (#76), ISO-8601 o null. */
+  dueDate: string | null;
+  /** Motivo si el gestor rechazó la tarea en revisión (#77). */
+  rejectionReason: string | null;
   recurrence: string | null;
   clientUserId: string | null;
   clientUser: { id: string; firstName: string; lastName: string; email: string } | null;
@@ -82,6 +88,9 @@ export interface CreateTaskInput {
   projectId: string;
   serviceId?: string;
   assignedToId?: string;
+  /** Fechas de planificación (#76), ISO-8601 (date-only). */
+  reviewDate?: string;
+  dueDate?: string;
   estimatedPoints?: number;
   recurrence?: string;
   clientUserId?: string;
@@ -95,6 +104,8 @@ export interface UpdateTaskInput {
   name?: string;
   description?: string;
   assignedToId?: string;
+  reviewDate?: string;
+  dueDate?: string;
   estimatedPoints?: number;
   actualPoints?: number;
   recurrence?: string;
@@ -108,6 +119,8 @@ export interface CreateProjectDocumentInput {
   serviceId: string;
   documentType: string;
   areaCode: string;
+  /** Entregable de una tarea (#77): linkea el documento a la tarea. */
+  taskId?: string;
 }
 
 export type ProjectDocumentStatus = 'BORRADOR' | 'PENDIENTE_QA' | 'PENDIENTE_CLIENTE' | 'APROBADO' | 'RECHAZADO';
@@ -125,6 +138,8 @@ export interface ProjectDocumentView {
   project: ProjectView;
   serviceId: string;
   service: ServiceView;
+  /** Tarea que produjo el entregable (#77), o null para documentos normales. */
+  taskId: string | null;
   ownerId: string;
   owner: { id: string; firstName: string; lastName: string; email: string };
   qaSignerId: string | null;

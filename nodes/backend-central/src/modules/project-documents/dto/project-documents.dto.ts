@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 
 export class CreateProjectDocumentDto {
   @IsString()
@@ -22,6 +22,14 @@ export class CreateProjectDocumentDto {
   @IsNotEmpty()
   @Length(2, 4, { message: 'El código de área debe tener entre 2 y 4 caracteres.' })
   areaCode!: string;
+
+  /**
+   * Entregable de una tarea (#77): linkea el documento a la tarea que lo produjo,
+   * además del proyecto. Opcional: los documentos de proyecto normales no lo llevan.
+   */
+  @IsString()
+  @IsOptional()
+  taskId?: string;
 }
 
 export class RejectDocumentDto {

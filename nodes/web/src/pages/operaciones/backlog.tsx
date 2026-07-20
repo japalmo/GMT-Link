@@ -2,6 +2,7 @@ import { useState, type ReactNode, useMemo, useEffect, useCallback } from 'react
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
+import { formatDate } from '@/lib/format';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { useProjects, useTasks, useProjectDocuments } from '@/hooks/use-operations';
 import { useUsers } from '@/hooks/use-users';
@@ -40,7 +41,7 @@ import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFo
 import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
 import { useDataTable } from '@/hooks/use-data-table';
 import type { TableRequest } from '@gmt-platform/contracts';
-import type { TaskView, TaskStatus, TaskDataSpec } from '@/types/operations';
+import type { TaskView, TaskStatus, TaskDataSpec, UpdateTaskInput } from '@/types/operations';
 
 /** Etiqueta legible + variante de `Badge` por estado de tarea del backlog. */
 const TASK_STATUS_META: Record<
@@ -52,6 +53,25 @@ const TASK_STATUS_META: Record<
   REVISADO: { label: 'Revisado', variant: 'neutral' },
   COMPLETADO: { label: 'Completado', variant: 'success' },
 };
+
+/**
+ * Convierte una fecha ISO date-only (guardada a medianoche UTC) al valor
+ * `YYYY-MM-DD` que espera un `<input type="date">`. Toma los primeros 10
+ * caracteres (parte UTC) para no correr el día por zona horaria. Devuelve '' si
+ * la entrada es null/indefinida.
+ */
+function isoToDateInput(iso: string | null | undefined): string {
+  if (!iso || iso.length < 10) return '';
+  return iso.slice(0, 10);
+}
+
+/**
+ * El endpoint de project-documents solo acepta PDF (application/pdf). Validamos
+ * en cliente por MIME type y, como respaldo, por extensión .pdf.
+ */
+function isPdf(file: File): boolean {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
 
 export function BacklogTab(): ReactNode {
   const { profile } = useProfile();
@@ -147,7 +167,7 @@ export function BacklogTab(): ReactNode {
 
   const { tasks, loading, create, updateStatus, update, remove, startTime, finishTime } = useTasks(taskFilters);
 
-  const { documents: projectDocs, refetch: refetchDocs } = useProjectDocuments(
+  const { documents: projectDocs, refetch: refetchDocs, upload: uploadDoc } = useProjectDocuments(
     filterProject !== 'all' ? filterProject : undefined,
     filterService !== 'all' ? filterService : undefined
   );
@@ -189,6 +209,8 @@ export function BacklogTab(): ReactNode {
   const [taskSrvId, setTaskSrvId] = useState('');
   const [taskAssignedId, setTaskAssignedId] = useState('');
   const [taskEstPoints, setTaskEstPoints] = useState(10);
+  const [taskReviewDate, setTaskReviewDate] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
   const [taskRecurrence, setTaskRecurrence] = useState('');
   const [taskClientId, setTaskClientId] = useState('');
   const [taskProduct, setTaskProduct] = useState<'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics'>('time_only');
@@ -214,8 +236,22 @@ export function BacklogTab(): ReactNode {
   const [editAssignedId, setEditAssignedId] = useState('');
   const [editEstPoints, setEditEstPoints] = useState(10);
   const [editActPoints, setEditActPoints] = useState<number | undefined>(undefined);
+  const [editReviewDate, setEditReviewDate] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
   const [editRecurrence, setEditRecurrence] = useState('');
   const [editClientId, setEditClientId] = useState('');
+
+  // Estados del flujo de revisión (#77): reportar inicio, enviar a revisión con
+  // entregables, aprobar y rechazar. Cada operación en vuelo deshabilita su botón.
+  const [startingTaskId, setStartingTaskId] = useState<string | null>(null);
+  const [reviewTask, setReviewTask] = useState<TaskView | null>(null);
+  const [reviewFiles, setReviewFiles] = useState<File[]>([]);
+  const [reviewServiceId, setReviewServiceId] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [rejectTask, setRejectTask] = useState<TaskView | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [approvingTaskId, setApprovingTaskId] = useState<string | null>(null);
 
   // Dynamically select services based on current project select in creation
   const projectServices = useMemo(() => {
@@ -229,6 +265,14 @@ export function BacklogTab(): ReactNode {
     const proj = projects.find((p) => p.id === filterProject);
     return proj?.services || [];
   }, [filterProject, projects]);
+
+  // Servicios del proyecto de la tarea que se está enviando a revisión (#77): se
+  // usan solo cuando la tarea no trae `serviceId` y hay que elegir uno a mano.
+  const reviewTaskServices = useMemo(() => {
+    if (!reviewTask) return [];
+    const proj = projects.find((p) => p.id === reviewTask.projectId);
+    return proj?.services || [];
+  }, [reviewTask, projects]);
 
   // Group tasks by status
   const columns = useMemo(() => {
@@ -349,6 +393,8 @@ export function BacklogTab(): ReactNode {
         projectId: taskProjId,
         serviceId: taskSrvId || undefined,
         assignedToId: taskAssignedId || undefined,
+        reviewDate: taskReviewDate || undefined,
+        dueDate: taskDueDate || undefined,
         estimatedPoints: Number(taskEstPoints),
         recurrence: taskRecurrence.trim() || undefined,
         clientUserId: taskClientId || undefined,
@@ -362,6 +408,8 @@ export function BacklogTab(): ReactNode {
       setTaskSrvId('');
       setTaskAssignedId('');
       setTaskEstPoints(10);
+      setTaskReviewDate('');
+      setTaskDueDate('');
       setTaskRecurrence('');
       setTaskClientId('');
       setTaskProduct('time_only');
@@ -380,6 +428,8 @@ export function BacklogTab(): ReactNode {
     setEditAssignedId(t.assignedToId || '');
     setEditEstPoints(t.estimatedPoints);
     setEditActPoints(t.actualPoints ?? undefined);
+    setEditReviewDate(isoToDateInput(t.reviewDate));
+    setEditDueDate(isoToDateInput(t.dueDate));
     setEditRecurrence(t.recurrence || '');
     setEditClientId(t.clientUserId || '');
   };
@@ -388,15 +438,20 @@ export function BacklogTab(): ReactNode {
     e.preventDefault();
     if (!editTask) return;
     try {
-      await update(editTask.id, {
+      // Se tipa como `UpdateTaskInput` (que ya admite reviewDate/dueDate) para
+      // que las fechas se envíen al backend a través de `update` -> `api.updateTask`.
+      const dto: UpdateTaskInput = {
         name: editName,
         description: editDesc.trim() || undefined,
         assignedToId: editAssignedId || undefined,
+        reviewDate: editReviewDate || undefined,
+        dueDate: editDueDate || undefined,
         estimatedPoints: Number(editEstPoints),
         actualPoints: editActPoints !== undefined ? Number(editActPoints) : undefined,
         recurrence: editRecurrence.trim() || undefined,
         clientUserId: editClientId || undefined,
-      });
+      };
+      await update(editTask.id, dto);
       tableRefetch();
       setEditTask(null);
     } catch (err) {
@@ -449,6 +504,12 @@ export function BacklogTab(): ReactNode {
   const handleTimeLogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!timeLogTask) return;
+    // El entregable se sube al endpoint de project-documents (solo PDF): valida
+    // antes de finalizar el tiempo para no dejar la tarea a medias.
+    if (timeLogType === 'finish' && deliverableFile && !isPdf(deliverableFile)) {
+      toast.error('Los entregables deben ser archivos PDF.');
+      return;
+    }
     try {
       const note = timeLogNote.trim() || undefined;
       if (timeLogType === 'start') {
@@ -464,8 +525,9 @@ export function BacklogTab(): ReactNode {
             name: `Entregable - ${timeLogTask.name}`,
             projectId: timeLogTask.projectId,
             serviceId: timeLogTask.serviceId || '',
-            documentType: 'INFORME',
+            documentType: 'INF',
             areaCode: 'OPS',
+            taskId: timeLogTask.id,
           }, deliverableFile);
           toast.success('Entregable subido con éxito.');
         }
@@ -502,8 +564,125 @@ export function BacklogTab(): ReactNode {
       setMetricCotaEspejo('');
       setMetricVolSalmuera('');
       tableRefetch();
+      // Refresca la lista de documentos para que el entregable recién subido
+      // aparezca de inmediato en la caja de entregables (filtrada por taskId).
+      void refetchDocs();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al registrar actividad.');
+    }
+  };
+
+  // #77 · "Reportar inicio": registra el inicio de tiempo y mueve la tarea de
+  // PENDIENTE a EN_PROGRESO en un solo gesto (para el responsable de la tarea).
+  const handleReportStart = async (t: TaskView) => {
+    setStartingTaskId(t.id);
+    try {
+      await startTime(t.id);
+      await updateStatus(t.id, 'EN_PROGRESO');
+      tableRefetch();
+      toast.success('Inicio reportado. La tarea pasó a En progreso.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al reportar el inicio.');
+    } finally {
+      setStartingTaskId(null);
+    }
+  };
+
+  // #77 · Abre el diálogo para enviar a revisión (subida de entregables).
+  const handleOpenReview = (t: TaskView) => {
+    setReviewTask(t);
+    setReviewFiles([]);
+    setReviewServiceId(t.serviceId || '');
+  };
+
+  // #77 · Sube cada entregable (documentType 'ENT', linkeado a la tarea) y, solo
+  // si todas las subidas se completan, mueve la tarea a REVISADO.
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewTask) return;
+    if (reviewFiles.length === 0) {
+      toast.error('Sube al menos un entregable para enviar a revisión.');
+      return;
+    }
+    if (!reviewFiles.every(isPdf)) {
+      toast.error('Los entregables deben ser archivos PDF.');
+      return;
+    }
+    const serviceId = reviewTask.serviceId || reviewServiceId;
+    if (!serviceId) {
+      toast.error('Selecciona el servicio al que pertenece el entregable.');
+      return;
+    }
+    setReviewSubmitting(true);
+    try {
+      for (const file of reviewFiles) {
+        await uploadDoc(
+          {
+            name: reviewFiles.length === 1 ? `Entregable - ${reviewTask.name}` : file.name,
+            projectId: reviewTask.projectId,
+            serviceId,
+            documentType: 'ENT',
+            areaCode: 'OPS',
+            taskId: reviewTask.id,
+          },
+          file,
+        );
+      }
+      await updateStatus(reviewTask.id, 'REVISADO');
+      tableRefetch();
+      void refetchDocs();
+      setReviewTask(null);
+      setReviewFiles([]);
+      setReviewServiceId('');
+      toast.success('Entregables subidos. La tarea pasó a Revisado.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al enviar a revisión.');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  // #77 · "Aprobar" (solo gestión; el backend gatea con 403): REVISADO -> COMPLETADO.
+  const handleApprove = async (t: TaskView) => {
+    setApprovingTaskId(t.id);
+    try {
+      await updateStatus(t.id, 'COMPLETADO');
+      tableRefetch();
+      toast.success('Tarea aprobada y completada.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al aprobar la tarea.');
+    } finally {
+      setApprovingTaskId(null);
+    }
+  };
+
+  // #77 · Abre el diálogo de rechazo (motivo obligatorio).
+  const handleOpenReject = (t: TaskView) => {
+    setRejectTask(t);
+    setRejectReason('');
+  };
+
+  // #77 · "Rechazar" (solo gestión; el backend gatea con 403): REVISADO -> EN_PROGRESO
+  // con motivo, que luego se muestra en la tarjeta al responsable.
+  const handleRejectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectTask) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast.error('Indica el motivo del rechazo.');
+      return;
+    }
+    setRejectSubmitting(true);
+    try {
+      await updateStatus(rejectTask.id, 'EN_PROGRESO', undefined, reason);
+      tableRefetch();
+      setRejectTask(null);
+      setRejectReason('');
+      toast.success('Tarea rechazada y devuelta a En progreso.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al rechazar la tarea.');
+    } finally {
+      setRejectSubmitting(false);
     }
   };
 
@@ -527,61 +706,73 @@ export function BacklogTab(): ReactNode {
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{t.name}</span>
           {t.description && <span className="text-xs text-muted-foreground line-clamp-1">{t.description}</span>}
-          {(t.status === 'COMPLETADO' || t.status === 'REVISADO') &&
-            (t.dataSpec?.type === 'pdf_report' || t.dataSpec?.type === 'file_generic') && (
+          {(() => {
+            // Entregables linkeados por taskId (#77). La caja se muestra si hay
+            // entregables o si el usuario puede subir uno en un estado apto.
+            const taskDocs = projectDocs?.filter((d) => d.taskId === t.id) ?? [];
+            const canUploadDeliverable =
+              !isReadOnly &&
+              (t.assignedToId === profile?.id || isSupervisorOrAdmin) &&
+              (t.status === 'REVISADO' || t.status === 'COMPLETADO');
+            if (taskDocs.length === 0 && !canUploadDeliverable) return null;
+            return (
               <div className="mt-1 flex max-w-xs flex-col gap-1 rounded-lg border bg-muted/20 p-2">
-                <span className="text-[9px] font-semibold text-muted-foreground">
-                  Entregable ({t.dataSpec?.label}):
-                </span>
-                {(() => {
-                  const taskDoc = projectDocs?.find((d) => d.name === `Entregable - ${t.name}`);
-                  return (
-                    <div className="flex flex-col gap-1.5">
-                      {taskDoc ? (
+                <span className="text-[9px] font-semibold text-muted-foreground">Entregables:</span>
+                {taskDocs.length > 0 ? (
+                  <ul className="flex flex-col gap-0.5">
+                    {taskDocs.map((d) => (
+                      <li key={d.id}>
                         <a
-                          href={taskDoc.fileUrl}
+                          href={d.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-[11px] font-medium text-primary hover:underline"
                         >
-                          Descargar entregable
+                          Descargar entregable ({d.name})
                         </a>
-                      ) : (
-                        <span className="text-[10px] italic text-amber-500">Pendiente</span>
-                      )}
-                      {!isReadOnly && (t.assignedToId === profile?.id || isSupervisorOrAdmin) && (
-                        <Input
-                          type="file"
-                          accept={t.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
-                          className="h-6 border-dashed border-border bg-card py-0 text-[9px]"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              await api.uploadProjectDocument(
-                                {
-                                  name: `Entregable - ${t.name}`,
-                                  projectId: t.projectId,
-                                  serviceId: t.serviceId || '',
-                                  documentType: 'INFORME',
-                                  areaCode: 'OPS',
-                                },
-                                file,
-                              );
-                              toast.success('Entregable subido con éxito.');
-                              e.target.value = '';
-                              void refetchDocs();
-                            } catch (err) {
-                              toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
-                            }
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })()}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-[10px] italic text-amber-500">Pendiente</span>
+                )}
+                {canUploadDeliverable && (
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    className="h-6 border-dashed border-border bg-card py-0 text-[9px]"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (!isPdf(file)) {
+                        toast.error('Los entregables deben ser archivos PDF.');
+                        e.target.value = '';
+                        return;
+                      }
+                      try {
+                        await api.uploadProjectDocument(
+                          {
+                            name: `Entregable - ${t.name}`,
+                            projectId: t.projectId,
+                            serviceId: t.serviceId || '',
+                            documentType: 'INF',
+                            areaCode: 'OPS',
+                            taskId: t.id,
+                          },
+                          file,
+                        );
+                        toast.success('Entregable subido con éxito.');
+                        e.target.value = '';
+                        void refetchDocs();
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
+                      }
+                    }}
+                  />
+                )}
               </div>
-            )}
+            );
+          })()}
         </div>
       ),
     },
@@ -682,6 +873,9 @@ export function BacklogTab(): ReactNode {
 
   const taskRowActions = (t: TaskView): ReactNode => {
     const states: TaskStatus[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
+    const isAssignee = t.assignedToId === profile?.id;
+    // Gestión del proyecto o creador de la tarea (espejo del backend: creador o can_assign_task).
+    const canManage = isSupervisorOrAdmin || t.createdById === profile?.id;
     return (
       <>
         {!isReadOnly && (isSupervisorOrAdmin || t.createdById === profile?.id || t.assignedToId === profile?.id) && (
@@ -700,36 +894,84 @@ export function BacklogTab(): ReactNode {
             <Trash2 className="size-3.5" />
           </Button>
         )}
-        {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && (
+        {/* Flechas genéricas (#77): mismo criterio que en Kanban. No se ofrecen
+            transiciones ya gobernadas por un botón dedicado ni las que el backend
+            rechazaría con 403 al salir de REVISADO o COMPLETADO. */}
+        {!isReadOnly &&
+          t.status !== 'PENDIENTE' &&
+          t.status !== 'REVISADO' &&
+          (t.status === 'COMPLETADO' ? canManage : isSupervisorOrAdmin || isAssignee) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={() => {
+              const prev = states[states.indexOf(t.status) - 1];
+              if (prev) void handleMoveStatus(t, prev);
+            }}
+            title="Retroceder"
+          >
+            <ArrowLeft className="size-3.5" />
+          </Button>
+        )}
+        {!isReadOnly &&
+          t.status !== 'COMPLETADO' &&
+          t.status !== 'REVISADO' &&
+          (t.status === 'PENDIENTE' ? canManage : isSupervisorOrAdmin || isAssignee) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={() => {
+              const next = states[states.indexOf(t.status) + 1];
+              if (next) void handleMoveStatus(t, next);
+            }}
+            title="Avanzar"
+          >
+            <ArrowRight className="size-3.5" />
+          </Button>
+        )}
+        {/* Acciones del flujo de revisión (#77) */}
+        {!isReadOnly && t.status === 'PENDIENTE' && t.assignedToId === profile?.id && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => void handleReportStart(t)}
+            disabled={startingTaskId === t.id}
+          >
+            {startingTaskId === t.id ? 'Reportando...' : 'Reportar inicio'}
+          </Button>
+        )}
+        {!isReadOnly && t.status === 'EN_PROGRESO' && t.assignedToId === profile?.id && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px]"
+            onClick={() => handleOpenReview(t)}
+          >
+            Enviar a revisión
+          </Button>
+        )}
+        {!isReadOnly && t.status === 'REVISADO' && (isSupervisorOrAdmin || t.createdById === profile?.id) && (
           <>
-            {t.status !== 'PENDIENTE' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => {
-                  const prev = states[states.indexOf(t.status) - 1];
-                  if (prev) void handleMoveStatus(t, prev);
-                }}
-                title="Retroceder"
-              >
-                <ArrowLeft className="size-3.5" />
-              </Button>
-            )}
-            {t.status !== 'COMPLETADO' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => {
-                  const next = states[states.indexOf(t.status) + 1];
-                  if (next) void handleMoveStatus(t, next);
-                }}
-                title="Avanzar"
-              >
-                <ArrowRight className="size-3.5" />
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => void handleApprove(t)}
+              disabled={approvingTaskId === t.id}
+            >
+              {approvingTaskId === t.id ? 'Aprobando...' : 'Aprobar'}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => handleOpenReject(t)}
+            >
+              Rechazar
+            </Button>
           </>
         )}
       </>
@@ -897,7 +1139,14 @@ export function BacklogTab(): ReactNode {
                     const activeLogForUser = profile && t.timeLogs?.find((log) => log.userId === profile.id && log.endedAt === null);
                     const hasVariance = t.actualPoints !== null && t.actualPoints !== t.estimatedPoints;
                     const variance = t.actualPoints !== null ? t.actualPoints - t.estimatedPoints : 0;
-                    
+                    // Acciones del flujo de revisión (#77) según estado y usuario.
+                    const isAssignee = t.assignedToId === profile?.id;
+                    // Gestión del proyecto o creador de la tarea (espejo del backend: creador o can_assign_task).
+                    const canManage = isSupervisorOrAdmin || t.createdById === profile?.id;
+                    const canReportStart = status === 'PENDIENTE' && isAssignee;
+                    const canSendReview = status === 'EN_PROGRESO' && isAssignee;
+                    const canManageReview = status === 'REVISADO' && canManage;
+
                     return (
                       <Card
                         key={t.id}
@@ -948,6 +1197,21 @@ export function BacklogTab(): ReactNode {
                             </div>
                           </div>
 
+                          {/* Fechas de planificación (#76): solo se muestran si existen */}
+                          {(t.reviewDate || t.dueDate) && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 w-full text-[10px] text-muted-foreground -mt-1">
+                              {t.reviewDate && <span>Revisión: {formatDate(t.reviewDate)}</span>}
+                              {t.dueDate && <span>Entrega: {formatDate(t.dueDate)}</span>}
+                            </div>
+                          )}
+
+                          {/* Motivo de rechazo (#77): visible al responsable tras un rechazo */}
+                          {t.status === 'EN_PROGRESO' && t.rejectionReason && (
+                            <div className="w-full rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[10px] text-destructive">
+                              <span className="font-semibold">Rechazada:</span> {t.rejectionReason}
+                            </div>
+                          )}
+
                           {/* Time logs tracking controls */}
                           {!isReadOnly && (
                             <div className="flex items-center justify-between w-full border-t border-border/40 pt-2 mt-1">
@@ -989,60 +1253,113 @@ export function BacklogTab(): ReactNode {
                             </div>
                           )}
 
-                          {/* Deliverable link / upload for completed/reviewed tasks */}
-                          {(t.status === 'COMPLETADO' || t.status === 'REVISADO') && (t.dataSpec?.type === 'pdf_report' || t.dataSpec?.type === 'file_generic') && (
-                            <div className="flex flex-col gap-1.5 w-full border-t border-border/40 pt-2 mt-1">
-                              <span className="text-[10px] font-semibold text-muted-foreground">
-                                Entregable esperado: {t.dataSpec?.label}
-                              </span>
-                              {(() => {
-                                const taskDoc = projectDocs?.find(d => d.name === `Entregable - ${t.name}`);
-                                return (
+                          {/* Entregables linkeados por taskId (#77): la caja se muestra si
+                              hay entregables o si el usuario puede subir uno en un estado apto */}
+                          {(() => {
+                            const taskDocs = projectDocs?.filter((d) => d.taskId === t.id) ?? [];
+                            const canUploadDeliverable =
+                              !isReadOnly &&
+                              (t.assignedToId === profile?.id || isSupervisorOrAdmin) &&
+                              (t.status === 'REVISADO' || t.status === 'COMPLETADO');
+                            if (taskDocs.length === 0 && !canUploadDeliverable) return null;
+                            return (
+                              <div className="flex flex-col gap-1.5 w-full border-t border-border/40 pt-2 mt-1">
+                                <span className="text-[10px] font-semibold text-muted-foreground">Entregables</span>
+                                {taskDocs.length > 0 ? (
                                   <div className="flex flex-col gap-1.5">
-                                    {taskDoc ? (
+                                    {taskDocs.map((d) => (
                                       <a
-                                        href={taskDoc.fileUrl}
+                                        key={d.id}
+                                        href={d.fileUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs text-primary hover:underline flex items-center gap-1 font-medium bg-primary/5 border border-primary/10 rounded-md p-1.5"
                                       >
-                                        <Plus className="size-3 rotate-45 text-primary" />
-                                        Descargar {t.dataSpec?.type === 'pdf_report' ? 'PDF' : 'Archivo'}
+                                        <Plus className="size-3 rotate-45 text-primary shrink-0" />
+                                        <span className="truncate">Descargar entregable ({d.name})</span>
                                       </a>
-                                    ) : (
-                                      <span className="text-[10px] text-amber-500 italic">Pendiente de subida</span>
-                                    )}
-                                    
-                                    {!isReadOnly && (t.assignedToId === profile?.id || isSupervisorOrAdmin) && (
-                                      <div className="flex items-center gap-2">
-                                        <Input
-                                          type="file"
-                                          accept={t.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
-                                          className="h-7 text-[10px] py-0.5 bg-card border-dashed border-border"
-                                          onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (!file) return;
-                                            try {
-                                              await api.uploadProjectDocument({
-                                                name: `Entregable - ${t.name}`,
-                                                projectId: t.projectId,
-                                                serviceId: t.serviceId || '',
-                                                documentType: 'INFORME',
-                                                areaCode: 'OPS',
-                                              }, file);
-                                              toast.success('Entregable subido con éxito.');
-                                              e.target.value = '';
-                                              void refetchDocs();
-                                            } catch (err) {
-                                              toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
-                                            }
-                                          }}
-                                        />
-                                      </div>
-                                    )}
+                                    ))}
                                   </div>
-                                );
-                              })()}
+                                ) : (
+                                  <span className="text-[10px] text-amber-500 italic">Pendiente de subida</span>
+                                )}
+                                {canUploadDeliverable && (
+                                  <Input
+                                    type="file"
+                                    accept="application/pdf"
+                                    className="h-7 text-[10px] py-0.5 bg-card border-dashed border-border"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      if (!isPdf(file)) {
+                                        toast.error('Los entregables deben ser archivos PDF.');
+                                        e.target.value = '';
+                                        return;
+                                      }
+                                      try {
+                                        await api.uploadProjectDocument({
+                                          name: `Entregable - ${t.name}`,
+                                          projectId: t.projectId,
+                                          serviceId: t.serviceId || '',
+                                          documentType: 'INF',
+                                          areaCode: 'OPS',
+                                          taskId: t.id,
+                                        }, file);
+                                        toast.success('Entregable subido con éxito.');
+                                        e.target.value = '';
+                                        void refetchDocs();
+                                      } catch (err) {
+                                        toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Acciones del flujo de revisión (#77) */}
+                          {!isReadOnly && (canReportStart || canSendReview || canManageReview) && (
+                            <div className="flex w-full gap-1.5 border-t border-border/40 pt-2 mt-1">
+                              {canReportStart && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 flex-1 text-[11px]"
+                                  onClick={() => void handleReportStart(t)}
+                                  disabled={startingTaskId === t.id}
+                                >
+                                  {startingTaskId === t.id ? 'Reportando...' : 'Reportar inicio'}
+                                </Button>
+                              )}
+                              {canSendReview && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 flex-1 text-[11px]"
+                                  onClick={() => handleOpenReview(t)}
+                                >
+                                  Enviar a revisión
+                                </Button>
+                              )}
+                              {canManageReview && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    className="h-7 flex-1 text-[11px]"
+                                    onClick={() => void handleApprove(t)}
+                                    disabled={approvingTaskId === t.id}
+                                  >
+                                    {approvingTaskId === t.id ? 'Aprobando...' : 'Aprobar'}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    className="h-7 flex-1 text-[11px]"
+                                    onClick={() => handleOpenReject(t)}
+                                  >
+                                    Rechazar
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           )}
 
@@ -1073,9 +1390,15 @@ export function BacklogTab(): ReactNode {
                               )}
                             </div>
 
-                            {/* Transition buttons */}
+                            {/* Flechas genéricas (#77): NO ofrecen transiciones ya gobernadas por un
+                                botón dedicado. Sin Retroceder ni Avanzar sobre REVISADO (rechazo con
+                                motivo / aprobación por botón). Sobre PENDIENTE, Avanzar solo para gestión
+                                (el responsable usa "Reportar inicio"). Reabrir COMPLETADO solo gestión. */}
                             <div className="flex gap-1">
-                              {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && status !== 'PENDIENTE' && (
+                              {!isReadOnly &&
+                                status !== 'PENDIENTE' &&
+                                status !== 'REVISADO' &&
+                                (status === 'COMPLETADO' ? canManage : isSupervisorOrAdmin || isAssignee) && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1090,7 +1413,10 @@ export function BacklogTab(): ReactNode {
                                   <ArrowLeft className="size-3" />
                                 </Button>
                               )}
-                              {!isReadOnly && (isSupervisorOrAdmin || t.assignedToId === profile?.id) && status !== 'COMPLETADO' && (
+                              {!isReadOnly &&
+                                status !== 'COMPLETADO' &&
+                                status !== 'REVISADO' &&
+                                (status === 'PENDIENTE' ? canManage : isSupervisorOrAdmin || isAssignee) && (
                                 <Button
                                   variant="outline"
                                   size="icon"
@@ -1240,6 +1566,28 @@ export function BacklogTab(): ReactNode {
                         value={taskRecurrence}
                         onChange={(e) => setTaskRecurrence(e.target.value)}
                         placeholder="Ej. 0 0 * * 1 (Cada Lunes)"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="task-review-date">Fecha de revisión (Opcional)</Label>
+                      <Input
+                        id="task-review-date"
+                        type="date"
+                        value={taskReviewDate}
+                        onChange={(e) => setTaskReviewDate(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="task-due-date">Fecha de entrega (Opcional)</Label>
+                      <Input
+                        id="task-due-date"
+                        type="date"
+                        value={taskDueDate}
+                        onChange={(e) => setTaskDueDate(e.target.value)}
                       />
                     </div>
                   </div>
@@ -1540,6 +1888,34 @@ export function BacklogTab(): ReactNode {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="edit-review-date">Fecha de revisión</Label>
+                    <Input
+                      id="edit-review-date"
+                      type="date"
+                      value={editReviewDate}
+                      onChange={(e) => setEditReviewDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="edit-due-date">Fecha de entrega</Label>
+                    <Input
+                      id="edit-due-date"
+                      type="date"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {editTask.status === 'EN_PROGRESO' && editTask.rejectionReason && (
+                  <Alert variant="destructive">
+                    <span className="font-semibold">Rechazada:</span> {editTask.rejectionReason}
+                  </Alert>
+                )}
+
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="edit-client">Mandante/ITO Solicitante</Label>
                   <Select
@@ -1661,12 +2037,12 @@ export function BacklogTab(): ReactNode {
                   {(timeLogTask.dataSpec?.type === 'pdf_report' || timeLogTask.dataSpec?.type === 'file_generic') && (
                     <div className="flex flex-col gap-1.5 border-t pt-3 mt-2">
                       <Label htmlFor="deliverable-file" className="font-semibold text-xs text-foreground">
-                        Subir Entregable / Producto ({timeLogTask.dataSpec?.label})
+                        Subir Entregable / Producto en PDF ({timeLogTask.dataSpec?.label})
                       </Label>
                       <Input
                         id="deliverable-file"
                         type="file"
-                        accept={timeLogTask.dataSpec?.type === 'pdf_report' ? '.pdf' : '*'}
+                        accept="application/pdf"
                         onChange={(e) => setDeliverableFile(e.target.files?.[0] || null)}
                         className="bg-card text-xs border border-border"
                       />
@@ -1717,6 +2093,155 @@ export function BacklogTab(): ReactNode {
               </Button>
             </ModalFooter>
           </form>
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL ENVIAR A REVISIÓN (SUBIR ENTREGABLES) (#77) */}
+      <Modal
+        open={reviewTask !== null}
+        onOpenChange={(open) => {
+          if (!open && !reviewSubmitting) {
+            setReviewTask(null);
+            setReviewFiles([]);
+            setReviewServiceId('');
+          }
+        }}
+      >
+        <ModalContent className="max-w-md bg-card border border-border shadow-lg">
+          {reviewTask && (
+            <form onSubmit={handleReviewSubmit}>
+              <ModalHeader>
+                <ModalTitle>Enviar a revisión</ModalTitle>
+                <ModalDescription>
+                  Sube uno o más entregables en formato PDF. Al confirmar, la tarea pasará a Revisado.
+                </ModalDescription>
+              </ModalHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="border rounded-lg p-3 bg-muted/20 text-xs">
+                  <span className="font-semibold text-foreground">Tarea:</span> {reviewTask.name}
+                </div>
+
+                {!reviewTask.serviceId && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="review-service">Servicio del entregable</Label>
+                    <Select
+                      id="review-service"
+                      aria-label="Servicio al que pertenece el entregable"
+                      required
+                      value={reviewServiceId}
+                      onChange={(e) => setReviewServiceId(e.target.value)}
+                    >
+                      <option value="">Selecciona servicio</option>
+                      {reviewTaskServices.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.code})
+                        </option>
+                      ))}
+                    </Select>
+                    {reviewTaskServices.length === 0 && (
+                      <p className="text-[11px] text-amber-500">
+                        El proyecto no tiene servicios registrados. Crea un servicio antes de enviar a revisión.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="review-files">Entregables (PDF)</Label>
+                  <Input
+                    id="review-files"
+                    type="file"
+                    multiple
+                    accept="application/pdf"
+                    onChange={(e) => setReviewFiles(e.target.files ? Array.from(e.target.files) : [])}
+                    className="bg-card text-xs border border-border"
+                    disabled={reviewSubmitting}
+                  />
+                  {reviewFiles.length > 0 && (
+                    <ul className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+                      {reviewFiles.map((f, i) => (
+                        <li key={`${f.name}-${i}`} className="truncate">{f.name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              <ModalFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setReviewTask(null);
+                    setReviewFiles([]);
+                    setReviewServiceId('');
+                  }}
+                  disabled={reviewSubmitting}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={reviewSubmitting || reviewFiles.length === 0}>
+                  {reviewSubmitting ? 'Subiendo...' : 'Enviar a revisión'}
+                </Button>
+              </ModalFooter>
+            </form>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* MODAL RECHAZAR TAREA (MOTIVO) (#77) */}
+      <Modal
+        open={rejectTask !== null}
+        onOpenChange={(open) => {
+          if (!open && !rejectSubmitting) {
+            setRejectTask(null);
+            setRejectReason('');
+          }
+        }}
+      >
+        <ModalContent className="max-w-md bg-card border border-border shadow-lg">
+          {rejectTask && (
+            <form onSubmit={handleRejectSubmit}>
+              <ModalHeader>
+                <ModalTitle>Rechazar tarea</ModalTitle>
+                <ModalDescription>
+                  Indica el motivo del rechazo. La tarea volverá a En progreso con el motivo visible para el responsable.
+                </ModalDescription>
+              </ModalHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="border rounded-lg p-3 bg-muted/20 text-xs">
+                  <span className="font-semibold text-foreground">Tarea:</span> {rejectTask.name}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reject-reason">Motivo del rechazo</Label>
+                  <Textarea
+                    id="reject-reason"
+                    required
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    className="min-h-24"
+                    placeholder="Explica qué debe corregirse antes de reenviar a revisión..."
+                    disabled={rejectSubmitting}
+                  />
+                </div>
+              </div>
+              <ModalFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setRejectTask(null);
+                    setRejectReason('');
+                  }}
+                  disabled={rejectSubmitting}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="destructive" disabled={rejectSubmitting || !rejectReason.trim()}>
+                  {rejectSubmitting ? 'Rechazando...' : 'Rechazar tarea'}
+                </Button>
+              </ModalFooter>
+            </form>
+          )}
         </ModalContent>
       </Modal>
 

@@ -113,19 +113,8 @@ export interface UseTasksResult {
   error: string | null;
   refetch: () => Promise<void>;
   create: (dto: CreateTaskInput) => Promise<TaskView>;
-  update: (
-    id: string,
-    dto: {
-      name?: string;
-      description?: string;
-      assignedToId?: string;
-      estimatedPoints?: number;
-      actualPoints?: number;
-      recurrence?: string;
-      clientUserId?: string;
-    },
-  ) => Promise<TaskView>;
-  updateStatus: (id: string, status: TaskStatus, actualPoints?: number) => Promise<TaskView>;
+  update: (id: string, dto: UpdateTaskInput) => Promise<TaskView>;
+  updateStatus: (id: string, status: TaskStatus, actualPoints?: number, rejectionReason?: string) => Promise<TaskView>;
   remove: (id: string) => Promise<void>;
   startTime: (id: string, note?: string) => Promise<void>;
   finishTime: (id: string, note?: string) => Promise<void>;
@@ -189,8 +178,8 @@ export function useTasks(filters: {
   );
 
   const updateStatus = useCallback(
-    async (id: string, status: TaskStatus, actualPoints?: number) => {
-      const t = await api.updateTaskStatus(id, status, actualPoints);
+    async (id: string, status: TaskStatus, actualPoints?: number, rejectionReason?: string) => {
+      const t = await api.updateTaskStatus(id, status, actualPoints, rejectionReason);
       await load();
       return t;
     },
@@ -252,16 +241,7 @@ export interface UseProjectDocumentsResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  upload: (
-    dto: {
-      name: string;
-      projectId: string;
-      serviceId: string;
-      documentType: string;
-      areaCode: string;
-    },
-    file: File,
-  ) => Promise<ProjectDocumentView>;
+  upload: (dto: CreateProjectDocumentInput, file: File) => Promise<ProjectDocumentView>;
   uploadRevision: (id: string, file: File) => Promise<ProjectDocumentView>;
   signQA: (id: string) => Promise<ProjectDocumentView>;
   signClient: (id: string) => Promise<ProjectDocumentView>;

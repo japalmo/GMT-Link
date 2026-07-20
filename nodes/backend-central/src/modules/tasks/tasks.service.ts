@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { TaskStatus, Prisma } from '@prisma/client';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -66,6 +72,8 @@ export class TasksService {
         assignedToId: dto.assignedToId || null,
         createdById: userId,
         estimatedPoints: dto.estimatedPoints ?? 0,
+        reviewDate: dto.reviewDate ? new Date(dto.reviewDate) : null,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         recurrence: dto.recurrence || null,
         clientUserId: dto.clientUserId || null,
         phaseId: dto.phaseId || null,
@@ -295,6 +303,9 @@ export class TasksService {
         assignedToId: dto.assignedToId !== undefined ? dto.assignedToId : undefined,
         estimatedPoints: dto.estimatedPoints,
         actualPoints: dto.actualPoints,
+        // Fechas (#76): `undefined` deja intacto; un ISO válido la fija.
+        reviewDate: dto.reviewDate !== undefined ? new Date(dto.reviewDate) : undefined,
+        dueDate: dto.dueDate !== undefined ? new Date(dto.dueDate) : undefined,
         recurrence: dto.recurrence,
         clientUserId: dto.clientUserId,
       },
@@ -314,19 +325,51 @@ export class TasksService {
   async updateStatus(id: string, userId: string, dto: UpdateTaskStatusDto) {
     const task = await this.getById(id, userId);
 
-    // Permitir mover la tarea si tiene el permiso general o es el asignado de la tarea
-    const canCreate = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'can_create_task',
-      object: `project:${task.projectId}`,
-    });
+    // Autoridad: se resuelve UNA vez y se reusa en ambas compuertas para no
+    // desalinearlas. Quien GESTIONA la tarea = su creador o can_assign_task
+    // (supervisor / admin de contrato / gerencia). can_create_task es la puerta
+    // general de mover; ser gestión también habilita (un rol custom con solo
+    // task:assign es gestión legítima aunque no tenga task:create).
+    const [canCreate, canAssign] = await Promise.all([
+      this.fga.check({ user: `user:${userId}`, relation: 'can_create_task', object: `project:${task.projectId}` }),
+      this.fga.check({ user: `user:${userId}`, relation: 'can_assign_task', object: `project:${task.projectId}` }),
+    ]);
+    const isManager = task.createdById === userId || canAssign;
 
-    if (!canCreate && task.assignedToId !== userId) {
+    if (!canCreate && !isManager && task.assignedToId !== userId) {
       throw new BadRequestException('No tienes permiso para mover esta tarea.');
     }
 
+    // Revisión (#77): las transiciones de CONTROL solo las hace quien GESTIONA el
+    // proyecto, NO el propio responsable:
+    //  - APROBAR: cualquier movimiento HACIA COMPLETADO.
+    //  - RECHAZAR / retirar de revisión: cualquier salida DE REVISADO.
+    //  - REABRIR: cualquier salida DE COMPLETADO (deshace una aprobación).
+    // El responsable solo mueve PENDIENTE→EN_PROGRESO (reportar inicio) y
+    // EN_PROGRESO→REVISADO (enviar a revisión).
+    const isApproval = dto.status === TaskStatus.COMPLETADO && task.status !== TaskStatus.COMPLETADO;
+    const isRejection = task.status === TaskStatus.REVISADO && dto.status === TaskStatus.EN_PROGRESO;
+    const requiresManagement =
+      task.status !== dto.status &&
+      (dto.status === TaskStatus.COMPLETADO ||
+        task.status === TaskStatus.REVISADO ||
+        task.status === TaskStatus.COMPLETADO);
+    if (requiresManagement && !isManager) {
+      throw new ForbiddenException(
+        'Solo quien gestiona el proyecto puede aprobar, rechazar o reabrir la tarea.',
+      );
+    }
+
+    // Motivo de rechazo (#77): rechazar lo guarda; reenviar a revisión o reiniciar
+    // (PENDIENTE) lo limpian; el resto de transiciones no lo tocan (`undefined`).
+    let rejectionReason: string | null | undefined = undefined;
+    if (isRejection) rejectionReason = dto.rejectionReason ?? null;
+    else if (dto.status === TaskStatus.REVISADO || dto.status === TaskStatus.PENDIENTE) {
+      rejectionReason = null;
+    }
+
     // Si la tarea se mueve a COMPLETADO, ejecutar en una transacción para actualizar puntos del usuario
-    if (dto.status === TaskStatus.COMPLETADO && task.status !== TaskStatus.COMPLETADO) {
+    if (isApproval) {
       const finalPoints = dto.actualPoints ?? task.estimatedPoints;
 
       const updatedTask = await this.prisma.task.update({
@@ -334,6 +377,7 @@ export class TasksService {
         data: {
           status: TaskStatus.COMPLETADO,
           actualPoints: finalPoints,
+          rejectionReason: null, // aprobada: se limpia cualquier motivo previo
         },
         include: {
           project: true,
@@ -355,7 +399,7 @@ export class TasksService {
     // Transición de estado normal (no completado)
     return this.prisma.task.update({
       where: { id },
-      data: { status: dto.status },
+      data: { status: dto.status, rejectionReason },
       include: {
         project: true,
         service: true,

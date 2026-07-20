@@ -1781,6 +1781,8 @@ export function createTask(dto: {
   projectId: string;
   serviceId?: string;
   assignedToId?: string;
+  reviewDate?: string;
+  dueDate?: string;
   estimatedPoints?: number;
   recurrence?: string;
   clientUserId?: string;
@@ -1797,6 +1799,8 @@ export function updateTask(
     name?: string;
     description?: string;
     assignedToId?: string;
+    reviewDate?: string;
+    dueDate?: string;
     estimatedPoints?: number;
     actualPoints?: number;
     recurrence?: string;
@@ -1809,10 +1813,15 @@ export function updateTask(
   });
 }
 
-export function updateTaskStatus(id: string, status: TaskStatus, actualPoints?: number): Promise<TaskView> {
+export function updateTaskStatus(
+  id: string,
+  status: TaskStatus,
+  actualPoints?: number,
+  rejectionReason?: string,
+): Promise<TaskView> {
   return request<TaskView>(`/tasks/${encodeURIComponent(id)}/status`, {
     method: 'PUT',
-    body: JSON.stringify({ status, actualPoints }),
+    body: JSON.stringify({ status, actualPoints, rejectionReason }),
   });
 }
 
@@ -1842,10 +1851,15 @@ export function getTaskAssignees(projectId: string): Promise<Array<{ id: string;
 
 /* --- Documentos de Proyecto --- */
 
-export function listProjectDocuments(projectId?: string, serviceId?: string): Promise<ProjectDocumentView[]> {
+export function listProjectDocuments(
+  projectId?: string,
+  serviceId?: string,
+  taskId?: string,
+): Promise<ProjectDocumentView[]> {
   const query = new URLSearchParams();
   if (projectId) query.append('projectId', projectId);
   if (serviceId) query.append('serviceId', serviceId);
+  if (taskId) query.append('taskId', taskId);
   const qs = query.toString();
   return request<ProjectDocumentView[]>(`/project-documents${qs ? `?${qs}` : ''}`);
 }
@@ -1857,6 +1871,7 @@ export function uploadProjectDocument(
     serviceId: string;
     documentType: string;
     areaCode: string;
+    taskId?: string;
   },
   file: File,
 ): Promise<ProjectDocumentView> {
@@ -1866,6 +1881,7 @@ export function uploadProjectDocument(
   formData.append('serviceId', dto.serviceId);
   formData.append('documentType', dto.documentType);
   formData.append('areaCode', dto.areaCode);
+  if (dto.taskId) formData.append('taskId', dto.taskId);
   formData.append('file', file);
   return uploadRequest<ProjectDocumentView>('/project-documents', formData);
 }

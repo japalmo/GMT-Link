@@ -123,9 +123,16 @@ export class ProjectDocumentsController {
     @CurrentUser() authUser: AuthUser | undefined,
     @Query('projectId') projectId?: string,
     @Query('serviceId') serviceId?: string,
+    @Query('taskId') taskId?: string,
   ) {
     const userId = this.requireUserId(authUser);
-    return this.service.list(userId, projectId, serviceId);
+    // Estrecha el valor (Express 5 puede entregar objeto/array en `?taskId[x]=`).
+    return this.service.list(
+      userId,
+      projectId,
+      serviceId,
+      typeof taskId === 'string' ? taskId : undefined,
+    );
   }
 
   /**

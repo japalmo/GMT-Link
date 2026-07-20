@@ -146,6 +146,7 @@ export class ProjectDocumentsService {
           version: 0, // rev0
           projectId: dto.projectId,
           serviceId: dto.serviceId,
+          taskId: dto.taskId || null, // entregable de tarea (#77), opcional
           ownerId: userId,
         },
         include: {
@@ -388,7 +389,7 @@ export class ProjectDocumentsService {
   /**
    * Lista documentos visibles.
    */
-  async list(userId: string, projectId?: string, serviceId?: string) {
+  async list(userId: string, projectId?: string, serviceId?: string, taskId?: string) {
     // Obtener proyectos accesibles
     const globalAdmin = await this.prisma.membership.findFirst({
       where: {
@@ -443,6 +444,11 @@ export class ProjectDocumentsService {
 
     if (serviceId) {
       where.serviceId = serviceId;
+    }
+
+    // Entregables de una tarea puntual (#77).
+    if (taskId) {
+      where.taskId = taskId;
     }
 
     return this.prisma.projectDocument.findMany({
