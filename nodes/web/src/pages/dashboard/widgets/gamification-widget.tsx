@@ -12,8 +12,6 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   CREATE_TASK: 'Tarea creada',
   COMPLETE_TASK: 'Tarea completada',
   RUN_CHECKLIST: 'Checklist ejecutado',
-  WAREHOUSE_TX: 'Transacción de bodega',
-  RATE_PROVIDER: 'Evaluación de proveedor',
 };
 
 const RANK_DETAILS = {

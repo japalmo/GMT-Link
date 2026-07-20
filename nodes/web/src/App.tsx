@@ -33,7 +33,6 @@ const ProyectosFaenasPage = lazy(() => import('@/pages/proyectos/faenas'));
 const ProyectosListaPage = lazy(() => import('@/pages/proyectos/faena-proyectos'));
 const ProyectoDetallePage = lazy(() => import('@/pages/proyectos/vista-proyecto'));
 const RecursosPage = lazy(() => import('@/pages/recursos'));
-const InventarioPage = lazy(() => import('@/pages/inventario'));
 const GisToolsPage = lazy(() => import('@/pages/gis-tools'));
 const MetricsDashboard = lazy(() => import('@/pages/v-metric'));
 const DesignDemo = lazy(() => import('@/pages/DesignDemo'));
@@ -120,7 +119,6 @@ const router = createBrowserRouter([
           },
           { path: '/proyectos/proyecto/:projectId', element: <RequireModule module="proyectos">{lazyRoute(<ProyectoDetallePage />)}</RequireModule> },
           { path: '/recursos', element: <RequireModule module="recursos">{lazyRoute(<RecursosPage />)}</RequireModule> },
-          { path: '/inventario', element: <RequireModule module="inventario">{lazyRoute(<InventarioPage />)}</RequireModule> },
           { path: '/herramientas', element: <RequireModule module="herramientas">{lazyRoute(<GisToolsPage />)}</RequireModule> },
           { path: '/v-metric', element: <RequireModule module="v-metric">{lazyRoute(<MetricsDashboard />)}</RequireModule> },
           // QA del design system.

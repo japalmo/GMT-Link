@@ -73,10 +73,10 @@ describe('rbac-catalog — invariantes', () => {
     }
   });
 
-  it('trabajador otorga SOLO los derechos base: finance:request:create + inventory:request:own, ambos GLOBAL', () => {
+  it('trabajador otorga SOLO el derecho base: finance:request:create a GLOBAL', () => {
     const t = roleByKey.get('trabajador')!.grants;
     expect(new Set(t.map((x) => `${x.perm}@${x.scope}`))).toEqual(
-      new Set(['finance:request:create@GLOBAL', 'inventory:request:own@GLOBAL']),
+      new Set(['finance:request:create@GLOBAL']),
     );
   });
 
@@ -111,70 +111,6 @@ describe('rbac-catalog — invariantes', () => {
     }
   });
 
-  it('inventory:access existe como permiso FUNCTIONAL del módulo inventario (siempre GLOBAL)', () => {
-    const p = PERMISSIONS.find((x) => x.key === 'inventory:access');
-    expect(p, 'inventory:access debe existir en el catálogo').toBeDefined();
-    expect(p!.kind).toBe('FUNCTIONAL');
-    expect(p!.module).toBe('inventario');
-    expect(p!.scopeable).toBe(false);
-  });
-
-  it('logistica es rol de sistema con inventario + bodegas + proveedores + solicitudes propias, todo a GLOBAL', () => {
-    const role = roleByKey.get('logistica');
-    expect(role, 'el rol logistica debe existir').toBeDefined();
-    expect(new Set(role!.grants.map((x) => `${x.perm}@${x.scope}`))).toEqual(
-      new Set([
-        'inventory:access@GLOBAL',
-        'warehouse:access@GLOBAL',
-        'provider:access@GLOBAL',
-        'finance:request:create@GLOBAL',
-        'inventory:request:own@GLOBAL',
-      ]),
-    );
-  });
-
-  it('inventory:request:own existe como permiso FUNCTIONAL del módulo inventario (siempre GLOBAL)', () => {
-    const p = PERMISSIONS.find((x) => x.key === 'inventory:request:own');
-    expect(p, 'inventory:request:own debe existir en el catálogo').toBeDefined();
-    expect(p!.kind).toBe('FUNCTIONAL');
-    expect(p!.module).toBe('inventario');
-    expect(p!.scopeable).toBe(false);
-  });
-
-  it('ESPEJO EXACTO: todo rol otorga inventory:request:own si y solo si otorga finance:request:create, con el mismo scope', () => {
-    for (const role of ROLES) {
-      const finance = role.grants.find((x) => x.perm === 'finance:request:create');
-      const inventory = role.grants.find((x) => x.perm === 'inventory:request:own');
-      expect(
-        Boolean(inventory),
-        `rol ${role.key}: inventory:request:own debe espejar finance:request:create`,
-      ).toBe(Boolean(finance));
-      if (finance && inventory) {
-        expect(inventory.scope, `rol ${role.key}: mismo scope que finance:request:create`).toBe(
-          finance.scope,
-        );
-      }
-    }
-  });
-
-  it('client_ito y viewer NO otorgan inventory:request:own (los externos no solicitan insumos)', () => {
-    for (const k of ['client_ito', 'viewer']) {
-      expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'inventory:request:own')).toBe(false);
-    }
-  });
-
-  it('department_admin otorga inventory:access a GLOBAL (es admin del módulo Inventario)', () => {
-    const grant = roleByKey.get('department_admin')!.grants.find((x) => x.perm === 'inventory:access');
-    expect(grant, 'department_admin debe otorgar inventory:access').toBeDefined();
-    expect(grant!.scope).toBe('GLOBAL');
-  });
-
-  it('org_admin y admin_ti incluyen inventory:access (vía ALL_GLOBAL_EXCEPT_BETA)', () => {
-    for (const k of ['org_admin', 'admin_ti']) {
-      expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'inventory:access' && x.scope === 'GLOBAL')).toBe(true);
-    }
-  });
-
   it('asset:use:report existe como permiso FUNCTIONAL del módulo recursos (siempre GLOBAL)', () => {
     const p = PERMISSIONS.find((x) => x.key === 'asset:use:report');
     expect(p, 'asset:use:report debe existir en el catálogo').toBeDefined();
@@ -191,10 +127,9 @@ describe('rbac-catalog — invariantes', () => {
     );
   });
 
-  it('conductor NO otorga finance:request:create ni inventory:request:own (rol complementario, no rol base)', () => {
+  it('conductor NO otorga finance:request:create (rol complementario, no rol base)', () => {
     const grants = roleByKey.get('conductor')!.grants;
     expect(grants.some((x) => x.perm === 'finance:request:create')).toBe(false);
-    expect(grants.some((x) => x.perm === 'inventory:request:own')).toBe(false);
   });
 
   it('org_admin y admin_ti incluyen asset:use:report (vía ALL_GLOBAL_EXCEPT_BETA)', () => {

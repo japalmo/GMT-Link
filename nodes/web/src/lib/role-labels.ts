@@ -26,8 +26,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   gerencia_rh: 'Gerencia de RH',
   gerencia_general: 'Gerencia General',
   admin_ti: 'Administrador TI',
-  // Rol de sistema Logística (módulo Inventario).
-  logistica: 'Logística',
   // Rol de sistema Conductor (flota de vehículos): reporta uso y ejecuta checklist.
   conductor: 'Conductor',
   // Legacy: etiquetas de rol de trabajador a nivel PROYECTO (no bundles de org).
@@ -55,8 +53,6 @@ export const MODULE_LABELS: Record<string, string> = {
   sistema: 'Sistema',
   directorio: 'Directorio',
   clientes: 'Clientes',
-  proveedores: 'Proveedores',
-  bodegas: 'Bodegas',
   proyectos: 'Proyectos',
   tareas: 'Tareas',
   documentos: 'Documentos',
@@ -64,7 +60,6 @@ export const MODULE_LABELS: Record<string, string> = {
   finanzas: 'Finanzas',
   activos: 'Activos',
   recursos: 'Recursos',
-  inventario: 'Inventario',
 };
 
 /**

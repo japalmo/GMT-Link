@@ -30,9 +30,6 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { ProjectDocumentsModule } from './modules/project-documents/project-documents.module';
 import { AssetsModule } from './modules/assets/assets.module';
-import { SuppliesModule } from './modules/supplies/supplies.module';
-import { InventoryModule } from './modules/inventory/inventory.module';
-import { ProvidersModule } from './modules/providers/providers.module';
 import { ToolsModule } from './modules/tools/tools.module';
 import { GamificationModule } from './modules/gamification/gamification.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
@@ -74,9 +71,6 @@ import { SignaturesModule } from './modules/signatures/signatures.module';
     TasksModule,
     ProjectDocumentsModule,
     AssetsModule,
-    SuppliesModule,
-    InventoryModule,
-    ProvidersModule,
     ToolsModule,
     GamificationModule,
     MetricsModule,

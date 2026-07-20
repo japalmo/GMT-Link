@@ -39,20 +39,6 @@ export const ACHIEVEMENTS_CATALOG: readonly AchievementDefinition[] = [
     condition: { type: 'first_action', action: 'COMPLETE_CV' },
   },
   {
-    key: 'warehouse_10',
-    title: 'Bodeguero',
-    description: 'Registraste 10 o más transacciones de bodega.',
-    icon: '📦',
-    condition: { type: 'action_count', action: 'WAREHOUSE_TX', threshold: 10 },
-  },
-  {
-    key: 'evaluator_5',
-    title: 'Evaluador',
-    description: 'Evaluaste a 5 o más proveedores.',
-    icon: '⭐',
-    condition: { type: 'action_count', action: 'RATE_PROVIDER', threshold: 5 },
-  },
-  {
     key: 'star_operator',
     title: 'Operador Estrella',
     description: 'Completaste 25 o más tareas asignadas.',
@@ -90,6 +76,4 @@ export const POINTS_TABLE: Readonly<Record<string, number>> = {
   CREATE_TASK: 5,
   COMPLETE_TASK: 15,
   RUN_CHECKLIST: 10,
-  WAREHOUSE_TX: 5,
-  RATE_PROVIDER: 10,
 };

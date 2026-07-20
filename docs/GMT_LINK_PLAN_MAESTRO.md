@@ -8,7 +8,7 @@
 
 ## 1. Contexto y objetivo
 
-GMT Link es la plataforma interna de operaciones de GMT (ingeniería/geofísica). Conviven **colaboradores y clientes (ITO)** con acceso finamente segmentado. Cubre: identidad/acceso, finanzas internas, operaciones por proyecto (backlog + documentos con flujo de aprobación), recursos físicos (insumos, proveedores, equipos, vehículos, bodegas) y herramientas técnicas (coordenadas + IA). Todo atravesado por **mínimo privilegio** y **gamificación**. Mobile-first, responsive, limpio.
+GMT Link es la plataforma interna de operaciones de GMT (ingeniería/geofísica). Conviven **colaboradores y clientes (ITO)** con acceso finamente segmentado. Cubre: identidad/acceso, finanzas internas, operaciones por proyecto (backlog + documentos con flujo de aprobación), recursos físicos (equipos, vehículos, maquinaria) y herramientas técnicas (coordenadas + IA). Todo atravesado por **mínimo privilegio** y **gamificación**. Mobile-first, responsive, limpio.
 
 **Objetivo de este plan:** construir el sistema por etapas pequeñas y reviewables, una tarea a la vez, optimizando el uso del modelo.
 
@@ -241,13 +241,13 @@ type asset
 
 | Primitiva | Qué hace | Usada en |
 |---|---|---|
-| `ImportWizard` | Overlay 4 pasos: descargar formato → subir → preview → confirmar. Slot opcional de ayuda IA. | Reembolsos, Horas extra, Insumos, Proveedores |
-| `ApprovalWorkflow` | Estados pendiente→aprobado/rechazado, guarda versión anterior, notifica al aprobador. | Docs proyecto, docs perfil, docs activos, plantillas checklist, update insumos |
-| `RoleScopedList` | Lista/tabla filtrada por permisos del usuario; búsqueda + filtros + paginación. | Reembolsos, Horas, Proyectos, Directorio, Insumos, Activos |
+| `ImportWizard` | Overlay 4 pasos: descargar formato → subir → preview → confirmar. Slot opcional de ayuda IA. | Reembolsos, Horas extra, Trabajadores/Checklists (import Excel) |
+| `ApprovalWorkflow` | Estados pendiente→aprobado/rechazado, guarda versión anterior, notifica al aprobador. | Docs proyecto, docs perfil, docs activos, plantillas checklist |
+| `RoleScopedList` | Lista/tabla filtrada por permisos del usuario; búsqueda + filtros + paginación. | Reembolsos, Horas, Proyectos, Directorio, Activos |
 | `RequestForm` | "Nueva solicitud" → formulario tipado → entra al list. | Reembolsos, Horas extra |
 | `AssetBase` | Codificación auto, QR, ficha pública, docs, historial, disputa "en uso". | Equipos, Vehículos |
 | `StepperDownload` | Barra de pasos adaptativa (1=última … N=todas; densidad cambia según cantidad). | Liquidaciones |
-| `AIAssistedDataCleaner` | Card "Necesito ayuda para ordenar los datos" → CSV ordenado. Cuota 3/día. | Insumos, Proveedores |
+| `AIAssistedDataCleaner` | Card "Necesito ayuda para ordenar los datos" → CSV ordenado. Cuota 3/día. | (sin consumidor activo tras retirar Inventario — #81) |
 
 ---
 
@@ -317,9 +317,9 @@ Formato de cada tarea: **objetivo · entregable · criterio de "hecho" (DoD)**. 
 | 5.1 | `AssetBase` (codificación, QR, ficha pública, docs, historial, disputa "en uso") | QR abre ficha pública |
 | 5.2 | Equipos (ciclos carga, calibración, accesorios, checklist editable + aprobación) | Crea equipo con checklist |
 | 5.3 | Vehículos (km, ubicación device, docs legales, checklist) — *integrar código + CSV existentes* | Checklist de camioneta corre |
-| 5.4 | Insumos (lote CSV/manual, búsqueda sugerida, alta bodega inline) | Ingresa lote a bodega |
-| 5.5 | Proveedores (catálogo, evaluación 1–5, score, `AIAssistedDataCleaner`) | Crea proveedor + catálogo |
-| 5.6 | Bodegas (stock, historial entrada/salida, widget gráfico más usados) | Muestra stock y gráfico |
+| ~~5.4~~ | ~~Insumos~~ — **RETIRADO (#81)**: el módulo Inventario (Insumos + Bodegas + Proveedores + rol logística) se eliminó por completo del producto. No re-implementar. | — |
+| ~~5.5~~ | ~~Proveedores~~ — **RETIRADO (#81)** (ver 5.4). | — |
+| ~~5.6~~ | ~~Bodegas~~ — **RETIRADO (#81)** (ver 5.4). | — |
 
 ### ETAPA 6 — Herramientas
 

@@ -157,30 +157,8 @@ describe('AuthController · GET /auth/me', () => {
     });
     const result = await controller.me(ACTIVE_USER);
     expect(result.modules).toEqual([
-      'dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'proyectos', 'recursos', 'inventario', 'herramientas', 'v-metric',
+      'dashboard', 'usuarios', 'directorio', 'finanzas', 'operaciones', 'proyectos', 'recursos', 'herramientas', 'v-metric',
     ]);
-  });
-
-  it('deriva el módulo "recursos" cuando el usuario tiene inventory:request:own (rol base trabajador llega a Mis insumos)', async () => {
-    const { controller } = buildController({
-      user: { id: 'u1', email: 'x@gmt.cl', firstName: 'X', lastName: 'Y', status: 'ACTIVE' },
-      permissions: ['finance:request:create', 'inventory:request:own'],
-    });
-    const result = await controller.me(ACTIVE_USER);
-    expect(result.modules).toEqual(expect.arrayContaining(['dashboard', 'finanzas', 'recursos']));
-    expect(result.modules).not.toContain('inventario');
-    expect(result.modules).not.toContain('usuarios');
-  });
-
-  it('deriva el módulo "inventario" cuando el usuario tiene inventory:access', async () => {
-    const { controller } = buildController({
-      user: { id: 'u1', email: 'x@gmt.cl', firstName: 'X', lastName: 'Y', status: 'ACTIVE' },
-      permissions: ['inventory:access'],
-    });
-    const result = await controller.me(ACTIVE_USER);
-    expect(result.permissions).toEqual(['inventory:access']);
-    expect(result.modules).toEqual(expect.arrayContaining(['dashboard', 'finanzas', 'inventario']));
-    expect(result.modules).not.toContain('usuarios');
   });
 
   it('incluye canManageRoles=true consultando FGA (can_manage_roles sobre organization:gmt)', async () => {

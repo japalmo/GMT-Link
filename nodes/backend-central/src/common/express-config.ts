@@ -14,7 +14,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
  *   Con 'simple', `?filters[type]=EQUIPO` llega como la clave literal
  *   "filters[type]" y `@Query('filters')` queda `undefined`: TODOS los filtros
  *   server-side del motor de tablas (activos por tipo, usuarios, finanzas,
- *   inventario) se descartaban en silencio y cada pestaña listaba todo. Con
+ *   recursos) se descartaban en silencio y cada pestaña listaba todo. Con
  *   'extended' vuelve a parsearse como `{ filters: { type: 'EQUIPO' } }`.
  */
 export function configureExpress(app: NestExpressApplication): void {

@@ -16,7 +16,6 @@ import {
 } from '@/lib/api';
 import { useProfile } from '@/hooks/use-profile';
 import { useHasPermission } from '@/hooks/use-has-permission';
-import { MisInsumos } from './mis-insumos';
 import {
   Wrench,
   Car,
@@ -99,7 +98,7 @@ interface UserOption {
   lastName: string;
 }
 
-type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria' | 'insumos';
+type RecursosTab = 'equipos' | 'vehiculos' | 'maquinaria';
 
 /**
  * Destino inicial del detalle de un activo:
@@ -171,10 +170,8 @@ const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
 };
 
 export default function RecursosPage(): ReactNode {
-  // Todas las pestañas son visibles para cualquier usuario. La gestión de la
-  // cadena de suministro (bodegas, proveedores, catálogo) vive en el módulo
-  // Inventario; aquí Insumos es la vista PROPIA del trabajador (mis entregas y
-  // mis solicitudes).
+  // Todas las pestañas son visibles para cualquier usuario: equipos, vehículos
+  // y maquinaria.
   const [activeTab, setActiveTab] = useState<RecursosTab>('equipos');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   // Destino inicial del detalle: 'checklist' aterriza en la pestaña Ficha con
@@ -197,29 +194,23 @@ export default function RecursosPage(): ReactNode {
       accion === 'reportar-uso' ? 'reportar-uso' : accion === 'ver-docs' ? 'documentos' : null;
     setSelectedAssetId(assetId);
     setDetailTarget(target);
-    // El detalle solo se muestra dentro de una pestaña de activos; si el deep-link
-    // llega con Insumos activo, vuelve a Equipos para que el detalle se renderice.
-    setActiveTab((t) => (t === 'insumos' ? 'equipos' : t));
     const next = new URLSearchParams(searchParams);
     next.delete('asset');
     next.delete('accion');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const isAssetTab = activeTab === 'equipos' || activeTab === 'vehiculos' || activeTab === 'maquinaria';
-
   const tabItems: TabItem<RecursosTab>[] = [
     { value: 'equipos', label: 'Equipos', icon: Wrench },
     { value: 'vehiculos', label: 'Vehículos', icon: Car },
     { value: 'maquinaria', label: 'Maquinaria', icon: Construction },
-    { value: 'insumos', label: 'Insumos', icon: Package },
   ];
 
   return (
     <PageContainer maxWidth="7xl">
       <PageHeader
         title="Recursos Físicos"
-        description="Administra los activos, vehículos y herramientas de GMT, y revisa tus insumos."
+        description="Administra los activos, vehículos y maquinaria de GMT."
       />
 
       <Tabs<RecursosTab>
@@ -242,36 +233,30 @@ export default function RecursosPage(): ReactNode {
         tabIndex={0}
         className="mt-4"
       >
-        {isAssetTab && (
-          selectedAssetId ? (
-            <AssetDetailView
-              id={selectedAssetId}
-              initialTarget={detailTarget}
-              onBack={() => {
-                setSelectedAssetId(null);
-                setDetailTarget(null);
-              }}
-            />
-          ) : (
-            <ActivosCatalogView
-              key={activeTab}
-              subsection={
-                activeTab === 'vehiculos'
-                  ? 'vehiculos'
-                  : activeTab === 'maquinaria'
-                    ? 'maquinaria'
-                    : 'equipos'
-              }
-              onSelectAsset={(id, target) => {
-                setSelectedAssetId(id);
-                setDetailTarget(target ?? null);
-              }}
-            />
-          )
-        )}
-
-        {activeTab === 'insumos' && (
-          <MisInsumos />
+        {selectedAssetId ? (
+          <AssetDetailView
+            id={selectedAssetId}
+            initialTarget={detailTarget}
+            onBack={() => {
+              setSelectedAssetId(null);
+              setDetailTarget(null);
+            }}
+          />
+        ) : (
+          <ActivosCatalogView
+            key={activeTab}
+            subsection={
+              activeTab === 'vehiculos'
+                ? 'vehiculos'
+                : activeTab === 'maquinaria'
+                  ? 'maquinaria'
+                  : 'equipos'
+            }
+            onSelectAsset={(id, target) => {
+              setSelectedAssetId(id);
+              setDetailTarget(target ?? null);
+            }}
+          />
         )}
       </div>
     </PageContainer>
