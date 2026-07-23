@@ -12,10 +12,12 @@ import {
 import { useDataTable } from '@/hooks/use-data-table';
 import {
   fetchDocumentsTable,
+  getDocumentFileUrl,
   uploadDocument as apiUploadDocument,
   uploadDocumentVersion as apiUploadDocumentVersion,
   deleteDocument as apiDeleteDocument,
 } from '@/lib/api';
+import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import type { TableRequest } from '@gmt-platform/contracts';
 import type { DocumentStatus, PersonalDocumentView } from '@/types/documents';
 import { ProfileTabs } from '../perfil/profile-tabs';
@@ -77,27 +79,27 @@ export default function DocumentsPage(): ReactNode {
       id: 'archivo',
       header: 'Archivo',
       render: (doc) => (
-        <div className="flex flex-col gap-1">
-          <a
-            href={doc.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex flex-col items-start gap-1">
+          {/* Fase 1B: la URL fresca se pide al hacer clic; `fileUrl` crudo puede
+              ser una clave de storage no navegable o una prefirma vencida. */}
+          <FreshFileLink
+            getUrl={() => getDocumentFileUrl(doc.id)}
+            aria-label={`Ver archivo de ${doc.name}`}
             className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
           >
             <FileText className="size-4" aria-hidden />
             Ver archivo
             <ExternalLink className="size-3.5" aria-hidden />
-          </a>
+          </FreshFileLink>
           {doc.previousFileUrl && (
-            <a
-              href={doc.previousFileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <FreshFileLink
+              getUrl={() => getDocumentFileUrl(doc.id, { previous: true })}
+              aria-label={`Ver versión anterior de ${doc.name}`}
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               <History className="size-3.5" aria-hidden />
               Versión anterior
-            </a>
+            </FreshFileLink>
           )}
         </div>
       ),

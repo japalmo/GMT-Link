@@ -970,6 +970,17 @@ export function uploadDiploma(
   );
 }
 
+/**
+ * `GET /cv/certifications/:id/diploma-url` — URL fresca de visualización del
+ * diploma (Fase 1B). El backend presigna claves R2 al leer y hace passthrough
+ * de URLs absolutas legadas. Nunca navegues `fileUrl` crudo: para diplomas
+ * nuevos es una clave de storage no navegable. Sirve para el dueño del CV y
+ * para el admin (`can_manage_users`, pestaña CV del detalle de usuario).
+ */
+export function getCvCertificationDiplomaUrl(id: string): Promise<{ url: string }> {
+  return request<{ url: string }>(`/cv/certifications/${encodeURIComponent(id)}/diploma-url`);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Mis documentos (§6-1.5) — vencimiento, filtros, versionado                  */
 /* -------------------------------------------------------------------------- */
@@ -1044,6 +1055,22 @@ export function deleteDocument(id: string): Promise<void> {
   return request<void>(`/documents/me/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+/**
+ * `GET /documents/:id/file-url` — URL fresca de visualización/descarga del
+ * archivo de un documento personal (Fase 1B). Con `previous: true` entrega la
+ * versión anterior. El backend presigna claves R2 al leer y hace passthrough de
+ * URLs absolutas legadas. Nunca navegues `fileUrl`/`previousFileUrl` crudos:
+ * para documentos nuevos son claves de storage no navegables. Sirve para el
+ * dueño y para el revisor/admin (pestaña Documentos del detalle de usuario).
+ */
+export function getDocumentFileUrl(
+  id: string,
+  opts: { previous?: boolean } = {},
+): Promise<{ url: string }> {
+  const suffix = opts.previous === true ? '?previous=true' : '';
+  return request<{ url: string }>(`/documents/${encodeURIComponent(id)}/file-url${suffix}`);
 }
 
 /* -------------------------------------------------------------------------- */

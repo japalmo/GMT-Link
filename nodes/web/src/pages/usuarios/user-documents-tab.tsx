@@ -3,7 +3,14 @@ import { Check, ExternalLink, FileText, History, Loader2, X } from 'lucide-react
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import { approveDocument, errorToMessage, fetchUserDocuments, rejectDocument } from '@/lib/api';
+import {
+  approveDocument,
+  errorToMessage,
+  fetchUserDocuments,
+  getDocumentFileUrl,
+  rejectDocument,
+} from '@/lib/api';
+import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import type { PersonalDocumentView } from '@/types/documents';
 import { toast } from 'sonner';
 import { ExpiryCell } from '../documentos/expiry-cell';
@@ -92,26 +99,26 @@ export function UserDocumentsTab({ userId }: { userId: string }): ReactNode {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <ExpiryCell document={doc} />
-              <a
-                href={doc.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              {/* Fase 1B: la URL fresca se pide al hacer clic; `fileUrl` crudo
+                  puede ser una clave de storage no navegable. */}
+              <FreshFileLink
+                getUrl={() => getDocumentFileUrl(doc.id)}
+                aria-label={`Ver archivo de ${doc.name}`}
                 className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
               >
                 <FileText className="size-4" aria-hidden />
                 Ver archivo
                 <ExternalLink className="size-3.5" aria-hidden />
-              </a>
+              </FreshFileLink>
               {doc.previousFileUrl && (
-                <a
-                  href={doc.previousFileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <FreshFileLink
+                  getUrl={() => getDocumentFileUrl(doc.id, { previous: true })}
+                  aria-label={`Ver versión anterior de ${doc.name}`}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   <History className="size-3.5" aria-hidden />
                   Versión anterior
-                </a>
+                </FreshFileLink>
               )}
             </div>
 

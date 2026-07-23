@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Briefcase, ExternalLink, FileText, GraduationCap, ShieldCheck } from 'lucide-react';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
-import { errorToMessage, fetchUserCv } from '@/lib/api';
+import { errorToMessage, fetchUserCv, getCvCertificationDiplomaUrl } from '@/lib/api';
+import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import type { CvView } from '@/types/cv';
 
 /** Fecha corta "mmm yyyy" es-CL desde un ISO; cadena vacía si null/ inválida. */
@@ -129,16 +130,17 @@ export function UserCvTab({ userId }: { userId: string }): ReactNode {
                   {c.expiresAt && `Vence ${monthYear(c.expiresAt)}`}
                 </p>
                 {c.fileUrl && (
-                  <a
-                    href={c.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  // Fase 1B: URL fresca al clic (gate admin: can_manage_users);
+                  // `fileUrl` crudo puede ser una clave de storage no navegable.
+                  <FreshFileLink
+                    getUrl={() => getCvCertificationDiplomaUrl(c.id)}
+                    aria-label={`Ver diploma de ${c.name}`}
                     className="mt-1 inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
                   >
                     <FileText className="size-4" aria-hidden />
                     Ver diploma
                     <ExternalLink className="size-3.5" aria-hidden />
-                  </a>
+                  </FreshFileLink>
                 )}
               </li>
             ))}

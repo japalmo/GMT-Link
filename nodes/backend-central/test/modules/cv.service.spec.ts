@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import type { FgaService } from '../../src/fga/fga.service';
 import type {
   StorageSaveInput,
   StorageSaveResult,
@@ -63,6 +64,7 @@ interface PrismaMocks {
   expFindFirst: ReturnType<typeof vi.fn>;
   certUpdate: ReturnType<typeof vi.fn>;
   certFindFirst: ReturnType<typeof vi.fn>;
+  certFindUnique: ReturnType<typeof vi.fn>;
 }
 
 /** Mocks tipados del StorageService. */
@@ -75,6 +77,7 @@ function build(): {
   service: CvService;
   prisma: PrismaMocks;
   storage: StorageMocks;
+  fgaCheck: ReturnType<typeof vi.fn<(input: { user: string; relation: string; object: string }) => Promise<boolean>>>;
 } {
   const prisma: PrismaMocks = {
     cvFindUnique: vi.fn(),
@@ -86,6 +89,7 @@ function build(): {
     expFindFirst: vi.fn(),
     certUpdate: vi.fn(),
     certFindFirst: vi.fn(),
+    certFindUnique: vi.fn(() => Promise.resolve(null)),
   };
   const storage: StorageMocks = {
     save: vi.fn(
@@ -109,6 +113,7 @@ function build(): {
       update: prisma.certUpdate,
       delete: vi.fn(),
       findFirst: prisma.certFindFirst,
+      findUnique: prisma.certFindUnique,
     },
   } as unknown as PrismaService;
 
@@ -116,7 +121,17 @@ function build(): {
 
   const gamificationService = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
 
-  return { service: new CvService(prismaService, storageService, gamificationService), prisma, storage };
+  const fgaCheck = vi.fn<(input: { user: string; relation: string; object: string }) => Promise<boolean>>(
+    () => Promise.resolve(false),
+  );
+  const fgaService = { check: fgaCheck } as unknown as FgaService;
+
+  return {
+    service: new CvService(prismaService, storageService, gamificationService, fgaService),
+    prisma,
+    storage,
+    fgaCheck,
+  };
 }
 
 describe('CvService.getMe (lazy CV)', () => {
@@ -207,7 +222,7 @@ describe('CvService experiencias — solo afectan el CV propio', () => {
 describe('CvService diploma — sube PDF y setea fileUrl en la certificación propia', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('verifica propiedad, guarda en storage (folder diplomas) y persiste fileUrl', async () => {
+  it('verifica propiedad, guarda en storage (folder diplomas) y persiste la CLAVE en fileUrl', async () => {
     const { service, prisma, storage } = build();
     prisma.cvFindUnique.mockResolvedValue(baseCv());
     prisma.certFindFirst.mockResolvedValue({ id: 'c1' });
@@ -218,7 +233,7 @@ describe('CvService diploma — sube PDF y setea fileUrl en la certificación pr
       issuer: null,
       issuedAt: null,
       expiresAt: null,
-      fileUrl: 'http://x/files/diplomas/k-d.pdf',
+      fileUrl: 'diplomas/k-d.pdf',
       createdAt: new Date(),
     });
 
@@ -231,9 +246,11 @@ describe('CvService diploma — sube PDF y setea fileUrl en la certificación pr
     expect(storage.save).toHaveBeenCalledTimes(1);
     const saveArg = storage.save.mock.calls[0]?.[0] as StorageSaveInput;
     expect(saveArg.folder).toBe('diplomas');
+    // Fase 1B: se persiste la CLAVE, no la URL (con R2 sería una prefirma con
+    // TTL de 1 h); la URL fresca la entrega GET /cv/certifications/:id/diploma-url.
     const updateArg = prisma.certUpdate.mock.calls[0]?.[0] as { data: { fileUrl: string } };
-    expect(updateArg.data.fileUrl).toBe('http://x/files/diplomas/k-d.pdf');
-    expect(view.fileUrl).toBe('http://x/files/diplomas/k-d.pdf');
+    expect(updateArg.data.fileUrl).toBe('diplomas/k-d.pdf');
+    expect(view.fileUrl).toBe('diplomas/k-d.pdf');
   });
 
   it('certificación ajena → 404 (no guarda ni actualiza)', async () => {
@@ -250,5 +267,77 @@ describe('CvService diploma — sube PDF y setea fileUrl en la certificación pr
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(storage.save).not.toHaveBeenCalled();
     expect(prisma.certUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('CvService.getCertificationDiplomaUrl (Fase 1B: URL fresca al leer)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const baseUrl = process.env.API_PUBLIC_URL ?? 'http://localhost:3001';
+  const certRow = (fileUrl: string | null, userId = 'me-1') => ({
+    fileUrl,
+    cv: { userId },
+  });
+
+  it('404 si la certificación no existe', async () => {
+    const { service, prisma } = build();
+    prisma.certFindUnique.mockResolvedValue(null);
+
+    await expect(service.getCertificationDiplomaUrl('me-1', 'nope')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('dueño con CLAVE y backend local → URL del FilesController (sin consultar FGA)', async () => {
+    const { service, prisma, fgaCheck } = build();
+    prisma.certFindUnique.mockResolvedValue(certRow('diplomas/k-d.pdf'));
+
+    const result = await service.getCertificationDiplomaUrl('me-1', 'c1');
+
+    expect(result).toEqual({ url: `${baseUrl}/files/diplomas/k-d.pdf` });
+    expect(fgaCheck).not.toHaveBeenCalled();
+  });
+
+  it('dueño con URL absoluta legada → passthrough tal cual', async () => {
+    const { service, prisma } = build();
+    prisma.certFindUnique.mockResolvedValue(certRow('https://r2.example.com/vieja.pdf?sig=x'));
+
+    const result = await service.getCertificationDiplomaUrl('me-1', 'c1');
+
+    expect(result).toEqual({ url: 'https://r2.example.com/vieja.pdf?sig=x' });
+  });
+
+  it('certificación sin diploma → 404', async () => {
+    const { service, prisma } = build();
+    prisma.certFindUnique.mockResolvedValue(certRow(null));
+
+    await expect(service.getCertificationDiplomaUrl('me-1', 'c1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('ajeno SIN can_manage_users → 404 (no distingue inexistente de ajeno)', async () => {
+    const { service, prisma, fgaCheck } = build();
+    prisma.certFindUnique.mockResolvedValue(certRow('diplomas/k-d.pdf', 'otro-usuario'));
+    fgaCheck.mockResolvedValue(false);
+
+    await expect(service.getCertificationDiplomaUrl('intruso', 'c1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(fgaCheck).toHaveBeenCalledWith({
+      user: 'user:intruso',
+      relation: 'can_manage_users',
+      object: 'organization:gmt',
+    });
+  });
+
+  it('ajeno CON can_manage_users (admin, pestaña CV) → permitido', async () => {
+    const { service, prisma, fgaCheck } = build();
+    prisma.certFindUnique.mockResolvedValue(certRow('diplomas/k-d.pdf', 'otro-usuario'));
+    fgaCheck.mockResolvedValue(true);
+
+    const result = await service.getCertificationDiplomaUrl('admin', 'c1');
+
+    expect(result).toEqual({ url: `${baseUrl}/files/diplomas/k-d.pdf` });
   });
 });
