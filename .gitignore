@@ -47,3 +47,6 @@ cubicador-app-key.json
 
 # Cliente Prisma generado (build output, no versionar)
 nodes/backend-central/generated/
+
+# Backups locales de la BD de produccion (CSV/dumps con datos reales) - JAMAS versionar ni subir
+/backups/
