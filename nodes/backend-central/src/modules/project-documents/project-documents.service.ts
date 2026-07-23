@@ -141,7 +141,10 @@ export class ProjectDocumentsService {
         data: {
           name: dto.name,
           code,
-          fileUrl: saved.url,
+          // I7: se persiste la CLAVE del storage (no `saved.url`, que con R2 es
+          // una URL prefirmada con TTL de 1 h). La URL fresca la entrega
+          // GET :id/file-url al leer.
+          fileUrl: saved.key,
           fileHash,
           status: ProjectDocumentStatus.PENDIENTE_QA,
           version: 0, // rev0
@@ -233,7 +236,8 @@ export class ProjectDocumentsService {
       where: { id },
       data: {
         previousFileUrl: doc.fileUrl,
-        fileUrl: saved.url,
+        // I7: la revisión también persiste la CLAVE; ver comentario en create().
+        fileUrl: saved.key,
         fileHash,
         status: ProjectDocumentStatus.PENDIENTE_QA,
         version: nextVersion,
@@ -533,8 +537,13 @@ export class ProjectDocumentsService {
       throw new BadRequestException('No tienes permisos para eliminar este documento.');
     }
 
-    // Eliminar archivo del storage
-    const key = doc.fileUrl.split('/files/')[1];
+    // Eliminar archivo del storage. `fileUrl` puede ser una CLAVE (documentos
+    // nuevos: se borra directo) o una URL legada del FilesController dev, de la
+    // que se extrae la clave tras '/files/'. URLs prefirmadas de R2 legadas no
+    // exponen una clave extraíble: se omite el borrado del blob (best-effort).
+    const key = /^https?:\/\//i.test(doc.fileUrl)
+      ? doc.fileUrl.split('/files/')[1]
+      : doc.fileUrl;
     if (key) {
       try {
         await this.storage.delete(key);

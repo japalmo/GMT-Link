@@ -806,6 +806,20 @@ export class MetricsService {
     //    (a) el servicio de la tarea; (b) `service_code` del payload resuelto
     //    contra `Service.code` del proyecto; (c) el único servicio del proyecto;
     //    (d) en cualquier otro caso, 400 pidiendo `service_code`.
+    //    Si la tarea YA trae servicio y el payload manda un `service_code` que
+    //    apunta a otro (o inexistente), se rechaza explícito: una contradicción
+    //    silenciosa colgaría el documento (y su tupla de firma) donde no es.
+    if (serviceId && dto.service_code) {
+      const byCode = await this.prisma.service.findUnique({
+        where: { projectId_code: { projectId, code: dto.service_code } },
+        select: { id: true },
+      });
+      if (!byCode || byCode.id !== serviceId) {
+        throw new BadRequestException(
+          'El service_code indicado no corresponde al servicio de la tarea vinculada. Omite service_code o corrige el vínculo.',
+        );
+      }
+    }
     if (!serviceId) {
       serviceId = await this.resolveDocumentServiceId(projectId, dto.service_code);
     }
@@ -998,7 +1012,13 @@ export class MetricsService {
     return {
       upload_url: `${baseUrl}/metrics/upload?token=${token}`,
       asset_id: uuid,
+      // Compat: URL legacy que otros flujos del escritorio ya consumen. NO usar
+      // como blob_path de POST /metrics/documents (ahí se exige la clave).
       blob_path: `${baseUrl}/metrics/uploads/${cleanFilename}`,
+      // Clave REAL bajo la que el PUT de subida almacena el objeto
+      // (storage.save folder 'metrics' + customFilename ya saneado): es lo que
+      // POST /metrics/documents exige en blob_path.
+      blob_key: `metrics/${cleanFilename}`,
     };
   }
 

@@ -273,6 +273,43 @@ describe('MetricsService.createDesktopDocument', () => {
   });
 
   describe('resolución determinista del servicio (I3)', () => {
+    it('n4: 400 si la tarea ya trae servicio y el service_code apunta a OTRO servicio (contradicción explícita)', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow); // serviceId serv-1
+      prisma.service.findUnique.mockResolvedValue({ id: 'serv-7' });
+
+      await expect(
+        service.createDesktopDocument('u1', dto({ task_id: 'task-1', service_code: 'OTRO' })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.projectDocument.create).not.toHaveBeenCalled();
+    });
+
+    it('n4: 400 si la tarea trae servicio y el service_code no existe en el proyecto', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow); // serviceId serv-1
+      prisma.service.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createDesktopDocument('u1', dto({ task_id: 'task-1', service_code: 'NADA' })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.projectDocument.create).not.toHaveBeenCalled();
+    });
+
+    it('n4: feliz si el service_code coincide con el servicio de la tarea (redundante pero consistente)', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow); // serviceId serv-1
+      prisma.service.findUnique.mockResolvedValue({ id: 'serv-1' });
+
+      const result = await service.createDesktopDocument(
+        'u1',
+        dto({ task_id: 'task-1', service_code: 'TOP' }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(prisma.projectDocument.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ serviceId: 'serv-1' }),
+        }),
+      );
+    });
+
     it('(b) sin servicio en la tarea: resuelve service_code contra el proyecto (clave natural)', async () => {
       prisma.task.findUnique.mockResolvedValue({ ...taskRow, serviceId: null });
       prisma.service.findUnique.mockResolvedValue({ id: 'serv-7' });

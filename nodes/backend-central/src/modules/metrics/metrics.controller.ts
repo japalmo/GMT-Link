@@ -392,7 +392,7 @@ export class MetricsController {
      });
 
      const contentType = req.headers['content-type'] || 'application/octet-stream';
-     await this.storage.save({
+     const saved = await this.storage.save({
        buffer,
        filename,
        contentType,
@@ -406,7 +406,9 @@ export class MetricsController {
        // Aquí iría el traslado a R2/S3.
      }, 1000);
 
-     return { success: true, filename };
+     // `blob_key`: clave REAL bajo la que quedó el objeto (local o R2); es la
+     // que POST /metrics/documents exige en blob_path.
+     return { success: true, filename, blob_key: saved.key };
    }
 
    private async getMaxBytes(): Promise<number> {

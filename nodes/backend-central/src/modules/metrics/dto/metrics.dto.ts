@@ -163,16 +163,21 @@ export class SaveReservorioMetadataDto {
  * existente); al menos uno es obligatorio (se valida en el service).
  */
 export class CreateDesktopDocumentDto {
+  // Clave del namespace `metrics/` (8 + nombre saneado de máx. 120 → 200 sobra).
   @IsString()
   @IsNotEmpty()
+  @MaxLength(200, { message: 'blob_path no puede superar 200 caracteres.' })
   blob_path!: string;
 
+  // SHA-256 hex son 64; 128 deja holgura para otros algoritmos/encodings.
   @IsString()
   @IsNotEmpty()
+  @MaxLength(128, { message: 'file_hash no puede superar 128 caracteres.' })
   file_hash!: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(40, { message: 'doc_type no puede superar 40 caracteres.' })
   doc_type!: string;
 
   // El código viaja luego en la ruta GET documents/:code/status: se restringe a

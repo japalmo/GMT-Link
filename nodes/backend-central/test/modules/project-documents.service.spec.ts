@@ -80,7 +80,12 @@ describe('ProjectDocumentsService', () => {
       deleteTuples: vi.fn(() => Promise.resolve()),
     };
     storage = {
-      save: vi.fn(() => Promise.resolve({ url: 'http://x/files/projects/p1/documents/doc.bin' })),
+      save: vi.fn(() =>
+        Promise.resolve({
+          key: 'projects/p1/documents/doc.bin',
+          url: 'http://x/files/projects/p1/documents/doc.bin',
+        }),
+      ),
       delete: vi.fn(() => Promise.resolve()),
     };
     service = new ProjectDocumentsService(
@@ -119,6 +124,9 @@ describe('ProjectDocumentsService', () => {
       expect(result.status).toBe(ProjectDocumentStatus.PENDIENTE_QA);
       expect(result.version).toBe(0);
       expect(result.fileHash).toMatch(/^[a-f0-9]{64}$/);
+      // I7: se persiste la CLAVE del storage, no la URL prefirmada (TTL 1 h);
+      // la URL fresca la entrega GET :id/file-url al leer.
+      expect(result.fileUrl).toBe('projects/p1/documents/doc.bin');
       expect(fga.writeTuples).toHaveBeenCalledWith([
         { user: 'user:u1', relation: 'owner', object: 'document:doc1' },
         { user: 'service:s1', relation: 'service', object: 'document:doc1' },
@@ -191,6 +199,8 @@ describe('ProjectDocumentsService', () => {
             status: ProjectDocumentStatus.PENDIENTE_QA,
             version: 0,
             previousFileUrl: 'http://x/files/old.bin',
+            // I7: la revisión también persiste la CLAVE, no la URL prefirmada.
+            fileUrl: 'projects/p1/documents/doc.bin',
             qaSignerId: null,
             clientSignerId: null,
             rejectionReason: null,
@@ -484,6 +494,21 @@ describe('ProjectDocumentsService', () => {
         { user: 'user:u1', relation: 'owner', object: 'document:d1' },
         { user: 'service:s1', relation: 'service', object: 'document:d1' },
       ]);
+      expect(mock.projectDocument.delete).toHaveBeenCalledWith({ where: { id: 'd1' } });
+    });
+
+    it('n1: fileUrl con CLAVE (documentos nuevos) borra el objeto directo, sin blob huérfano', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue({
+        id: 'd1',
+        ownerId: 'u1',
+        serviceId: 's1',
+        fileUrl: 'metrics/9f3a-protocolo.pdf',
+      });
+      mock.membership.findFirst.mockResolvedValue(null);
+
+      await service.remove('d1', 'u1');
+
+      expect(storage.delete).toHaveBeenCalledWith('metrics/9f3a-protocolo.pdf');
       expect(mock.projectDocument.delete).toHaveBeenCalledWith({ where: { id: 'd1' } });
     });
   });

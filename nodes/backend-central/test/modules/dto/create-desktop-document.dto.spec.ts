@@ -75,4 +75,23 @@ describe('CreateDesktopDocumentDto', () => {
     const errors = await validated({ ...base, task_id: 'task-1', codigo: 'A'.repeat(161) });
     expect(errors.length).toBeGreaterThan(0);
   });
+
+  it('rechaza blob_path de más de 200 caracteres', async () => {
+    const errors = await validated({
+      ...base,
+      task_id: 'task-1',
+      blob_path: `metrics/${'a'.repeat(200)}.pdf`,
+    });
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza file_hash de más de 128 caracteres', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', file_hash: 'f'.repeat(129) });
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza doc_type de más de 40 caracteres', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', doc_type: 'X'.repeat(41) });
+    expect(errors.length).toBeGreaterThan(0);
+  });
 });
