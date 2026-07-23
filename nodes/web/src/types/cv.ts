@@ -31,6 +31,10 @@ export interface CvCertificationView {
   issuer: string | null;
   issuedAt: string | null;
   expiresAt: string | null;
+  /**
+   * CLAVE de storage del diploma (nuevos, Fase 1B) o URL legada; null si no se
+   * subió. NO navegar directamente: usar `getCvCertificationDiplomaUrl(id)`.
+   */
   fileUrl: string | null;
 }
 

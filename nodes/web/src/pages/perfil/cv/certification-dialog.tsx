@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ExternalLink, FileCheck2, TriangleAlert } from 'lucide-react';
-import { errorToMessage } from '@/lib/api';
+import { errorToMessage, getCvCertificationDiplomaUrl } from '@/lib/api';
+import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -187,15 +188,16 @@ export function CertificationDialog({
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <FileCheck2 className="size-4 shrink-0 text-emerald-600" aria-hidden />
               Diploma actual:
-              <a
-                href={certification.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              {/* Fase 1B: URL fresca al clic; `fileUrl` crudo puede ser una
+                  clave de storage no navegable. */}
+              <FreshFileLink
+                getUrl={() => getCvCertificationDiplomaUrl(certification.id)}
+                aria-label={`Ver diploma actual de ${certification.name}`}
                 className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
               >
                 ver PDF
                 <ExternalLink className="size-3.5" aria-hidden />
-              </a>
+              </FreshFileLink>
             </p>
           )}
 

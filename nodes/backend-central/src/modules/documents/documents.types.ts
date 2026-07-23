@@ -10,8 +10,16 @@ export interface PersonalDocumentView {
   id: string;
   type: string;
   name: string;
+  /**
+   * CLAVE de storage (documentos nuevos, Fase 1B) o URL absoluta legada. NO es
+   * navegable directamente: la URL fresca la entrega `GET /documents/:id/file-url`.
+   */
   fileUrl: string;
-  /** Versión anterior conservada al subir una nueva (ApprovalWorkflow); null si nunca se versionó. */
+  /**
+   * Versión anterior conservada al subir una nueva (ApprovalWorkflow); null si
+   * nunca se versionó. Misma naturaleza que `fileUrl` (clave o URL legada): la
+   * URL fresca se pide con `GET /documents/:id/file-url?previous=true`.
+   */
   previousFileUrl: string | null;
   /** ISO-8601 o null. */
   issuedAt: string | null;

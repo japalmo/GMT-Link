@@ -36,7 +36,11 @@ export interface CvCertificationView {
   issuedAt: string | null;
   /** ISO-8601 o null. */
   expiresAt: string | null;
-  /** URL del diploma PDF en el storage (o null si no se subió). */
+  /**
+   * CLAVE de storage del diploma PDF (diplomas nuevos, Fase 1B) o URL absoluta
+   * legada; null si no se subió. NO es navegable directamente: la URL fresca la
+   * entrega `GET /cv/certifications/:id/diploma-url`.
+   */
   fileUrl: string | null;
 }
 

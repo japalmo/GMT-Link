@@ -324,7 +324,9 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     const findUnique = vi.fn(() =>
       Promise.resolve({ firstLoginAt: null, status: 'PENDING_FIRST_LOGIN' }),
     );
-    const update = vi.fn((_args: { data: Record<string, unknown> }) => Promise.resolve({}));
+    const update = vi.fn<(args: { data: Record<string, unknown> }) => Promise<object>>(() =>
+      Promise.resolve({}),
+    );
     const service = serviceWith({ findUnique, update });
 
     const { provisionalPassword } = await service.resendInvite('u1', { sendEmail: false });

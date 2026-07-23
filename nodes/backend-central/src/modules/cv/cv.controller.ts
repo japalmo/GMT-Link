@@ -174,6 +174,21 @@ export class CvController {
     });
   }
 
+  /**
+   * URL fresca de descarga/visualización del diploma de una certificación
+   * (Fase 1B): las claves de storage se presignan al leer y las URLs legadas
+   * pasan tal cual. Gate en el SERVICE (dueño-O-permiso, no admite guard): el
+   * dueño del CV o `can_manage_users` sobre `organization:gmt` — la misma
+   * relación de la lectura admin del CV (`GET /users/:id/cv`, pestaña CV).
+   */
+  @Get('certifications/:id/diploma-url')
+  getCertificationDiplomaUrl(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<{ url: string }> {
+    return this.cvService.getCertificationDiplomaUrl(this.requireUserId(authUser), id);
+  }
+
   /** Exige sesión: devuelve el id del usuario autenticado o lanza 401. */
   private requireUserId(authUser: AuthUser | undefined): string {
     if (!authUser) {

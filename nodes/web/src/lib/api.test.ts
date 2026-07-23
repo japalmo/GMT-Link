@@ -441,3 +441,62 @@ describe('api — getProjectDocumentFileUrl (URL fresca del PDF, Fase 1B)', () =
     expect((err as ApiError).message).toBe('El documento no existe.');
   });
 });
+
+import { getDocumentFileUrl, getCvCertificationDiplomaUrl } from '@/lib/api';
+
+describe('api — URL fresca de documentos personales y diplomas del CV (Fase 1B)', () => {
+  beforeEach(() => {
+    mockGetToken.mockReset();
+    mockGetToken.mockReturnValue('tok');
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getDocumentFileUrl — GET /documents/:id/file-url y devuelve { url }', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(res({ url: 'https://r2.example.com/documents/a.pdf?firma=xyz' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getDocumentFileUrl('doc/1');
+
+    expect(result).toEqual({ url: 'https://r2.example.com/documents/a.pdf?firma=xyz' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/documents/doc%2F1/file-url');
+    expect(init.method ?? 'GET').toBe('GET');
+    expect((init.headers as Headers).get('Authorization')).toBe('Bearer tok');
+  });
+
+  it('getDocumentFileUrl con previous:true — agrega ?previous=true (versión anterior)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res({ url: 'https://x/old.pdf' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getDocumentFileUrl('d1', { previous: true });
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/documents/d1/file-url?previous=true');
+  });
+
+  it('getCvCertificationDiplomaUrl — GET /cv/certifications/:id/diploma-url', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res({ url: 'https://x/diploma.pdf' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getCvCertificationDiplomaUrl('c/1');
+
+    expect(result).toEqual({ url: 'https://x/diploma.pdf' });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/cv/certifications/c%2F1/diploma-url');
+  });
+
+  it('propaga ApiError en no-2xx (sin acceso o sin diploma)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(res({ message: 'La certificación no tiene diploma adjunto.' }, false, 404)),
+    );
+
+    const err = await getCvCertificationDiplomaUrl('c1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(404);
+  });
+});

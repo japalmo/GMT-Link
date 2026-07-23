@@ -157,6 +157,25 @@ export class DocumentsController {
   }
 
   /**
+   * URL fresca de descarga/visualización del archivo del documento (Fase 1B).
+   * Si `fileUrl` es una clave de storage se presigna al leer; si es una URL
+   * absoluta legada, se devuelve tal cual. Con `?previous=true` entrega la
+   * versión anterior (404 si no hay). Gate en el SERVICE (no admite guard por
+   * ser dueño-O-permiso): el dueño, o `can_review_documents`/`can_manage_users`
+   * sobre `organization:gmt` (las superficies de revisión y detalle de usuario).
+   */
+  @Get(':id/file-url')
+  getFileUrl(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Query('previous') previous?: string,
+  ): Promise<{ url: string }> {
+    return this.documentsService.getFileUrl(this.requireUserId(authUser), id, {
+      previous: previous === 'true',
+    });
+  }
+
+  /**
    * Aprueba un documento. Requiere `can_review_documents` sobre `organization:gmt`
    * (revisor/admin). 403 si no lo tiene; 404 si el documento no existe.
    */
