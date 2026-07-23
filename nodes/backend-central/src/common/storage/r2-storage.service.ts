@@ -150,6 +150,39 @@ export class R2StorageService extends StorageService {
     }
   }
 
+  /**
+   * Lee A LO MÁS los primeros `maxBytes` bytes del objeto `key` con GetObject +
+   * `Range: bytes=0-(maxBytes-1)` (sin transferir el objeto completo; pensado
+   * para validar firmas mágicas como `%PDF-`). Un objeto VACÍO responde 416
+   * InvalidRange en S3/R2 → se devuelve un buffer vacío (que nunca calza con
+   * una firma). 404 si la clave no existe.
+   */
+  async readHead(key: string, maxBytes: number): Promise<Buffer> {
+    const last = Math.max(1, Math.floor(maxBytes)) - 1;
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.env.bucket,
+          Key: key,
+          Range: `bytes=0-${last}`,
+        }),
+      );
+      if (!response.Body) {
+        throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+      }
+      const bytes = await response.Body.transformToByteArray();
+      return Buffer.from(bytes);
+    } catch (error: unknown) {
+      if (isInvalidRange(error)) {
+        return Buffer.alloc(0);
+      }
+      if (isNoSuchKey(error)) {
+        throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+      }
+      throw error;
+    }
+  }
+
   /** ¿Existe el objeto `key` en el bucket? HEAD (sin transferir el contenido). */
   async exists(key: string): Promise<boolean> {
     try {
@@ -202,6 +235,16 @@ export class R2StorageService extends StorageService {
 /** Sanitiza un segmento de carpeta lógica (sin separadores ni '..'). */
 function sanitizeSegment(segment: string): string {
   return segment.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+/** ¿El error de S3/R2 es 416 InvalidRange (Range sobre un objeto vacío)? */
+function isInvalidRange(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const name = (error as { name?: unknown }).name;
+  const status = (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata?.httpStatusCode;
+  return name === 'InvalidRange' || status === 416;
 }
 
 /** ¿El error de S3/R2 indica que la clave no existe (NoSuchKey / 404)? */

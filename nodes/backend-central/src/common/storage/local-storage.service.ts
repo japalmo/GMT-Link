@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { StorageService } from './storage.service';
@@ -60,6 +60,28 @@ export class LocalStorageService extends StorageService {
         throw new NotFoundException(`Archivo no encontrado: "${key}".`);
       }
       throw error;
+    }
+  }
+
+  async readHead(key: string, maxBytes: number): Promise<Buffer> {
+    const absolute = resolveWithinUploads(key);
+    if (absolute === null) {
+      throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+    }
+    const length = Math.max(1, Math.floor(maxBytes));
+    let handle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      handle = await open(absolute, 'r');
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, bytesRead);
+    } catch (error: unknown) {
+      if (isFileNotFound(error)) {
+        throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+      }
+      throw error;
+    } finally {
+      await handle?.close();
     }
   }
 

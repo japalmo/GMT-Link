@@ -24,6 +24,14 @@ function toInputJson(value: Record<string, unknown> | undefined): Prisma.InputJs
   return (value ?? {}) as Prisma.InputJsonValue;
 }
 
+/**
+ * Firma mágica de PDF (ISO 32000: todo PDF comienza con `%PDF-`). El circuito
+ * documental del escritorio la exige sobre los primeros bytes del blob antes de
+ * registrar el documento (F4): sin ella, el visor embebido de la web podría
+ * renderizar contenido activo (HTML/JS) controlado por quien sube.
+ */
+const PDF_MAGIC = Buffer.from('%PDF-');
+
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
@@ -832,6 +840,16 @@ export class MetricsService {
       throw new BadRequestException(
         'El archivo indicado en blob_path no existe en el almacenamiento. Sube el PDF antes de registrar el documento.',
       );
+    }
+
+    // 5b) Firma mágica (F4, defensa principal): el visor web embebe este blob en
+    //     un iframe, así que el contenido DEBE ser un PDF real. Sin este check,
+    //     un blob HTML/JS subido por el canal se renderizaría como contenido
+    //     activo bajo el origen del presign de R2 (o del /files local). Se leen
+    //     SOLO los primeros bytes (readHead), nunca el archivo completo.
+    const head = await this.storage.readHead(dto.blob_path, PDF_MAGIC.byteLength);
+    if (head.byteLength < PDF_MAGIC.byteLength || !head.subarray(0, PDF_MAGIC.byteLength).equals(PDF_MAGIC)) {
+      throw new BadRequestException('El archivo no es un PDF válido.');
     }
 
     // 6) Código único (V-Metric lo construye; acá solo se exige unicidad).

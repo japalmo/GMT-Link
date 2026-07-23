@@ -37,6 +37,7 @@ interface FgaMock {
 interface StorageMock {
   save: ReturnType<typeof vi.fn>;
   read: ReturnType<typeof vi.fn>;
+  readHead: ReturnType<typeof vi.fn>;
   exists: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
 }
@@ -81,6 +82,8 @@ function build(): {
   const storage: StorageMock = {
     save: vi.fn(() => Promise.resolve({ key: 'k', url: 'http://localhost:3001/files/k' })),
     read: vi.fn(() => Promise.resolve(Buffer.from(''))),
+    // Por defecto el blob simula un PDF real (firma mágica %PDF-).
+    readHead: vi.fn(() => Promise.resolve(Buffer.from('%PDF-'))),
     exists: vi.fn(() => Promise.resolve(true)),
     delete: vi.fn(() => Promise.resolve()),
   };
@@ -227,6 +230,48 @@ describe('MetricsService.createDesktopDocument', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.projectDocument.create).not.toHaveBeenCalled();
       expect(fga.writeTuples).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('firma mágica del PDF (F4: el visor web embebe el blob en un iframe)', () => {
+    it('400 si el blob no es un PDF real (bytes HTML) — SIN crear el documento ni tuplas FGA', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow);
+      storage.readHead.mockResolvedValue(Buffer.from('<html><script>alert(1)</script>'));
+
+      await expect(
+        service.createDesktopDocument('u1', dto({ task_id: 'task-1' })),
+      ).rejects.toThrowError('El archivo no es un PDF válido.');
+      expect(prisma.projectDocument.create).not.toHaveBeenCalled();
+      expect(fga.writeTuples).not.toHaveBeenCalled();
+    });
+
+    it('400 si el blob está vacío o es más corto que la firma', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow);
+      storage.readHead.mockResolvedValue(Buffer.alloc(0));
+
+      await expect(
+        service.createDesktopDocument('u1', dto({ task_id: 'task-1' })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.projectDocument.create).not.toHaveBeenCalled();
+    });
+
+    it('la firma se lee sobre el blob_path declarado, tras confirmar existencia', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow);
+
+      const result = await service.createDesktopDocument('u1', dto({ task_id: 'task-1' }));
+
+      expect(result.success).toBe(true);
+      expect(storage.readHead).toHaveBeenCalledWith('metrics/9f3a-PROT-001.pdf', expect.any(Number));
+    });
+
+    it('el deny de FGA corta ANTES de leer el head (no se filtra trabajo posterior)', async () => {
+      prisma.task.findUnique.mockResolvedValue(taskRow);
+      fga.check.mockResolvedValue(false);
+
+      await expect(
+        service.createDesktopDocument('u1', dto({ task_id: 'task-1' })),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(storage.readHead).not.toHaveBeenCalled();
     });
   });
 

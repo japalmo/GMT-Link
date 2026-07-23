@@ -40,12 +40,22 @@ const DOC_TYPE_LABEL: Record<string, string> = {
 };
 
 /**
- * Deriva el tipo documental desde el código `GMT-…-{TIPO}-{ÁREA}-{N}` (el
- * modelo no persiste el tipo por separado; viaja embebido en el código).
+ * Deriva el tipo documental desde el código (el modelo no persiste el tipo por
+ * separado; viaja embebido en el código). Convive con DOS formatos:
+ *  - Web (§7): `GMT-…-{TIPO}-{ÁREA}-{N}` → el tipo es el ANTEPENÚLTIMO segmento.
+ *  - Escritorio (V-Metric): `{TIPO}-{ELEMENTO}-{YYYYMMDD}-{HHMMSS}-{microseg}`
+ *    → el tipo es el PRIMER segmento (el antepenúltimo sería la FECHA).
+ * Regla: si el código NO empieza con `GMT-` y su primer segmento existe en el
+ * catálogo, es un código del escritorio; en cualquier otro caso se conserva el
+ * antepenúltimo con su fallback.
  */
 export function documentTypeFromCode(code: string): string {
   const segments = code.split('-');
   if (segments.length < 3) return '—';
+  const first = segments[0] ?? '';
+  if (!code.startsWith('GMT-') && DOC_TYPE_LABEL[first] !== undefined) {
+    return DOC_TYPE_LABEL[first];
+  }
   const token = segments[segments.length - 3] ?? '';
   if (token.length === 0) return '—';
   return DOC_TYPE_LABEL[token] ?? token;

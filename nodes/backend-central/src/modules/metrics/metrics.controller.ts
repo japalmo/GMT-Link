@@ -391,11 +391,19 @@ export class MetricsController {
        req.on('error', (err) => reject(err));
      });
 
-     const contentType = req.headers['content-type'] || 'application/octet-stream';
+     // F4 (capa 2): el canal `metrics/` transporta EXCLUSIVAMENTE los PDF del
+     // circuito documental, así que el Content-Type declarado por el cliente se
+     // IGNORA y se fuerza application/pdf al guardar. En prod (R2) las URLs
+     // firmadas de descarga sirven el ContentType almacenado: forzarlo impide
+     // que un blob no-PDF se entregue como text/html ejecutable bajo el origen
+     // del presign. En dev el `FilesController` local ya sirve por EXTENSIÓN
+     // (mapa propio; extensión desconocida → application/octet-stream) y nunca
+     // propaga el content-type del cliente. La defensa principal sigue siendo la
+     // firma mágica %PDF- que valida createDesktopDocument (capa 1).
      const saved = await this.storage.save({
        buffer,
        filename,
-       contentType,
+       contentType: 'application/pdf',
        folder: 'metrics',
        customFilename: filename,
      });

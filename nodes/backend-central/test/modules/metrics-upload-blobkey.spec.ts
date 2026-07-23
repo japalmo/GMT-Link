@@ -75,11 +75,11 @@ function build(): Built {
 }
 
 /** Request falso: stream legible con headers, como el PUT crudo del escritorio. */
-function fakeUploadRequest(body: Buffer): Request {
+function fakeUploadRequest(body: Buffer, contentType = 'application/pdf'): Request {
   const req = Object.assign(new Readable({ read() {} }), {
     headers: {
       'content-length': String(body.byteLength),
-      'content-type': 'application/pdf',
+      'content-type': contentType,
     },
   });
   queueMicrotask(() => {
@@ -88,6 +88,9 @@ function fakeUploadRequest(body: Buffer): Request {
   });
   return req as unknown as Request;
 }
+
+/** Cuerpo mínimo con la firma mágica de PDF que exige POST /metrics/documents (F4). */
+const PDF_BODY = Buffer.from('%PDF-1.4\n%contenido de prueba');
 
 function tokenOf(uploadUrl: string): string {
   return new URL(uploadUrl).searchParams.get('token') ?? '';
@@ -127,7 +130,7 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6/I8)',
     const token = tokenOf(upload.upload_url);
     expect(token.length).toBeGreaterThan(0);
 
-    const res = await controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('pdf')));
+    const res = await controller.handleRawUpload(token, fakeUploadRequest(PDF_BODY));
 
     expect(res.success).toBe(true);
     expect(res.blob_key).toMatch(NAMESPACE);
@@ -148,7 +151,7 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6/I8)',
     const upload = await service.getAssetUploadUrl({ filename: longName });
     const token = tokenOf(upload.upload_url);
 
-    const res = await controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('pdf')));
+    const res = await controller.handleRawUpload(token, fakeUploadRequest(PDF_BODY));
 
     expect(res.blob_key).toMatch(NAMESPACE);
     expect(res.blob_key).toBe(upload.blob_key); // anticipada === real
@@ -177,7 +180,7 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6/I8)',
 
   it('la blob_key entregada pasa la validación de POST /metrics/documents (circuito completo con storage real)', async () => {
     const upload = await service.getAssetUploadUrl({ filename: 'protocolo.pdf' });
-    await controller.handleRawUpload(tokenOf(upload.upload_url), fakeUploadRequest(Buffer.from('pdf')));
+    await controller.handleRawUpload(tokenOf(upload.upload_url), fakeUploadRequest(PDF_BODY));
     prisma.task.findUnique.mockResolvedValue({
       id: 'task-1',
       projectId: 'proj-1',
@@ -204,11 +207,51 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6/I8)',
     const upload = await service.getAssetUploadUrl({ filename: 'protocolo.pdf' });
     const token = tokenOf(upload.upload_url);
 
-    const first = await controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('pdf')));
+    const first = await controller.handleRawUpload(token, fakeUploadRequest(PDF_BODY));
     expect(first.success).toBe(true);
 
     await expect(
       controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('reemplazo malicioso'))),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  describe('F4: solo PDF real en el canal documental', () => {
+    it('el PUT fuerza contentType application/pdf al guardar, ignorando el header del cliente', async () => {
+      const upload = await service.getAssetUploadUrl({ filename: 'protocolo.pdf' });
+
+      const res = await controller.handleRawUpload(
+        tokenOf(upload.upload_url),
+        fakeUploadRequest(PDF_BODY, 'text/html'),
+      );
+
+      expect(res.success).toBe(true);
+      expect(saveSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ folder: 'metrics', contentType: 'application/pdf' }),
+      );
+    });
+
+    it('circuito completo: un blob HTML subido por el canal NO se registra como documento (400 por firma mágica)', async () => {
+      const upload = await service.getAssetUploadUrl({ filename: 'falso.pdf' });
+      const html = Buffer.from('<html><body><script>alert(document.cookie)</script></body></html>');
+      const put = await controller.handleRawUpload(tokenOf(upload.upload_url), fakeUploadRequest(html));
+      expect(put.success).toBe(true);
+
+      prisma.task.findUnique.mockResolvedValue({
+        id: 'task-1',
+        projectId: 'proj-1',
+        serviceId: 'serv-1',
+      });
+
+      await expect(
+        service.createDesktopDocument('u1', {
+          blob_path: upload.blob_key,
+          file_hash: 'abc123',
+          doc_type: 'CR',
+          codigo: 'GMT-SQM-SD-P1-TOP-CR-GEN-004',
+          task_id: 'task-1',
+        }),
+      ).rejects.toThrowError('El archivo no es un PDF válido.');
+      expect(prisma.projectDocument.create).not.toHaveBeenCalled();
+    });
   });
 });

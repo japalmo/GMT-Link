@@ -41,6 +41,13 @@ export abstract class StorageService {
   /** Lee el contenido binario de un archivo por su `key`. 404 si no existe. */
   abstract read(key: string): Promise<Buffer>;
 
+  /**
+   * Lee A LO MÁS los primeros `maxBytes` bytes del objeto `key` sin transferir
+   * el resto (validación de firmas mágicas, ej. `%PDF-`). Puede devolver menos
+   * bytes si el objeto es más corto (incluso 0 si está vacío). 404 si no existe.
+   */
+  abstract readHead(key: string, maxBytes: number): Promise<Buffer>;
+
   /** ¿Existe un objeto con esa `key`? No transfiere el contenido (HEAD/stat). */
   abstract exists(key: string): Promise<boolean>;
 

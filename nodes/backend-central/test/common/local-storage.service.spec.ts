@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { NotFoundException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import {
   LocalStorageService,
@@ -82,5 +83,51 @@ describe('LocalStorageService — exists (verificación sin lectura)', () => {
 
     await storage.delete(key);
     expect(await storage.exists(key)).toBe(false);
+  });
+});
+
+describe('LocalStorageService — readHead (lectura parcial para firmas mágicas)', () => {
+  it('devuelve SOLO los primeros maxBytes del archivo (no transfiere el resto)', async () => {
+    const storage = new LocalStorageService();
+    const { key } = await storage.save({
+      buffer: Buffer.from(`%PDF-1.7\n${'x'.repeat(4096)}`),
+      filename: 'protocolo-head.pdf',
+      contentType: 'application/pdf',
+      folder: 'metrics',
+    });
+    try {
+      const head = await storage.readHead(key, 8);
+      expect(head.byteLength).toBe(8);
+      expect(head.toString('utf8')).toBe('%PDF-1.7');
+    } finally {
+      await storage.delete(key);
+    }
+  });
+
+  it('devuelve el archivo completo cuando pesa menos que maxBytes', async () => {
+    const storage = new LocalStorageService();
+    const { key } = await storage.save({
+      buffer: Buffer.from('abc'),
+      filename: 'chico.bin',
+      contentType: 'application/octet-stream',
+      folder: 'metrics',
+    });
+    try {
+      const head = await storage.readHead(key, 8);
+      expect(head.byteLength).toBe(3);
+      expect(head.toString('utf8')).toBe('abc');
+    } finally {
+      await storage.delete(key);
+    }
+  });
+
+  it('404 para una clave inexistente o que escapa de la raíz', async () => {
+    const storage = new LocalStorageService();
+    await expect(storage.readHead('metrics/no-existe.pdf', 8)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(storage.readHead('../../etc/passwd', 8)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });
