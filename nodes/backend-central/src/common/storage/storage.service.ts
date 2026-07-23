@@ -41,6 +41,9 @@ export abstract class StorageService {
   /** Lee el contenido binario de un archivo por su `key`. 404 si no existe. */
   abstract read(key: string): Promise<Buffer>;
 
+  /** ¿Existe un objeto con esa `key`? No transfiere el contenido (HEAD/stat). */
+  abstract exists(key: string): Promise<boolean>;
+
   /** Borra un archivo por su `key`. Idempotente: si no existe, no falla. */
   abstract delete(key: string): Promise<void>;
 }

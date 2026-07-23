@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
   type S3ClientConfig,
@@ -144,6 +145,19 @@ export class R2StorageService extends StorageService {
     } catch (error: unknown) {
       if (isNoSuchKey(error)) {
         throw new NotFoundException(`Archivo no encontrado: "${key}".`);
+      }
+      throw error;
+    }
+  }
+
+  /** ¿Existe el objeto `key` en el bucket? HEAD (sin transferir el contenido). */
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.env.bucket, Key: key }));
+      return true;
+    } catch (error: unknown) {
+      if (isNoSuchKey(error)) {
+        return false;
       }
       throw error;
     }

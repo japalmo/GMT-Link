@@ -113,7 +113,7 @@ describe('TasksService', () => {
 
       await service.create('u1', dto);
 
-      const data = prismaMock.task.create.mock.calls[0][0].data as { reviewDate: Date; dueDate: Date };
+      const data = (prismaMock.task.create.mock.calls[0]?.[0] as { data: { reviewDate: Date; dueDate: Date } }).data;
       expect(data.reviewDate).toEqual(new Date('2026-07-20'));
       expect(data.dueDate).toEqual(new Date('2026-07-25'));
     });

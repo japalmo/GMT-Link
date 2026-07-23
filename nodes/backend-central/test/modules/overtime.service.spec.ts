@@ -296,10 +296,12 @@ describe('OvertimeService', () => {
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(0);
     // El mes contable 2026-07 abarca [21-jun, 21-jul) y solo trae APROBADAS.
-    const where = findMany.mock.calls[0]?.[0]?.where as {
-      status: FinanceStatus;
-      date: { gte: Date; lt: Date };
-    };
+    // El mock se define sin parámetros → sus `calls` tipan como tupla vacía;
+    // se re-tipa la primera llamada para leer el `where` real con que se invocó.
+    const calls = findMany.mock.calls as unknown as [
+      [{ where: { status: FinanceStatus; date: { gte: Date; lt: Date } } }],
+    ];
+    const where = calls[0][0].where;
     expect(where.status).toBe(FinanceStatus.APROBADO);
     expect(where.date.gte.toISOString()).toBe('2026-06-21T00:00:00.000Z');
     expect(where.date.lt.toISOString()).toBe('2026-07-21T00:00:00.000Z');

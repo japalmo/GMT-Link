@@ -757,6 +757,12 @@ export class MetricsService {
       );
     }
 
+    // 0) `blob_path` debe ser una CLAVE del namespace que produce el upload del
+    //    escritorio (`getAssetUploadUrl` + PUT → storage.save(folder 'metrics')),
+    //    nunca una URL: una URL absoluta sería spoofeable (enlace externo mostrado
+    //    como oficial) y una clave arbitraria apuntaría fuera del canal de subida.
+    this.assertValidDocumentBlobPath(dto.blob_path);
+
     // 1) Resolver proyecto (y servicio/tarea si aplica) desde el vínculo.
     let projectId: string;
     let serviceId: string | null = null;
@@ -777,29 +783,44 @@ export class MetricsService {
       projectId = await this.getProjectIdForElementCode(dto.element_code!);
     }
 
-    // `ProjectDocument.serviceId` es obligatorio. Si la tarea no tiene servicio
-    // (o el vínculo vino por elemento), se usa el servicio más reciente del
-    // proyecto; sin servicios no hay dónde colgar el documento. `Service` no
-    // tiene createdAt: se ordena por id desc (cuid con prefijo temporal, orden
-    // de creación aproximado; mismo criterio heurístico que la fase activa).
-    if (!serviceId) {
-      const service = await this.prisma.service.findFirst({
-        where: { projectId },
-        orderBy: { id: 'desc' },
-        select: { id: true },
-      });
-      if (!service) {
-        throw new BadRequestException(
-          'El proyecto vinculado no tiene servicios. Crea un servicio antes de registrar documentos.',
-        );
-      }
-      serviceId = service.id;
-    }
-
-    // 2) Autorización por proyecto (patrón saveCubicacion).
+    // 2) Autorización INMEDIATA tras resolver el proyecto (patrón saveCubicacion).
+    //    Nada posterior (servicios del proyecto, cruce de elemento, existencia en
+    //    storage, unicidad de código) debe ejecutarse ni filtrar información si el
+    //    usuario no tiene permiso.
     await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
 
-    // 3) Código único (V-Metric lo construye; acá solo se exige unicidad).
+    // 3) Si vienen tarea Y elemento, el elemento debe pertenecer al proyecto de
+    //    la tarea (un cruce silencioso colgaría el documento del proyecto/servicio
+    //    equivocado).
+    if (dto.task_id && dto.element_code) {
+      const elementProjectId = await this.getProjectIdForElementCode(dto.element_code);
+      if (elementProjectId !== projectId) {
+        throw new BadRequestException(
+          'El elemento indicado no pertenece al proyecto de la tarea. Verifica el vínculo en V-Metric.',
+        );
+      }
+    }
+
+    // 4) `ProjectDocument.serviceId` es obligatorio y la tupla FGA `service:`
+    //    otorga derechos de firma, así que NUNCA se adivina. Regla determinista:
+    //    (a) el servicio de la tarea; (b) `service_code` del payload resuelto
+    //    contra `Service.code` del proyecto; (c) el único servicio del proyecto;
+    //    (d) en cualquier otro caso, 400 pidiendo `service_code`.
+    if (!serviceId) {
+      serviceId = await this.resolveDocumentServiceId(projectId, dto.service_code);
+    }
+
+    // 5) El objeto debe existir en el storage ANTES de crear el documento: un
+    //    registro que apunte a un PDF inexistente dejaría al QA sin archivo que
+    //    aprobar.
+    const blobExists = await this.storage.exists(dto.blob_path);
+    if (!blobExists) {
+      throw new BadRequestException(
+        'El archivo indicado en blob_path no existe en el almacenamiento. Sube el PDF antes de registrar el documento.',
+      );
+    }
+
+    // 6) Código único (V-Metric lo construye; acá solo se exige unicidad).
     const existing = await this.prisma.projectDocument.findUnique({
       where: { code: dto.codigo },
       select: { id: true },
@@ -861,10 +882,79 @@ export class MetricsService {
   }
 
   /**
+   * Namespace de claves válido para documentos del escritorio: exactamente lo que
+   * produce `getAssetUploadUrl` + `PUT /metrics/upload` → `storage.save({ folder:
+   * 'metrics', customFilename: <uuid>-<sanitizeFilename(nombre)> })`, es decir
+   * `metrics/<nombre saneado>`. `sanitizeFilename` solo emite `[A-Za-z0-9._-]`
+   * sin puntos iniciales, por eso el primer carácter del nombre excluye el punto
+   * (bloquea `metrics/..` y ocultos). URLs absolutas se rechazan siempre.
+   */
+  private assertValidDocumentBlobPath(blobPath: string): void {
+    if (/^https?:\/\//i.test(blobPath)) {
+      throw new BadRequestException(
+        'blob_path debe ser la clave del archivo subido (por ejemplo metrics/archivo.pdf), no una URL.',
+      );
+    }
+    if (!/^metrics\/[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(blobPath)) {
+      throw new BadRequestException(
+        'blob_path no corresponde al almacenamiento de documentos del escritorio. Usa la clave entregada al subir el archivo.',
+      );
+    }
+  }
+
+  /**
+   * Resuelve el servicio del documento cuando la tarea no lo trae (o el vínculo
+   * vino por elemento). Determinista, sin heurísticas: `service_code` explícito
+   * (clave natural `@@unique([projectId, code])`) o el ÚNICO servicio del
+   * proyecto; ambigüedad → 400.
+   */
+  private async resolveDocumentServiceId(
+    projectId: string,
+    serviceCode: string | undefined,
+  ): Promise<string> {
+    if (serviceCode) {
+      const service = await this.prisma.service.findUnique({
+        where: { projectId_code: { projectId, code: serviceCode } },
+        select: { id: true },
+      });
+      if (!service) {
+        throw new BadRequestException(
+          `El servicio con código ${serviceCode} no existe en el proyecto vinculado.`,
+        );
+      }
+      return service.id;
+    }
+
+    const services = await this.prisma.service.findMany({
+      where: { projectId },
+      select: { id: true },
+      take: 2,
+    });
+    const [first, second] = services;
+    if (!first) {
+      throw new BadRequestException(
+        'El proyecto vinculado no tiene servicios. Crea un servicio antes de registrar documentos.',
+      );
+    }
+    if (second) {
+      throw new BadRequestException(
+        'El proyecto vinculado tiene más de un servicio. Indica service_code para elegir dónde registrar el documento.',
+      );
+    }
+    return first.id;
+  }
+
+  /**
    * Estado de un documento para el polling del escritorio (Bloque D). Gate
-   * `can_view` sobre el proyecto del documento.
+   * `can_view` sobre el proyecto del documento. Anti-enumeración: cuando FGA
+   * niega la visibilidad se responde el MISMO 404 que cuando el código no
+   * existe, para que un tercero no pueda confirmar códigos ajenos (son
+   * estructurados y adivinables).
    */
   async getDesktopDocumentStatus(userId: string, code: string) {
+    const notFound = () =>
+      new NotFoundException(`No existe un documento con el código ${code}.`);
+
     const doc = await this.prisma.projectDocument.findUnique({
       where: { code },
       select: {
@@ -876,10 +966,17 @@ export class MetricsService {
       },
     });
     if (!doc) {
-      throw new NotFoundException(`No existe un documento con el código ${code}.`);
+      throw notFound();
     }
 
-    await this.requireProjectPermission(userId, doc.projectId, 'can_view');
+    const allowed = await this.fga.check({
+      user: `user:${userId}`,
+      relation: 'can_view',
+      object: `project:${doc.projectId}`,
+    });
+    if (!allowed) {
+      throw notFound();
+    }
 
     return {
       status: doc.status,

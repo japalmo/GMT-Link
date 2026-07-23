@@ -7,6 +7,7 @@ import { UsersService } from '../../src/modules/users/users.service';
 import type { FgaClientLike, TupleKey } from '../../src/fga/fga.types';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { EmailService } from '../../src/common/email.service';
+import type { OvertimeService } from '../../src/modules/overtime/overtime.service';
 
 /** Catálogo con el mapeo permiso→relación REAL del seed (prisma/seed.ts, A16). */
 const PERMS = [
@@ -182,7 +183,10 @@ describe('Flujo: rol custom → asignación por scope → resync → remove (map
     const roles = new RolesService(prisma, fga);
     const storage = { save: vi.fn() } as unknown as StorageService;
     const emailService = { send: vi.fn(() => Promise.resolve()) } as unknown as EmailService;
-    const users = new UsersService(prisma, fga, storage, roles, emailService);
+    const overtime = {
+      recomputePendingForWorker: vi.fn(() => Promise.resolve(0)),
+    } as unknown as OvertimeService;
+    const users = new UsersService(prisma, fga, storage, roles, emailService, overtime);
 
     // 1) Asignar el rol custom a u1 en el proyecto p1.
     //    3 grants pero solo 2 tuplas: task:read y project:read comparten can_view (dedupe A5).

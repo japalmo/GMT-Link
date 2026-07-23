@@ -136,6 +136,20 @@ export class ProjectDocumentsController {
   }
 
   /**
+   * URL fresca de descarga/visualización del archivo del documento (Fase 1B).
+   * Si `fileUrl` es una clave de storage se presigna al leer; si es una URL
+   * absoluta legada, se devuelve tal cual. Mismo gate de visibilidad de `list`.
+   */
+  @Get(':id/file-url')
+  getFileUrl(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.service.getFileUrl(id, userId);
+  }
+
+  /**
    * Elimina un documento de proyecto.
    */
   @Delete(':id')

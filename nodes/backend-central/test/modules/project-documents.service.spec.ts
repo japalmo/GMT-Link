@@ -6,6 +6,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import { ProjectDocumentsService } from '../../src/modules/project-documents/project-documents.service';
+import { R2StorageService } from '../../src/common/storage/r2-storage.service';
 import type { CreateProjectDocumentDto } from '../../src/modules/project-documents/dto/project-documents.dto';
 
 // Archivo no-PDF para saltar el estampado pdf-lib y enfocar la lógica del servicio.
@@ -16,7 +17,7 @@ const file = () => ({
 });
 
 interface PrismaMock {
-  project: { findUnique: ReturnType<typeof vi.fn> };
+  project: { findUnique: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
   service: { findUnique: ReturnType<typeof vi.fn> };
   projectDocument: {
     count: ReturnType<typeof vi.fn>;
@@ -32,7 +33,7 @@ interface PrismaMock {
 
 function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
   const mock: PrismaMock = {
-    project: { findUnique: vi.fn() },
+    project: { findUnique: vi.fn(), findMany: vi.fn(() => Promise.resolve([])) },
     service: { findUnique: vi.fn() },
     projectDocument: {
       count: vi.fn(() => Promise.resolve(0)),
@@ -366,6 +367,92 @@ describe('ProjectDocumentsService', () => {
         vi.fn(() => Promise.resolve([{ id: 'p1' }]));
 
       await expect(service.list('u1', 'p9')).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('getFileUrl (C1: URL fresca al leer, clave en fileUrl)', () => {
+    const baseUrl = process.env.API_PUBLIC_URL ?? 'http://localhost:3001';
+
+    it('404 si el documento no existe', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue(null);
+      await expect(service.getFileUrl('d1', 'u1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('no-admin sin membresía sobre el proyecto del documento → rechazado', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue({
+        fileUrl: 'metrics/abc-doc.pdf',
+        projectId: 'p9',
+      });
+      mock.membership.findFirst.mockResolvedValue(null);
+      mock.membership.findMany.mockResolvedValue([
+        { scopeType: ScopeType.PROJECT, scopeId: 'p1' },
+      ]);
+      mock.project.findMany.mockResolvedValue([{ id: 'p1' }]);
+
+      await expect(service.getFileUrl('d1', 'u1')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('URL absoluta legada → passthrough tal cual (org_admin)', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue({
+        fileUrl: 'https://r2.example.com/firmada-vieja.pdf?sig=x',
+        projectId: 'p1',
+      });
+      mock.membership.findFirst.mockResolvedValue({ id: 'adm' });
+
+      const result = await service.getFileUrl('d1', 'admin');
+
+      expect(result).toEqual({ url: 'https://r2.example.com/firmada-vieja.pdf?sig=x' });
+    });
+
+    it('clave de storage con backend local (dev) → URL del FilesController', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue({
+        fileUrl: 'metrics/abc-doc.pdf',
+        projectId: 'p1',
+      });
+      mock.membership.findFirst.mockResolvedValue({ id: 'adm' });
+
+      const result = await service.getFileUrl('d1', 'admin');
+
+      expect(result).toEqual({ url: `${baseUrl}/files/metrics/abc-doc.pdf` });
+    });
+
+    it('clave de storage con R2 activo → URL prefirmada fresca', async () => {
+      // Instancia con el prototipo real de R2 (sin correr su constructor) para
+      // que el narrowing `instanceof R2StorageService` tome el camino de presign.
+      const r2 = Object.create(R2StorageService.prototype) as R2StorageService;
+      const presign = vi.fn(() => Promise.resolve('https://r2.example.com/presign-fresca'));
+      (r2 as unknown as { createPresignedGetUrl: unknown }).createPresignedGetUrl = presign;
+      const r2Service = new ProjectDocumentsService(
+        prisma,
+        fga as unknown as FgaService,
+        r2,
+      );
+      mock.projectDocument.findUnique.mockResolvedValue({
+        fileUrl: 'metrics/abc-doc.pdf',
+        projectId: 'p1',
+      });
+      mock.membership.findFirst.mockResolvedValue({ id: 'adm' });
+
+      const result = await r2Service.getFileUrl('d1', 'admin');
+
+      expect(presign).toHaveBeenCalledWith('metrics/abc-doc.pdf');
+      expect(result).toEqual({ url: 'https://r2.example.com/presign-fresca' });
+    });
+
+    it('miembro directo del proyecto del documento → permitido', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue({
+        fileUrl: 'metrics/abc-doc.pdf',
+        projectId: 'p1',
+      });
+      mock.membership.findFirst.mockResolvedValue(null);
+      mock.membership.findMany.mockResolvedValue([
+        { scopeType: ScopeType.PROJECT, scopeId: 'p1' },
+      ]);
+      mock.project.findMany.mockResolvedValue([{ id: 'p1' }]);
+
+      const result = await service.getFileUrl('d1', 'u1');
+
+      expect(result).toEqual({ url: `${baseUrl}/files/metrics/abc-doc.pdf` });
     });
   });
 

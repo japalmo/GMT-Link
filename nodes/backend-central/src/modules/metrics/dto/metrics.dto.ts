@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsObject, IsEnum, IsBoolean, IsIn, ArrayNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsObject, IsEnum, IsBoolean, IsIn, ArrayNotEmpty, Matches, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { VariableType } from '@prisma/client';
 
@@ -175,8 +175,14 @@ export class CreateDesktopDocumentDto {
   @IsNotEmpty()
   doc_type!: string;
 
+  // El código viaja luego en la ruta GET documents/:code/status: se restringe a
+  // letras, números y guiones (un "/" lo haría inconsultable) y a un largo sano.
   @IsString()
   @IsNotEmpty()
+  @MaxLength(160, { message: 'El código no puede superar 160 caracteres.' })
+  @Matches(/^[A-Z0-9-]+$/i, {
+    message: 'El código solo puede contener letras, números y guiones.',
+  })
   codigo!: string;
 
   @IsString()
@@ -186,6 +192,13 @@ export class CreateDesktopDocumentDto {
   @IsString()
   @IsOptional()
   element_code?: string;
+
+  // Desambiguación del servicio cuando la tarea no trae uno (o el vínculo vino
+  // por elemento) y el proyecto tiene varios servicios. Se resuelve contra
+  // `Service.code` del proyecto (@@unique [projectId, code]).
+  @IsString()
+  @IsOptional()
+  service_code?: string;
 
   // D3: el escritorio solo emite BORRADOR o PENDIENTE_QA (default). Los demás
   // estados del ciclo (PENDIENTE_CLIENTE, APROBADO, RECHAZADO) son del flujo web.

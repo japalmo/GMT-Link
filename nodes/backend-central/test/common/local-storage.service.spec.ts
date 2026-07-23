@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
 import {
+  LocalStorageService,
   sanitizeFilename,
   resolveWithinUploads,
   UPLOADS_ROOT,
@@ -58,5 +59,28 @@ describe('LocalStorageService — resolveWithinUploads (defensa anti-escape de l
     const r = resolveWithinUploads('projects/p1/documents/doc.pdf');
     expect(r).not.toBeNull();
     expect(r?.startsWith(UPLOADS_ROOT)).toBe(true);
+  });
+});
+
+describe('LocalStorageService — exists (verificación sin lectura)', () => {
+  it('false para una clave inexistente o que escapa de la raíz', async () => {
+    const storage = new LocalStorageService();
+    expect(await storage.exists('metrics/no-existe.pdf')).toBe(false);
+    expect(await storage.exists('../../etc/passwd')).toBe(false);
+  });
+
+  it('true tras guardar y false tras borrar (ciclo real en disco dev)', async () => {
+    const storage = new LocalStorageService();
+    const { key } = await storage.save({
+      buffer: Buffer.from('pdf-de-prueba'),
+      filename: 'protocolo-exists.pdf',
+      contentType: 'application/pdf',
+      folder: 'metrics',
+    });
+
+    expect(await storage.exists(key)).toBe(true);
+
+    await storage.delete(key);
+    expect(await storage.exists(key)).toBe(false);
   });
 });

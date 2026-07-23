@@ -3,6 +3,7 @@ import { ProjectDocumentStatus, ScopeType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { R2StorageService } from '../../common/storage/r2-storage.service';
 import { CreateProjectDocumentDto } from './dto/project-documents.dto';
 import { createHash } from 'node:crypto';
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
@@ -387,10 +388,11 @@ export class ProjectDocumentsService {
   }
 
   /**
-   * Lista documentos visibles.
+   * Proyectos cuyo contenido documental puede VER el usuario (gate de lectura
+   * del módulo): `undefined` = org_admin (todos); si no, los proyectos de sus
+   * membresías directas (PROJECT) o por departamento (DEPARTMENT).
    */
-  async list(userId: string, projectId?: string, serviceId?: string, taskId?: string) {
-    // Obtener proyectos accesibles
+  private async getVisibleProjectIds(userId: string): Promise<string[] | undefined> {
     const globalAdmin = await this.prisma.membership.findFirst({
       where: {
         userId,
@@ -398,37 +400,44 @@ export class ProjectDocumentsService {
         scopeType: ScopeType.ORGANIZATION,
       },
     });
-
-    let allowedProjectIds: string[] | undefined;
-
-    if (!globalAdmin) {
-      const memberships = await this.prisma.membership.findMany({
-        where: {
-          userId,
-          scopeType: { in: [ScopeType.PROJECT, ScopeType.DEPARTMENT] },
-        },
-      });
-
-      const projectIds = memberships
-        .filter((m) => m.scopeType === ScopeType.PROJECT)
-        .map((m) => m.scopeId);
-
-      const departmentIds = memberships
-        .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
-        .map((m) => m.scopeId);
-
-      const projects = await this.prisma.project.findMany({
-        where: {
-          OR: [
-            { id: { in: projectIds } },
-            { departmentId: { in: departmentIds } },
-          ],
-        },
-        select: { id: true },
-      });
-
-      allowedProjectIds = projects.map((p) => p.id);
+    if (globalAdmin) {
+      return undefined;
     }
+
+    const memberships = await this.prisma.membership.findMany({
+      where: {
+        userId,
+        scopeType: { in: [ScopeType.PROJECT, ScopeType.DEPARTMENT] },
+      },
+    });
+
+    const projectIds = memberships
+      .filter((m) => m.scopeType === ScopeType.PROJECT)
+      .map((m) => m.scopeId);
+
+    const departmentIds = memberships
+      .filter((m) => m.scopeType === ScopeType.DEPARTMENT)
+      .map((m) => m.scopeId);
+
+    const projects = await this.prisma.project.findMany({
+      where: {
+        OR: [
+          { id: { in: projectIds } },
+          { departmentId: { in: departmentIds } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return projects.map((p) => p.id);
+  }
+
+  /**
+   * Lista documentos visibles.
+   */
+  async list(userId: string, projectId?: string, serviceId?: string, taskId?: string) {
+    // Obtener proyectos accesibles (mismo gate de visibilidad del módulo).
+    const allowedProjectIds = await this.getVisibleProjectIds(userId);
 
     const where: Prisma.ProjectDocumentWhereInput = {};
     if (allowedProjectIds) {
@@ -462,6 +471,44 @@ export class ProjectDocumentsService {
       },
       orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  /**
+   * URL de descarga/visualización FRESCA de un documento (Fase 1B, C1).
+   *
+   * `fileUrl` puede ser (a) una CLAVE de storage (documentos del escritorio, que
+   * guardan la clave y nunca una URL) o (b) una URL absoluta legada del flujo web
+   * (que persistía URLs prefirmadas de R2 con vigencia de 1 hora — por eso los
+   * documentos nuevos guardan la clave y presignan AL LEER). Gate: el mismo de
+   * visibilidad que usa `list()` para leer documentos.
+   */
+  async getFileUrl(id: string, userId: string): Promise<{ url: string }> {
+    const doc = await this.prisma.projectDocument.findUnique({
+      where: { id },
+      select: { fileUrl: true, projectId: true },
+    });
+    if (!doc) {
+      throw new NotFoundException('El documento no existe.');
+    }
+
+    const allowedProjectIds = await this.getVisibleProjectIds(userId);
+    if (allowedProjectIds && !allowedProjectIds.includes(doc.projectId)) {
+      throw new BadRequestException('No tienes acceso a este proyecto.');
+    }
+
+    // (b) URL absoluta legada → passthrough tal cual.
+    if (/^https?:\/\//i.test(doc.fileUrl)) {
+      return { url: doc.fileUrl };
+    }
+
+    // (a) Clave de storage → URL fresca según el backend activo.
+    if (this.storage instanceof R2StorageService) {
+      return { url: await this.storage.createPresignedGetUrl(doc.fileUrl) };
+    }
+
+    // Dev local: el FilesController sirve /files/<key>.
+    const baseUrl = process.env.API_PUBLIC_URL ?? 'http://localhost:3001';
+    return { url: `${baseUrl}/files/${doc.fileUrl}` };
   }
 
   /**

@@ -55,4 +55,24 @@ describe('CreateDesktopDocumentDto', () => {
     const errors = await validated({ ...base, task_id: 'task-1', extra: 'no' });
     expect(errors.length).toBeGreaterThan(0);
   });
+
+  it('acepta service_code opcional', async () => {
+    const errors = await validated({ ...base, element_code: 'R1', service_code: 'TOP' });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rechaza un código con "/" (sería inconsultable por la ruta de status)', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', codigo: 'GMT/X/001' });
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza un código con espacios u otros caracteres fuera de letras, números y guiones', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', codigo: 'GMT X 001' });
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza un código de más de 160 caracteres', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', codigo: 'A'.repeat(161) });
+    expect(errors.length).toBeGreaterThan(0);
+  });
 });
