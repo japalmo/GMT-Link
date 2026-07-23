@@ -31,6 +31,12 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   EST: 'Estudio',
   REP: 'Reporte',
   PRT: 'Protocolo',
+  // Tipos de protocolo de V-Metric (poza/pdf/placeholders.py, DOC_TYPE_LABELS).
+  CR: 'Cubicación Reservorio',
+  CP: 'Cubicación Poza',
+  CA: 'Cubicación Acopio',
+  CL: 'Cota Lámina',
+  AE: 'Área Efectiva',
 };
 
 /**
