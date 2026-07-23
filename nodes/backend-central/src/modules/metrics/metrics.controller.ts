@@ -406,6 +406,10 @@ export class MetricsController {
        // Aquí iría el traslado a R2/S3.
      }, 1000);
 
+     // n5: token de un solo uso — se invalida tras completar la subida para
+     // impedir re-subidas que reemplacen el contenido bajo el hash ya declarado.
+     this.service.invalidateToken(token);
+
      // `blob_key`: clave REAL bajo la que quedó el objeto (local o R2); es la
      // que POST /metrics/documents exige en blob_path.
      return { success: true, filename, blob_key: saved.key };

@@ -1004,7 +1004,14 @@ export class MetricsService {
   async getAssetUploadUrl(body: { filename: string }) {
     const uuid = randomUUID();
     const token = randomUUID();
-    const cleanFilename = `${uuid}-${sanitizeFilename(body.filename)}`;
+    // Punto fijo de sanitize (I8): el PUT re-sanitiza el nombre compuesto al
+    // guardar (objectName = sanitizeFilename(customFilename) en ambos
+    // storages, con truncado a 120). Si el nombre saneado supera 83 chars, el
+    // compuesto uuid-nombre excede 120 y el truncado del storage divergiría de
+    // la clave anticipada. Aplicar la MISMA función al compuesto garantiza
+    // anticipada === real por construcción (sanitizeFilename es idempotente
+    // sobre su propia salida).
+    const cleanFilename = sanitizeFilename(`${uuid}-${sanitizeFilename(body.filename)}`);
 
     this.tokens.set(token, cleanFilename);
 
@@ -1031,6 +1038,16 @@ export class MetricsService {
 
   resolveToken(token: string): string | undefined {
     return this.tokens.get(token);
+  }
+
+  /**
+   * Invalida un token de subida (n5): se llama al COMPLETAR el PUT con éxito,
+   * dejando el token de un solo uso. Sin esto, el poseedor podría re-subir al
+   * mismo key y reemplazar el contenido bajo el hash ya declarado en el
+   * documento registrado.
+   */
+  invalidateToken(token: string): void {
+    this.tokens.delete(token);
   }
 
   private publicBaseUrl(): string {

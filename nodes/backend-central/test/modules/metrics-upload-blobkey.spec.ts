@@ -1,14 +1,15 @@
 import 'reflect-metadata';
 import { Readable } from 'node:stream';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { MetricsController } from '../../src/modules/metrics/metrics.controller';
 import { MetricsService } from '../../src/modules/metrics/metrics.service';
 import { OtpService } from '../../src/common/otp.service';
+import { LocalStorageService } from '../../src/common/storage/local-storage.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { EmailService } from '../../src/common/email.service';
 import type { FgaService } from '../../src/fga/fga.service';
-import type { StorageService } from '../../src/common/storage/storage.service';
 
 /** Namespace que exige POST /metrics/documents para blob_path (clave, no URL). */
 const NAMESPACE = /^metrics\/[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
@@ -21,12 +22,15 @@ interface UploadPrismaMock {
   projectDocument: { findUnique: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
 }
 
-function build(): {
+interface Built {
   controller: MetricsController;
   service: MetricsService;
   prisma: UploadPrismaMock;
-  storageSave: ReturnType<typeof vi.fn>;
-} {
+  storage: LocalStorageService;
+  saveSpy: ReturnType<typeof vi.fn>;
+}
+
+function build(): Built {
   const prisma: UploadPrismaMock = {
     $transaction: vi.fn((ops: unknown) =>
       typeof ops === 'function' ? (ops as (tx: UploadPrismaMock) => unknown)(prisma) : Promise.resolve(ops),
@@ -50,23 +54,12 @@ function build(): {
     writeTuples: vi.fn(() => Promise.resolve()),
   };
 
-  // Mimetiza la derivación de clave REAL de los storage concretos:
-  // key = `${folder}/${customFilename}` (local y R2 comparten esa forma).
-  const storageSave = vi.fn(
-    (input: { folder: string; customFilename?: string; filename: string }) => {
-      const name = input.customFilename ?? input.filename;
-      return Promise.resolve({
-        key: `${input.folder}/${name}`,
-        url: `http://localhost:3001/files/${input.folder}/${name}`,
-      });
-    },
-  );
-  const storage = {
-    save: storageSave,
-    read: vi.fn(() => Promise.resolve(Buffer.from(''))),
-    exists: vi.fn(() => Promise.resolve(true)),
-    delete: vi.fn(() => Promise.resolve()),
-  };
+  // Storage LOCAL REAL (patrón de local-storage.service.spec.ts): el PUT
+  // re-sanitiza el nombre compuesto al guardar (objectName =
+  // sanitizeFilename(customFilename), igual que R2); un mock que no lo haga
+  // ocultaría la divergencia anticipada/real (I8).
+  const storage = new LocalStorageService();
+  const saveSpy = vi.spyOn(storage, 'save') as unknown as ReturnType<typeof vi.fn>;
 
   const emailService = { send: vi.fn(() => Promise.resolve()) };
   const otp = new OtpService(prisma as unknown as PrismaService);
@@ -74,15 +67,11 @@ function build(): {
     prisma as unknown as PrismaService,
     emailService as unknown as EmailService,
     fga as unknown as FgaService,
-    storage as unknown as StorageService,
+    storage,
     otp,
   );
-  const controller = new MetricsController(
-    service,
-    fga as unknown as FgaService,
-    storage as unknown as StorageService,
-  );
-  return { controller, service, prisma, storageSave };
+  const controller = new MetricsController(service, fga as unknown as FgaService, storage);
+  return { controller, service, prisma, storage, saveSpy };
 }
 
 /** Request falso: stream legible con headers, como el PUT crudo del escritorio. */
@@ -100,14 +89,27 @@ function fakeUploadRequest(body: Buffer): Request {
   return req as unknown as Request;
 }
 
-describe('Circuito de subida del escritorio: blob_key en los responses (I6)', () => {
+function tokenOf(uploadUrl: string): string {
+  return new URL(uploadUrl).searchParams.get('token') ?? '';
+}
+
+describe('Circuito de subida del escritorio: blob_key en los responses (I6/I8)', () => {
   let controller: MetricsController;
   let service: MetricsService;
   let prisma: UploadPrismaMock;
-  let storageSave: ReturnType<typeof vi.fn>;
+  let storage: LocalStorageService;
+  let saveSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    ({ controller, service, prisma, storageSave } = build());
+    ({ controller, service, prisma, storage, saveSpy } = build());
+  });
+
+  afterEach(async () => {
+    // Limpieza de los archivos reales escritos en var/uploads durante el test.
+    for (const result of saveSpy.mock.results) {
+      const saved = (await result.value) as { key: string };
+      await storage.delete(saved.key);
+    }
   });
 
   it('getAssetUploadUrl incluye blob_key con la clave real del namespace (aditivo: blob_path se conserva)', async () => {
@@ -122,7 +124,7 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6)', ()
 
   it('PUT /metrics/upload responde blob_key con la clave real almacenada por el storage', async () => {
     const upload = await service.getAssetUploadUrl({ filename: 'protocolo.pdf' });
-    const token = new URL(upload.upload_url).searchParams.get('token') ?? '';
+    const token = tokenOf(upload.upload_url);
     expect(token.length).toBeGreaterThan(0);
 
     const res = await controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('pdf')));
@@ -130,14 +132,52 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6)', ()
     expect(res.success).toBe(true);
     expect(res.blob_key).toMatch(NAMESPACE);
     // La clave del response es EXACTAMENTE la que retornó storage.save (no una reconstrucción).
-    const savedResult = (await storageSave.mock.results[0]?.value) as { key: string };
+    const savedResult = (await saveSpy.mock.results[0]?.value) as { key: string };
     expect(res.blob_key).toBe(savedResult.key);
     // Y coincide con la que getAssetUploadUrl anticipó.
     expect(res.blob_key).toBe(upload.blob_key);
+    // El objeto existe de verdad bajo esa clave.
+    expect(await storage.exists(res.blob_key)).toBe(true);
   });
 
-  it('la blob_key entregada pasa la validación de POST /metrics/documents (circuito completo)', async () => {
+  it('I8: con nombre largo (84+ chars saneados) la clave anticipada sigue igual a la real y valida en POST /metrics/documents', async () => {
+    // 96 chars + '.pdf' = 100 saneados; uuid(36) + '-' + 100 = 137 > 120 → el
+    // storage trunca al guardar. La anticipada debe truncar IGUAL (punto fijo
+    // de sanitizeFilename sobre el compuesto).
+    const longName = `${'x'.repeat(96)}.pdf`;
+    const upload = await service.getAssetUploadUrl({ filename: longName });
+    const token = tokenOf(upload.upload_url);
+
+    const res = await controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('pdf')));
+
+    expect(res.blob_key).toMatch(NAMESPACE);
+    expect(res.blob_key).toBe(upload.blob_key); // anticipada === real
+    expect(await storage.exists(res.blob_key)).toBe(true);
+
+    // Y esa clave pasa la validación (y el check de existencia REAL) del registro.
+    prisma.task.findUnique.mockResolvedValue({
+      id: 'task-1',
+      projectId: 'proj-1',
+      serviceId: 'serv-1',
+    });
+    const result = await service.createDesktopDocument('u1', {
+      blob_path: upload.blob_key,
+      file_hash: 'abc123',
+      doc_type: 'CR',
+      codigo: 'GMT-SQM-SD-P1-TOP-CR-GEN-003',
+      task_id: 'task-1',
+    });
+    expect(result.success).toBe(true);
+    expect(prisma.projectDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ fileUrl: upload.blob_key }),
+      }),
+    );
+  });
+
+  it('la blob_key entregada pasa la validación de POST /metrics/documents (circuito completo con storage real)', async () => {
     const upload = await service.getAssetUploadUrl({ filename: 'protocolo.pdf' });
+    await controller.handleRawUpload(tokenOf(upload.upload_url), fakeUploadRequest(Buffer.from('pdf')));
     prisma.task.findUnique.mockResolvedValue({
       id: 'task-1',
       projectId: 'proj-1',
@@ -158,5 +198,17 @@ describe('Circuito de subida del escritorio: blob_key en los responses (I6)', ()
         data: expect.objectContaining({ fileUrl: upload.blob_key }),
       }),
     );
+  });
+
+  it('n5: el token de subida es de un solo uso (segundo PUT con el mismo token → rechazado)', async () => {
+    const upload = await service.getAssetUploadUrl({ filename: 'protocolo.pdf' });
+    const token = tokenOf(upload.upload_url);
+
+    const first = await controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('pdf')));
+    expect(first.success).toBe(true);
+
+    await expect(
+      controller.handleRawUpload(token, fakeUploadRequest(Buffer.from('reemplazo malicioso'))),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
