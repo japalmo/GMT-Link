@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsObject, IsEnum, IsBoolean, ArrayNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsObject, IsEnum, IsBoolean, IsIn, ArrayNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 import { VariableType } from '@prisma/client';
 
@@ -154,6 +154,46 @@ export class SaveReservorioMetadataDto {
   @IsString()
   @IsOptional()
   proyecto_id?: string;
+}
+
+/**
+ * Ingreso de un documento emitido desde el escritorio (V-Metric, Fase 1B).
+ * Campos en snake_case: es el dialecto que el canal desktop ya habla.
+ * El vínculo llega por `task_id` (preferente) o `element_code` (resolver
+ * existente); al menos uno es obligatorio (se valida en el service).
+ */
+export class CreateDesktopDocumentDto {
+  @IsString()
+  @IsNotEmpty()
+  blob_path!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  file_hash!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  doc_type!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  codigo!: string;
+
+  @IsString()
+  @IsOptional()
+  task_id?: string;
+
+  @IsString()
+  @IsOptional()
+  element_code?: string;
+
+  // D3: el escritorio solo emite BORRADOR o PENDIENTE_QA (default). Los demás
+  // estados del ciclo (PENDIENTE_CLIENTE, APROBADO, RECHAZADO) son del flujo web.
+  @IsIn(['BORRADOR', 'PENDIENTE_QA'], {
+    message: 'El estado debe ser BORRADOR o PENDIENTE_QA.',
+  })
+  @IsOptional()
+  estado?: 'BORRADOR' | 'PENDIENTE_QA';
 }
 
 export class LogActivityDto {

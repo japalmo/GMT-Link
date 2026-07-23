@@ -17,6 +17,7 @@ import {
   SaveReservorioMetadataDto,
   LogActivityDto,
   SetPhaseDataSpecDto,
+  CreateDesktopDocumentDto,
 } from './dto/metrics.dto';
 
 
@@ -271,6 +272,43 @@ export class MetricsController {
     const projectId = await this.service.getProjectIdForElementCode(body.reservorio_codigo);
     await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     return this.service.saveCubicacion(userId, body);
+  }
+
+  // ── Documentos desde el escritorio (Fase 1B) ─────────────────────────────────
+  //
+  // Mapeo de estados desktop → web (D3):
+  //   - El borrador LOCAL de V-Metric no viaja: vive solo en la BD del escritorio.
+  //   - Al emitir, el documento llega como PENDIENTE_QA (default) y entra al
+  //     flujo web de project-documents: firmar QA → PENDIENTE_CLIENTE o APROBADO,
+  //     o rechazar → RECHAZADO.
+  //   - Si el operador guarda sin emitir y decide subirlo igual, puede llegar
+  //     como BORRADOR (estado='BORRADOR'); ningún otro estado se acepta desde
+  //     el escritorio.
+  //   - El escritorio refleja el resultado por polling de GET documents/:code/status.
+  //   - Firma biométrica: dormida (D5); no participa en este circuito.
+
+  /**
+   * Registra un documento emitido desde V-Metric. La autorización
+   * (`can_submit_measurements` sobre el proyecto resuelto desde task_id o
+   * element_code) se decide dentro del service, junto a la resolución.
+   */
+  @Post('documents')
+  createDesktopDocument(
+    @CurrentUser() user: AuthUser | undefined,
+    @Body() dto: CreateDesktopDocumentDto,
+  ) {
+    const userId = this.requireUserId(user);
+    return this.service.createDesktopDocument(userId, dto);
+  }
+
+  /** Estado de un documento para el polling del escritorio (gate can_view). */
+  @Get('documents/:code/status')
+  getDesktopDocumentStatus(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('code') code: string,
+  ) {
+    const userId = this.requireUserId(user);
+    return this.service.getDesktopDocumentStatus(userId, code);
   }
 
   @Post('getAssetUploadUrl')

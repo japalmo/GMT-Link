@@ -1,0 +1,58 @@
+import 'reflect-metadata';
+import { describe, expect, it } from 'vitest';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { CreateDesktopDocumentDto } from '../../../src/modules/metrics/dto/metrics.dto';
+
+const base = {
+  blob_path: 'documents/R1/PROT-001.pdf',
+  file_hash: 'abc123',
+  doc_type: 'CR',
+  codigo: 'GMT-SQM-SD-P1-TOP-CR-GEN-001',
+};
+
+async function validated(payload: Record<string, unknown>) {
+  const dto = plainToInstance(CreateDesktopDocumentDto, payload);
+  return validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+}
+
+describe('CreateDesktopDocumentDto', () => {
+  it('acepta el payload mínimo con task_id', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1' });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('acepta element_code y estado BORRADOR', async () => {
+    const errors = await validated({ ...base, element_code: 'R1', estado: 'BORRADOR' });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('acepta estado PENDIENTE_QA explícito', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', estado: 'PENDIENTE_QA' });
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rechaza un estado fuera de BORRADOR|PENDIENTE_QA', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', estado: 'APROBADO' });
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza payload sin blob_path', async () => {
+    const rest: Record<string, unknown> = { ...base, task_id: 'task-1' };
+    delete rest.blob_path;
+    const errors = await validated(rest);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza payload sin codigo', async () => {
+    const rest: Record<string, unknown> = { ...base, task_id: 'task-1' };
+    delete rest.codigo;
+    const errors = await validated(rest);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('rechaza campos extra (whitelist estricta del módulo)', async () => {
+    const errors = await validated({ ...base, task_id: 'task-1', extra: 'no' });
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});

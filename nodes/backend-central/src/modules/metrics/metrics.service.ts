@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, UnauthorizedException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException, ConflictException, ForbiddenException, Logger } from '@nestjs/common';
+import { Prisma, ProjectDocumentStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email.service';
 import { OtpService, OTP_PURPOSES } from '../../common/otp.service';
@@ -14,6 +14,7 @@ import {
   SaveCubicacionDto,
   SaveReservorioMetadataDto,
   SetPhaseDataSpecDto,
+  CreateDesktopDocumentDto,
 } from './dto/metrics.dto';
 import { randomUUID, createHash } from 'crypto';
 import { buildDemGrid, type DemSourceImage, type DemGridResult } from './dem-grid.util';
@@ -735,6 +736,157 @@ export class MetricsService {
       },
     });
     return { success: true, element };
+  }
+
+  // ── Documentos desde el escritorio (Fase 1B, D2/D3/D6) ──────────────────────
+
+  /**
+   * Registra un documento emitido desde V-Metric como `ProjectDocument` (D2: se
+   * reusa el modelo del flujo web, sin modelo paralelo). El canal es metrics
+   * porque es el que el escritorio ya habla, con FGA por proyecto:
+   * `can_submit_measurements` (mismo permiso que saveCubicacion). A diferencia
+   * del flujo web (multipart + estampado + código autogenerado), aquí el PDF ya
+   * vive en R2 (`blob_path`), el hash lo calculó el escritorio y el código viene
+   * construido por V-Metric (§7); por eso NO se acoplan los gates de roles de UI
+   * ni el pipeline de estampado de project-documents.service.
+   */
+  async createDesktopDocument(userId: string, dto: CreateDesktopDocumentDto) {
+    if (!dto.task_id && !dto.element_code) {
+      throw new BadRequestException(
+        'Debes indicar task_id o element_code para vincular el documento.',
+      );
+    }
+
+    // 1) Resolver proyecto (y servicio/tarea si aplica) desde el vínculo.
+    let projectId: string;
+    let serviceId: string | null = null;
+    let taskId: string | null = null;
+
+    if (dto.task_id) {
+      const task = await this.prisma.task.findUnique({
+        where: { id: dto.task_id },
+        select: { id: true, projectId: true, serviceId: true },
+      });
+      if (!task) {
+        throw new NotFoundException(`La tarea con ID ${dto.task_id} no existe.`);
+      }
+      projectId = task.projectId;
+      serviceId = task.serviceId;
+      taskId = task.id;
+    } else {
+      projectId = await this.getProjectIdForElementCode(dto.element_code!);
+    }
+
+    // `ProjectDocument.serviceId` es obligatorio. Si la tarea no tiene servicio
+    // (o el vínculo vino por elemento), se usa el servicio más reciente del
+    // proyecto; sin servicios no hay dónde colgar el documento. `Service` no
+    // tiene createdAt: se ordena por id desc (cuid con prefijo temporal, orden
+    // de creación aproximado; mismo criterio heurístico que la fase activa).
+    if (!serviceId) {
+      const service = await this.prisma.service.findFirst({
+        where: { projectId },
+        orderBy: { id: 'desc' },
+        select: { id: true },
+      });
+      if (!service) {
+        throw new BadRequestException(
+          'El proyecto vinculado no tiene servicios. Crea un servicio antes de registrar documentos.',
+        );
+      }
+      serviceId = service.id;
+    }
+
+    // 2) Autorización por proyecto (patrón saveCubicacion).
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
+
+    // 3) Código único (V-Metric lo construye; acá solo se exige unicidad).
+    const existing = await this.prisma.projectDocument.findUnique({
+      where: { code: dto.codigo },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `Ya existe un documento con el código ${dto.codigo}. Verifica el correlativo en V-Metric.`,
+      );
+    }
+
+    const status =
+      dto.estado === 'BORRADOR'
+        ? ProjectDocumentStatus.BORRADOR
+        : ProjectDocumentStatus.PENDIENTE_QA;
+
+    const resolvedServiceId = serviceId;
+    try {
+      const doc = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.projectDocument.create({
+          data: {
+            name: `Protocolo ${dto.doc_type} ${dto.codigo}`,
+            code: dto.codigo,
+            fileUrl: dto.blob_path,
+            fileHash: dto.file_hash,
+            status,
+            version: 0, // rev0
+            projectId,
+            serviceId: resolvedServiceId,
+            taskId,
+            ownerId: userId,
+          },
+        });
+
+        // Mismas tuplas FGA que escribe project-documents.service al crear.
+        await this.fga.writeTuples([
+          { user: `user:${userId}`, relation: 'owner', object: `document:${created.id}` },
+          { user: `service:${resolvedServiceId}`, relation: 'service', object: `document:${created.id}` },
+        ]);
+
+        return created;
+      });
+
+      return {
+        success: true,
+        id: doc.id,
+        code: doc.code,
+        status: doc.status,
+        version: doc.version,
+      };
+    } catch (error) {
+      // Red ante carrera: dos emisiones simultáneas con el mismo código.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException(
+          `Ya existe un documento con el código ${dto.codigo}. Verifica el correlativo en V-Metric.`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Estado de un documento para el polling del escritorio (Bloque D). Gate
+   * `can_view` sobre el proyecto del documento.
+   */
+  async getDesktopDocumentStatus(userId: string, code: string) {
+    const doc = await this.prisma.projectDocument.findUnique({
+      where: { code },
+      select: {
+        status: true,
+        rejectionReason: true,
+        qaSignedAt: true,
+        version: true,
+        projectId: true,
+      },
+    });
+    if (!doc) {
+      throw new NotFoundException(`No existe un documento con el código ${code}.`);
+    }
+
+    await this.requireProjectPermission(userId, doc.projectId, 'can_view');
+
+    return {
+      status: doc.status,
+      rejectionReason: doc.rejectionReason,
+      qaSignedAt: doc.qaSignedAt,
+      version: doc.version,
+    };
   }
 
   // --- Asset management mocks ---

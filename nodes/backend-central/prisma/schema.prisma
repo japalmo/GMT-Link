@@ -739,7 +739,7 @@ model Task {
   clientUserId    String? // ITO/cliente que solicitó la tarea
   clientUser      User?         @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
   // Módulo 5 — instancia de ejecución (captura de datos SEPARADA):
-  phaseId         String? // contexto de captura (fase/periodo) — soft-link
+  phaseId         String? // contexto de captura (fase/periodo); soft-link
   // Fase 1B (D4): la tarea se vincula opcionalmente a un área y a un elemento.
   // `elementId` existía como soft-link; se promueve a FK dura (la migración
   // anula referencias colgantes antes de crear la constraint). SetNull para no
