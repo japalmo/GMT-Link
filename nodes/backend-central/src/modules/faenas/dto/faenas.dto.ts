@@ -30,6 +30,36 @@ export class CreateFaenaDto {
   address?: string;
 }
 
+/**
+ * Creación de área (subnivel formal de la faena, Fase 1B). El nombre es único
+ * dentro de la faena; el código es opcional (etiqueta corta para codificación
+ * documental).
+ */
+export class CreateAreaDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120, { message: 'El nombre del área no puede superar 120 caracteres.' })
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10, { message: 'El código del área no puede superar 10 caracteres.' })
+  code?: string;
+}
+
+export class UpdateAreaDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120, { message: 'El nombre del área no puede superar 120 caracteres.' })
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10, { message: 'El código del área no puede superar 10 caracteres.' })
+  code?: string;
+}
+
 export class UpdateFaenaDto {
   @IsString()
   @IsNotEmpty()

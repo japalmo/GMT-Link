@@ -16,7 +16,7 @@ import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { PermissionService } from '../../authz/permission.service';
 import { FaenasService } from './faenas.service';
-import { CreateFaenaDto, UpdateFaenaDto } from './dto/faenas.dto';
+import { CreateAreaDto, CreateFaenaDto, UpdateAreaDto, UpdateFaenaDto } from './dto/faenas.dto';
 
 @Controller()
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
@@ -91,6 +91,56 @@ export class FaenasController {
     const userId = this.requireUserId(authUser);
     await this.requireFunctional(userId, 'faena:create');
     await this.faenas.remove(id);
+  }
+
+  // ── Áreas (subnivel formal de la faena, Fase 1B) ───────────────────────────
+  // Mismo criterio del módulo: lectura abierta a autenticados, mutaciones con
+  // el permiso FUNCTIONAL `faena:create` (el área es estructura de la faena).
+
+  /** Lista las áreas de una faena. */
+  @Get('faenas/:id/areas')
+  listAreas(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') faenaId: string,
+  ) {
+    this.requireUserId(authUser);
+    return this.faenas.listAreas(faenaId);
+  }
+
+  /** Crea un área dentro de una faena. */
+  @Post('faenas/:id/areas')
+  async createArea(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') faenaId: string,
+    @Body() dto: CreateAreaDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    await this.requireFunctional(userId, 'faena:create');
+    return this.faenas.createArea(faenaId, dto);
+  }
+
+  /** Actualiza un área. */
+  @Patch('areas/:id')
+  async updateArea(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateAreaDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    await this.requireFunctional(userId, 'faena:create');
+    return this.faenas.updateArea(id, dto);
+  }
+
+  /** Elimina un área. 409 si tiene elementos o tareas vinculadas. */
+  @Delete('areas/:id')
+  @HttpCode(204)
+  async removeArea(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    await this.requireFunctional(userId, 'faena:create');
+    await this.faenas.removeArea(id);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

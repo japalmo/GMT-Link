@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, ProjectDocumentStatus, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateFaenaDto, UpdateFaenaDto } from './dto/faenas.dto';
+import { CreateAreaDto, CreateFaenaDto, UpdateAreaDto, UpdateFaenaDto } from './dto/faenas.dto';
 
 @Injectable()
 export class FaenasService {
@@ -173,6 +173,102 @@ export class FaenasService {
         throw new ConflictException({
           code: 'FAENA_HAS_PROJECTS',
           message: `No puedes eliminar la faena "${faena.code}" porque tiene proyecto(s) asociado(s). Elimina o reasigna los proyectos primero.`,
+        });
+      }
+      throw error;
+    }
+  }
+
+  // ── Áreas (subnivel formal de la faena, Fase 1B) ───────────────────────────
+
+  /** Lista las áreas de una faena con el conteo de vínculos (elementos/tareas). */
+  async listAreas(faenaId: string) {
+    const faena = await this.prisma.faena.findUnique({ where: { id: faenaId } });
+    if (!faena) {
+      throw new NotFoundException('La faena no existe.');
+    }
+    return this.prisma.area.findMany({
+      where: { faenaId },
+      include: { _count: { select: { elements: true, tasks: true } } },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /** Crea un área dentro de una faena. `@@unique([faenaId, name])` → 409 si se repite. */
+  async createArea(faenaId: string, dto: CreateAreaDto) {
+    const faena = await this.prisma.faena.findUnique({ where: { id: faenaId } });
+    if (!faena) {
+      throw new NotFoundException('La faena no existe.');
+    }
+
+    try {
+      return await this.prisma.area.create({
+        data: {
+          faenaId,
+          name: dto.name,
+          code: dto.code ?? null,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Ya existe un área con ese nombre en esta faena.');
+      }
+      throw error;
+    }
+  }
+
+  /** Actualiza nombre o código de un área. */
+  async updateArea(id: string, dto: UpdateAreaDto) {
+    const area = await this.prisma.area.findUnique({ where: { id } });
+    if (!area) {
+      throw new NotFoundException('El área no existe.');
+    }
+
+    try {
+      return await this.prisma.area.update({
+        where: { id },
+        data: {
+          name: dto.name,
+          code: dto.code,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Ya existe un área con ese nombre en esta faena.');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina un área. Se bloquea con 409 si tiene elementos o tareas vinculadas:
+   * primero hay que desvincular o reasignar. El `Restrict` de las FKs actúa de
+   * red de seguridad ante carreras (P2003 → mismo 409).
+   */
+  async removeArea(id: string) {
+    const area = await this.prisma.area.findUnique({ where: { id } });
+    if (!area) {
+      throw new NotFoundException('El área no existe.');
+    }
+
+    const [elementsCount, tasksCount] = await Promise.all([
+      this.prisma.element.count({ where: { areaId: id } }),
+      this.prisma.task.count({ where: { areaId: id } }),
+    ]);
+    if (elementsCount > 0 || tasksCount > 0) {
+      throw new ConflictException({
+        code: 'AREA_HAS_LINKS',
+        message: `No puedes eliminar el área "${area.name}" porque tiene ${elementsCount} elemento(s) y ${tasksCount} tarea(s) vinculados. Desvincula o reasigna primero.`,
+      });
+    }
+
+    try {
+      await this.prisma.area.delete({ where: { id } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new ConflictException({
+          code: 'AREA_HAS_LINKS',
+          message: `No puedes eliminar el área "${area.name}" porque tiene elementos o tareas vinculados. Desvincula o reasigna primero.`,
         });
       }
       throw error;

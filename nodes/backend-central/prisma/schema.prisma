@@ -212,10 +212,30 @@ model Faena {
   longitude    Float?
   address      String?
   projects     Project[]
+  areas        Area[]
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
   @@unique([clientId, code])
+}
+
+// Área: subnivel formal de la Faena (Fase 1B, P2). Agrupa elementos y tareas
+// para la vinculación documental del circuito desktop→web. El borrado se
+// bloquea en el service (409) si tiene elementos o tareas; el `Restrict` de
+// esas FKs actúa como red de seguridad ante carreras.
+model Area {
+  id        String    @id @default(cuid())
+  name      String
+  code      String?
+  faenaId   String
+  faena     Faena     @relation(fields: [faenaId], references: [id], onDelete: Cascade)
+  elements  Element[]
+  tasks     Task[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([faenaId, name])
+  @@map("areas")
 }
 
 model Department {
@@ -718,9 +738,16 @@ model Task {
   recurrence      String? // cron expression para tareas cíclicas
   clientUserId    String? // ITO/cliente que solicitó la tarea
   clientUser      User?         @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
-  // Módulo 5 — instancia de ejecución (captura de datos SEPARADA; soft-links opcionales):
-  phaseId         String? // contexto de captura (fase/periodo)
+  // Módulo 5 — instancia de ejecución (captura de datos SEPARADA):
+  phaseId         String? // contexto de captura (fase/periodo) — soft-link
+  // Fase 1B (D4): la tarea se vincula opcionalmente a un área y a un elemento.
+  // `elementId` existía como soft-link; se promueve a FK dura (la migración
+  // anula referencias colgantes antes de crear la constraint). SetNull para no
+  // bloquear el borrado de elementos del flujo metrics.
   elementId       String? // poza/sector objetivo
+  element         Element?      @relation("TaskElement", fields: [elementId], references: [id], onDelete: SetNull)
+  areaId          String?
+  area            Area?         @relation(fields: [areaId], references: [id], onDelete: Restrict)
   dataSpec        Json? // "datos a obtener" que define el Supervisor (variable codes + labels)
   timeLogs        TaskTimeLog[]
   // Entregables subidos al enviar a revisión (#77): ProjectDocument con taskId.
@@ -730,6 +757,7 @@ model Task {
 
   @@index([projectId, status])
   @@index([assignedToId])
+  @@index([areaId])
   @@map("tasks")
 }
 
@@ -1055,10 +1083,15 @@ model Element {
   metadata        Json? // Niveles/cotas de referencia estáticas: cota_fondo, cota_segura, etc.
   projectId       String
   project         Project     @relation("ProjectElements", fields: [projectId], references: [id], onDelete: Cascade)
+  // Fase 1B (P2/D4): el elemento puede pertenecer a un área de la faena.
+  areaId          String?
+  area            Area?       @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  tasks           Task[]      @relation("TaskElement")
   dataPoints      DataPoint[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
+  @@index([areaId])
   @@map("elements")
 }
 
