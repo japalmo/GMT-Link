@@ -402,3 +402,42 @@ describe('api — asignación de roles por alcance (switch atómico, Task 5.8)',
     expect(init.method).toBe('DELETE');
   });
 });
+
+import { getProjectDocumentFileUrl } from '@/lib/api';
+
+describe('api — getProjectDocumentFileUrl (URL fresca del PDF, Fase 1B)', () => {
+  beforeEach(() => {
+    mockGetToken.mockReset();
+    mockGetToken.mockReturnValue('tok');
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('GET /project-documents/:id/file-url con el id URL-encodeado y devuelve { url }', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(res({ url: 'https://r2.example.com/docs/a.pdf?firma=xyz' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getProjectDocumentFileUrl('doc/1');
+
+    expect(result).toEqual({ url: 'https://r2.example.com/docs/a.pdf?firma=xyz' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/project-documents/doc%2F1/file-url');
+    expect(init.method ?? 'GET').toBe('GET');
+    expect((init.headers as Headers).get('Authorization')).toBe('Bearer tok');
+  });
+
+  it('propaga ApiError en respuestas no-2xx (documento inexistente o sin acceso)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(res({ message: 'El documento no existe.' }, false, 404)),
+    );
+
+    const err = await getProjectDocumentFileUrl('nope').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(404);
+    expect((err as ApiError).message).toBe('El documento no existe.');
+  });
+});

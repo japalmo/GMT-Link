@@ -1,23 +1,17 @@
-import { useState, type ReactNode, useMemo, useRef } from 'react';
+import { useState, type ReactNode, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useProjects, useProjectDocuments } from '@/hooks/use-operations';
 import { useProfile } from '@/hooks/use-profile';
 import {
   Plus,
   FileText,
-  CheckCircle2,
-  XCircle,
-  Download,
-  PenTool,
-  FileCheck,
-  RefreshCw,
   FolderOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Alert } from '@/components/ui/alert';
 import { EmptyState, LoadingState } from '@/components/ui/states';
 import { SearchInput } from '@/components/ui/search-input';
@@ -26,31 +20,16 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
 import { errorToMessage } from '@/lib/api';
-import type { ProjectDocumentStatus } from '@/types/operations';
-
-/** Etiqueta legible + variante de `Badge` por estado de documento de proyecto. */
-const DOC_STATUS_META: Record<
-  ProjectDocumentStatus,
-  { label: string; variant: NonNullable<BadgeProps['variant']> }
-> = {
-  BORRADOR: { label: 'Borrador', variant: 'neutral' },
-  PENDIENTE_QA: { label: 'Pendiente QA', variant: 'warning' },
-  PENDIENTE_CLIENTE: { label: 'Pendiente Cliente', variant: 'info' },
-  APROBADO: { label: 'Aprobado', variant: 'success' },
-  RECHAZADO: { label: 'Rechazado', variant: 'danger' },
-};
-
-export function formatRevision(version: number): string {
-  if (version === 0) return 'rev0';
-  const charCode = 'A'.charCodeAt(0) + (version - 1);
-  return `rev${String.fromCharCode(charCode)}`;
-}
+import {
+  DOC_STATUS_META,
+  formatRevision,
+  ProjectDocumentDetailCard,
+} from '@/components/documents/project-document-detail-card';
 
 export function DocumentosTab(): ReactNode {
   const { profile } = useProfile();
@@ -81,9 +60,6 @@ export function DocumentosTab(): ReactNode {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  // Revision file input ref
-  const revisionInputRef = useRef<HTMLInputElement>(null);
 
   // Dynamically select services based on current project select in creation
   const projectServices = useMemo(() => {
@@ -156,19 +132,8 @@ export function DocumentosTab(): ReactNode {
     }
   };
 
-  const handleUploadRevisionClick = () => {
-    revisionInputRef.current?.click();
-  };
-
-  const handleRevisionFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeDoc) return;
-
-    if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-      toast.error('La revisión debe ser obligatoriamente un archivo PDF.');
-      return;
-    }
-
+  const handleUploadRevision = async (file: File) => {
+    if (!activeDoc) return;
     try {
       await uploadRevision(activeDoc.id, file);
       toast.success('Nueva revisión subida con éxito.');
@@ -349,225 +314,15 @@ export function DocumentosTab(): ReactNode {
           {/* Panel Lateral: Detalle, Auditoría y Firmas (FES) */}
           <div className="flex flex-col gap-6">
             {activeDoc ? (
-              <Card className="bg-card/70 shadow-sm border border-border flex flex-col h-full">
-                <CardHeader className="pb-3 border-b">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <Badge variant="outline" className="mb-2">
-                        {formatRevision(activeDoc.version)}
-                      </Badge>
-                      <CardTitle className="text-sm font-bold tracking-tight text-foreground line-clamp-2 leading-snug">
-                        {activeDoc.code}
-                      </CardTitle>
-                      <CardDescription className="text-xs mt-1">
-                        {activeDoc.name}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="flex-1 flex flex-col gap-5 py-4">
-                  {/* File Download / View Link */}
-                  <div className="flex items-center justify-between p-3 rounded-lg border bg-primary/5 border-primary/10">
-                    <div className="flex items-center gap-2">
-                      <FileText className="size-5 text-primary" />
-                      <span className="text-xs font-semibold text-foreground">Archivo PDF</span>
-                    </div>
-                    <a
-                      href={activeDoc.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline cursor-pointer"
-                      title="Descargar o visualizar archivo"
-                    >
-                      <Download className="size-3.5" />
-                      Ver/Descargar
-                    </a>
-                  </div>
-
-                  {/* Hash FES Audit Trail */}
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground">Firma Electrónica Simple (FES)</span>
-                    <div className="p-2.5 rounded-lg border bg-muted/20 border-border font-mono text-[10px] text-muted-foreground select-all break-all" title="SHA-256 Hash auditado">
-                      Hash: {activeDoc.fileHash || 'No calculado'}
-                    </div>
-                  </div>
-
-                  {/* Timeline Tracker */}
-                  <div className="flex flex-col gap-4">
-                    <span className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Línea de Tiempo de Aprobaciones</span>
-
-                    <div className="flex flex-col gap-4 relative pl-5 border-l border-border/80">
-                      {/* Step 1: Upload */}
-                      <div className="relative">
-                        <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-emerald-500 border-2 border-background" />
-                        <div className="flex flex-col text-xs">
-                          <span className="font-bold text-foreground">1. Generación y Carga</span>
-                          <span className="text-muted-foreground">Creado por {activeDoc.owner?.firstName} {activeDoc.owner?.lastName}</span>
-                          <span className="text-[10px] text-muted-foreground/80">{new Date(activeDoc.createdAt).toLocaleDateString('es-CL', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
-
-                      {/* Step 2: QA Review */}
-                      <div className="relative">
-                        {activeDoc.qaSigner ? (
-                          <>
-                            <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-emerald-500 border-2 border-background" />
-                            <div className="flex flex-col text-xs">
-                              <span className="font-bold text-foreground">2. Control de Calidad QA</span>
-                              <span className="text-muted-foreground">Aprobado y Firmado por {activeDoc.qaSigner.firstName} {activeDoc.qaSigner.lastName}</span>
-                              <span className="text-[10px] text-muted-foreground/80">
-                                {activeDoc.qaSignedAt ? new Date(activeDoc.qaSignedAt).toLocaleDateString('es-CL', { hour: '2-digit', minute: '2-digit' }) : ''}
-                              </span>
-                            </div>
-                          </>
-                        ) : activeDoc.status === 'RECHAZADO' && !activeDoc.qaSignedAt ? (
-                          <>
-                            <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-destructive border-2 border-background" />
-                            <div className="flex flex-col text-xs">
-                              <span className="font-bold text-destructive">2. Control de Calidad QA (Rechazado)</span>
-                              <p className="text-[11px] text-muted-foreground mt-1 italic">
-                                "{activeDoc.rejectionReason}"
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-amber-500 animate-pulse border-2 border-background" />
-                            <div className="flex flex-col text-xs">
-                              <span className="font-bold text-amber-500">2. Control de Calidad QA</span>
-                              <span className="text-muted-foreground">Esperando revisión y firma de QA</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Step 3: Client Signature (If required) */}
-                      {activeDoc.service?.docCodingConfig?.requiresClientSignature === true && (
-                        <div className="relative">
-                          {activeDoc.clientSigner ? (
-                            <>
-                              <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-emerald-500 border-2 border-background" />
-                              <div className="flex flex-col text-xs">
-                                <span className="font-bold text-foreground">3. Aprobación Cliente/ITO</span>
-                                <span className="text-muted-foreground">Firmado por {activeDoc.clientSigner.firstName} {activeDoc.clientSigner.lastName}</span>
-                                <span className="text-[10px] text-muted-foreground/80">
-                                  {activeDoc.clientSignedAt ? new Date(activeDoc.clientSignedAt).toLocaleDateString('es-CL', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                </span>
-                              </div>
-                            </>
-                          ) : activeDoc.status === 'RECHAZADO' && activeDoc.qaSignedAt ? (
-                            <>
-                              <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-destructive border-2 border-background" />
-                              <div className="flex flex-col text-xs">
-                                <span className="font-bold text-destructive">3. Aprobación Cliente/ITO (Rechazado)</span>
-                                <p className="text-[11px] text-muted-foreground mt-1 italic">
-                                  "{activeDoc.rejectionReason}"
-                                </p>
-                              </div>
-                            </>
-                          ) : activeDoc.status === 'PENDIENTE_CLIENTE' ? (
-                            <>
-                              <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-amber-500 animate-pulse border-2 border-background" />
-                              <div className="flex flex-col text-xs">
-                                <span className="font-bold text-amber-500">3. Aprobación Cliente/ITO</span>
-                                <span className="text-muted-foreground">Pendiente de firma del Cliente/ITO</span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="absolute -left-[26px] top-0.5 size-3 rounded-full bg-muted border-2 border-background" />
-                              <div className="flex flex-col text-xs">
-                                <span className="font-bold text-muted-foreground">3. Aprobación Cliente/ITO</span>
-                                <span className="text-[10px] text-muted-foreground">Esperando aprobación previa de QA</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Summary Approved status */}
-                  {activeDoc.status === 'APROBADO' && (
-                    <div className="flex items-center gap-2 p-3.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-emerald-500 mt-2 text-xs">
-                      <CheckCircle2 className="size-5 shrink-0" />
-                      <div className="font-medium">
-                        Documento Aprobado y Vigente para uso operacional.
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-
-                <CardFooter className="flex flex-col gap-2 border-t pt-4 bg-muted/10">
-                  {/* QA actions */}
-                  {activeDoc.status === 'PENDIENTE_QA' && (
-                    <div className="flex w-full gap-2">
-                      <Button
-                        disabled={!isQARole}
-                        onClick={handleSignQA}
-                        className="flex-1 text-xs"
-                      >
-                        <PenTool className="size-3.5 mr-1" />
-                        Firmar QA
-                      </Button>
-                      <Button
-                        disabled={!isQARole}
-                        variant="destructive"
-                        onClick={() => setRejectOpen(true)}
-                        className="flex-1 text-xs"
-                      >
-                        <XCircle className="size-3.5 mr-1" />
-                        Rechazar
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Client actions */}
-                  {activeDoc.status === 'PENDIENTE_CLIENTE' && (
-                    <div className="flex w-full gap-2">
-                      <Button
-                        disabled={!isClientRole}
-                        onClick={handleSignClient}
-                        className="flex-1 text-xs"
-                      >
-                        <FileCheck className="size-3.5 mr-1" />
-                        Firmar Cliente
-                      </Button>
-                      <Button
-                        disabled={!isClientRole}
-                        variant="destructive"
-                        onClick={() => setRejectOpen(true)}
-                        className="flex-1 text-xs"
-                      >
-                        <XCircle className="size-3.5 mr-1" />
-                        Rechazar
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Revision / Correction Action */}
-                  {(activeDoc.status === 'APROBADO' || activeDoc.status === 'RECHAZADO') && (
-                    <div className="w-full">
-                      <input
-                        type="file"
-                        ref={revisionInputRef}
-                        onChange={handleRevisionFileChange}
-                        accept=".pdf"
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={handleUploadRevisionClick}
-                        className="w-full text-xs"
-                      >
-                        <RefreshCw className="size-3.5 mr-1" />
-                        Subir Nueva Revisión ({activeDoc.status === 'APROBADO' ? 'Incrementar Rev' : 'Corregir'})
-                      </Button>
-                    </div>
-                  )}
-                </CardFooter>
-              </Card>
+              <ProjectDocumentDetailCard
+                document={activeDoc}
+                canSignQA={Boolean(isQARole)}
+                canSignClient={Boolean(isClientRole)}
+                onSignQA={() => void handleSignQA()}
+                onSignClient={() => void handleSignClient()}
+                onRejectRequest={() => setRejectOpen(true)}
+                onUploadRevision={handleUploadRevision}
+              />
             ) : (
               <div className="h-64 flex items-center justify-center border border-dashed rounded-xl p-6 text-center text-muted-foreground bg-card/25">
                 Selecciona un documento del listado para revisar su trazabilidad, firmas y FES.

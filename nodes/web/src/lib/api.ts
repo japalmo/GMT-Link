@@ -1886,6 +1886,16 @@ export function listProjectDocuments(
   return request<ProjectDocumentView[]>(`/project-documents${qs ? `?${qs}` : ''}`);
 }
 
+/**
+ * `GET /project-documents/:id/file-url` — URL fresca de visualización/descarga
+ * del PDF (Fase 1B). El backend presigna claves R2 al leer y hace passthrough
+ * de URLs absolutas legadas. Nunca navegues `fileUrl` crudo: para documentos
+ * nuevos puede ser una clave de storage no navegable.
+ */
+export function getProjectDocumentFileUrl(id: string): Promise<{ url: string }> {
+  return request<{ url: string }>(`/project-documents/${encodeURIComponent(id)}/file-url`);
+}
+
 export function uploadProjectDocument(
   dto: {
     name: string;

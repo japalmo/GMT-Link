@@ -80,6 +80,7 @@ import {
   type UploadProjectDocumentFields,
 } from './upload-project-document-dialog';
 import { formatDate } from '@/lib/format';
+import { openProjectDocumentFileInNewTab } from '@/components/documents/project-document-file';
 import type {
   ProjectType,
   ServiceFrequency,
@@ -812,6 +813,7 @@ function DocumentacionTab({
   const { documents, loading, error, refetch } = useProjectDocuments(projectId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openingDocId, setOpeningDocId] = useState<string | null>(null);
 
   const handleUpload = useCallback(
     async (fields: UploadProjectDocumentFields, file: File) => {
@@ -821,6 +823,19 @@ function DocumentacionTab({
     },
     [projectId, refetch],
   );
+
+  // Abre el PDF con la URL FRESCA de /project-documents/:id/file-url (Fase 1B):
+  // `fileUrl` crudo puede ser una clave R2 no navegable.
+  const handleOpenFile = useCallback(async (doc: ProjectDocumentView) => {
+    setOpeningDocId(doc.id);
+    try {
+      await openProjectDocumentFileInNewTab(doc.id);
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo abrir el documento.'));
+    } finally {
+      setOpeningDocId(null);
+    }
+  }, []);
 
   const handleDelete = useCallback(
     async (doc: ProjectDocumentView) => {
@@ -897,18 +912,17 @@ function DocumentacionTab({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      {doc.fileUrl && (
-                        <a
-                          href={doc.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={buttonVariants({ variant: 'ghost', size: 'icon' })}
-                          title="Ver / descargar"
-                          aria-label={`Ver o descargar ${doc.name}`}
-                        >
-                          <Download className="size-4" aria-hidden />
-                        </a>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Ver / descargar"
+                        aria-label={`Ver o descargar ${doc.name}`}
+                        loading={openingDocId === doc.id}
+                        disabled={openingDocId !== null}
+                        onClick={() => void handleOpenFile(doc)}
+                      >
+                        <Download className="size-4" aria-hidden />
+                      </Button>
                       {canManage && (
                         <Button
                           variant="ghost"

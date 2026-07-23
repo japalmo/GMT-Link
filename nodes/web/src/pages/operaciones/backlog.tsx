@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
 import { formatDate } from '@/lib/format';
+import { openProjectDocumentFileInNewTab } from '@/components/documents/project-document-file';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { useProjects, useTasks, useProjectDocuments } from '@/hooks/use-operations';
 import { useUsers } from '@/hooks/use-users';
@@ -252,6 +253,22 @@ export function BacklogTab(): ReactNode {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [approvingTaskId, setApprovingTaskId] = useState<string | null>(null);
+
+  // Entregable en apertura (Fase 1B): el PDF se abre con la URL FRESCA de
+  // /project-documents/:id/file-url; `fileUrl` crudo puede ser una clave R2
+  // no navegable.
+  const [openingDeliverableId, setOpeningDeliverableId] = useState<string | null>(null);
+
+  const handleOpenDeliverable = useCallback(async (docId: string) => {
+    setOpeningDeliverableId(docId);
+    try {
+      await openProjectDocumentFileInNewTab(docId);
+    } catch (err) {
+      toast.error(api.errorToMessage(err, 'No se pudo abrir el entregable.'));
+    } finally {
+      setOpeningDeliverableId(null);
+    }
+  }, []);
 
   // Dynamically select services based on current project select in creation
   const projectServices = useMemo(() => {
@@ -722,14 +739,16 @@ export function BacklogTab(): ReactNode {
                   <ul className="flex flex-col gap-0.5">
                     {taskDocs.map((d) => (
                       <li key={d.id}>
-                        <a
-                          href={d.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-medium text-primary hover:underline"
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenDeliverable(d.id)}
+                          disabled={openingDeliverableId !== null}
+                          className="text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-60"
                         >
-                          Descargar entregable ({d.name})
-                        </a>
+                          {openingDeliverableId === d.id
+                            ? 'Abriendo entregable…'
+                            : `Descargar entregable (${d.name})`}
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -1268,16 +1287,20 @@ export function BacklogTab(): ReactNode {
                                 {taskDocs.length > 0 ? (
                                   <div className="flex flex-col gap-1.5">
                                     {taskDocs.map((d) => (
-                                      <a
+                                      <button
                                         key={d.id}
-                                        href={d.fileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-primary hover:underline flex items-center gap-1 font-medium bg-primary/5 border border-primary/10 rounded-md p-1.5"
+                                        type="button"
+                                        onClick={() => void handleOpenDeliverable(d.id)}
+                                        disabled={openingDeliverableId !== null}
+                                        className="text-xs text-primary hover:underline flex w-full items-center gap-1 text-left font-medium bg-primary/5 border border-primary/10 rounded-md p-1.5 disabled:opacity-60"
                                       >
                                         <Plus className="size-3 rotate-45 text-primary shrink-0" />
-                                        <span className="truncate">Descargar entregable ({d.name})</span>
-                                      </a>
+                                        <span className="truncate">
+                                          {openingDeliverableId === d.id
+                                            ? 'Abriendo entregable…'
+                                            : `Descargar entregable (${d.name})`}
+                                        </span>
+                                      </button>
                                     ))}
                                   </div>
                                 ) : (

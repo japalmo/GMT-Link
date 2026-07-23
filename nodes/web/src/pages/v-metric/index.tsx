@@ -58,6 +58,7 @@ import {
 import type { ProjectView, ServiceView } from '@/types/operations';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { DemViewer } from './dem-viewer';
+import { VMetricDocumentsSection } from './documents-section';
 
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -1452,6 +1453,9 @@ export default function MetricsDashboard(): ReactNode {
           </table>
         </div>
       </section>
+
+      {/* Documentos del circuito documental (Fase 1B): revisar, firmar o rechazar */}
+      <VMetricDocumentsSection project={selectedProject} service={selectedService} />
 
       {/* CREATE ELEMENT MODAL DIALOG */}
       <Modal open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
