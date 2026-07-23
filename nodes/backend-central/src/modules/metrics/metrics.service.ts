@@ -182,8 +182,28 @@ export class MetricsService {
     return element;
   }
 
-  async updatePool(id: string, dto: CreateElementDto) {
-    await this.getPoolById(id);
+  async updatePool(userId: string, id: string, dto: CreateElementDto) {
+    // El gate se evalúa sobre el proyecto REAL del elemento: dto.projectId lo controla
+    // el cliente y podría apuntar a un proyecto donde el usuario sí tiene permiso,
+    // colándose a editar elementos ajenos (mismo patrón que deletePool).
+    const element = await this.getPoolById(id);
+    await this.requireProjectPermission(userId, element.projectId, 'can_submit_measurements');
+
+    // `Element.code` es único GLOBAL y aquí se actualiza por id: renombrar jamás puede
+    // absorber otro elemento, así que cualquier colisión (propio u otro proyecto) se
+    // rechaza; sin este gate revienta como P2002 (500) recién en la BD.
+    if (dto.code !== element.code) {
+      const collision = await this.prisma.element.findUnique({
+        where: { code: dto.code },
+        select: { id: true },
+      });
+      if (collision && collision.id !== id) {
+        throw new ConflictException(
+          `El código de elemento "${dto.code}" ya está en uso por otro elemento. Usa un código distinto.`,
+        );
+      }
+    }
+
     return this.prisma.element.update({
       where: { id },
       data: {
@@ -749,6 +769,27 @@ export class MetricsService {
     }
 
     await this.requireProjectPermission(userId, targetProjectId, 'can_submit_measurements');
+
+    // `Element.code` es único GLOBAL: la rama update del upsert puede modificar
+    // name/metadata de un elemento de OTRO proyecto (incluso de otro cliente). Si el
+    // code ya vive en otro proyecto, el usuario debe tener can_submit_measurements
+    // también ahí; si no, se rechaza sin tocar nada (mismo patrón que createPool).
+    const existing = await this.prisma.element.findUnique({
+      where: { code: body.reservorio_codigo },
+      select: { projectId: true },
+    });
+    if (existing && existing.projectId !== targetProjectId) {
+      const allowedOnOrigin = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_submit_measurements',
+        object: `project:${existing.projectId}`,
+      });
+      if (!allowedOnOrigin) {
+        throw new ConflictException(
+          `El código de reservorio "${body.reservorio_codigo}" ya está registrado en otro proyecto al que no tienes acceso. Usa un código distinto o solicita acceso a ese proyecto.`,
+        );
+      }
+    }
 
     const element = await this.prisma.element.upsert({
       where: { code: body.reservorio_codigo },

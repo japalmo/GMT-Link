@@ -50,8 +50,9 @@ export class MetricsController {
     @Body() dto: CreateElementDto,
   ) {
     const userId = this.requireUserId(user);
-    await this.requireProjectPermission(userId, dto.projectId, 'can_submit_measurements');
-    return this.service.updatePool(id, dto);
+    // El gate vive en el service, contra el proyecto REAL del elemento :id — no contra
+    // dto.projectId, que permitiría editar elementos de otro proyecto.
+    return this.service.updatePool(userId, id, dto);
   }
 
   @Delete('elements/:id')
