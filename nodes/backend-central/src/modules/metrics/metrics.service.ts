@@ -116,12 +116,33 @@ export class MetricsService {
 
   // ── Elementos ────────────────────────────────────────────────────────────────
 
-  async createPool(dto: CreateElementDto) {
+  async createPool(userId: string, dto: CreateElementDto) {
     const project = await this.prisma.project.findUnique({
       where: { id: dto.projectId },
     });
     if (!project) {
       throw new NotFoundException(`Proyecto con ID ${dto.projectId} no encontrado.`);
+    }
+
+    // `Element.code` es único GLOBAL: el upsert por code puede re-apuntar un elemento
+    // de OTRO proyecto (incluso de otro cliente) hacia dto.projectId, llevándose sus
+    // dataPoints y visibilidad. Si el code ya vive en otro proyecto, el usuario debe
+    // tener can_submit_measurements también ahí; si no, se rechaza sin tocar nada.
+    const existing = await this.prisma.element.findUnique({
+      where: { code: dto.code },
+      select: { projectId: true },
+    });
+    if (existing && existing.projectId !== dto.projectId) {
+      const allowedOnOrigin = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_submit_measurements',
+        object: `project:${existing.projectId}`,
+      });
+      if (!allowedOnOrigin) {
+        throw new ConflictException(
+          `El código de elemento "${dto.code}" ya está registrado en otro proyecto al que no tienes acceso. Usa un código distinto o solicita acceso a ese proyecto.`,
+        );
+      }
     }
 
     return this.prisma.element.upsert({

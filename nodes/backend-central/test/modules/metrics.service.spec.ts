@@ -1,13 +1,13 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { MetricsService } from '../../src/modules/metrics/metrics.service';
 import { OtpService } from '../../src/common/otp.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { EmailService } from '../../src/common/email.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
-import type { SaveDataPointDto } from '../../src/modules/metrics/dto/metrics.dto';
+import type { CreateElementDto, SaveDataPointDto } from '../../src/modules/metrics/dto/metrics.dto';
 
 describe('MetricsService', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,6 +102,66 @@ describe('MetricsService', () => {
       storageServiceMock as unknown as StorageService,
       otpService,
     );
+  });
+
+  describe('createPool (anti-hijack de elementos entre proyectos)', () => {
+    const dto: CreateElementDto = {
+      code: 'R1',
+      name: 'Reservorio 1',
+      type: 'RESERVORIO',
+      projectId: 'proj-A',
+    };
+
+    beforeEach(() => {
+      prismaMock.project.findUnique.mockResolvedValue({ id: 'proj-A' });
+      prismaMock.element.upsert.mockResolvedValue({ id: 'el-1', ...dto });
+    });
+
+    it('crea el elemento cuando el código no existe, sin chequeo FGA adicional', async () => {
+      prismaMock.element.findUnique.mockResolvedValue(null);
+
+      const res = await service.createPool('user-1', dto);
+
+      expect(res.id).toBe('el-1');
+      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(fgaServiceMock.check).not.toHaveBeenCalled();
+    });
+
+    it('actualiza el elemento cuando ya pertenece al mismo proyecto, sin chequeo FGA adicional', async () => {
+      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-A' });
+
+      await service.createPool('user-1', dto);
+
+      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(fgaServiceMock.check).not.toHaveBeenCalled();
+    });
+
+    it('rechaza con 409 el intento de hijack: código de un elemento de OTRO proyecto sin permiso allí', async () => {
+      // Escenario adversarial: el elemento R1 vive en proj-B (otro proyecto, incluso
+      // otro cliente); el usuario solo tiene can_submit_measurements en proj-A.
+      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-B' });
+      fgaServiceMock.check.mockImplementation(({ object }: { object: string }) =>
+        Promise.resolve(object === 'project:proj-A'),
+      );
+
+      await expect(service.createPool('user-1', dto)).rejects.toThrow(ConflictException);
+      // El elemento de proj-B NO debe re-apuntarse ni tocarse.
+      expect(prismaMock.element.upsert).not.toHaveBeenCalled();
+    });
+
+    it('permite re-apuntar el elemento solo si el usuario también tiene permiso en el proyecto de origen', async () => {
+      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-B' });
+      fgaServiceMock.check.mockResolvedValue(true);
+
+      await service.createPool('user-1', dto);
+
+      expect(fgaServiceMock.check).toHaveBeenCalledWith({
+        user: 'user:user-1',
+        relation: 'can_submit_measurements',
+        object: 'project:proj-B',
+      });
+      expect(prismaMock.element.upsert).toHaveBeenCalled();
+    });
   });
 
   describe('getDemGrid (visor 3D con DEM real)', () => {

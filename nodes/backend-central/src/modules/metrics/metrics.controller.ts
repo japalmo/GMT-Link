@@ -40,7 +40,7 @@ export class MetricsController {
   ) {
     const userId = this.requireUserId(user);
     await this.requireProjectPermission(userId, dto.projectId, 'can_submit_measurements');
-    return this.service.createPool(dto);
+    return this.service.createPool(userId, dto);
   }
 
   @Put('elements/:id')
