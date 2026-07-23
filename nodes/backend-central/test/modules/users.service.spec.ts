@@ -1346,3 +1346,55 @@ describe('UsersService.upsertSchedule', () => {
     expect(view.startTime).toBe('08:00');
   });
 });
+
+describe('UsersService.uploadAvatar', () => {
+  it('persiste la CLAVE estable del storage en avatarUrl (nunca la URL firmada/efímera)', async () => {
+    const row = {
+      id: 'u-1',
+      firstName: 'Ana',
+      secondName: null,
+      lastName: 'Pérez',
+      secondLastName: null,
+      email: 'ana@gmt.cl',
+      username: 'ana.perez',
+      emailInstitucional: 'ana@gmt.cl',
+      emailPersonal: null,
+      status: 'ACTIVE',
+      isClientUser: false,
+      cargo: null,
+      avatarUrl: 'users/u-1/avatar/uuid-foto.png',
+      createdAt: new Date('2026-06-13T00:00:00.000Z'),
+      firstLoginAt: null,
+      memberships: [],
+    };
+    const findUnique = vi.fn(() => Promise.resolve({ id: 'u-1' }));
+    const update = vi.fn(() => Promise.resolve(row));
+    const prisma = { user: { findUnique, update } } as unknown as PrismaService;
+    const storage = {
+      save: vi.fn(() =>
+        Promise.resolve({
+          key: 'users/u-1/avatar/uuid-foto.png',
+          url: 'https://r2.example/firmada?X-Amz-Signature=x',
+        }),
+      ),
+    } as unknown as StorageService;
+    const service = new UsersService(
+      prisma,
+      buildFgaMock().fga,
+      storage,
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
+
+    await service.uploadAvatar('u-1', {
+      buffer: Buffer.from('img'),
+      originalname: 'foto.png',
+      mimetype: 'image/png',
+    });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { avatarUrl: 'users/u-1/avatar/uuid-foto.png' } }),
+    );
+  });
+});

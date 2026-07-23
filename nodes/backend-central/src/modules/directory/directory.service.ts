@@ -5,6 +5,8 @@ import { ORG_ID } from '../../common/org.constant';
 import { isRoleKey } from '../../common/role-keys';
 import type { RoleKey } from '../../common/role-keys';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../common/storage/storage.service';
+import { freshFileUrl } from '../../common/storage/fresh-file-url';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import type { DirectoryEntry, DirectoryEntryExtended } from './directory.types';
 
@@ -31,7 +33,10 @@ type UserWithMemberships = Prisma.UserGetPayload<{ include: { memberships: true;
  */
 @Injectable()
 export class DirectoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   /**
    * Lista del directorio (campos básicos). `search` server-side por nombre o
@@ -46,7 +51,7 @@ export class DirectoryService {
       include: { memberships: true, client: true },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
-    return users.map((user) => this.toEntry(user));
+    return Promise.all(users.map((user) => this.toEntry(user)));
   }
 
   /**
@@ -83,7 +88,8 @@ export class DirectoryService {
       this.prisma.user.count({ where }),
     ]);
 
-    return tablePage(rows.map((user) => this.toEntry(user)), total, page, pageSize);
+    const entries = await Promise.all(rows.map((user) => this.toEntry(user)));
+    return tablePage(entries, total, page, pageSize);
   }
 
   /**
@@ -189,14 +195,18 @@ export class DirectoryService {
     return conditions.length === 1 ? conditions[0] : { AND: conditions };
   }
 
-  /** Vista BÁSICA del directorio (visible para cualquier autenticado). */
-  private toEntry(user: UserWithMemberships): DirectoryEntry {
+  /**
+   * Vista BÁSICA del directorio (visible para cualquier autenticado).
+   * `avatarUrl` puede ser una CLAVE de storage (avatar subido) o una URL externa
+   * (pegada en el perfil): se resuelve a URL fresca al leer (fix R2 1 h).
+   */
+  private async toEntry(user: UserWithMemberships): Promise<DirectoryEntry> {
     return {
       id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: await freshFileUrl(this.storage, user.avatarUrl),
       cargo: user.cargo,
       roleKeys: this.collectRoleKeys(user.memberships),
       isClientUser: user.isClientUser,
@@ -205,9 +215,9 @@ export class DirectoryService {
   }
 
   /** Vista EXTENDIDA: básicos + campos internos (solo con permiso). */
-  private toEntryExtended(user: UserWithMemberships): DirectoryEntryExtended {
+  private async toEntryExtended(user: UserWithMemberships): Promise<DirectoryEntryExtended> {
     return {
-      ...this.toEntry(user),
+      ...(await this.toEntry(user)),
       status: user.status,
       points: user.points,
       secondName: user.secondName,

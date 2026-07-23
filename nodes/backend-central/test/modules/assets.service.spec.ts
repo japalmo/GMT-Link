@@ -407,7 +407,9 @@ describe('AssetsService', () => {
     };
 
     storageMock = {
-      save: vi.fn(() => Promise.resolve({ url: 'http://localhost/new.pdf' })),
+      save: vi.fn(() =>
+        Promise.resolve({ key: 'assets/a-1/documents/new.pdf', url: 'http://localhost/new.pdf' }),
+      ),
       delete: vi.fn(() => Promise.resolve(undefined)),
     };
 
@@ -826,6 +828,53 @@ describe('AssetsService', () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'g-1', projectId: null });
       fgaMock.check.mockResolvedValueOnce(false);
       await expect(service.getHistory('g-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('listDocuments resuelve claves a URL fresca y hace passthrough de URLs legadas', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      prismaMock.assetDocument.findMany.mockResolvedValueOnce([
+        { ...buildDocRow({ id: 'd-key', fileUrl: 'assets/a-1/documents/uuid-soap.pdf' }), reviewedBy: null },
+        { ...buildDocRow({ id: 'd-legacy', fileUrl: 'http://localhost/cert.pdf' }), reviewedBy: null },
+      ]);
+
+      const views = await service.listDocuments('a-1', 'mgr');
+
+      expect(views.map((v) => v.fileUrl)).toEqual([
+        'http://localhost:3001/files/assets/a-1/documents/uuid-soap.pdf',
+        'http://localhost/cert.pdf',
+      ]);
+    });
+
+    it('getDocumentFileUrl resuelve la clave persistida a URL fresca (endpoint FreshFileLink)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      prismaMock.assetDocument.findUnique.mockResolvedValueOnce({
+        assetId: 'a-1',
+        fileUrl: 'assets/a-1/documents/uuid-soap.pdf',
+      });
+
+      await expect(service.getDocumentFileUrl('a-1', 'd-1', 'mgr')).resolves.toEqual({
+        url: 'http://localhost:3001/files/assets/a-1/documents/uuid-soap.pdf',
+      });
+    });
+
+    it('getDocumentFileUrl exige can_manage_assets (mismo gate que listDocuments)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      fgaMock.check.mockResolvedValueOnce(false); // sin can_manage_assets
+      await expect(service.getDocumentFileUrl('a-1', 'd-1', 'viewer')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prismaMock.assetDocument.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('getDocumentFileUrl → 404 si el documento no existe o es de OTRO activo', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      prismaMock.assetDocument.findUnique.mockResolvedValueOnce({
+        assetId: 'a-OTRO',
+        fileUrl: 'assets/a-OTRO/documents/uuid.pdf',
+      });
+      await expect(service.getDocumentFileUrl('a-1', 'd-ajeno', 'mgr')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -1756,6 +1805,8 @@ describe('AssetsService', () => {
           name: 'SOAP',
           type: 'SOAP_PDF',
           expirationDate: new Date('2026-12-31T00:00:00.000Z'),
+          // Se persiste la CLAVE estable, nunca la URL (firmada/efímera con R2).
+          fileUrl: 'assets/a-1/documents/new.pdf',
         }),
       }));
       expect(res.expirationDate).toBe('2026-12-31T00:00:00.000Z');
@@ -2240,6 +2291,33 @@ describe('AssetsService', () => {
           NotFoundException,
         );
         expect(prismaMock.usageCycle.findUnique).not.toHaveBeenCalled();
+      });
+
+      it('las fotos del ciclo prefieren la KEY estable (URL fresca) con passthrough de la URL legada', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow());
+        prismaMock.usageCycle.findMany.mockResolvedValueOnce([
+          buildUsageCycleRow({
+            id: 'cyc-key',
+            // La URL persistida está VENCIDA (firmada 1 h): manda la key.
+            startPhotoUrl: 'https://r2.example/firmada-vencida?X-Amz-Signature=x',
+            startPhotoKey: 'assets/a-1/usage-cycles/uuid-foto.jpg',
+          }),
+          buildUsageCycleRow({
+            id: 'cyc-legacy',
+            endPhotoUrl: 'http://localhost:3001/files/assets/a-1/usage-cycles/vieja.jpg',
+            endPhotoKey: null,
+          }),
+        ]);
+
+        const views = await service.listUsageCycles('a-1', 'u-1');
+
+        expect(views[0]?.startPhotoUrl).toBe(
+          'http://localhost:3001/files/assets/a-1/usage-cycles/uuid-foto.jpg',
+        );
+        expect(views[0]?.endPhotoUrl).toBeNull();
+        expect(views[1]?.endPhotoUrl).toBe(
+          'http://localhost:3001/files/assets/a-1/usage-cycles/vieja.jpg',
+        );
       });
     });
   });

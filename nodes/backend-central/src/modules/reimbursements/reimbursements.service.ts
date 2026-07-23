@@ -11,6 +11,7 @@ import { FinanceStatus } from '@prisma/client';
 import type { Prisma, Reimbursement } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { freshFileUrl } from '../../common/storage/fresh-file-url';
 import { NotificationsService } from '../notifications/notifications.service';
 import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
@@ -134,7 +135,27 @@ export class ReimbursementsService {
         status: FinanceStatus.PENDIENTE,
       },
     });
-    return toView(row);
+    return this.present(row);
+  }
+
+  /**
+   * Vista pública con `receiptUrl` FRESCO: manda la `receiptKey` estable
+   * (presign al leer — la URL persistida caduca en 1 h con R2); filas legadas
+   * sin key hacen passthrough de su `receiptUrl` absoluta.
+   */
+  private async present(row: Reimbursement): Promise<ReimbursementView> {
+    return {
+      ...toView(row),
+      receiptUrl: await freshFileUrl(this.storage, row.receiptKey ?? row.receiptUrl),
+    };
+  }
+
+  /** Igual que `present`, con los datos del solicitante (vista de gestión). */
+  private async presentWithRequester(row: ReimbursementWithRequester): Promise<ReimbursementView> {
+    return {
+      ...toViewWithRequester(row),
+      receiptUrl: await freshFileUrl(this.storage, row.receiptKey ?? row.receiptUrl),
+    };
   }
 
   /**
@@ -231,7 +252,7 @@ export class ReimbursementsService {
     const lastRow = pageRows[pageRows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
 
-    return { items: pageRows.map(toView), nextCursor };
+    return { items: await Promise.all(pageRows.map((r) => this.present(r))), nextCursor };
   }
 
   /**
@@ -267,7 +288,10 @@ export class ReimbursementsService {
     const lastRow = pageRows[pageRows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.date, lastRow.id) : null;
 
-    return { items: pageRows.map(toViewWithRequester), nextCursor };
+    return {
+      items: await Promise.all(pageRows.map((r) => this.presentWithRequester(r))),
+      nextCursor,
+    };
   }
 
   /**
@@ -307,7 +331,8 @@ export class ReimbursementsService {
       this.prisma.reimbursement.count({ where }),
     ]);
 
-    return tablePage(rows.map(toViewWithRequester), total, page, pageSize);
+    const views = await Promise.all(rows.map((r) => this.presentWithRequester(r)));
+    return tablePage(views, total, page, pageSize);
   }
 
   /**
@@ -406,7 +431,7 @@ export class ReimbursementsService {
     if (!row || (!isManager && row.userId !== requesterId)) {
       throw new NotFoundException('El reembolso no existe.');
     }
-    return isManager ? toViewWithRequester(row) : toView(row);
+    return isManager ? this.presentWithRequester(row) : this.present(row);
   }
 
   /**
@@ -440,7 +465,7 @@ export class ReimbursementsService {
       // es firmada/efímera y no sirve para leer la boleta al imprimir en lote.
       data: { receiptUrl: saved.url, receiptKey: saved.key },
     });
-    return toView(row);
+    return this.present(row);
   }
 
   /**
@@ -484,7 +509,7 @@ export class ReimbursementsService {
         observations: dto.observations ?? null,
       },
     });
-    return toView(row);
+    return this.present(row);
   }
 
   /**
@@ -588,7 +613,7 @@ export class ReimbursementsService {
     });
 
     await this.notifyRequester(row, status, reason);
-    return toView(row);
+    return this.present(row);
   }
 
   /** Notifica al solicitante el resultado de la transición (salvo que él la haga). */

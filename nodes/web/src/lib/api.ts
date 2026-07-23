@@ -2109,6 +2109,19 @@ export function listAssetDocuments(id: string): Promise<AssetDocumentView[]> {
   return request<AssetDocumentView[]>(`/assets/${encodeURIComponent(id)}/documents`);
 }
 
+/**
+ * `GET /assets/:id/documents/:docId/file-url` — URL fresca de visualización/
+ * descarga del archivo de un documento del activo (Fase 1B). El backend
+ * presigna claves R2 al leer y hace passthrough de URLs absolutas legadas.
+ * Nunca navegues `fileUrl` crudo: para documentos nuevos es una clave de
+ * storage no navegable. Mismo gate admin/gerencia que el listado de documentos.
+ */
+export function getAssetDocumentFileUrl(id: string, docId: string): Promise<{ url: string }> {
+  return request<{ url: string }>(
+    `/assets/${encodeURIComponent(id)}/documents/${encodeURIComponent(docId)}/file-url`,
+  );
+}
+
 export function reviewAssetDocument(
   id: string,
   docId: string,

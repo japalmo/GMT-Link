@@ -230,6 +230,44 @@ export class R2StorageService extends StorageService {
       { expiresIn: this.presignTtlSeconds },
     );
   }
+
+  /**
+   * Extrae la CLAVE de una URL firmada legada de ESTE bucket (mismo host del
+   * endpoint + path `/<bucket>/<key>`; `forcePathStyle` garantiza esa forma).
+   * `null` si la URL es de otro host/bucket, no trae clave o está malformada.
+   * Permite re-presignar enlaces persistidos antes del fix "clave al guardar,
+   * presign al leer" (ya vencidos) en vez de dejarlos muertos en passthrough.
+   */
+  extractKeyFromUrl(url: string): string | null {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return null;
+    }
+    let endpoint: URL;
+    try {
+      endpoint = new URL(this.env.endpoint);
+    } catch {
+      return null;
+    }
+    if (parsed.host !== endpoint.host) {
+      return null;
+    }
+    const prefix = `/${this.env.bucket}/`;
+    if (!parsed.pathname.startsWith(prefix)) {
+      return null;
+    }
+    const rawKey = parsed.pathname.slice(prefix.length);
+    if (rawKey.length === 0) {
+      return null;
+    }
+    try {
+      return decodeURIComponent(rawKey);
+    } catch {
+      return null;
+    }
+  }
 }
 
 /** Sanitiza un segmento de carpeta lógica (sin separadores ni '..'). */

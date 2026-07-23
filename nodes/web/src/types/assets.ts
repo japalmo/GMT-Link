@@ -63,6 +63,12 @@ export interface AssetDocumentView {
   assetId: string;
   name: string;
   type: string;
+  /**
+   * URL de visualización resuelta AL LEER por el backend (Fase 1B: se persiste
+   * la clave del storage y se presigna en cada respuesta). Con R2 caduca en
+   * ~1 h: para abrir al clic, pedir una fresca con `getAssetDocumentFileUrl`
+   * (componente `FreshFileLink`) en vez de navegar este valor.
+   */
   fileUrl: string;
   status: DocumentStatus;
   previousFileUrl: string | null;

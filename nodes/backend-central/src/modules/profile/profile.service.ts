@@ -16,6 +16,12 @@ import { verificationCodeEmail, passwordChangeCodeEmail } from '../../common/ema
 import { OtpService, OTP_PURPOSES } from '../../common/otp.service';
 import { resolvePasswordOtpTarget } from '../../common/email-target';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../../common/storage/storage.service';
+import {
+  freshFileUrl,
+  isAbsoluteUrl,
+  urlReferencesKey,
+} from '../../common/storage/fresh-file-url';
 import type { ChangeEmailRequestDto } from './dto/change-email-request.dto';
 import type { ChangeEmailConfirmDto } from './dto/change-email-confirm.dto';
 import type { ChangePasswordDto } from './dto/change-password.dto';
@@ -44,6 +50,7 @@ export class ProfileService {
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
     private readonly emailService: EmailService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Perfil propio. 404 si el usuario de la sesión ya no existe en Postgres. */
@@ -78,7 +85,7 @@ export class ProfileService {
     if (dto.secondLastName !== undefined) {
       data.secondLastName = normalizeOptional(dto.secondLastName);
     }
-    if (dto.avatarUrl !== undefined) {
+    if (dto.avatarUrl !== undefined && !(await this.isEchoOfCurrentAvatar(userId, dto.avatarUrl))) {
       data.avatarUrl = normalizeOptional(dto.avatarUrl);
     }
     if (dto.cargo !== undefined) {
@@ -299,6 +306,29 @@ export class ProfileService {
   }
 
   /**
+   * ¿El `avatarUrl` entrante es el ECO de la URL fresca del avatar YA subido?
+   * El GET de perfil resuelve la CLAVE persistida a una URL de descarga fresca
+   * (firmada de R2 o `/files/` local) y el form la re-envía tal cual al guardar
+   * cualquier otro campo. Persistir ese eco pisaría la clave con una URL que
+   * caduca en 1 h — justo el bug que este fix elimina — así que se ignora: solo
+   * un valor que NO referencia la clave vigente cuenta como cambio de avatar.
+   */
+  private async isEchoOfCurrentAvatar(userId: string, incoming: string): Promise<boolean> {
+    if (incoming === '') {
+      return false; // limpiar el avatar SIEMPRE es un cambio intencional
+    }
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+    const stored = current?.avatarUrl;
+    if (!stored || isAbsoluteUrl(stored)) {
+      return false; // sin avatar subido (o URL externa/legada): no hay clave que proteger
+    }
+    return urlReferencesKey(incoming, stored);
+  }
+
+  /**
    * Exige que `email` no esté tomado por OTRO usuario como email primario,
    * emailInstitucional o emailPersonal. 409 si colisiona. Chequeo a nivel app
    * ("un correo = una persona"); el `@unique` de emailPersonal en BD queda como
@@ -317,8 +347,12 @@ export class ProfileService {
     }
   }
 
-  /** Vista de perfil propio: básicos + correos/verificación + roleKeys (Membership ORG). */
-  private toProfile(user: UserWithMemberships): ProfileMe {
+  /**
+   * Vista de perfil propio: básicos + correos/verificación + roleKeys (Membership
+   * ORG). `avatarUrl` puede ser una CLAVE de storage (avatar subido) o una URL
+   * externa: se resuelve a URL fresca al leer (fix R2 1 h).
+   */
+  private async toProfile(user: UserWithMemberships): Promise<ProfileMe> {
     return {
       id: user.id,
       firstName: user.firstName,
@@ -333,7 +367,7 @@ export class ProfileService {
       emailPersonalVerified: user.emailPersonalVerified !== null,
       pendingEmail: user.pendingEmail,
       pendingEmailKind: user.pendingEmailKind,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: await freshFileUrl(this.storage, user.avatarUrl),
       status: user.status,
       isClientUser: user.isClientUser,
       cargo: user.cargo,

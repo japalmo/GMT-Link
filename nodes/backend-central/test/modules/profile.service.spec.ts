@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { EmailService } from '../../src/common/email.service';
 import type { OtpService } from '../../src/common/otp.service';
+import type { StorageService } from '../../src/common/storage/storage.service';
 import { ProfileService } from '../../src/modules/profile/profile.service';
 import { hashPassword, verifyPassword } from '../../src/common/password';
 import type { UpdateProfileDto } from '../../src/modules/profile/dto/update-profile.dto';
@@ -102,9 +103,11 @@ function buildService(opts: BuildOpts = {}): {
   const prisma = { user: { findUnique, update, findFirst } } as unknown as PrismaService;
   const otp = { generate: otpGenerate, verify: otpVerify } as unknown as OtpService;
   const email = { send: emailSend } as unknown as EmailService;
+  // Storage NO-R2 (dev): freshFileUrl resuelve claves a /files/ del FilesController.
+  const storage = {} as unknown as StorageService;
 
   return {
-    service: new ProfileService(prisma, otp, email),
+    service: new ProfileService(prisma, otp, email, storage),
     findUnique,
     update,
     findFirst,
@@ -163,6 +166,20 @@ describe('ProfileService.getMe', () => {
     const { service } = buildService({ findUser: null });
     await expect(service.getMe('ghost')).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('resuelve la CLAVE del avatar a URL fresca y hace passthrough de URLs externas', async () => {
+    const { service } = buildService({
+      findUser: baseUser({ avatarUrl: 'users/me-1/avatar/uuid-foto.png' }),
+    });
+    const result = await service.getMe('me-1');
+    expect(result.avatarUrl).toBe('http://localhost:3001/files/users/me-1/avatar/uuid-foto.png');
+
+    const { service: service2 } = buildService({
+      findUser: baseUser({ avatarUrl: 'https://gravatar.com/avatar/abc' }),
+    });
+    const result2 = await service2.getMe('me-1');
+    expect(result2.avatarUrl).toBe('https://gravatar.com/avatar/abc');
+  });
 });
 
 describe('ProfileService.updateMe', () => {
@@ -198,6 +215,36 @@ describe('ProfileService.updateMe', () => {
     expect(arg.data).not.toHaveProperty('points');
     expect(arg.data).not.toHaveProperty('roleKeys');
     expect(arg.data).not.toHaveProperty('id');
+  });
+
+  it('ignora el ECO de la URL fresca del avatar vigente (no pisa la CLAVE persistida)', async () => {
+    // El form de perfil re-envía el avatarUrl tal como lo recibió del GET (la
+    // URL fresca resuelta de la clave): eso NO es un cambio de avatar.
+    const { service, update } = buildService({
+      findUser: baseUser({ avatarUrl: 'users/me-1/avatar/uuid-foto.png' }),
+    });
+
+    await service.updateMe('me-1', {
+      firstName: 'Anita',
+      avatarUrl: 'http://localhost:3001/files/users/me-1/avatar/uuid-foto.png',
+    } as UpdateProfileDto);
+
+    const arg = update.mock.calls[0]?.[0] as UpdateArgs;
+    expect(arg.data).toEqual({ firstName: 'Anita' });
+    expect(arg.data).not.toHaveProperty('avatarUrl');
+  });
+
+  it('una URL de avatar DISTINTA sí reemplaza la clave persistida', async () => {
+    const { service, update } = buildService({
+      findUser: baseUser({ avatarUrl: 'users/me-1/avatar/uuid-foto.png' }),
+    });
+
+    await service.updateMe('me-1', {
+      avatarUrl: 'https://gravatar.com/avatar/abc',
+    } as UpdateProfileDto);
+
+    const arg = update.mock.calls[0]?.[0] as UpdateArgs;
+    expect(arg.data).toEqual({ avatarUrl: 'https://gravatar.com/avatar/abc' });
   });
 
   it('normaliza string vacío a null en secondName/secondLastName/avatarUrl (limpiar campo)', async () => {

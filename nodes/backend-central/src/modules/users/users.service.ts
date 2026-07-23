@@ -1461,7 +1461,9 @@ export class UsersService {
 
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { avatarUrl: saved.url },
+      // CLAVE estable del storage, nunca la URL (firmada/efímera con R2);
+      // perfil y directorio la resuelven a URL fresca AL LEER.
+      data: { avatarUrl: saved.key },
       include: { memberships: true },
     });
 

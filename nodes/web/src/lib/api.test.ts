@@ -442,7 +442,7 @@ describe('api — getProjectDocumentFileUrl (URL fresca del PDF, Fase 1B)', () =
   });
 });
 
-import { getDocumentFileUrl, getCvCertificationDiplomaUrl } from '@/lib/api';
+import { getDocumentFileUrl, getCvCertificationDiplomaUrl, getAssetDocumentFileUrl } from '@/lib/api';
 
 describe('api — URL fresca de documentos personales y diplomas del CV (Fase 1B)', () => {
   beforeEach(() => {
@@ -498,5 +498,17 @@ describe('api — URL fresca de documentos personales y diplomas del CV (Fase 1B
     const err = await getCvCertificationDiplomaUrl('c1').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(404);
+  });
+
+  it('getAssetDocumentFileUrl — GET /assets/:id/documents/:docId/file-url', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res({ url: 'https://x/soap.pdf?firma=abc' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getAssetDocumentFileUrl('a/1', 'd/2');
+
+    expect(result).toEqual({ url: 'https://x/soap.pdf?firma=abc' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://localhost:3001/assets/a%2F1/documents/d%2F2/file-url');
+    expect(init.method ?? 'GET').toBe('GET');
   });
 });
