@@ -144,18 +144,43 @@ export function resolveShiftForDate(
   return { startMin, endMin, label: `${start}-${end}` };
 }
 
-/** Minutos de solapamiento del periodo [otStart, otEnd] con el turno diario (recurrente). */
-function shiftOverlapMinutes(otStartMin: number, otEndMin: number, shift: DayShift): number {
-  // El turno se repite cada día: un minuto del periodo cuenta como turno si su hora
-  // de reloj cae dentro de [start, end]. Se evalúan las copias k=-1/0/+1 para cubrir
-  // periodos que cruzan la medianoche y turnos nocturnos del día anterior/siguiente.
-  let overlap = 0;
-  for (const k of [-1, 0, 1]) {
-    const s = shift.startMin + k * 1440;
-    const e = shift.endMin + k * 1440;
-    overlap += Math.max(0, Math.min(otEndMin, e) - Math.max(otStartMin, s));
+/** Un turno colocado con un desfase de días (en minutos), o `null` si ese día no tiene turno. */
+interface PlacedShift {
+  shift: DayShift | null;
+  /** Desfase en minutos: -1440 (día anterior), 0 (día de la fecha), +1440 (día siguiente). */
+  offset: number;
+}
+
+/**
+ * Minutos del periodo [otStart, otEnd] cubiertos por AL MENOS UNO de los turnos
+ * colocados (unión de intervalos, sin doble conteo). Cada turno se coloca en el eje
+ * de minutos del día de la fecha según su desfase; el turno del día siguiente en
+ * +1440 y la cola de un turno nocturno del día anterior en -1440. A diferencia de
+ * replicar UN turno cada día, aquí un día de DESCANSO (turno `null`) no aporta nada.
+ */
+function coveredMinutes(otStartMin: number, otEndMin: number, placed: PlacedShift[]): number {
+  const intervals: Array<[number, number]> = [];
+  for (const { shift, offset } of placed) {
+    if (!shift) continue;
+    const s = Math.max(otStartMin, shift.startMin + offset);
+    const e = Math.min(otEndMin, shift.endMin + offset);
+    if (e > s) intervals.push([s, e]);
   }
-  return Math.min(overlap, otEndMin - otStartMin);
+  intervals.sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let cur: [number, number] | null = null;
+  for (const [s, e] of intervals) {
+    if (cur === null) {
+      cur = [s, e];
+    } else if (s <= cur[1]) {
+      cur[1] = Math.max(cur[1], e); // se solapan/tocan: fusiona
+    } else {
+      total += cur[1] - cur[0];
+      cur = [s, e];
+    }
+  }
+  if (cur !== null) total += cur[1] - cur[0];
+  return total;
 }
 
 /** Desglose de un periodo de horas extra contra el turno del día. */
@@ -171,21 +196,34 @@ export interface OvertimeBreakdown {
 }
 
 /**
- * Desglosa el periodo [startTime, endTime] contra el `shift` del día: total, tramo
- * de turno normal y hora extra real (total menos el solape con el turno). Sin turno
+ * Desglosa el periodo [startTime, endTime] contra el turno del día: total, tramo de
+ * turno normal y hora extra real (total menos el solape con el turno). Sin turno
  * (`shift === null`) => todo el periodo es hora extra.
+ *
+ * Cuando el periodo cruza la medianoche, el tramo del día siguiente se descuenta
+ * contra el turno REAL de ESE día (`shiftNext`), no una copia del turno del día de la
+ * fecha: así un día de descanso no acredita "turno normal" fantasma (subvaluando la
+ * HE). `shiftPrev` cubre la cola de un turno nocturno del día anterior que aún corre
+ * al inicio del periodo. Ambos son opcionales (default `null`): un llamador que no los
+ * pasa solo descuenta el turno del día de la fecha.
  */
 export function computeOvertimeBreakdown(
   startTime: string,
   endTime: string,
   shift: DayShift | null,
+  shiftPrev: DayShift | null = null,
+  shiftNext: DayShift | null = null,
 ): OvertimeBreakdown {
   const startMin = toMinutes(startTime);
   const totalMin = (toMinutes(endTime) - startMin + 1440) % 1440; // 0..1439 (== computeHours)
   const otStart = startMin;
   const otEnd = startMin + totalMin;
 
-  const regularMin = shift ? shiftOverlapMinutes(otStart, otEnd, shift) : 0;
+  const regularMin = coveredMinutes(otStart, otEnd, [
+    { shift: shiftPrev, offset: -1440 },
+    { shift, offset: 0 },
+    { shift: shiftNext, offset: 1440 },
+  ]);
   const overtimeMin = totalMin - regularMin;
 
   return {

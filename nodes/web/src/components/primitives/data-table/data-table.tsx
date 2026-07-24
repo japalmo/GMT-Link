@@ -46,12 +46,29 @@ export interface DataTableColumn<T> {
 }
 
 /** Filtro select server-side: el valor elegido viaja como `filters[id]` al backend. */
-export interface DataTableFilter {
+export interface DataTableSelectFilter {
+  /** Tipo de filtro. Omitido o 'select' = desplegable de opciones. */
+  readonly kind?: 'select';
   readonly id: string;
   readonly label: string;
   readonly options: ReadonlyArray<{ readonly value: string; readonly label: string }>;
   readonly allLabel?: string;
 }
+
+/**
+ * Filtro de rango de fecha server-side: dos inputs (Desde/Hasta) cuyos valores
+ * viajan como `filters[fromKey]` y `filters[toKey]` (p. ej. `dateFrom`/`dateTo`).
+ */
+export interface DataTableDateRangeFilter {
+  readonly kind: 'daterange';
+  /** Identificador del grupo (para la key de React y el label). No es una clave de filtro. */
+  readonly id: string;
+  readonly label: string;
+  readonly fromKey: string;
+  readonly toKey: string;
+}
+
+export type DataTableFilter = DataTableSelectFilter | DataTableDateRangeFilter;
 
 export interface DataTableProps<T> {
   /** Estado y datos del hook {@link useDataTable}. */
@@ -126,16 +143,54 @@ export function DataTable<T>({
           )}
 
           {activeFilters.map((filter) => {
+            const controlCls = cn(
+              'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors',
+              'outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40',
+            );
+            if (filter.kind === 'daterange') {
+              const fromId = `${baseId}-filter-${filter.id}-from`;
+              const toId = `${baseId}-filter-${filter.id}-to`;
+              return (
+                <div key={filter.id} className="flex flex-col gap-1.5">
+                  <Label>{filter.label}</Label>
+                  <div className="flex items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor={fromId} className="text-xs text-muted-foreground">
+                        Desde
+                      </Label>
+                      <input
+                        id={fromId}
+                        type="date"
+                        className={controlCls}
+                        value={table.filters[filter.fromKey] ?? ''}
+                        max={table.filters[filter.toKey] || undefined}
+                        onChange={(e) => table.setFilter(filter.fromKey, e.target.value || undefined)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor={toId} className="text-xs text-muted-foreground">
+                        Hasta
+                      </Label>
+                      <input
+                        id={toId}
+                        type="date"
+                        className={controlCls}
+                        value={table.filters[filter.toKey] ?? ''}
+                        min={table.filters[filter.fromKey] || undefined}
+                        onChange={(e) => table.setFilter(filter.toKey, e.target.value || undefined)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             const selectId = `${baseId}-filter-${filter.id}`;
             return (
               <div key={filter.id} className="flex flex-col gap-1.5 sm:min-w-44">
                 <Label htmlFor={selectId}>{filter.label}</Label>
                 <select
                   id={selectId}
-                  className={cn(
-                    'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors',
-                    'outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40',
-                  )}
+                  className={controlCls}
                   value={table.filters[filter.id] ?? ''}
                   onChange={(e) => table.setFilter(filter.id, e.target.value || undefined)}
                 >

@@ -444,18 +444,22 @@ export class ReimbursementsService {
   }
 
   /**
-   * Edita un reembolso propio (JSON, §5). SOLO el dueño y SOLO mientras sigue
-   * PENDIENTE (no se toca uno ya resuelto). La BOLETA no se modifica aquí (va por
-   * `attachReceipt`). 404 si no existe o es ajeno; 409 si ya no está PENDIENTE.
+   * Edita un reembolso (JSON, §5). El DUEÑO edita el suyo, o quien GESTIONA
+   * finanzas (`canManage`, que el controller resuelve con `finance:request:approve`)
+   * edita el de otro (p. ej. para corregir un error de carga del trabajador). SOLO
+   * mientras sigue PENDIENTE (no se toca uno ya resuelto). La BOLETA no se modifica
+   * aquí (va por `attachReceipt`). 404 si no existe o no puede editarlo; 409 si ya
+   * no está PENDIENTE.
    */
   async update(
     userId: string,
     id: string,
     dto: UpdateReimbursementDto,
+    canManage: boolean,
   ): Promise<ReimbursementView> {
-    const current = await this.prisma.reimbursement.findFirst({ where: { id, userId } });
-    if (!current) {
-      throw new NotFoundException('El reembolso no existe o no te pertenece.');
+    const current = await this.prisma.reimbursement.findUnique({ where: { id } });
+    if (!current || (current.userId !== userId && !canManage)) {
+      throw new NotFoundException('El reembolso no existe o no puedes editarlo.');
     }
     if (current.status !== FinanceStatus.PENDIENTE) {
       throw new ConflictException('Solo puedes editar un reembolso mientras está pendiente.');

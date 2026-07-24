@@ -491,19 +491,24 @@ describe('ReimbursementsService', () => {
   });
 
   it('update: el dueño edita un reembolso PENDIENTE (campos editables, sin tocar la boleta)', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data })),
     );
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    const view = await service.update('u1', 'r-1', {
-      amount: 20000,
-      date: TODAY_ISO,
-      concept: 'Taxi de vuelta',
-      category: 'transporte',
-    });
+    const view = await service.update(
+      'u1',
+      'r-1',
+      {
+        amount: 20000,
+        date: TODAY_ISO,
+        concept: 'Taxi de vuelta',
+        category: 'transporte',
+      },
+      false,
+    );
 
     const data = update.mock.calls[0]?.[0]?.data as {
       amount: number;
@@ -524,65 +529,115 @@ describe('ReimbursementsService', () => {
     expect(view.amount).toBe(20000);
   });
 
-  it('update: ajeno o inexistente → 404 y NO actualiza', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(null));
+  it('update: inexistente → 404 y NO actualiza', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(null));
     const update = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
     await expect(
-      service.update('u1', 'ajeno', {
-        amount: 100,
-        date: TODAY_ISO,
-        concept: 'X',
-      }),
+      service.update(
+        'u1',
+        'ajeno',
+        {
+          amount: 100,
+          date: TODAY_ISO,
+          concept: 'X',
+        },
+        false,
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('update: reembolso ya resuelto (no PENDIENTE) → 409 y NO actualiza', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO })));
+  it('update: ajeno por quien NO gestiona → 404 y NO actualiza', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'otro' })),
+    );
     const update = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
     await expect(
-      service.update('u1', 'r-1', {
-        amount: 100,
-        date: TODAY_ISO,
-        concept: 'X',
-      }),
+      service.update('u1', 'r-1', { amount: 100, date: TODAY_ISO, concept: 'X' }, false),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('update: un GESTOR (canManage) edita un reembolso ajeno PENDIENTE → OK', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'otro' })),
+    );
+    const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update('gestor', 'r-1', { amount: 500, date: TODAY_ISO, concept: 'Corrección' }, true),
+    ).resolves.toBeDefined();
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('update: reembolso ya resuelto (no PENDIENTE) → 409 y NO actualiza', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO })));
+    const update = vi.fn();
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    await expect(
+      service.update(
+        'u1',
+        'r-1',
+        {
+          amount: 100,
+          date: TODAY_ISO,
+          concept: 'X',
+        },
+        false,
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(update).not.toHaveBeenCalled();
   });
 
   it('update: fecha FUTURA → 400 y NO actualiza', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    const promise = service.update('u1', 'r-1', {
-      amount: 100,
-      date: FUTURE_ISO,
-      concept: 'X',
-    });
+    const promise = service.update(
+      'u1',
+      'r-1',
+      {
+        amount: 100,
+        date: FUTURE_ISO,
+        concept: 'X',
+      },
+      false,
+    );
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
     await expect(promise).rejects.toThrow('La fecha del gasto no puede ser futura.');
     expect(update).not.toHaveBeenCalled();
   });
 
   it('update: anterior al mes en curso → 400 y NO actualiza', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    const promise = service.update('u1', 'r-1', {
-      amount: 100,
-      date: TOO_OLD_ISO,
-      concept: 'X',
-    });
+    const promise = service.update(
+      'u1',
+      'r-1',
+      {
+        amount: 100,
+        date: TOO_OLD_ISO,
+        concept: 'X',
+      },
+      false,
+    );
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
     await expect(promise).rejects.toThrow('Solo puedes reportar gastos del mes en curso.');
     expect(update).not.toHaveBeenCalled();
@@ -593,16 +648,16 @@ describe('ReimbursementsService', () => {
     // solicitud que envejeció fuera de la ventana debe seguir corrigible en monto /
     // concepto sin obligar a mover la fecha (que ya no cabría en la ventana).
     const aged = buildRow({ status: FinanceStatus.PENDIENTE, date: new Date(TOO_OLD_ISO) });
-    const findFirst = vi.fn(() => Promise.resolve(aged));
+    const findUnique = vi.fn(() => Promise.resolve(aged));
     const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...aged, ...args.data })),
     );
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
     // Reenvía la MISMA fecha (mismo día date-only) y corrige solo el monto.
     await expect(
-      service.update('u1', 'r-1', { amount: 99999, date: TOO_OLD_ISO, concept: 'Taxi al puerto' }),
+      service.update('u1', 'r-1', { amount: 99999, date: TOO_OLD_ISO, concept: 'Taxi al puerto' }, false),
     ).resolves.toBeDefined();
     expect(update).toHaveBeenCalled();
     const data = update.mock.calls[0]?.[0]?.data as { amount: number };
@@ -610,15 +665,15 @@ describe('ReimbursementsService', () => {
   });
 
   it('update: primer día del mes en curso (límite inferior, inclusive) → OK', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data })),
     );
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
     await expect(
-      service.update('u1', 'r-1', { amount: 100, date: WINDOW_LIMIT_ISO, concept: 'X' }),
+      service.update('u1', 'r-1', { amount: 100, date: WINDOW_LIMIT_ISO, concept: 'X' }, false),
     ).resolves.toBeDefined();
     const data = update.mock.calls[0]?.[0]?.data as { date: Date };
     expect(data.date.toISOString()).toBe(WINDOW_LIMIT_ISO);

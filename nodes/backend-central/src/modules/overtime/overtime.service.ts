@@ -42,6 +42,9 @@ type OvertimeWithRequester = Prisma.OvertimeRequestGetPayload<{
 }>;
 
 /** Filtros de listado (ya parseados desde el query). */
+/** Milisegundos de un día: para saltar a la medianoche UTC contigua (fechas date-only). */
+const ONE_DAY_MS = 86_400_000;
+
 export interface ListOvertimeFilters {
   status?: FinanceStatus;
   userId?: string;
@@ -94,8 +97,13 @@ export class OvertimeService {
       return computeOvertimeBreakdown(startTime, endTime, null);
     }
     const schedule = await this.prisma.workSchedule.findUnique({ where: { userId: workerId } });
+    // Turnos del día y de sus vecinos (las fechas de finanzas son medianoche UTC; ±24h
+    // cae en la medianoche UTC contigua). El tramo que cruza la medianoche se descuenta
+    // contra el turno REAL del día siguiente, no una copia del de hoy.
     const shift = resolveShiftForDate(schedule, date);
-    return computeOvertimeBreakdown(startTime, endTime, shift);
+    const shiftPrev = resolveShiftForDate(schedule, new Date(date.getTime() - ONE_DAY_MS));
+    const shiftNext = resolveShiftForDate(schedule, new Date(date.getTime() + ONE_DAY_MS));
+    return computeOvertimeBreakdown(startTime, endTime, shift, shiftPrev, shiftNext);
   }
 
   /**
@@ -206,15 +214,23 @@ export class OvertimeService {
   }
 
   /**
-   * Edita una solicitud PROPIA aún PENDIENTE (spec §5.6). Solo el dueño
-   * (`findFirst` acota por `userId`) y solo mientras no esté resuelta. Recomputa
-   * `hours`/`isDraft` desde `startTime`/`endTime` (endTime ausente => vuelve a
-   * borrador con `hours=null`), igual que `create`/`close`.
+   * Edita una solicitud aún PENDIENTE (spec §5.6). El DUEÑO edita la suya, o quien
+   * GESTIONA finanzas (`canManage`, que el controller resuelve con
+   * `finance:request:approve`) edita la de otro (p. ej. para corregir un error de
+   * carga del trabajador). Solo mientras no esté resuelta. Recomputa
+   * `hours`/`isDraft` desde `startTime`/`endTime` contra el turno del DUEÑO
+   * (`current.userId`), no el del editor (endTime ausente => vuelve a borrador con
+   * `hours=null`), igual que `create`/`close`.
    */
-  async update(userId: string, id: string, dto: UpdateOvertimeDto): Promise<OvertimeView> {
-    const current = await this.prisma.overtimeRequest.findFirst({ where: { id, userId } });
-    if (!current) {
-      throw new NotFoundException('La solicitud de horas extra no existe o no te pertenece.');
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateOvertimeDto,
+    canManage: boolean,
+  ): Promise<OvertimeView> {
+    const current = await this.prisma.overtimeRequest.findUnique({ where: { id } });
+    if (!current || (current.userId !== userId && !canManage)) {
+      throw new NotFoundException('La solicitud de horas extra no existe o no puedes editarla.');
     }
     if (current.status !== FinanceStatus.PENDIENTE) {
       throw new ConflictException('No se puede editar una solicitud ya resuelta.');
@@ -283,10 +299,18 @@ export class OvertimeService {
     const schedule = await this.prisma.workSchedule.findUnique({ where: { userId: workerId } });
     for (const row of pending) {
       const shift = row.weekendOrHoliday ? null : resolveShiftForDate(schedule, row.date);
+      const shiftPrev = row.weekendOrHoliday
+        ? null
+        : resolveShiftForDate(schedule, new Date(row.date.getTime() - ONE_DAY_MS));
+      const shiftNext = row.weekendOrHoliday
+        ? null
+        : resolveShiftForDate(schedule, new Date(row.date.getTime() + ONE_DAY_MS));
       const breakdown = computeOvertimeBreakdown(
         row.startTime as string,
         row.endTime as string,
         shift,
+        shiftPrev,
+        shiftNext,
       );
       await this.prisma.overtimeRequest.update({
         where: { id: row.id },

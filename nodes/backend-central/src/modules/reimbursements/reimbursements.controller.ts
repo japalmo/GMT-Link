@@ -184,7 +184,23 @@ export class ReimbursementsController {
     const status = (Object.values(FinanceStatus) as string[]).includes(rawStatus)
       ? (rawStatus as FinanceStatus)
       : undefined;
-    return this.reimbursements.listAllTable({ status }, req);
+    // Los reembolsos no tienen proyecto/cliente: solo trabajador + rango de fecha.
+    // Se estrecha cada filtro antes de Prisma (strings no vacíos; fechas que parsean).
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+    const isoDate = (v: unknown): string | undefined => {
+      const s = str(v);
+      return s !== undefined && !Number.isNaN(Date.parse(s)) ? s : undefined;
+    };
+    return this.reimbursements.listAllTable(
+      {
+        status,
+        userId: str(filters?.userId),
+        dateFrom: isoDate(filters?.dateFrom),
+        dateTo: isoDate(filters?.dateTo),
+      },
+      req,
+    );
   }
 
   @Get(':id')
@@ -210,7 +226,12 @@ export class ReimbursementsController {
     return this.reimbursements.attachReceipt(userId, id, checked);
   }
 
-  /** Edita un reembolso propio (JSON). Solo el dueño y solo mientras sigue PENDIENTE. */
+  /**
+   * Edita un reembolso (JSON): el DUEÑO edita el suyo, o quien GESTIONA finanzas
+   * (`finance:request:approve`) edita el de otro (corregir un error de carga del
+   * trabajador). La autorización la decide EL SERVICE (ADR-0001): 404 para quien no
+   * es dueño ni gestor, 409 si ya está resuelto.
+   */
   @Put(':id')
   async update(
     @CurrentUser() authUser: AuthUser | undefined,
@@ -218,8 +239,8 @@ export class ReimbursementsController {
     @Body() dto: UpdateReimbursementDto,
   ): Promise<ReimbursementView> {
     const userId = this.requireUserId(authUser);
-    await this.require(userId, P_CREATE);
-    return this.reimbursements.update(userId, id, dto);
+    const canManage = (await this.permissions.can(userId, P_APPROVE)).effect === 'allow';
+    return this.reimbursements.update(userId, id, dto, canManage);
   }
 
   /**

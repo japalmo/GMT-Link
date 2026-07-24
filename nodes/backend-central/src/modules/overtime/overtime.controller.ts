@@ -125,7 +125,25 @@ export class OvertimeController {
     const status = (Object.values(FinanceStatus) as string[]).includes(rawStatus)
       ? (rawStatus as FinanceStatus)
       : undefined;
-    return this.overtime.listAllTable({ status }, req);
+    // Se estrecha cada filtro antes de Prisma: solo strings no vacíos, y las fechas
+    // solo si parsean (evita reventar el `where` con basura tipeada en la query).
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+    const isoDate = (v: unknown): string | undefined => {
+      const s = str(v);
+      return s !== undefined && !Number.isNaN(Date.parse(s)) ? s : undefined;
+    };
+    return this.overtime.listAllTable(
+      {
+        status,
+        userId: str(filters?.userId),
+        projectId: str(filters?.projectId),
+        clientId: str(filters?.clientId),
+        dateFrom: isoDate(filters?.dateFrom),
+        dateTo: isoDate(filters?.dateTo),
+      },
+      req,
+    );
   }
 
   /**
@@ -175,14 +193,21 @@ export class OvertimeController {
     return this.overtime.close(this.requireUserId(authUser), id, dto.endTime);
   }
 
-  /** Edita una solicitud propia aún PENDIENTE (solo dueño; el service valida). */
+  /**
+   * Edita una solicitud aún PENDIENTE: el DUEÑO edita la suya, o quien GESTIONA
+   * finanzas (`finance:request:approve`) edita la de otro (corregir un error de
+   * carga del trabajador). La autorización la decide EL SERVICE (ADR-0001): 404
+   * para quien no es dueño ni gestor, 409 si ya está resuelta.
+   */
   @Put(':id')
-  update(
+  async update(
     @CurrentUser() authUser: AuthUser | undefined,
     @Param('id') id: string,
     @Body() dto: UpdateOvertimeDto,
   ): Promise<OvertimeView> {
-    return this.overtime.update(this.requireUserId(authUser), id, dto);
+    const userId = this.requireUserId(authUser);
+    const canManage = (await this.permissions.can(userId, P_APPROVE)).effect === 'allow';
+    return this.overtime.update(userId, id, dto, canManage);
   }
 
   /**

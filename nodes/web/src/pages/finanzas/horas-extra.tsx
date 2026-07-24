@@ -209,6 +209,25 @@ export function HorasExtraTab(): ReactNode {
     ],
   };
 
+  // Filtro por proyecto: el catálogo ya está cargado (`projects`). El trabajador y el
+  // cliente esperan un endpoint de opciones de finanzas (el listado de usuarios exige
+  // can_manage_users, que un gestor de finanzas no tiene).
+  const managerProjectFilter: DataTableFilter = {
+    id: 'projectId',
+    label: 'Proyecto',
+    allLabel: 'Todos los proyectos',
+    options: projects.map((p) => ({ value: p.id, label: p.name })),
+  };
+
+  // Rango de fecha server-side: viaja como filters.dateFrom / filters.dateTo.
+  const managerDateFilter: DataTableFilter = {
+    kind: 'daterange',
+    id: 'fecha',
+    label: 'Fecha',
+    fromKey: 'dateFrom',
+    toKey: 'dateTo',
+  };
+
   const managerRowActions = (item: OvertimeView): ReactNode => (
     <>
       {item.status === 'PENDIENTE' && !item.isDraft && (
@@ -415,7 +434,7 @@ export function HorasExtraTab(): ReactNode {
             table={managerTable}
             columns={managerColumns}
             getRowId={(item) => item.id}
-            filters={[managerStatusFilter]}
+            filters={[managerStatusFilter, managerProjectFilter, managerDateFilter]}
             rowActions={managerRowActions}
             onRowClick={(item) => setDetail({ view: item, mine: false })}
             emptyMessage="No hay solicitudes de horas extra pendientes ni registradas en el sistema."
@@ -437,7 +456,13 @@ export function HorasExtraTab(): ReactNode {
         }}
         onSubmit={create}
         initial={editTarget ?? undefined}
-        onUpdate={update}
+        // Tras editar (incluido un gestor editando una ajena, FIX 4), refresca la
+        // tabla de Gestión: usa su propio motor (managerTable) y no auto-revalida.
+        onUpdate={async (id, input) => {
+          const result = await update(id, input);
+          managerTable.refetch();
+          return result;
+        }}
       />
 
       <ConfirmDialog
@@ -492,8 +517,11 @@ export function HorasExtraTab(): ReactNode {
         // backend: un gestor de solo lectura sin approve no debe ver "Borrar").
         onDelete={detail?.mine || canApprove ? handleDetailDelete : undefined}
         mine={detail?.mine ?? false}
+        // Editar: el DUEÑO la suya, o quien gestiona (canApprove) la de otro para
+        // corregir un error de carga. El diálogo solo muestra "Editar" si sigue
+        // PENDIENTE y no es borrador; el backend reafirma el gate.
         onEdit={
-          detail?.mine
+          detail?.mine || canApprove
             ? () => {
                 if (detail) setEditTarget(detail.view);
                 setDetail(null);

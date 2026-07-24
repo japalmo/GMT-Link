@@ -102,10 +102,12 @@ export function ReembolsosTab(): ReactNode {
     await create(input, receiptFile);
   };
 
-  /** Edita un reembolso propio PENDIENTE (sin tocar la boleta). */
+  /** Edita un reembolso PENDIENTE (sin tocar la boleta); el gestor puede editar ajenas (FIX 4). */
   const handleEdit = async (input: CreateReimbursementInput): Promise<void> => {
     if (!editTarget) return;
     await update(editTarget.id, input);
+    // Refresca la tabla de Gestión: usa su propio motor (managerTable) y no auto-revalida.
+    managerTable.refetch();
   };
 
   const handleApprove = async (id: string): Promise<void> => {
@@ -259,6 +261,17 @@ export function ReembolsosTab(): ReactNode {
       { value: 'PAGADO', label: 'Pagado' },
       { value: 'RECHAZADO', label: 'Rechazado' },
     ],
+  };
+
+  // Rango de fecha server-side: viaja como filters.dateFrom / filters.dateTo. Los
+  // reembolsos no tienen proyecto/cliente; el filtro por trabajador espera el
+  // endpoint de opciones de finanzas (el listado de usuarios exige can_manage_users).
+  const managerDateFilter: DataTableFilter = {
+    kind: 'daterange',
+    id: 'fecha',
+    label: 'Fecha',
+    fromKey: 'dateFrom',
+    toKey: 'dateTo',
   };
 
   const managerRowActions = (item: ReimbursementView): ReactNode => (
@@ -500,7 +513,7 @@ export function ReembolsosTab(): ReactNode {
             table={managerTable}
             columns={managerColumns}
             getRowId={(item) => item.id}
-            filters={[managerStatusFilter]}
+            filters={[managerStatusFilter, managerDateFilter]}
             rowActions={managerRowActions}
             onRowClick={(item) => setDetail({ view: item, mine: false })}
             emptyMessage="No hay reembolsos pendientes ni registrados en el sistema."
@@ -594,8 +607,11 @@ export function ReembolsosTab(): ReactNode {
         // backend: un gestor de solo lectura sin approve no debe ver "Borrar").
         onDelete={detail?.mine || canApprove ? handleDetailDelete : undefined}
         mine={detail?.mine ?? false}
+        // Editar: el DUEÑO el suyo, o quien gestiona (canApprove) el de otro para
+        // corregir un error de carga. El diálogo solo muestra "Editar" si sigue
+        // PENDIENTE; el backend reafirma el gate.
         onEdit={
-          detail?.mine
+          detail?.mine || canApprove
             ? () => {
                 if (detail) setEditTarget(detail.view);
                 setDetail(null);

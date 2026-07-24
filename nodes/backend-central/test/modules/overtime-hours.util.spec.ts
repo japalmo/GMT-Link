@@ -147,4 +147,31 @@ describe('computeOvertimeBreakdown', () => {
     expect(b.regularHours).toBe(12);
     expect(b.overtimeHours).toBe(2);
   });
+
+  it('cruza a un día de DESCANSO: no acredita turno fantasma del día siguiente (todo HE tras medianoche)', () => {
+    // Regresión del bug destapado al permitir cruzar la medianoche: viernes turno
+    // 08:00-14:00, sábado de DESCANSO; HE viernes 22:00 -> sábado 10:00 (12 h). El
+    // sábado no tiene turno que descontar => las 12 h son hora extra.
+    const sch = adminSchedule();
+    const shift = resolveShiftForDate(sch, utcDay('2026-07-17')); // viernes 08:00-14:00
+    const shiftPrev = resolveShiftForDate(sch, utcDay('2026-07-16')); // jueves 08:00-18:00
+    const shiftNext = resolveShiftForDate(sch, utcDay('2026-07-18')); // sábado => null (descanso)
+    const b = computeOvertimeBreakdown('22:00', '10:00', shift, shiftPrev, shiftNext);
+    expect(b.totalHours).toBe(12);
+    expect(b.regularHours).toBe(0);
+    expect(b.overtimeHours).toBe(12);
+  });
+
+  it('cruza a un día de TRABAJO: descuenta el turno REAL del día siguiente', () => {
+    // Lunes turno 08:00-18:00, martes también; HE lunes 22:00 -> martes 10:00 (12 h).
+    // El tramo martes 08:00-10:00 (2 h) cae en el turno del martes => 10 h extra.
+    const sch = adminSchedule();
+    const shift = resolveShiftForDate(sch, utcDay('2026-07-13')); // lunes 08:00-18:00
+    const shiftPrev = resolveShiftForDate(sch, utcDay('2026-07-12')); // domingo => null
+    const shiftNext = resolveShiftForDate(sch, utcDay('2026-07-14')); // martes 08:00-18:00
+    const b = computeOvertimeBreakdown('22:00', '10:00', shift, shiftPrev, shiftNext);
+    expect(b.totalHours).toBe(12);
+    expect(b.regularHours).toBe(2);
+    expect(b.overtimeHours).toBe(10);
+  });
 });

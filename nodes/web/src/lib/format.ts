@@ -130,12 +130,19 @@ export function formatCLP(amount: number): string {
 }
 
 /**
- * Formatea horas decimales en español chileno con la unidad ("8,33 hrs"): coma
- * decimal y máximo 2 decimales. Redondea al mostrar, así que absorbe las colas de
- * coma flotante de las sumas acumuladas (p. ej. 1,1 + 2,2 = "3,3 hrs", no "3.3000…").
+ * Formatea una cantidad de horas (decimales) como horas y minutos ("2h 30m").
+ * Redondea al minuto más cercano, así que absorbe las colas de coma flotante de
+ * las sumas acumuladas. Omite la parte que sea cero ("3h", "45m") y devuelve "0h"
+ * cuando no hay duración.
  */
 export function formatHours(hours: number): string {
-  return `${hours.toLocaleString('es-CL', { maximumFractionDigits: 2 })} hrs`;
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0 && m === 0) return '0h';
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 /** Formatea un tamaño en bytes a texto legible ("2,4 MB"). */

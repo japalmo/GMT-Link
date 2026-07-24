@@ -167,8 +167,11 @@ export function HorasExtraFormDialog({
       }
     }
     if (!startTime) return setError('La hora de inicio es obligatoria.');
-    if (endTime && endTime <= startTime) {
-      return setError('La hora de término debe ser posterior a la de inicio.');
+    // Un término anterior al inicio es válido: el turno cruza la medianoche
+    // (ej. 22:00 a 02:00), y el backend calcula las horas con ese desfase. Solo
+    // se rechaza el término idéntico al inicio (duración cero).
+    if (endTime && endTime === startTime) {
+      return setError('La hora de término no puede ser igual a la de inicio.');
     }
     if (projectValue === OTHER_PROJECT && !projectOther.trim()) {
       return setError('Indica el nombre del proyecto ("Otro").');
@@ -293,6 +296,11 @@ export function HorasExtraFormDialog({
                 onChange={(e) => setEndTime(e.target.value)}
                 disabled={submitting}
               />
+              {endTime !== '' && startTime !== '' && endTime < startTime && (
+                <p className="text-xs text-muted-foreground">
+                  El turno cruza la medianoche: el término es del día siguiente.
+                </p>
+              )}
             </div>
           </div>
 

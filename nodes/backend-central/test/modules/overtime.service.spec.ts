@@ -547,23 +547,28 @@ describe('OvertimeService', () => {
   });
 
   it('update: recomputa hours/isDraft y persiste los campos editables', async () => {
-    const findFirst = vi.fn(() =>
+    const findUnique = vi.fn(() =>
       Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, startTime: '09:00' })),
     );
     const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
       Promise.resolve(buildRow({ ...args.data })),
     );
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    const view = await service.update('u1', 'o-1', {
-      startTime: '08:00',
-      endTime: '10:30',
-      projectOther: 'Faena Norte',
-      reason: 'Cierre mensual',
-    });
+    const view = await service.update(
+      'u1',
+      'o-1',
+      {
+        startTime: '08:00',
+        endTime: '10:30',
+        projectOther: 'Faena Norte',
+        reason: 'Cierre mensual',
+      },
+      false,
+    );
 
-    expect(findFirst).toHaveBeenCalledWith({ where: { id: 'o-1', userId: 'u1' } });
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: 'o-1' } });
     const data = update.mock.calls[0]?.[0]?.data as {
       startTime: string;
       endTime: string | null;
@@ -582,40 +587,58 @@ describe('OvertimeService', () => {
   });
 
   it('update sin endTime => vuelve a borrador (isDraft, hours null)', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
       Promise.resolve(buildRow({ ...args.data })),
     );
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    await service.update('u1', 'o-1', { startTime: '09:00' });
+    await service.update('u1', 'o-1', { startTime: '09:00' }, false);
 
     const data = update.mock.calls[0]?.[0]?.data as { isDraft: boolean; hours: number | null };
     expect(data.isDraft).toBe(true);
     expect(data.hours).toBeNull();
   });
 
-  it('update de una solicitud ajena => 404 y no actualiza', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(null));
+  it('update de una solicitud ajena por quien NO gestiona => 404 y no actualiza', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'otro' })),
+    );
     const update = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
     await expect(
-      service.update('intruso', 'o-1', { startTime: '09:00' }),
+      service.update('intruso', 'o-1', { startTime: '09:00' }, false),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('update de una solicitud ajena por un GESTOR (canManage) => actualiza', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'otro', startTime: '09:00' })),
+    );
+    const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
+    const { prisma } = buildPrisma({ findUnique, update });
+    const service = makeService(prisma);
+
+    const view = await service.update('gestor', 'o-1', { startTime: '08:00', endTime: '10:30' }, true);
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(view).toBeDefined();
+  });
+
   it('update de una solicitud ya resuelta (no PENDIENTE) => 409 y no actualiza', async () => {
-    const findFirst = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO })));
+    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO })));
     const update = vi.fn();
-    const { prisma } = buildPrisma({ findFirst, update });
+    const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
     await expect(
-      service.update('u1', 'o-1', { startTime: '09:00' }),
+      service.update('u1', 'o-1', { startTime: '09:00' }, false),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(update).not.toHaveBeenCalled();
   });
