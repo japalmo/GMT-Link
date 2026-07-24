@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
-import { Ban, KeyRound, LogOut, Plus, ShieldCheck, Upload, UserCog, Users, X } from 'lucide-react';
+import { Ban, KeyRound, LogOut, Plus, ShieldCheck, Upload, UserCheck, UserCog, Users, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -20,6 +20,7 @@ import {
   fetchUsersTable,
   importUsers,
   removeUserRole,
+  restoreUserAccess,
   revokeUserInvite,
   revokeUserSessions,
   uploadUserAvatar,
@@ -90,6 +91,7 @@ function UsuariosDirectorioTab(): ReactNode {
   const [importOpen, setImportOpen] = useState(false);
   const [rolesUser, setRolesUser] = useState<UserListItem | null>(null);
   const [revokeUser, setRevokeUser] = useState<UserListItem | null>(null);
+  const [restoreUser, setRestoreUser] = useState<UserListItem | null>(null);
   const [sessionsUser, setSessionsUser] = useState<UserListItem | null>(null);
   const [detailUser, setDetailUser] = useState<UserListItem | null>(null);
   const [resendUser, setResendUser] = useState<UserListItem | null>(null);
@@ -259,6 +261,17 @@ function UsuariosDirectorioTab(): ReactNode {
                   Revocar acceso
                 </Button>
               )}
+              {u.status === 'SUSPENDED' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRestoreUser(u)}
+                  aria-label={`Restaurar acceso de ${u.firstName} ${u.lastName}`}
+                >
+                  <UserCheck aria-hidden />
+                  Restaurar acceso
+                </Button>
+              )}
               {u.status === 'ACTIVE' && (
                 <Button
                   variant="outline"
@@ -330,6 +343,21 @@ function UsuariosDirectorioTab(): ReactNode {
           if (!revokeUser) return;
           await revokeUserInvite(revokeUser.id);
           toast.success('Acceso revocado.');
+          table.refetch();
+        }}
+      />
+
+      <ConfirmDialog
+        open={restoreUser !== null}
+        onOpenChange={(open) => (open ? undefined : setRestoreUser(null))}
+        title="Restaurar acceso"
+        description="¿Restauras el acceso de este usuario? Volverá a iniciar sesión con su clave. Si nunca ingresó, entrará con su clave provisoria."
+        confirmLabel="Restaurar acceso"
+        confirmVariant="default"
+        onConfirm={async () => {
+          if (!restoreUser) return;
+          await restoreUserAccess(restoreUser.id);
+          toast.success('Acceso restaurado.');
           table.refetch();
         }}
       />

@@ -278,6 +278,17 @@ export class UsersController {
   }
 
   /**
+   * Restaura el acceso de un usuario suspendido (deshace revoke-invite). Vuelve a
+   * ACTIVE si ya había ingresado, o a PENDING_FIRST_LOGIN si nunca entró. 409 si el
+   * usuario no está suspendido.
+   */
+  @Post(':id/restore-access')
+  @RequirePermission('can_manage_users', { type: 'organization', id: ORG_ID })
+  restoreAccess(@Param('id') id: string): Promise<UserListItem> {
+    return this.usersService.restoreAccess(id);
+  }
+
+  /**
    * Vista previa del correo de reenvío de clave (sin efectos): asunto y mensaje por
    * defecto (editables), destinatario y si se puede enviar server-side. 409 si la
    * invitación ya fue usada. La clave NO se genera ni viaja aquí.

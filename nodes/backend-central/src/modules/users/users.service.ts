@@ -180,6 +180,40 @@ export class UsersService {
   }
 
   /**
+   * Restaura el acceso de un usuario SUSPENDED (deshace `revokeInvite`). Devuelve
+   * el estado a ACTIVE si el usuario ya había ingresado alguna vez (su clave sigue
+   * vigente porque revocar nunca la borró), o a PENDING_FIRST_LOGIN si nunca
+   * ingresó (entra con la provisoria intacta). 409 si el usuario NO está
+   * suspendido: restaurar es lo inverso de revocar, no un atajo para tocar el
+   * estado de una cuenta viva. No modifica la clave ni la época de sesión, pero
+   * limpia el lockout (intentos fallidos y bloqueo temporal) para que el acceso
+   * restaurado sea borrón y cuenta nueva, igual que un ingreso exitoso o la
+   * recuperación de clave (#67): así un bloqueo previo a la revocación no reaparece.
+   */
+  async restoreAccess(userId: string): Promise<UserListItem> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true, firstLoginAt: true },
+    });
+    if (!user) {
+      throw new NotFoundException(`No existe un usuario con id "${userId}".`);
+    }
+    if (user.status !== 'SUSPENDED') {
+      throw new ConflictException(
+        'Solo se puede restaurar el acceso de un usuario con el acceso revocado (suspendido).',
+      );
+    }
+    const nextStatus: 'ACTIVE' | 'PENDING_FIRST_LOGIN' =
+      user.firstLoginAt !== null ? 'ACTIVE' : 'PENDING_FIRST_LOGIN';
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { status: nextStatus, failedLoginAttempts: 0, lockedUntil: null },
+      include: { memberships: true },
+    });
+    return this.toListItem(updated);
+  }
+
+  /**
    * Vista previa del correo de reenvío de clave (sin efectos). Valida que la
    * invitación NO haya sido usada (409 si ya definió su contraseña) y devuelve el
    * asunto y mensaje POR DEFECTO (editables por el admin), el destinatario y si se

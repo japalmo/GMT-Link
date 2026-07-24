@@ -320,6 +320,64 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     expect(result.status).toBe('SUSPENDED');
   });
 
+  it('restoreAccess de un suspendido que ya había ingresado vuelve a ACTIVE', async () => {
+    const findUnique = vi.fn(() =>
+      Promise.resolve({ status: 'SUSPENDED', firstLoginAt: new Date('2026-07-01T00:00:00.000Z') }),
+    );
+    const update = vi.fn((args: { data: Record<string, unknown> }) =>
+      Promise.resolve(fullUser({ ...args.data })),
+    );
+    const service = serviceWith({ findUnique, update });
+
+    const result = await service.restoreAccess('u1');
+
+    const data = update.mock.calls[0]?.[0]?.data as {
+      status: string;
+      tokenVersion?: unknown;
+      failedLoginAttempts?: unknown;
+      lockedUntil?: unknown;
+    };
+    expect(data.status).toBe('ACTIVE');
+    // No toca la clave ni la época de sesión: restaurar solo cambia el estado.
+    expect(data.tokenVersion).toBeUndefined();
+    // Limpia el lockout: borrón y cuenta nueva para el acceso restaurado (#67).
+    expect(data.failedLoginAttempts).toBe(0);
+    expect(data.lockedUntil).toBeNull();
+    expect(result.status).toBe('ACTIVE');
+  });
+
+  it('restoreAccess de un suspendido que nunca ingresó vuelve a PENDING_FIRST_LOGIN', async () => {
+    const findUnique = vi.fn(() => Promise.resolve({ status: 'SUSPENDED', firstLoginAt: null }));
+    const update = vi.fn((args: { data: Record<string, unknown> }) =>
+      Promise.resolve(fullUser({ ...args.data })),
+    );
+    const service = serviceWith({ findUnique, update });
+
+    const result = await service.restoreAccess('u1');
+
+    const data = update.mock.calls[0]?.[0]?.data as { status: string };
+    expect(data.status).toBe('PENDING_FIRST_LOGIN');
+    expect(result.status).toBe('PENDING_FIRST_LOGIN');
+  });
+
+  it('restoreAccess rechaza (409) si el usuario no está suspendido', async () => {
+    const findUnique = vi.fn(() => Promise.resolve({ status: 'ACTIVE', firstLoginAt: new Date() }));
+    const update = vi.fn();
+    const service = serviceWith({ findUnique, update });
+
+    await expect(service.restoreAccess('u1')).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('restoreAccess lanza 404 si el usuario no existe', async () => {
+    const findUnique = vi.fn(() => Promise.resolve(null));
+    const update = vi.fn();
+    const service = serviceWith({ findUnique, update });
+
+    await expect(service.restoreAccess('ghost')).rejects.toBeInstanceOf(NotFoundException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('resendInvite regenera la clave provisoria de una invitación pendiente', async () => {
     const findUnique = vi.fn(() =>
       Promise.resolve({ firstLoginAt: null, status: 'PENDING_FIRST_LOGIN' }),

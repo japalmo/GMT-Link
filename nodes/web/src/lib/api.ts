@@ -661,6 +661,18 @@ export function revokeUserSessions(id: string): Promise<void> {
   );
 }
 
+/**
+ * `POST /users/:id/restore-access` — restaura el acceso de un usuario suspendido
+ * (deshace revoke-invite). Vuelve a ACTIVE si ya había ingresado, o a
+ * PENDING_FIRST_LOGIN si nunca entró. Devuelve el {@link UserListItem} restaurado.
+ */
+export function restoreUserAccess(id: string): Promise<UserListItem> {
+  return request<UserListItem>(
+    `/users/${encodeURIComponent(id)}/restore-access`,
+    { method: 'POST' },
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Roles dinámicos (§Fase 5 — matriz RBAC)                                    */
 /* -------------------------------------------------------------------------- */

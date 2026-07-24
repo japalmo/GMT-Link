@@ -8,6 +8,7 @@ import {
   listUsers,
   removeUserRole,
   resendUserInvite,
+  restoreUserAccess,
   revokeUserInvite,
   revokeUserSessions,
   type CreateUserDto,
@@ -61,6 +62,8 @@ export interface UseUsersResult {
   revokeInvite: (id: string) => Promise<UserListItem>;
   /** Cierra las sesiones vivas del usuario (no cambia su estado). */
   revokeSessions: (id: string) => Promise<void>;
+  /** Restaura el acceso de un usuario suspendido (deshace revoke) y recarga la lista. */
+  restoreAccess: (id: string) => Promise<UserListItem>;
 }
 
 /** Opciones de {@link useUsers}. */
@@ -224,6 +227,15 @@ export function useUsers(opts: UseUsersOptions = {}): UseUsersResult {
     [loadFirstPage],
   );
 
+  const restoreAccess = useCallback(
+    async (id: string): Promise<UserListItem> => {
+      const result = await restoreUserAccess(id);
+      await loadFirstPage();
+      return result;
+    },
+    [loadFirstPage],
+  );
+
   return {
     items,
     loading,
@@ -240,5 +252,6 @@ export function useUsers(opts: UseUsersOptions = {}): UseUsersResult {
     resendInvite,
     revokeInvite,
     revokeSessions,
+    restoreAccess,
   };
 }

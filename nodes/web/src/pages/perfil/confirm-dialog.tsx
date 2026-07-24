@@ -14,9 +14,10 @@ import {
 } from '@/components/ui/modal';
 
 /**
- * Diálogo de confirmación genérico para acciones destructivas (eliminar). Corre
- * `onConfirm` (async), muestra estado de carga y error inline, y cierra al
- * completar con éxito. Controlado vía `open` / `onOpenChange`.
+ * Diálogo de confirmación genérico. Corre `onConfirm` (async), muestra estado de
+ * carga y error inline, y cierra al completar con éxito. Controlado vía `open` /
+ * `onOpenChange`. Por defecto asume una acción destructiva (botón rojo); para una
+ * acción constructiva (p. ej. restaurar acceso) pasa `confirmVariant="default"`.
  */
 export function ConfirmDialog({
   open,
@@ -24,6 +25,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Eliminar',
+  confirmVariant = 'destructive',
   onConfirm,
 }: {
   open: boolean;
@@ -31,6 +33,7 @@ export function ConfirmDialog({
   title: string;
   description: ReactNode;
   confirmLabel?: string;
+  confirmVariant?: 'destructive' | 'default';
   onConfirm: () => Promise<void>;
 }): ReactNode {
   const [submitting, setSubmitting] = useState(false);
@@ -77,7 +80,7 @@ export function ConfirmDialog({
             </Button>
           </ModalClose>
           <Button
-            variant="destructive"
+            variant={confirmVariant}
             loading={submitting}
             onClick={() => void handleConfirm()}
           >
