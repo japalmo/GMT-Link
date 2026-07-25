@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import type { StorageService } from '../../src/common/storage/storage.service';
 import { DirectoryService } from '../../src/modules/directory/directory.service';
 
 /** Fila de usuario en la "BD" simulada. */
@@ -44,7 +45,15 @@ function makeUser(overrides: Partial<FakeUserRow> & Pick<FakeUserRow, 'id'>): Fa
  */
 const DB: FakeUserRow[] = [
   makeUser({ id: 'colab-ana', firstName: 'Ana', lastName: 'Pérez', email: 'ana@gmt.cl', isClientUser: false }),
-  makeUser({ id: 'colab-beto', firstName: 'Beto', lastName: 'Lagos', email: 'beto@gmt.cl', isClientUser: false }),
+  makeUser({
+    id: 'colab-beto',
+    firstName: 'Beto',
+    lastName: 'Lagos',
+    email: 'beto@gmt.cl',
+    isClientUser: false,
+    // CLAVE de storage (avatar subido): la vista la resuelve a URL fresca.
+    avatarUrl: 'users/colab-beto/avatar/uuid-b.png',
+  }),
   makeUser({
     id: 'cli-carla',
     firstName: 'Carla',
@@ -52,6 +61,8 @@ const DB: FakeUserRow[] = [
     email: 'carla@acme.cl',
     isClientUser: true,
     cargo: 'ITO',
+    // URL externa (pegada a mano en el perfil): passthrough tal cual.
+    avatarUrl: 'https://gravatar.com/avatar/carla',
   }),
   makeUser({
     id: 'cli-dario',
@@ -106,7 +117,9 @@ function buildService(): { service: DirectoryService } {
   );
 
   const prisma = { user: { findMany, findUnique } } as unknown as PrismaService;
-  return { service: new DirectoryService(prisma) };
+  // Storage NO-R2 (dev): freshFileUrl resuelve claves a /files/ del FilesController.
+  const storage = {} as unknown as StorageService;
+  return { service: new DirectoryService(prisma, storage) };
 }
 
 describe('DirectoryService.list — aislamiento cliente/colaborador (§3.4)', () => {
@@ -123,6 +136,17 @@ describe('DirectoryService.list — aislamiento cliente/colaborador (§3.4)', ()
     const result = await service.list('cli-carla');
     expect(result.map((e) => e.id).sort()).toEqual(['colab-ana', 'colab-beto'].sort());
     expect(result.every((e) => e.isClientUser === false)).toBe(true);
+  });
+
+  it('resuelve la CLAVE del avatar a URL fresca y hace passthrough de URLs externas', async () => {
+    const { service } = buildService();
+    const result = await service.list('colab-ana');
+    const byId = new Map(result.map((e) => [e.id, e.avatarUrl]));
+    expect(byId.get('colab-beto')).toBe(
+      'http://localhost:3001/files/users/colab-beto/avatar/uuid-b.png',
+    );
+    expect(byId.get('cli-carla')).toBe('https://gravatar.com/avatar/carla');
+    expect(byId.get('colab-ana')).toBeNull();
   });
 
   it('expone solo campos BÁSICOS (sin status ni points)', async () => {

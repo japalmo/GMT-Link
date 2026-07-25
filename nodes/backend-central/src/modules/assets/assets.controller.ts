@@ -452,6 +452,22 @@ export class AssetsController {
   }
 
   /**
+   * URL fresca de descarga/visualización del archivo de un documento del activo
+   * (Fase 1B). Si `fileUrl` es una clave de storage se presigna al leer; si es
+   * una URL absoluta legada se devuelve tal cual. Gate en el SERVICE: el mismo
+   * `assertCanManageAssetById` (admin/gerencia) que protege `listDocuments`.
+   */
+  @Get(':id/documents/:docId/file-url')
+  getDocumentFileUrl(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+  ): Promise<{ url: string }> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.getDocumentFileUrl(id, docId, userId);
+  }
+
+  /**
    * Aprueba o rechaza un documento del activo.
    */
   @Post(':id/documents/:docId/review')

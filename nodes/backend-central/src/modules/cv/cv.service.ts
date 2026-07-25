@@ -10,7 +10,10 @@ import type {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
+import { ORG_ID } from '../../common/org.constant';
 import { GamificationService } from '../gamification/gamification.service';
 import type {
   CreateCertificationDto,
@@ -51,6 +54,7 @@ export class CvService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly gamification: GamificationService,
+    private readonly fga: FgaService,
   ) {}
 
   /** CV propio con sus arrays. Crea uno vacío (lazy) si aún no existe. */
@@ -210,7 +214,8 @@ export class CvService {
    * Sube el diploma PDF de una certificación propia (§6-1.4). El controller ya
    * validó mimetype (solo application/pdf) y presencia del archivo; aquí se
    * verifica la propiedad, se persiste en el storage (carpeta diplomas) y se
-   * guarda la `fileUrl` en la certificación.
+   * guarda la CLAVE en `fileUrl` (Fase 1B: `saved.url` con R2 es una URL
+   * prefirmada con TTL de 1 h; la URL fresca la entrega `getCertificationDiplomaUrl`).
    */
   async setCertificationDiploma(
     userId: string,
@@ -229,9 +234,42 @@ export class CvService {
 
     const row = await this.prisma.cVCertification.update({
       where: { id },
-      data: { fileUrl: saved.url },
+      data: { fileUrl: saved.key },
     });
     return this.toCertificationView(row);
+  }
+
+  /**
+   * URL de descarga/visualización FRESCA del diploma de una certificación
+   * (Fase 1B). `fileUrl` puede ser una CLAVE de storage (diplomas nuevos, se
+   * presigna al leer) o una URL absoluta legada (passthrough). Gate: el DUEÑO
+   * del CV, o `can_manage_users` sobre la organización — la misma relación que
+   * protege la lectura admin del CV (`GET /users/:id/cv`). Para un ajeno sin
+   * permiso responde 404 (no se distingue "no existe" de "es de otro").
+   */
+  async getCertificationDiplomaUrl(
+    requesterId: string,
+    id: string,
+  ): Promise<{ url: string }> {
+    const cert = await this.prisma.cVCertification.findUnique({
+      where: { id },
+      select: { fileUrl: true, cv: { select: { userId: true } } },
+    });
+    if (
+      !cert ||
+      (cert.cv.userId !== requesterId &&
+        !(await this.fga.check({
+          user: `user:${requesterId}`,
+          relation: 'can_manage_users',
+          object: `organization:${ORG_ID}`,
+        })))
+    ) {
+      throw new NotFoundException('La certificación no existe o no pertenece a tu CV.');
+    }
+    if (cert.fileUrl === null) {
+      throw new NotFoundException('La certificación no tiene diploma adjunto.');
+    }
+    return { url: await resolveFreshFileUrl(this.storage, cert.fileUrl) };
   }
 
   // ============ Helpers de propiedad / lazy CV ============

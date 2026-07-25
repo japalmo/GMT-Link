@@ -9,6 +9,8 @@ import { FgaService } from '../../fga/fga.service';
 import { PermissionService } from '../../authz/permission.service';
 import { ORG_ID } from '../../common/org.constant';
 import { StorageService } from '../../common/storage/storage.service';
+import { freshFileUrl } from '../../common/storage/fresh-file-url';
+import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
 import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
@@ -285,19 +287,23 @@ export class AssetsService {
   /**
    * Mapea un registro de documento de activo a su vista.
    */
-  private toDocView(row: Prisma.AssetDocumentGetPayload<{
+  private async toDocView(row: Prisma.AssetDocumentGetPayload<{
     include: {
       reviewedBy: true;
     };
-  }>): AssetDocumentView {
+  }>): Promise<AssetDocumentView> {
+    // `fileUrl`/`previousFileUrl` guardan la CLAVE del storage (o una URL
+    // absoluta legada): se resuelven a una URL de descarga FRESCA al leer.
+    const fileUrl = await freshFileUrl(this.storage, row.fileUrl);
     return {
       id: row.id,
       assetId: row.assetId,
       name: row.name,
       type: row.type,
-      fileUrl: row.fileUrl,
+      // `fileUrl` es NOT NULL en el schema; el fallback '' es solo defensivo.
+      fileUrl: fileUrl ?? '',
       status: row.status,
-      previousFileUrl: row.previousFileUrl,
+      previousFileUrl: await freshFileUrl(this.storage, row.previousFileUrl),
       reviewedById: row.reviewedById,
       reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
       expirationDate: row.expirationDate ? row.expirationDate.toISOString() : null,
@@ -1094,10 +1100,15 @@ export class AssetsService {
 
   private readonly usageCycleInclude = { user: true, handoffTo: true } as const;
 
-  /** Mapea una fila UsageCycle (con user/handoffTo) a la vista del frontend. */
-  private toUsageCycleView(
+  /**
+   * Mapea una fila UsageCycle (con user/handoffTo) a la vista del frontend.
+   * Fotos: manda la KEY estable (`*PhotoKey`) resuelta a URL fresca; la URL
+   * persistida (`*PhotoUrl`, firmada/efímera con R2) queda solo como fallback
+   * legado para filas sin key.
+   */
+  private async toUsageCycleView(
     row: Prisma.UsageCycleGetPayload<{ include: { user: true; handoffTo: true } }>,
-  ): UsageCycleView {
+  ): Promise<UsageCycleView> {
     const person = (
       u: { id: string; firstName: string; lastName: string } | null,
     ): { id: string; firstName: string; lastName: string } | null =>
@@ -1112,8 +1123,8 @@ export class AssetsService {
       confirmedAt: row.confirmedAt ? row.confirmedAt.toISOString() : null,
       endedAt: row.endedAt ? row.endedAt.toISOString() : null,
       checklistSubmissionId: row.checklistSubmissionId,
-      startPhotoUrl: row.startPhotoUrl,
-      endPhotoUrl: row.endPhotoUrl,
+      startPhotoUrl: await freshFileUrl(this.storage, row.startPhotoKey ?? row.startPhotoUrl),
+      endPhotoUrl: await freshFileUrl(this.storage, row.endPhotoKey ?? row.endPhotoUrl),
       endKind: row.endKind,
       endLatitude: row.endLatitude,
       endLongitude: row.endLongitude,
@@ -1192,7 +1203,7 @@ export class AssetsService {
         include: this.usageCycleInclude,
       }),
     ]);
-    return { asset: this.toAssetView(assetRow), cycle: this.toUsageCycleView(cycleRow) };
+    return { asset: this.toAssetView(assetRow), cycle: await this.toUsageCycleView(cycleRow) };
   }
 
   /**
@@ -1480,7 +1491,7 @@ export class AssetsService {
       include: this.usageCycleInclude,
       orderBy: { startedAt: 'desc' },
     });
-    return rows.map((r) => this.toUsageCycleView(r));
+    return Promise.all(rows.map((r) => this.toUsageCycleView(r)));
   }
 
   /** Detalle de un ciclo de uso puntual. Requiere ver el activo. */
@@ -1530,7 +1541,9 @@ export class AssetsService {
           assetId: id,
           name,
           type,
-          fileUrl: saved.url,
+          // CLAVE estable del storage, nunca la URL (firmada/efímera con R2);
+          // `toDocView` presigna AL LEER.
+          fileUrl: saved.key,
           status: DocumentStatus.EN_REVISION,
           expirationDate: expirationDate ? new Date(expirationDate) : null,
         },
@@ -1642,7 +1655,32 @@ export class AssetsService {
       include: { reviewedBy: true },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((r) => this.toDocView(r));
+    return Promise.all(rows.map((r) => this.toDocView(r)));
+  }
+
+  /**
+   * URL de descarga/visualización FRESCA del archivo de un documento del activo
+   * (Fase 1B): `fileUrl` puede ser una CLAVE de storage (documentos nuevos, se
+   * presigna al leer) o una URL absoluta legada (passthrough; si es del propio
+   * bucket R2 se rescata la clave y se re-firma). La web pide esta URL al clic
+   * (`FreshFileLink`), nunca navega el valor persistido. Mismo gate que
+   * `listDocuments` (admin/gerencia vía `assertCanManageAssetById`): 404 si el
+   * activo o el documento no existen; 403 si no gestiona el activo.
+   */
+  async getDocumentFileUrl(
+    id: string,
+    docId: string,
+    userId: string,
+  ): Promise<{ url: string }> {
+    await this.assertCanManageAssetById(id, userId);
+    const doc = await this.prisma.assetDocument.findUnique({
+      where: { id: docId },
+      select: { assetId: true, fileUrl: true },
+    });
+    if (!doc || doc.assetId !== id) {
+      throw new NotFoundException('El documento no existe para este activo.');
+    }
+    return { url: await resolveFreshFileUrl(this.storage, doc.fileUrl) };
   }
 
   /**

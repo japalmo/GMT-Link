@@ -281,6 +281,34 @@ describe('ReimbursementsService', () => {
     expect(where?.status).toBe(FinanceStatus.APROBADO);
   });
 
+  it('las vistas derivan receiptUrl FRESCO de receiptKey (la URL persistida está vencida) con passthrough legado', async () => {
+    const findMany = vi.fn(() =>
+      Promise.resolve([
+        buildRow({
+          id: 'r-key',
+          receiptKey: 'reimbursements/uuid-boleta.pdf',
+          receiptUrl: 'https://r2.example/firmada-vencida?X-Amz-Signature=x',
+        }),
+        buildRow({
+          id: 'r-legacy',
+          receiptKey: null,
+          receiptUrl: 'http://localhost:3001/files/reimbursements/vieja.pdf',
+        }),
+        buildRow({ id: 'r-sin-boleta', receiptKey: null, receiptUrl: null }),
+      ]),
+    );
+    const { prisma } = buildPrisma({ findMany });
+    const service = makeService(prisma);
+
+    const page = await service.listMine('u1');
+
+    expect(page.items.map((i) => i.receiptUrl)).toEqual([
+      'http://localhost:3001/files/reimbursements/uuid-boleta.pdf',
+      'http://localhost:3001/files/reimbursements/vieja.pdf',
+      null,
+    ]);
+  });
+
   it('listMine: nextCursor=null cuando hay menos de limit+1 filas (orden createdAt desc + id desc, take=31)', async () => {
     const findMany = vi.fn(() => Promise.resolve([buildRow()]));
     const { prisma } = buildPrisma({ findMany });

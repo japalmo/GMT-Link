@@ -4,6 +4,8 @@ import { ErrorState } from '@/components/ui/states';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCv } from '@/hooks/use-cv';
+import { getCvCertificationDiplomaUrl } from '@/lib/api';
+import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import { formatDate, formatDateRange } from '@/lib/format';
 import type {
   CvCertificationView,
@@ -194,16 +196,17 @@ export default function CvPage(): ReactNode {
                   }
                   extra={
                     cert.fileUrl ? (
-                      <a
-                        href={cert.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      // Fase 1B: la URL fresca se pide al hacer clic; `fileUrl`
+                      // crudo puede ser una clave de storage no navegable.
+                      <FreshFileLink
+                        getUrl={() => getCvCertificationDiplomaUrl(cert.id)}
+                        aria-label={`Ver diploma de ${cert.name}`}
                         className="mt-1 inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
                       >
                         <FileCheck2 className="size-4" aria-hidden />
                         Ver diploma (PDF)
                         <ExternalLink className="size-3.5" aria-hidden />
-                      </a>
+                      </FreshFileLink>
                     ) : (
                       <span className="mt-1 text-xs text-muted-foreground">
                         Sin diploma adjunto

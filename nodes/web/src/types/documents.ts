@@ -12,8 +12,15 @@ export interface PersonalDocumentView {
   id: string;
   type: string;
   name: string;
+  /**
+   * CLAVE de storage (documentos nuevos, Fase 1B) o URL legada. NO navegar
+   * directamente: pedir la URL fresca con `getDocumentFileUrl(id)`.
+   */
   fileUrl: string;
-  /** URL de la versión anterior tras un versionado, o `null`. */
+  /**
+   * Versión anterior tras un versionado, o `null`. Misma naturaleza que
+   * `fileUrl`: usar `getDocumentFileUrl(id, { previous: true })`.
+   */
   previousFileUrl: string | null;
   issuedAt: string | null;
   expiresAt: string | null;

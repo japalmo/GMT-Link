@@ -11,9 +11,11 @@ import {
   createAsset,
   deleteAsset,
   releaseAssetUse,
+  getAssetDocumentFileUrl,
   ApiError,
   type TableRequest,
 } from '@/lib/api';
+import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import { useProfile } from '@/hooks/use-profile';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import {
@@ -2052,14 +2054,13 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                           </div>
 
                         <div className="flex items-center gap-3 justify-end">
-                          <a
-                            href={doc.fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                          <FreshFileLink
+                            getUrl={() => getAssetDocumentFileUrl(doc.assetId, doc.id)}
                             className="text-xs text-primary font-medium hover:underline"
+                            aria-label={`Ver archivo de ${doc.name}`}
                           >
                             Ver Archivo
-                          </a>
+                          </FreshFileLink>
 
                           {doc.status === 'EN_REVISION' && isAdmin && (
                             <div className="flex gap-1">

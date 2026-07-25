@@ -7,7 +7,10 @@ import {
 import { DocumentStatus } from '@prisma/client';
 import type { PersonalDocument, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
+import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
+import { ORG_ID } from '../../common/org.constant';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
@@ -65,6 +68,7 @@ export class DocumentsService {
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
     private readonly gamification: GamificationService,
+    private readonly fga: FgaService,
   ) {}
 
   /**
@@ -167,7 +171,10 @@ export class DocumentsService {
         userId,
         type: dto.type,
         name: dto.name,
-        fileUrl: saved.url,
+        // Fase 1B: se persiste la CLAVE del storage (no `saved.url`, que con R2
+        // es una URL prefirmada con TTL de 1 h). La URL fresca la entrega
+        // GET /documents/:id/file-url al leer.
+        fileUrl: saved.key,
         issuedAt: parseOptionalDate(dto.issuedAt),
         expiresAt: parseOptionalDate(dto.expiresAt),
         status: DocumentStatus.EN_REVISION,
@@ -203,7 +210,8 @@ export class DocumentsService {
       where: { id },
       data: {
         previousFileUrl: current.fileUrl,
-        fileUrl: saved.url,
+        // Fase 1B: la nueva versión también persiste la CLAVE; ver create().
+        fileUrl: saved.key,
         status: DocumentStatus.EN_REVISION,
         reviewedById: null,
         reviewedAt: null,
@@ -244,7 +252,54 @@ export class DocumentsService {
     return this.review(id, DocumentStatus.RECHAZADO, reviewerId);
   }
 
+  /**
+   * URL de descarga/visualización FRESCA del archivo del documento (Fase 1B
+   * aplicada a documentos personales; con `previous`, de la versión anterior).
+   *
+   * `fileUrl`/`previousFileUrl` pueden ser (a) una CLAVE de storage (documentos
+   * nuevos, que se presigna al leer) o (b) una URL absoluta legada (passthrough).
+   * Gate de visibilidad: el DUEÑO, o quien puede revisar documentos
+   * (`can_review_documents`) o gestionar usuarios (`can_manage_users`) sobre la
+   * organización — las mismas relaciones que protegen `:id/approve|reject` y
+   * `user/:userId`. Para un ajeno sin permiso responde 404 (no distingue
+   * inexistente de ajeno, igual que `findOwned`).
+   */
+  async getFileUrl(
+    userId: string,
+    id: string,
+    opts: { previous?: boolean } = {},
+  ): Promise<{ url: string }> {
+    const doc = await this.prisma.personalDocument.findUnique({
+      where: { id },
+      select: { userId: true, fileUrl: true, previousFileUrl: true },
+    });
+    if (!doc || (doc.userId !== userId && !(await this.canReadOthersDocuments(userId)))) {
+      throw new NotFoundException('El documento no existe o no te pertenece.');
+    }
+
+    const stored = opts.previous === true ? doc.previousFileUrl : doc.fileUrl;
+    if (stored === null) {
+      throw new NotFoundException('El documento no tiene versión anterior.');
+    }
+    return { url: await resolveFreshFileUrl(this.storage, stored) };
+  }
+
   // ============ Helpers ============
+
+  /**
+   * ¿Puede el usuario leer archivos de documentos AJENOS? Mismas relaciones FGA
+   * que usan los endpoints admin de este módulo vía `@RequirePermission`:
+   * revisor (`can_review_documents`) o gestor de personas (`can_manage_users`).
+   */
+  private async canReadOthersDocuments(userId: string): Promise<boolean> {
+    const user = `user:${userId}`;
+    const object = `organization:${ORG_ID}`;
+    const [reviews, manages] = await Promise.all([
+      this.fga.check({ user, relation: 'can_review_documents', object }),
+      this.fga.check({ user, relation: 'can_manage_users', object }),
+    ]);
+    return reviews || manages;
+  }
 
   /**
    * Aplica el resultado de revisión (estado + revisor) y notifica al DUEÑO del
@@ -372,11 +427,16 @@ function parseOptionalDate(value: string | null | undefined): Date | null {
 }
 
 /**
- * Extrae la `key` del storage desde una URL pública (`.../files/<key>`).
- * Devuelve null si la URL no contiene el prefijo `/files/` (no es de este
- * storage, p. ej. una URL firmada de R2 en el futuro).
+ * Resuelve la `key` del storage desde el valor persistido en `fileUrl`:
+ *  - CLAVE directa (documentos Fase 1B, sin esquema `http(s)://`) → tal cual;
+ *  - URL legada del FilesController dev (`.../files/<key>`) → la parte tras `/files/`;
+ *  - URL firmada de R2 legada (sin `/files/`) → null (no hay clave extraíble;
+ *    se omite el borrado del blob, best-effort).
  */
 function extractStorageKey(fileUrl: string): string | null {
+  if (!/^https?:\/\//i.test(fileUrl)) {
+    return fileUrl.length > 0 ? fileUrl : null;
+  }
   const marker = '/files/';
   const idx = fileUrl.indexOf(marker);
   if (idx === -1) {
