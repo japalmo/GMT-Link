@@ -40,6 +40,7 @@ import { RequestDetailDialog } from './request-detail-dialog';
 import { MonthlyReportDialog } from './monthly-report-dialog';
 import { toFinanceRows } from './finance-overview';
 import { useFinanceProjects } from './use-finance-projects';
+import { useFinanceFilterOptions } from '@/hooks/use-finance-filter-options';
 
 export function HorasExtraTab(): ReactNode {
   const {
@@ -84,6 +85,14 @@ export function HorasExtraTab(): ReactNode {
   const canApprove = useHasPermission('finance:request:approve');
   // Catálogo de proyectos para hidratar el nombre/cliente en el detalle de HE.
   const { projects } = useFinanceProjects();
+  // Opciones de los filtros de Gestión (trabajador/proyecto/cliente que YA tienen HE);
+  // se consulta solo si el usuario es gestor (enabled=isManager). Deriva de las HE,
+  // no del catálogo de usuarios (que exige can_manage_users, que un gestor no tiene).
+  const {
+    workers: filterWorkers,
+    projects: filterProjects,
+    clients: filterClients,
+  } = useFinanceFilterOptions('overtime', isManager);
 
   const handleApprove = async (id: string) => {
     if (actioning) return;
@@ -209,14 +218,25 @@ export function HorasExtraTab(): ReactNode {
     ],
   };
 
-  // Filtro por proyecto: el catálogo ya está cargado (`projects`). El trabajador y el
-  // cliente esperan un endpoint de opciones de finanzas (el listado de usuarios exige
-  // can_manage_users, que un gestor de finanzas no tiene).
+  // Filtros de Gestión (trabajador/proyecto/cliente), poblados desde el endpoint de
+  // opciones de finanzas; cada uno viaja como filters[clave] al backend.
+  const managerWorkerFilter: DataTableFilter = {
+    id: 'userId',
+    label: 'Trabajador',
+    allLabel: 'Todos los trabajadores',
+    options: filterWorkers.map((w) => ({ value: w.id, label: w.name })),
+  };
   const managerProjectFilter: DataTableFilter = {
     id: 'projectId',
     label: 'Proyecto',
     allLabel: 'Todos los proyectos',
-    options: projects.map((p) => ({ value: p.id, label: p.name })),
+    options: filterProjects.map((p) => ({ value: p.id, label: p.name })),
+  };
+  const managerClientFilter: DataTableFilter = {
+    id: 'clientId',
+    label: 'Cliente',
+    allLabel: 'Todos los clientes',
+    options: filterClients.map((c) => ({ value: c.id, label: c.name })),
   };
 
   // Rango de fecha server-side: viaja como filters.dateFrom / filters.dateTo.
@@ -434,7 +454,13 @@ export function HorasExtraTab(): ReactNode {
             table={managerTable}
             columns={managerColumns}
             getRowId={(item) => item.id}
-            filters={[managerStatusFilter, managerProjectFilter, managerDateFilter]}
+            filters={[
+              managerStatusFilter,
+              managerWorkerFilter,
+              managerProjectFilter,
+              managerClientFilter,
+              managerDateFilter,
+            ]}
             rowActions={managerRowActions}
             onRowClick={(item) => setDetail({ view: item, mine: false })}
             emptyMessage="No hay solicitudes de horas extra pendientes ni registradas en el sistema."

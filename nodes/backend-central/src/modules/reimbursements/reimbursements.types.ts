@@ -51,5 +51,20 @@ export interface ReimbursementRequester {
   email: string;
 }
 
+/** Una opción de filtro (id + etiqueta) para los desplegables de la tabla de Gestión. */
+export interface FinanceFilterOption {
+  id: string;
+  name: string;
+}
+
+/**
+ * Opciones de los filtros de la tabla de Gestión de reembolsos: solo trabajador
+ * (los reembolsos no tienen proyecto ni cliente). Se deriva de las solicitudes
+ * existentes, accesible a `finance:request:view:all`.
+ */
+export interface ReimbursementFilterOptions {
+  workers: FinanceFilterOption[];
+}
+
 /** Resultado del OCR de boleta re-exportado para el controller. */
 export type { ReceiptScanResult } from './receipt-ocr.util';

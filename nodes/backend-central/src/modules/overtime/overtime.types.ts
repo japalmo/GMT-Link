@@ -59,3 +59,21 @@ export interface OvertimeRequester {
   lastName: string;
   email: string;
 }
+
+/** Una opción de filtro (id + etiqueta) para los desplegables de la tabla de Gestión. */
+export interface FinanceFilterOption {
+  id: string;
+  name: string;
+}
+
+/**
+ * Opciones de los filtros de la tabla de Gestión de HE. Se derivan de las
+ * solicitudes existentes (solo trabajadores/proyectos/clientes que YA tienen HE),
+ * accesibles a quien puede ver todo (`finance:request:view:all`), sin exigir el
+ * permiso de administrar usuarios que un gestor de finanzas no tiene.
+ */
+export interface OvertimeFilterOptions {
+  workers: FinanceFilterOption[];
+  projects: FinanceFilterOption[];
+  clients: FinanceFilterOption[];
+}

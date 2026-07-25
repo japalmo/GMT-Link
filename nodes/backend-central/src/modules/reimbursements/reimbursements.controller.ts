@@ -34,7 +34,12 @@ import {
   RejectReimbursementDto,
   UpdateReimbursementDto,
 } from './dto/reimbursements.dto';
-import type { Paginated, ReceiptScanResult, ReimbursementView } from './reimbursements.types';
+import type {
+  Paginated,
+  ReceiptScanResult,
+  ReimbursementFilterOptions,
+  ReimbursementView,
+} from './reimbursements.types';
 import type { ReimbursementSummary } from './reimbursements-summary.util';
 
 /** Permisos funcionales de finanzas (spec §2.2). */
@@ -201,6 +206,19 @@ export class ReimbursementsController {
       },
       req,
     );
+  }
+
+  /**
+   * Opciones del filtro de trabajador de la tabla de Gestión (trabajadores que ya
+   * tienen algún reembolso). Mismo gate P_VIEW_ALL que la tabla. DEBE declararse
+   * antes de `@Get(':id')`.
+   */
+  @Get('filter-options')
+  async filterOptions(
+    @CurrentUser() authUser: AuthUser | undefined,
+  ): Promise<ReimbursementFilterOptions> {
+    await this.require(this.requireUserId(authUser), P_VIEW_ALL);
+    return this.reimbursements.filterOptions();
   }
 
   @Get(':id')

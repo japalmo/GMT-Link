@@ -20,7 +20,11 @@ import { startOfMonthSantiago, startOfTodaySantiago } from '../finance/finance-t
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateReimbursementDto, UpdateReimbursementDto } from './dto/reimbursements.dto';
-import type { Paginated, ReimbursementView } from './reimbursements.types';
+import type {
+  Paginated,
+  ReimbursementFilterOptions,
+  ReimbursementView,
+} from './reimbursements.types';
 import { composeReceiptsPdf, sniffReceiptKind } from './reimbursements-pdf.util';
 import type { ReceiptForPdf, ComposeOptions } from './reimbursements-pdf.util';
 import { buildReceiptOcrMessages, parseReceiptOcr } from './receipt-ocr.util';
@@ -308,6 +312,23 @@ export class ReimbursementsService {
     ]);
 
     return tablePage(rows.map(toViewWithRequester), total, page, pageSize);
+  }
+
+  /**
+   * Opciones para el filtro de trabajador de la tabla de Gestión: los trabajadores
+   * que YA tienen algún reembolso. Se deriva de las propias solicitudes (no del
+   * catálogo de usuarios, que exige un permiso que un gestor de finanzas no tiene).
+   * Los reembolsos no tienen proyecto ni cliente, así que solo trabajador.
+   */
+  async filterOptions(): Promise<ReimbursementFilterOptions> {
+    const workerRows = await this.prisma.reimbursement.findMany({
+      distinct: ['userId'],
+      select: { user: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    const workers = workerRows
+      .map((r) => ({ id: r.user.id, name: `${r.user.firstName} ${r.user.lastName}`.trim() }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    return { workers };
   }
 
   /**

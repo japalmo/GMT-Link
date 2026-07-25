@@ -23,7 +23,7 @@ import type { OvertimeReportRow } from './overtime-report.util';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import type { CreateOvertimeDto, UpdateOvertimeDto } from './dto/overtime.dto';
-import type { OvertimeView, Paginated } from './overtime.types';
+import type { OvertimeFilterOptions, OvertimeView, Paginated } from './overtime.types';
 
 /** Tipo de notificación que recibe el solicitante en cada transición (§6-2.2). */
 const NOTIFICATION_TYPE = 'overtime.decided';
@@ -468,6 +468,46 @@ export class OvertimeService {
     ]);
 
     return tablePage(rows.map(toViewWithRequester), total, page, pageSize);
+  }
+
+  /**
+   * Opciones para los filtros de la tabla de Gestión: trabajadores, proyectos y
+   * clientes que YA aparecen en alguna solicitud de HE. Se deriva de las propias
+   * solicitudes (no del catálogo de usuarios, que exige un permiso que un gestor de
+   * finanzas no tiene), así los desplegables no ofrecen opciones sin resultados.
+   */
+  async filterOptions(): Promise<OvertimeFilterOptions> {
+    const [workerRows, projectRows] = await this.prisma.$transaction([
+      this.prisma.overtimeRequest.findMany({
+        distinct: ['userId'],
+        select: { user: { select: { id: true, firstName: true, lastName: true } } },
+      }),
+      this.prisma.overtimeRequest.findMany({
+        where: { projectId: { not: null } },
+        distinct: ['projectId'],
+        select: {
+          project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
+        },
+      }),
+    ]);
+
+    const byName = (a: { name: string }, b: { name: string }): number =>
+      a.name.localeCompare(b.name, 'es');
+    const workers = workerRows
+      .map((r) => ({ id: r.user.id, name: `${r.user.firstName} ${r.user.lastName}`.trim() }))
+      .sort(byName);
+
+    const projectsById = new Map<string, string>();
+    const clientsById = new Map<string, string>();
+    for (const r of projectRows) {
+      if (!r.project) continue;
+      projectsById.set(r.project.id, r.project.name);
+      if (r.project.client) clientsById.set(r.project.client.id, r.project.client.name);
+    }
+    const projects = [...projectsById].map(([id, name]) => ({ id, name })).sort(byName);
+    const clients = [...clientsById].map(([id, name]) => ({ id, name })).sort(byName);
+
+    return { workers, projects, clients };
   }
 
   /**

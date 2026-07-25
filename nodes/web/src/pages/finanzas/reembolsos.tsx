@@ -32,6 +32,7 @@ import {
 import { useDataTable } from '@/hooks/use-data-table';
 import { useReimbursements } from '@/hooks/use-reimbursements';
 import { useHasPermission } from '@/hooks/use-has-permission';
+import { useFinanceFilterOptions } from '@/hooks/use-finance-filter-options';
 import { errorToMessage, fetchReimbursementsTable } from '@/lib/api';
 import type { TableRequest } from '@gmt-platform/contracts';
 import { formatCLP, formatDate } from '@/lib/format';
@@ -77,6 +78,9 @@ export function ReembolsosTab(): ReactNode {
     initialSortBy: 'fecha',
     initialSortDir: 'desc',
   });
+  // Opciones del filtro de trabajador de Gestión (trabajadores con reembolso); solo
+  // se consulta si el usuario es gestor. Los reembolsos no tienen proyecto ni cliente.
+  const { workers: filterWorkers } = useFinanceFilterOptions('reimbursements', isManager);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ReimbursementView | null>(null);
@@ -263,9 +267,16 @@ export function ReembolsosTab(): ReactNode {
     ],
   };
 
-  // Rango de fecha server-side: viaja como filters.dateFrom / filters.dateTo. Los
-  // reembolsos no tienen proyecto/cliente; el filtro por trabajador espera el
-  // endpoint de opciones de finanzas (el listado de usuarios exige can_manage_users).
+  // Filtro por trabajador (opciones desde el endpoint de finanzas: trabajadores con
+  // reembolso). Los reembolsos no tienen proyecto ni cliente.
+  const managerWorkerFilter: DataTableFilter = {
+    id: 'userId',
+    label: 'Trabajador',
+    allLabel: 'Todos los trabajadores',
+    options: filterWorkers.map((w) => ({ value: w.id, label: w.name })),
+  };
+
+  // Rango de fecha server-side: viaja como filters.dateFrom / filters.dateTo.
   const managerDateFilter: DataTableFilter = {
     kind: 'daterange',
     id: 'fecha',
@@ -513,7 +524,7 @@ export function ReembolsosTab(): ReactNode {
             table={managerTable}
             columns={managerColumns}
             getRowId={(item) => item.id}
-            filters={[managerStatusFilter, managerDateFilter]}
+            filters={[managerStatusFilter, managerWorkerFilter, managerDateFilter]}
             rowActions={managerRowActions}
             onRowClick={(item) => setDetail({ view: item, mine: false })}
             emptyMessage="No hay reembolsos pendientes ni registrados en el sistema."

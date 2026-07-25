@@ -30,7 +30,7 @@ import {
   RejectOvertimeDto,
   UpdateOvertimeDto,
 } from './dto/overtime.dto';
-import type { OvertimeView, Paginated } from './overtime.types';
+import type { OvertimeFilterOptions, OvertimeView, Paginated } from './overtime.types';
 import type { OvertimeSummary } from './overtime-summary.util';
 
 /** Permisos funcionales de finanzas (spec §2.2). */
@@ -144,6 +144,19 @@ export class OvertimeController {
       },
       req,
     );
+  }
+
+  /**
+   * Opciones de los filtros de la tabla de Gestión (trabajador / proyecto / cliente
+   * que ya aparecen en alguna HE). Mismo gate "ver todo" que la tabla. DEBE
+   * declararse antes de `@Get(':id')`.
+   */
+  @Get('filter-options')
+  async filterOptions(
+    @CurrentUser() authUser: AuthUser | undefined,
+  ): Promise<OvertimeFilterOptions> {
+    await this.requireViewAll(this.requireUserId(authUser));
+    return this.overtime.filterOptions();
   }
 
   /**

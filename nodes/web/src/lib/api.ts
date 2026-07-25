@@ -1598,6 +1598,34 @@ export function fetchOvertimeTable(req: TableRequest): Promise<TablePage<Overtim
   return request<TablePage<OvertimeView>>(`/overtime/table?${query.toString()}`);
 }
 
+/** Una opción de filtro (id + etiqueta) para los desplegables de Gestión de finanzas. */
+export interface FinanceFilterOption {
+  id: string;
+  name: string;
+}
+
+/** Opciones de los filtros de la tabla de Gestión de HE (trabajador/proyecto/cliente con HE). */
+export interface OvertimeFilterOptions {
+  workers: FinanceFilterOption[];
+  projects: FinanceFilterOption[];
+  clients: FinanceFilterOption[];
+}
+
+/** `GET /overtime/filter-options` — opciones de filtro derivadas de las HE. Solo gestores (403 si no). */
+export function fetchOvertimeFilterOptions(): Promise<OvertimeFilterOptions> {
+  return request<OvertimeFilterOptions>('/overtime/filter-options');
+}
+
+/** Opciones del filtro de la tabla de Gestión de reembolsos (solo trabajador). */
+export interface ReimbursementFilterOptions {
+  workers: FinanceFilterOption[];
+}
+
+/** `GET /reimbursements/filter-options` — trabajadores con algún reembolso. Solo gestores (403 si no). */
+export function fetchReimbursementFilterOptions(): Promise<ReimbursementFilterOptions> {
+  return request<ReimbursementFilterOptions>('/reimbursements/filter-options');
+}
+
 /**
  * `GET /overtime/summary` — totales agregados por el servidor (§5.2). Solo gestores
  * (403 si no). C2 agrega client-side, pero el wrapper queda disponible.
