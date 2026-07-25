@@ -124,45 +124,60 @@ export class MetricsService {
       throw new NotFoundException(`Proyecto con ID ${dto.projectId} no encontrado.`);
     }
 
-    // `Element.code` es único GLOBAL: el upsert por code puede re-apuntar un elemento
+    // `Element.code` es único GLOBAL: escribir por code puede re-apuntar un elemento
     // de OTRO proyecto (incluso de otro cliente) hacia dto.projectId, llevándose sus
-    // dataPoints y visibilidad. Si el code ya vive en otro proyecto, el usuario debe
-    // tener can_submit_measurements también ahí; si no, se rechaza sin tocar nada.
-    const existing = await this.prisma.element.findUnique({
-      where: { code: dto.code },
-      select: { projectId: true },
-    });
-    if (existing && existing.projectId !== dto.projectId) {
-      const allowedOnOrigin = await this.fga.check({
+    // dataPoints y visibilidad. Antes de re-apuntar un elemento ajeno se exige
+    // can_submit_measurements en el proyecto de ORIGEN.
+    const updateData = {
+      name: dto.name,
+      type: dto.type,
+      locationPolygon: dto.locationPolygon,
+      metadata: toInputJson(dto.metadata),
+      projectId: dto.projectId,
+    };
+    // Gate de re-apuntado: si el elemento ya vive en otro proyecto, el usuario debe
+    // tener can_submit_measurements ahí; si no, 409 sin tocar nada.
+    const requireOriginAccess = async (ownerProjectId: string): Promise<void> => {
+      if (ownerProjectId === dto.projectId) return;
+      const allowed = await this.fga.check({
         user: `user:${userId}`,
         relation: 'can_submit_measurements',
-        object: `project:${existing.projectId}`,
+        object: `project:${ownerProjectId}`,
       });
-      if (!allowedOnOrigin) {
+      if (!allowed) {
         throw new ConflictException(
           `El código de elemento "${dto.code}" ya está registrado en otro proyecto al que no tienes acceso. Usa un código distinto o solicita acceso a ese proyecto.`,
         );
       }
-    }
+    };
 
-    return this.prisma.element.upsert({
+    const existing = await this.prisma.element.findUnique({
       where: { code: dto.code },
-      update: {
-        name: dto.name,
-        type: dto.type,
-        locationPolygon: dto.locationPolygon,
-        metadata: toInputJson(dto.metadata),
-        projectId: dto.projectId,
-      },
-      create: {
-        code: dto.code,
-        name: dto.name,
-        type: dto.type,
-        locationPolygon: dto.locationPolygon,
-        metadata: toInputJson(dto.metadata),
-        projectId: dto.projectId,
-      },
+      select: { id: true, projectId: true },
     });
+    if (existing) {
+      await requireOriginAccess(existing.projectId);
+      return this.prisma.element.update({ where: { id: existing.id }, data: updateData });
+    }
+    // No existe (aún). Se intenta CREAR; si otra transacción insertó el mismo code en
+    // la ventana entre el findUnique y la escritura, el unique global dispara P2002:
+    // se re-lee y se re-valida la pertenencia ANTES de re-apuntar, cerrando el TOCTOU
+    // (un upsert ciego re-apuntaría el elemento ajeno sin volver a chequear el origen).
+    try {
+      return await this.prisma.element.create({ data: { code: dto.code, ...updateData } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const raced = await this.prisma.element.findUnique({
+          where: { code: dto.code },
+          select: { id: true, projectId: true },
+        });
+        if (raced) {
+          await requireOriginAccess(raced.projectId);
+          return this.prisma.element.update({ where: { id: raced.id }, data: updateData });
+        }
+      }
+      throw error;
+    }
   }
 
   async getPools(projectId: string) {

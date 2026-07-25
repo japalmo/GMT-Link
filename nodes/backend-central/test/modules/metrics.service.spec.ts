@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundException, BadRequestException, ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { MetricsService } from '../../src/modules/metrics/metrics.service';
 import { OtpService } from '../../src/common/otp.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -34,6 +35,7 @@ describe('MetricsService', () => {
       element: {
         findUnique: vi.fn(),
         upsert: vi.fn(),
+        create: vi.fn(),
         update: vi.fn(),
         findMany: vi.fn(),
       },
@@ -115,7 +117,8 @@ describe('MetricsService', () => {
 
     beforeEach(() => {
       prismaMock.project.findUnique.mockResolvedValue({ id: 'proj-A' });
-      prismaMock.element.upsert.mockResolvedValue({ id: 'el-1', ...dto });
+      prismaMock.element.create.mockResolvedValue({ id: 'el-1', ...dto });
+      prismaMock.element.update.mockResolvedValue({ id: 'el-1', ...dto });
     });
 
     it('crea el elemento cuando el código no existe, sin chequeo FGA adicional', async () => {
@@ -124,34 +127,36 @@ describe('MetricsService', () => {
       const res = await service.createPool('user-1', dto);
 
       expect(res.id).toBe('el-1');
-      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(prismaMock.element.create).toHaveBeenCalled();
       expect(fgaServiceMock.check).not.toHaveBeenCalled();
     });
 
     it('actualiza el elemento cuando ya pertenece al mismo proyecto, sin chequeo FGA adicional', async () => {
-      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-A' });
+      prismaMock.element.findUnique.mockResolvedValue({ id: 'el-1', projectId: 'proj-A' });
 
       await service.createPool('user-1', dto);
 
-      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(prismaMock.element.update).toHaveBeenCalled();
+      expect(prismaMock.element.create).not.toHaveBeenCalled();
       expect(fgaServiceMock.check).not.toHaveBeenCalled();
     });
 
     it('rechaza con 409 el intento de hijack: código de un elemento de OTRO proyecto sin permiso allí', async () => {
       // Escenario adversarial: el elemento R1 vive en proj-B (otro proyecto, incluso
       // otro cliente); el usuario solo tiene can_submit_measurements en proj-A.
-      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-B' });
+      prismaMock.element.findUnique.mockResolvedValue({ id: 'el-1', projectId: 'proj-B' });
       fgaServiceMock.check.mockImplementation(({ object }: { object: string }) =>
         Promise.resolve(object === 'project:proj-A'),
       );
 
       await expect(service.createPool('user-1', dto)).rejects.toThrow(ConflictException);
       // El elemento de proj-B NO debe re-apuntarse ni tocarse.
-      expect(prismaMock.element.upsert).not.toHaveBeenCalled();
+      expect(prismaMock.element.update).not.toHaveBeenCalled();
+      expect(prismaMock.element.create).not.toHaveBeenCalled();
     });
 
     it('permite re-apuntar el elemento solo si el usuario también tiene permiso en el proyecto de origen', async () => {
-      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-B' });
+      prismaMock.element.findUnique.mockResolvedValue({ id: 'el-1', projectId: 'proj-B' });
       fgaServiceMock.check.mockResolvedValue(true);
 
       await service.createPool('user-1', dto);
@@ -161,7 +166,25 @@ describe('MetricsService', () => {
         relation: 'can_submit_measurements',
         object: 'project:proj-B',
       });
-      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(prismaMock.element.update).toHaveBeenCalled();
+    });
+
+    it('cierra el TOCTOU: si el code aparece en la ventana (P2002), re-valida antes de re-apuntar', async () => {
+      // El code no existe al chequear (create), pero otra tx lo insertó en proj-B en la
+      // ventana → P2002. Se re-lee y se exige permiso en proj-B antes de re-apuntar.
+      prismaMock.element.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'el-1', projectId: 'proj-B' });
+      prismaMock.element.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+      fgaServiceMock.check.mockResolvedValue(false);
+
+      await expect(service.createPool('user-1', dto)).rejects.toThrow(ConflictException);
+      expect(prismaMock.element.update).not.toHaveBeenCalled();
     });
   });
 
