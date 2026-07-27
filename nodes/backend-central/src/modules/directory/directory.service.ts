@@ -206,7 +206,9 @@ export class DirectoryService {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      avatarUrl: await freshFileUrl(this.storage, user.avatarUrl),
+      // `avatarUrl` es editable por el usuario: se acota el re-firmado a la carpeta de
+      // avatares (`users/`) para cerrar el oráculo de firmado (ver freshFileUrl).
+      avatarUrl: await freshFileUrl(this.storage, user.avatarUrl, 'users/'),
       cargo: user.cargo,
       roleKeys: this.collectRoleKeys(user.memberships),
       isClientUser: user.isClientUser,

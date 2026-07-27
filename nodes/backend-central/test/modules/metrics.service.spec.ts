@@ -270,23 +270,24 @@ describe('MetricsService', () => {
     };
 
     beforeEach(() => {
-      prismaMock.element.upsert.mockResolvedValue({ id: 'el-1', code: 'R1' });
+      prismaMock.element.create.mockResolvedValue({ id: 'el-1', code: 'R1' });
+      prismaMock.element.update.mockResolvedValue({ id: 'el-1', code: 'R1' });
     });
 
-    it('hace upsert cuando el código no existe, con un solo chequeo FGA (proyecto destino)', async () => {
+    it('crea cuando el código no existe, con un solo chequeo FGA (proyecto destino)', async () => {
       prismaMock.element.findUnique.mockResolvedValue(null);
 
       const res = await service.saveReservorioMetadata('user-1', body);
 
       expect(res.success).toBe(true);
-      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(prismaMock.element.create).toHaveBeenCalled();
       expect(fgaServiceMock.check).toHaveBeenCalledTimes(1);
     });
 
     it('rechaza con 409 el intento de hijack: código de un elemento de OTRO proyecto sin permiso allí', async () => {
       // Escenario adversarial: R1 vive en proj-B; el usuario solo tiene permiso en
-      // proj-A. La rama update del upsert tocaría name/metadata del elemento ajeno.
-      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-B' });
+      // proj-A. Tocar name/metadata del elemento ajeno debe rechazarse.
+      prismaMock.element.findUnique.mockResolvedValue({ id: 'el-1', projectId: 'proj-B' });
       fgaServiceMock.check.mockImplementation(({ object }: { object: string }) =>
         Promise.resolve(object === 'project:proj-A'),
       );
@@ -294,11 +295,12 @@ describe('MetricsService', () => {
       await expect(service.saveReservorioMetadata('user-1', body)).rejects.toThrow(
         ConflictException,
       );
-      expect(prismaMock.element.upsert).not.toHaveBeenCalled();
+      expect(prismaMock.element.update).not.toHaveBeenCalled();
+      expect(prismaMock.element.create).not.toHaveBeenCalled();
     });
 
     it('permite actualizar el elemento de otro proyecto solo si también tiene permiso allí', async () => {
-      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-B' });
+      prismaMock.element.findUnique.mockResolvedValue({ id: 'el-1', projectId: 'proj-B' });
       fgaServiceMock.check.mockResolvedValue(true);
 
       await service.saveReservorioMetadata('user-1', body);
@@ -308,16 +310,37 @@ describe('MetricsService', () => {
         relation: 'can_submit_measurements',
         object: 'project:proj-B',
       });
-      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(prismaMock.element.update).toHaveBeenCalled();
     });
 
     it('actualiza sin chequeo adicional cuando el código ya vive en el proyecto destino', async () => {
-      prismaMock.element.findUnique.mockResolvedValue({ projectId: 'proj-A' });
+      prismaMock.element.findUnique.mockResolvedValue({ id: 'el-1', projectId: 'proj-A' });
 
       await service.saveReservorioMetadata('user-1', body);
 
       expect(fgaServiceMock.check).toHaveBeenCalledTimes(1);
-      expect(prismaMock.element.upsert).toHaveBeenCalled();
+      expect(prismaMock.element.update).toHaveBeenCalled();
+    });
+
+    it('cierra el TOCTOU: si el code aparece en la ventana (P2002), re-valida antes de escribir', async () => {
+      prismaMock.element.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'el-1', projectId: 'proj-B' });
+      prismaMock.element.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+      // requireProjectPermission (destino) ok; requireOriginAccess (proj-B) falla.
+      fgaServiceMock.check.mockImplementation(({ object }: { object: string }) =>
+        Promise.resolve(object === 'project:proj-A'),
+      );
+
+      await expect(service.saveReservorioMetadata('user-1', body)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prismaMock.element.update).not.toHaveBeenCalled();
     });
   });
 

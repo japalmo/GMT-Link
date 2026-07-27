@@ -367,7 +367,10 @@ export class ProfileService {
       emailPersonalVerified: user.emailPersonalVerified !== null,
       pendingEmail: user.pendingEmail,
       pendingEmailKind: user.pendingEmailKind,
-      avatarUrl: await freshFileUrl(this.storage, user.avatarUrl),
+      // `avatarUrl` es editable por el usuario: se acota el re-firmado a la carpeta
+      // de avatares (`users/`) para que no pueda rescatar la clave de un objeto ajeno
+      // del bucket (reembolsos/documentos/etc.) y recibir una URL prefirmada fresca.
+      avatarUrl: await freshFileUrl(this.storage, user.avatarUrl, 'users/'),
       status: user.status,
       isClientUser: user.isClientUser,
       cargo: user.cargo,

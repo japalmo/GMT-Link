@@ -45,10 +45,20 @@ export function urlReferencesKey(url: string, key: string): boolean {
  *  - URL absoluta legada del PROPIO bucket R2 → se RESCATA la clave del path y
  *    se re-presigna (revive los enlaces persistidos antes del fix, ya vencidos);
  *  - cualquier otra URL absoluta (local legada, externa) → passthrough tal cual.
+ *
+ * SEGURIDAD: la rama que rescata la clave de una URL absoluta y la re-firma es un
+ * ORÁCULO DE FIRMADO. Para campos EDITABLES por el usuario (p. ej. `avatarUrl`), un
+ * atacante podría pegar la URL de un objeto AJENO del bucket único (`reimbursements/…`,
+ * `documents/…`) y recibir una URL prefirmada fresca, saltándose el gate de lectura.
+ * Por eso, cuando el valor viene de un campo controlable por el usuario, DEBE pasarse
+ * `expectedKeyPrefix` (la carpeta esperada, p. ej. `users/` para avatares): solo se
+ * re-firma si la clave rescatada cae dentro de ese prefijo; si no, passthrough sin
+ * firmar. Para campos de solo-sistema (claves de subidas) puede omitirse.
  */
 export async function freshFileUrl(
   storage: StorageService,
   stored: string | null | undefined,
+  expectedKeyPrefix?: string,
 ): Promise<string | null> {
   if (stored === null || stored === undefined || stored.length === 0) {
     return null;
@@ -57,7 +67,12 @@ export async function freshFileUrl(
   if (isAbsoluteUrl(stored)) {
     if (storage instanceof R2StorageService) {
       const rescuedKey = storage.extractKeyFromUrl(stored);
-      if (rescuedKey !== null) {
+      // Solo se re-firma si la clave rescatada cae en el prefijo esperado (cuando el
+      // llamador lo exige). Cierra el oráculo de firmado en campos editables.
+      if (
+        rescuedKey !== null &&
+        (expectedKeyPrefix === undefined || rescuedKey.startsWith(expectedKeyPrefix))
+      ) {
         return storage.createPresignedGetUrl(rescuedKey);
       }
     }

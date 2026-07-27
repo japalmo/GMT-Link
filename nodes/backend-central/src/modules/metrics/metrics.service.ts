@@ -785,42 +785,61 @@ export class MetricsService {
 
     await this.requireProjectPermission(userId, targetProjectId, 'can_submit_measurements');
 
-    // `Element.code` es único GLOBAL: la rama update del upsert puede modificar
-    // name/metadata de un elemento de OTRO proyecto (incluso de otro cliente). Si el
-    // code ya vive en otro proyecto, el usuario debe tener can_submit_measurements
-    // también ahí; si no, se rechaza sin tocar nada (mismo patrón que createPool).
-    const existing = await this.prisma.element.findUnique({
-      where: { code: body.reservorio_codigo },
-      select: { projectId: true },
-    });
-    if (existing && existing.projectId !== targetProjectId) {
-      const allowedOnOrigin = await this.fga.check({
+    // `Element.code` es único GLOBAL: escribir por code puede modificar name/metadata
+    // de un elemento de OTRO proyecto. Antes de tocar un elemento ajeno se exige
+    // can_submit_measurements en su proyecto de ORIGEN. Se usa create-o-update
+    // atomico (con catch P2002) en vez de un upsert ciego para cerrar el TOCTOU:
+    // si el code aparece en la ventana entre el findUnique y la escritura, el catch
+    // re-lee y re-valida la pertenencia ANTES de escribir (mismo patron que createPool).
+    const requireOriginAccess = async (ownerProjectId: string): Promise<void> => {
+      if (ownerProjectId === targetProjectId) return;
+      const allowed = await this.fga.check({
         user: `user:${userId}`,
         relation: 'can_submit_measurements',
-        object: `project:${existing.projectId}`,
+        object: `project:${ownerProjectId}`,
       });
-      if (!allowedOnOrigin) {
+      if (!allowed) {
         throw new ConflictException(
           `El código de reservorio "${body.reservorio_codigo}" ya está registrado en otro proyecto al que no tienes acceso. Usa un código distinto o solicita acceso a ese proyecto.`,
         );
       }
-    }
+    };
+    const updateData = { name: body.nombre, metadata: toInputJson(body.extra) };
 
-    const element = await this.prisma.element.upsert({
+    const existing = await this.prisma.element.findUnique({
       where: { code: body.reservorio_codigo },
-      update: {
-        name: body.nombre,
-        metadata: toInputJson(body.extra),
-      },
-      create: {
-        code: body.reservorio_codigo,
-        name: body.nombre,
-        type: 'POZA',
-        metadata: toInputJson(body.extra),
-        projectId: targetProjectId,
-      },
+      select: { id: true, projectId: true },
     });
-    return { success: true, element };
+    if (existing) {
+      await requireOriginAccess(existing.projectId);
+      const element = await this.prisma.element.update({ where: { id: existing.id }, data: updateData });
+      return { success: true, element };
+    }
+    try {
+      const element = await this.prisma.element.create({
+        data: {
+          code: body.reservorio_codigo,
+          name: body.nombre,
+          type: 'POZA',
+          metadata: toInputJson(body.extra),
+          projectId: targetProjectId,
+        },
+      });
+      return { success: true, element };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const raced = await this.prisma.element.findUnique({
+          where: { code: body.reservorio_codigo },
+          select: { id: true, projectId: true },
+        });
+        if (raced) {
+          await requireOriginAccess(raced.projectId);
+          const element = await this.prisma.element.update({ where: { id: raced.id }, data: updateData });
+          return { success: true, element };
+        }
+      }
+      throw error;
+    }
   }
 
   // ── Documentos desde el escritorio (Fase 1B, D2/D3/D6) ──────────────────────
