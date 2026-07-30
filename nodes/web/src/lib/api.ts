@@ -52,6 +52,7 @@ import type {
   RoleKey,
   TablePage,
   TableRequest,
+  TaskDataSpec,
   UpdateProfileInput,
   UpdateProjectInput,
   UpdateRoleInput,
@@ -1867,7 +1868,11 @@ export function fetchTasksTable(req: TableRequest): Promise<TablePage<TaskView>>
 export function createTask(dto: {
   name: string;
   description?: string;
-  projectId: string;
+  projectId?: string | null;
+  parentId?: string | null;
+  type?: string;
+  priorityManual?: boolean;
+  startDate?: string;
   serviceId?: string;
   assignedToId?: string;
   reviewDate?: string;
@@ -1875,6 +1880,7 @@ export function createTask(dto: {
   estimatedPoints?: number;
   recurrence?: string;
   clientUserId?: string;
+  dataSpec?: TaskDataSpec | null;
 }): Promise<TaskView> {
   return request<TaskView>('/tasks', {
     method: 'POST',
@@ -1887,6 +1893,10 @@ export function updateTask(
   dto: {
     name?: string;
     description?: string;
+    parentId?: string | null;
+    type?: string;
+    priorityManual?: boolean;
+    startDate?: string;
     assignedToId?: string;
     reviewDate?: string;
     dueDate?: string;

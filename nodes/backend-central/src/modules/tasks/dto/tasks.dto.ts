@@ -8,8 +8,9 @@ import {
   IsString,
   MaxLength,
   Min,
+  IsBoolean,
 } from 'class-validator';
-import { TaskStatus } from '@prisma/client';
+import { TaskStatus, TaskType } from '@prisma/client';
 
 export class CreateTaskDto {
   @IsString()
@@ -21,8 +22,24 @@ export class CreateTaskDto {
   description?: string;
 
   @IsString()
-  @IsNotEmpty()
-  projectId!: string;
+  @IsOptional()
+  projectId?: string;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
+
+  @IsEnum(TaskType)
+  @IsOptional()
+  type?: TaskType;
+
+  @IsBoolean()
+  @IsOptional()
+  priorityManual?: boolean;
+
+  @IsISO8601({ strict: true })
+  @IsOptional()
+  startDate?: string;
 
   @IsString()
   @IsOptional()
@@ -77,6 +94,22 @@ export class UpdateTaskDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsString()
+  @IsOptional()
+  parentId?: string;
+
+  @IsEnum(TaskType)
+  @IsOptional()
+  type?: TaskType;
+
+  @IsBoolean()
+  @IsOptional()
+  priorityManual?: boolean;
+
+  @IsISO8601({ strict: true })
+  @IsOptional()
+  startDate?: string;
 
   @IsString()
   @IsOptional()

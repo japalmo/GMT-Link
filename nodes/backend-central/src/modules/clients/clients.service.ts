@@ -69,7 +69,9 @@ export class ClientsService {
       : [];
 
     const pendingCountMap = new Map<string, number>(
-      pendingByProject.map((row) => [row.projectId, row._count._all]),
+      pendingByProject
+        .filter((row) => row.projectId !== null)
+        .map((row) => [row.projectId!, row._count._all]),
     );
 
     return clients.map((client) => this.toView(client, pendingCountMap));

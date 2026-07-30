@@ -109,7 +109,13 @@ describe('TasksService', () => {
         reviewDate: '2026-07-20',
         dueDate: '2026-07-25',
       };
-      prismaMock.task.create.mockResolvedValue({ id: 't1', ...dto });
+      prismaMock.task.create.mockResolvedValue({
+        id: 't1',
+        name: dto.name,
+        projectId: dto.projectId,
+        reviewDate: new Date('2026-07-20T00:00:00Z'),
+        dueDate: new Date('2026-07-25T00:00:00Z')
+      } as any);
 
       await service.create('u1', dto);
 
@@ -146,7 +152,11 @@ describe('TasksService', () => {
       await service.list('u1', {});
 
       const prismaArgs = prismaMock.task.findMany.mock.calls[0]?.[0];
-      expect(prismaArgs.where.projectId).toEqual({ in: ['p1', 'p2'] });
+      expect(prismaArgs.where.OR).toEqual([
+        { projectId: { in: ['p1', 'p2'] } },
+        { projectId: null, assignedToId: 'u1' },
+        { projectId: null, createdById: 'u1' },
+      ]);
     });
 
     it('lanza error si filtra por proyecto y no tiene permiso sobre ese proyecto', async () => {
@@ -156,18 +166,15 @@ describe('TasksService', () => {
   });
 
   describe('getById', () => {
-    it('retorna la tarea si existe y FGA autoriza', async () => {
+    it('retorna la tarea si existe y tiene permiso de proyectos', async () => {
       const mockTask = { id: 't1', projectId: 'p1' };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
+      permissionMock.scopeFilter.mockResolvedValue({ kind: 'projects', ids: ['p1'] });
 
       const res = await service.getById('t1', 'u1');
 
-      expect(res).toEqual(mockTask);
-      expect(fgaMock.check).toHaveBeenCalledWith({
-        user: 'user:u1',
-        relation: 'can_view',
-        object: 'project:p1',
-      });
+      expect(res).toEqual({ ...mockTask, priority: 'BAJA' });
+      expect(permissionMock.scopeFilter).toHaveBeenCalledWith('u1', 'task:read');
     });
 
     it('lanza NotFoundException si la tarea no existe', async () => {
@@ -175,9 +182,9 @@ describe('TasksService', () => {
       await expect(service.getById('t1', 'u1')).rejects.toThrow(NotFoundException);
     });
 
-    it('lanza NotFoundException si FGA no autoriza a ver el proyecto', async () => {
+    it('lanza NotFoundException si no tiene acceso al proyecto', async () => {
       prismaMock.task.findUnique.mockResolvedValue({ id: 't1', projectId: 'p1' });
-      fgaMock.check.mockResolvedValue(false);
+      permissionMock.scopeFilter.mockResolvedValue({ kind: 'projects', ids: ['p2'] });
 
       await expect(service.getById('t1', 'u1')).rejects.toThrow(NotFoundException);
     });

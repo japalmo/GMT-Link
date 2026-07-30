@@ -41,8 +41,8 @@ import {
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription, ModalFooter } from '@/components/ui/modal';
 import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
 import { useDataTable } from '@/hooks/use-data-table';
-import type { TableRequest } from '@gmt-platform/contracts';
-import type { TaskView, TaskStatus, TaskDataSpec, UpdateTaskInput } from '@/types/operations';
+import type { TableRequest, TaskDataSpec } from '@gmt-platform/contracts';
+import type { TaskView, TaskStatus, UpdateTaskInput } from '@/types/operations';
 
 /** Etiqueta legible + variante de `Badge` por estado de tarea del backlog. */
 const TASK_STATUS_META: Record<
@@ -53,6 +53,16 @@ const TASK_STATUS_META: Record<
   EN_PROGRESO: { label: 'En progreso', variant: 'info' },
   REVISADO: { label: 'Revisado', variant: 'neutral' },
   COMPLETADO: { label: 'Completado', variant: 'success' },
+};
+
+const TASK_PRIORITY_META: Record<
+  string,
+  { label: string; variant: NonNullable<BadgeProps['variant']> }
+> = {
+  BAJA: { label: 'Baja', variant: 'neutral' },
+  MEDIA: { label: 'Media', variant: 'info' },
+  ALTA: { label: 'Alta', variant: 'warning' },
+  URGENTE: { label: 'Urgente', variant: 'destructive' },
 };
 
 /**
@@ -214,7 +224,7 @@ export function BacklogTab(): ReactNode {
   const [taskDueDate, setTaskDueDate] = useState('');
   const [taskRecurrence, setTaskRecurrence] = useState('');
   const [taskClientId, setTaskClientId] = useState('');
-  const [taskProduct, setTaskProduct] = useState<'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics'>('time_only');
+  const [taskProduct, setTaskProduct] = useState<'time_only' | 'DOCUMENTO' | 'DATO'>('time_only');
   const [deliverableFile, setDeliverableFile] = useState<File | null>(null);
   const [metricCotaEspejo, setMetricCotaEspejo] = useState<string>('');
   const [metricVolSalmuera, setMetricVolSalmuera] = useState<string>('');
@@ -225,7 +235,7 @@ export function BacklogTab(): ReactNode {
   const [itoName, setItoName] = useState('');
   const [itoDesc, setItoDesc] = useState('');
   const [itoProjId, setItoProjId] = useState('');
-  const [itoProduct, setItoProduct] = useState<'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics'>('time_only');
+  const [itoProduct, setItoProduct] = useState<'time_only' | 'DOCUMENTO' | 'DATO'>('time_only');
   const [itoFormError, setItoFormError] = useState<string | null>(null);
 
   // Form states - Points Completion Prompt
@@ -323,16 +333,14 @@ export function BacklogTab(): ReactNode {
     }
 
     try {
-      let dataSpec: TaskDataSpec | null = null;
+      let dataSpec: TaskDataSpec | undefined;
       if (itoProduct === 'time_only') {
-        dataSpec = { type: 'time_only', label: 'Solo registro de tiempo' };
-      } else if (itoProduct === 'pdf_report') {
-        dataSpec = { type: 'pdf_report', label: 'Informe en PDF' };
-      } else if (itoProduct === 'file_generic') {
-        dataSpec = { type: 'file_generic', label: 'Archivo genérico' };
-      } else if (itoProduct === 'custom_metrics') {
+        dataSpec = { type: 'NINGUNO', label: 'Solo registro de tiempo' };
+      } else if (itoProduct === 'DOCUMENTO') {
+        dataSpec = { type: 'DOCUMENTO', label: 'Informe' };
+      } else if (itoProduct === 'DATO') {
         dataSpec = {
-          type: 'custom_metrics',
+          type: 'DATO',
           label: 'Ingreso de datos / Mediciones',
           fields: {
             cota_espejo: 'Cota espejo (m)',
@@ -380,22 +388,20 @@ export function BacklogTab(): ReactNode {
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    if (!taskName || !taskProjId) {
-      setFormError('Por favor completa el nombre de la tarea y selecciona un proyecto.');
+    if (!taskName) {
+      setFormError('Por favor completa el nombre de la tarea.');
       return;
     }
 
     try {
-      let dataSpec: TaskDataSpec | null = null;
+      let dataSpec: TaskDataSpec | undefined;
       if (taskProduct === 'time_only') {
-        dataSpec = { type: 'time_only', label: 'Solo registro de tiempo' };
-      } else if (taskProduct === 'pdf_report') {
-        dataSpec = { type: 'pdf_report', label: 'Informe en PDF' };
-      } else if (taskProduct === 'file_generic') {
-        dataSpec = { type: 'file_generic', label: 'Archivo genérico' };
-      } else if (taskProduct === 'custom_metrics') {
+        dataSpec = { type: 'NINGUNO', label: 'Solo registro de tiempo' };
+      } else if (taskProduct === 'DOCUMENTO') {
+        dataSpec = { type: 'DOCUMENTO', label: 'Informe' };
+      } else if (taskProduct === 'DATO') {
         dataSpec = {
-          type: 'custom_metrics',
+          type: 'DATO',
           label: 'Ingreso de datos / Mediciones',
           fields: {
             cota_espejo: 'Cota espejo (m)',
@@ -407,7 +413,9 @@ export function BacklogTab(): ReactNode {
       await create({
         name: taskName,
         description: taskDesc.trim() || undefined,
-        projectId: taskProjId,
+        projectId: taskProjId || undefined,
+        type: 'SPOT',
+        priorityManual: false,
         serviceId: taskSrvId || undefined,
         assignedToId: taskAssignedId || undefined,
         reviewDate: taskReviewDate || undefined,
@@ -537,7 +545,7 @@ export function BacklogTab(): ReactNode {
         toast.success('Actividad finalizada.');
 
         // Subir archivo si se especificó y la tarea lo requiere
-        if (deliverableFile && (timeLogTask.dataSpec?.type === 'pdf_report' || timeLogTask.dataSpec?.type === 'file_generic')) {
+        if (timeLogTask.projectId && deliverableFile && (timeLogTask.dataSpec?.type === 'DOCUMENTO')) {
           await api.uploadProjectDocument({
             name: `Entregable - ${timeLogTask.name}`,
             projectId: timeLogTask.projectId,
@@ -550,7 +558,7 @@ export function BacklogTab(): ReactNode {
         }
 
         // Ingresar mediciones de cubicación si se especificaron
-        if (timeLogTask.dataSpec?.type === 'custom_metrics' && (metricCotaEspejo || metricVolSalmuera)) {
+        if (timeLogTask.dataSpec?.type === 'DATO' && (metricCotaEspejo || metricVolSalmuera)) {
           const elementId = timeLogTask.elementId || undefined;
           const phaseId = timeLogTask.phaseId || undefined;
 
@@ -632,18 +640,20 @@ export function BacklogTab(): ReactNode {
     }
     setReviewSubmitting(true);
     try {
-      for (const file of reviewFiles) {
-        await uploadDoc(
-          {
-            name: reviewFiles.length === 1 ? `Entregable - ${reviewTask.name}` : file.name,
-            projectId: reviewTask.projectId,
-            serviceId,
-            documentType: 'ENT',
-            areaCode: 'OPS',
-            taskId: reviewTask.id,
-          },
-          file,
-        );
+      if (reviewTask.projectId) {
+        for (const file of reviewFiles) {
+          await uploadDoc(
+            {
+              name: reviewFiles.length === 1 ? `Entregable - ${reviewTask.name}` : file.name,
+              projectId: reviewTask.projectId,
+              serviceId,
+              documentType: 'ENT',
+              areaCode: 'OPS',
+              taskId: reviewTask.id,
+            },
+            file,
+          );
+        }
       }
       await updateStatus(reviewTask.id, 'REVISADO');
       tableRefetch();
@@ -756,38 +766,45 @@ export function BacklogTab(): ReactNode {
                   <span className="text-[10px] italic text-amber-500">Pendiente</span>
                 )}
                 {canUploadDeliverable && (
-                  <Input
-                    type="file"
-                    accept="application/pdf"
-                    className="h-6 border-dashed border-border bg-card py-0 text-[9px]"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (!isPdf(file)) {
-                        toast.error('Los entregables deben ser archivos PDF.');
-                        e.target.value = '';
-                        return;
-                      }
-                      try {
-                        await api.uploadProjectDocument(
-                          {
-                            name: `Entregable - ${t.name}`,
-                            projectId: t.projectId,
-                            serviceId: t.serviceId || '',
-                            documentType: 'INF',
-                            areaCode: 'OPS',
-                            taskId: t.id,
-                          },
-                          file,
-                        );
-                        toast.success('Entregable subido con éxito.');
-                        e.target.value = '';
-                        void refetchDocs();
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
-                      }
-                    }}
-                  />
+                  t.projectId ? (
+                    <Input
+                      type="file"
+                      accept="application/pdf"
+                      className="h-6 border-dashed border-border bg-card py-0 text-[9px]"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!isPdf(file)) {
+                          toast.error('Los entregables deben ser archivos PDF.');
+                          e.target.value = '';
+                          return;
+                        }
+                        if (!t.projectId) return;
+                        try {
+                          await api.uploadProjectDocument(
+                            {
+                              name: `Entregable - ${t.name}`,
+                              projectId: t.projectId,
+                              serviceId: t.serviceId || '',
+                              documentType: 'INF',
+                              areaCode: 'OPS',
+                              taskId: t.id,
+                            },
+                            file,
+                          );
+                          toast.success('Entregable subido con éxito.');
+                          e.target.value = '';
+                          void refetchDocs();
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'Error al subir entregable.');
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="mt-1 p-1 bg-amber-500/10 border border-amber-500/20 rounded text-[9px] text-amber-600 text-center leading-tight">
+                      No se admiten entregables en tareas sueltas.
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -800,9 +817,15 @@ export function BacklogTab(): ReactNode {
       header: 'Proyecto / Servicio',
       render: (t) => (
         <div className="flex flex-wrap gap-1">
-          <Badge variant="outline" className="border-primary/20 bg-primary/5 px-1 py-0 text-[10px] text-primary">
-            {t.project.code}
-          </Badge>
+          {t.project ? (
+            <Badge variant="outline" className="border-primary/20 bg-primary/5 px-1 py-0 text-[10px] text-primary">
+              {t.project.code}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-muted bg-muted/30 px-1 py-0 text-[10px] text-muted-foreground">
+              Suelta
+            </Badge>
+          )}
           {t.service && (
             <Badge variant="outline" className="border-muted bg-muted/30 px-1 py-0 text-[10px] text-muted-foreground">
               {t.service.code}
@@ -810,6 +833,14 @@ export function BacklogTab(): ReactNode {
           )}
         </div>
       ),
+    },
+    {
+      id: 'prioridad',
+      header: 'Prioridad',
+      render: (t) => {
+        const priority = t.priority || 'BAJA';
+        return <Badge variant={TASK_PRIORITY_META[priority]?.variant ?? 'neutral'}>{TASK_PRIORITY_META[priority]?.label ?? priority}</Badge>;
+      }
     },
     {
       id: 'estado',
@@ -1177,15 +1208,24 @@ export function BacklogTab(): ReactNode {
                               {t.name}
                             </h4>
                           </div>
-                          <div className="flex flex-wrap gap-1">
-                            <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/20 bg-primary/5 text-primary shrink-0">
-                              {t.project.code}
-                            </Badge>
+                          <div className="flex flex-wrap gap-1 items-center">
+                            {t.project ? (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/20 bg-primary/5 text-primary shrink-0">
+                                {t.project.code}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1 border-muted bg-muted/30 text-muted-foreground shrink-0">
+                                Suelta
+                              </Badge>
+                            )}
                             {t.service && (
                               <Badge variant="outline" className="text-[10px] py-0 px-1 border-muted bg-muted/30 text-muted-foreground shrink-0">
                                 {t.service.code}
                               </Badge>
                             )}
+                            <Badge variant={TASK_PRIORITY_META[t.priority || 'BAJA']?.variant || 'neutral'} className="text-[10px] py-0 px-1 ml-auto">
+                              {TASK_PRIORITY_META[t.priority || 'BAJA']?.label || 'Baja'}
+                            </Badge>
                           </div>
                         </CardHeader>
 
@@ -1306,7 +1346,7 @@ export function BacklogTab(): ReactNode {
                                 ) : (
                                   <span className="text-[10px] text-amber-500 italic">Pendiente de subida</span>
                                 )}
-                                {canUploadDeliverable && (
+                                {canUploadDeliverable && t.projectId && (
                                   <Input
                                     type="file"
                                     accept="application/pdf"
@@ -1319,6 +1359,7 @@ export function BacklogTab(): ReactNode {
                                         e.target.value = '';
                                         return;
                                       }
+                                      if (!t.projectId) return;
                                       try {
                                         await api.uploadProjectDocument({
                                           name: `Entregable - ${t.name}`,
@@ -1531,18 +1572,17 @@ export function BacklogTab(): ReactNode {
               {wizardStep === 2 && (
                 <div className="flex flex-col gap-4 animate-in fade-in duration-200">
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="task-proj">Proyecto</Label>
+                    <Label htmlFor="task-proj">Proyecto (Opcional)</Label>
                     <Select
                       id="task-proj"
                       aria-label="Proyecto de la tarea"
-                      required
                       value={taskProjId}
                       onChange={(e) => {
                         setTaskProjId(e.target.value);
                         setTaskSrvId(''); // reset service
                       }}
                     >
-                      <option value="">Selecciona proyecto</option>
+                      <option value="">Ninguno (Tarea suelta)</option>
                       {projects.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
@@ -1628,14 +1668,13 @@ export function BacklogTab(): ReactNode {
                       value={taskProduct}
                       onChange={(e) =>
                         setTaskProduct(
-                          e.target.value as 'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics',
+                          e.target.value as 'time_only' | 'DOCUMENTO' | 'DATO',
                         )
                       }
                     >
                       <option value="time_only">Solo registro de tiempo</option>
-                      <option value="pdf_report">Informe en PDF</option>
-                      <option value="file_generic">Archivo genérico / Entregable pesado</option>
-                      <option value="custom_metrics">Ingreso de datos / Mediciones (Atacama)</option>
+                      <option value="DOCUMENTO">Documento / Informe</option>
+                      <option value="DATO">Ingreso de datos / Mediciones (Atacama)</option>
                     </Select>
                     <p className="text-[11px] text-muted-foreground mt-1">
                       Define qué debe ingresar u ocurrir al finalizar la tarea.
@@ -1693,8 +1732,7 @@ export function BacklogTab(): ReactNode {
                     <div>
                       <span className="text-muted-foreground">Entregable esperado:</span>{' '}
                       {taskProduct === 'time_only' ? 'Solo registro de tiempo' :
-                       taskProduct === 'pdf_report' ? 'Informe en PDF' :
-                       taskProduct === 'file_generic' ? 'Archivo genérico' :
+                       taskProduct === 'DOCUMENTO' ? 'Documento / Informe' :
                        'Mediciones de cubicación'}
                     </div>
                   </div>
@@ -1806,14 +1844,13 @@ export function BacklogTab(): ReactNode {
                   value={itoProduct}
                   onChange={(e) =>
                     setItoProduct(
-                      e.target.value as 'time_only' | 'pdf_report' | 'file_generic' | 'custom_metrics',
+                      e.target.value as 'time_only' | 'DOCUMENTO' | 'DATO',
                     )
                   }
                 >
                   <option value="time_only">Solo registro de tiempo</option>
-                  <option value="pdf_report">Informe en PDF</option>
-                  <option value="file_generic">Archivo genérico / Entregable pesado</option>
-                  <option value="custom_metrics">Ingreso de datos / Mediciones (Atacama)</option>
+                  <option value="DOCUMENTO">Documento / Informe</option>
+                  <option value="DATO">Ingreso de datos / Mediciones (Atacama)</option>
                 </Select>
               </div>
             </div>
@@ -2057,22 +2094,28 @@ export function BacklogTab(): ReactNode {
 
               {timeLogType === 'finish' && timeLogTask && (
                 <>
-                  {(timeLogTask.dataSpec?.type === 'pdf_report' || timeLogTask.dataSpec?.type === 'file_generic') && (
+                  {(timeLogTask.dataSpec?.type === 'DOCUMENTO') && (
                     <div className="flex flex-col gap-1.5 border-t pt-3 mt-2">
                       <Label htmlFor="deliverable-file" className="font-semibold text-xs text-foreground">
                         Subir Entregable / Producto en PDF ({timeLogTask.dataSpec?.label})
                       </Label>
-                      <Input
-                        id="deliverable-file"
-                        type="file"
-                        accept="application/pdf"
-                        onChange={(e) => setDeliverableFile(e.target.files?.[0] || null)}
-                        className="bg-card text-xs border border-border"
-                      />
+                      {timeLogTask.projectId ? (
+                        <Input
+                          id="deliverable-file"
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) => setDeliverableFile(e.target.files?.[0] || null)}
+                          className="bg-card text-xs border border-border"
+                        />
+                      ) : (
+                        <div className="text-[10px] text-amber-600 bg-amber-500/10 p-2 rounded border border-amber-500/20">
+                          Las tareas sueltas no admiten carga de entregables. Deben estar asociadas a un proyecto.
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {timeLogTask.dataSpec?.type === 'custom_metrics' && (
+                  {timeLogTask.dataSpec?.type === 'DATO' && (
                     <div className="flex flex-col gap-3 border-t pt-3 mt-2">
                       <Label className="font-semibold text-xs text-foreground">
                         Ingreso de Mediciones de Campo

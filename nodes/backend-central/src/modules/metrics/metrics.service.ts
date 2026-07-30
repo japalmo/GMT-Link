@@ -880,6 +880,9 @@ export class MetricsService {
       if (!task) {
         throw new NotFoundException(`La tarea con ID ${dto.task_id} no existe.`);
       }
+      if (!task.projectId) {
+        throw new BadRequestException('No se pueden vincular métricas a una tarea suelta.');
+      }
       projectId = task.projectId;
       serviceId = task.serviceId;
       taskId = task.id;

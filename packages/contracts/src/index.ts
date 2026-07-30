@@ -988,3 +988,14 @@ export interface ChecklistAnswer {
   value: string | number | boolean | null;
   comment?: string;
 }
+
+/** Tipo de retorno que produce un paso o actividad. */
+export type TaskReturnType = 'DATO' | 'FOTO' | 'DOCUMENTO' | 'TEXTO' | 'NINGUNO';
+
+/** Especificación de retorno y campos dinámicos para una actividad/paso. */
+export interface TaskDataSpec {
+  type: TaskReturnType;
+  /** Definición de campos si type === 'DATO'. Se reutiliza el contrato visual si aplica. */
+  fields?: Record<string, any>;
+  label?: string;
+}

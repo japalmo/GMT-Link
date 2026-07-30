@@ -1,4 +1,4 @@
-import type { Procedimiento, ServiceFrequency } from '@gmt-platform/contracts';
+import type { Procedimiento, ServiceFrequency, TaskDataSpec } from '@gmt-platform/contracts';
 
 export interface ProjectView {
   id: string;
@@ -42,12 +42,7 @@ export interface TaskTimeLogView {
   createdAt: string;
 }
 
-/** Especificación del entregable/producto de una tarea (type + label conocidos). */
-export interface TaskDataSpec {
-  type: string;
-  label?: string;
-  [key: string]: unknown;
-}
+
 
 export interface TaskView {
   id: string;
@@ -63,6 +58,8 @@ export interface TaskView {
   createdById: string;
   createdBy: { id: string; firstName: string; lastName: string; email: string };
   estimatedPoints: number;
+  priority?: string;
+  priorityManual?: boolean;
   actualPoints: number | null;
   /** Fecha de revisión planificada (#76), ISO-8601 o null. */
   reviewDate: string | null;
@@ -85,7 +82,10 @@ export interface TaskView {
 export interface CreateTaskInput {
   name: string;
   description?: string;
-  projectId: string;
+  projectId?: string | null;
+  parentId?: string | null;
+  type?: string;
+  priorityManual?: boolean;
   serviceId?: string;
   assignedToId?: string;
   /** Fechas de planificación (#76), ISO-8601 (date-only). */

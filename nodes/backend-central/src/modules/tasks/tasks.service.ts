@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskStatus, Prisma } from '@prisma/client';
+import { TaskStatus, TaskPriority, Prisma } from '@prisma/client';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
@@ -13,6 +13,7 @@ import { GamificationService } from '../gamification/gamification.service';
 import { PermissionService } from '../../authz/permission.service';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/tasks.dto';
+import { computeTaskPriority } from './priority.util';
 
 /** Include común de las consultas de tareas (misma forma para list y listTable). */
 const TASK_INCLUDE = {
@@ -49,25 +50,55 @@ export class TasksService {
   ) {}
 
   /**
+   * Helper que computa la prioridad al leer, actualiza los objetos devueltos,
+   * y lanza un lazy update a BD para mantener los índices sincronizados.
+   */
+  private applyPriorityEscalation<T extends { id: string; priority: TaskPriority; priorityManual: boolean; dueDate: Date | null }>(tasks: T[]): T[] {
+    const now = new Date();
+
+    const result = tasks.map((t) => {
+      const computed = computeTaskPriority(t.priority, t.priorityManual, t.dueDate, now);
+      return { ...t, priority: computed };
+    });
+
+    // Removida la actualización en BD desde el camino de lectura (QA).
+    // Esto previene side-effects (UPDATEs no esperados al listar).
+
+    return result;
+  }
+
+  /**
    * Crea una nueva tarea en el backlog.
    */
   async create(userId: string, dto: CreateTaskDto) {
-    // Verificar permisos FGA sobre el proyecto
-    const canCreate = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'can_create_task',
-      object: `project:${dto.projectId}`,
-    });
+    if (dto.projectId) {
+      // Verificar permisos FGA sobre el proyecto
+      const canCreate = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_create_task',
+        object: `project:${dto.projectId}`,
+      });
 
-    if (!canCreate) {
-      throw new BadRequestException('No tienes permisos para crear tareas en este proyecto.');
+      if (!canCreate) {
+        throw new BadRequestException('No tienes permisos para crear tareas en este proyecto.');
+      }
+    } else {
+      // Tarea suelta: requiere permiso funcional global (ej. desde Operaciones)
+      const filter = await this.permissions.scopeFilter(userId, 'task:create');
+      if (!filter || filter.kind !== 'none') {
+        throw new BadRequestException('No tienes permisos para crear tareas sueltas (se requiere acceso GLOBAL a tareas).');
+      }
     }
 
     const task = await this.prisma.task.create({
       data: {
         name: dto.name,
         description: dto.description,
-        projectId: dto.projectId,
+        projectId: dto.projectId || null,
+        parentId: dto.parentId || null,
+        type: dto.type || 'SPOT',
+        priorityManual: dto.priorityManual || false,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
         serviceId: dto.serviceId || null,
         assignedToId: dto.assignedToId || null,
         createdById: userId,
@@ -93,7 +124,7 @@ export class TasksService {
     // Gamificación: puntos por crear tarea (best-effort)
     void this.gamification.awardPoints(userId, 'CREATE_TASK');
 
-    return task;
+    return this.applyPriorityEscalation([task])[0];
   }
 
   /**
@@ -113,11 +144,12 @@ export class TasksService {
     if (where === null) {
       return [];
     }
-    return this.prisma.task.findMany({
+    const rows = await this.prisma.task.findMany({
       where,
       include: TASK_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
+    return this.applyPriorityEscalation(rows);
   }
 
   /**
@@ -163,7 +195,7 @@ export class TasksService {
       this.prisma.task.count({ where }),
     ]);
 
-    return tablePage(rows, total, page, pageSize);
+    return tablePage(this.applyPriorityEscalation(rows), total, page, pageSize);
   }
 
   /**
@@ -196,7 +228,12 @@ export class TasksService {
     if (scope.kind === 'own') {
       where.OR = [{ assignedToId: userId }, { createdById: userId }];
     } else if (scope.kind === 'projects') {
-      where.projectId = { in: scope.ids };
+      // Los proyectos del scope, Y las tareas sueltas propias (donde no aplica proyecto)
+      where.OR = [
+        { projectId: { in: scope.ids } },
+        { projectId: null, assignedToId: userId },
+        { projectId: null, createdById: userId },
+      ];
     }
     // scope.kind === 'none' (GLOBAL): sin restricción de fila.
 
@@ -244,6 +281,20 @@ export class TasksService {
   }
 
   /**
+   * Determina si un usuario puede operar una tarea suelta.
+   * Una tarea suelta (projectId = null) solo puede ser operada por:
+   * - Usuario con alcance GLOBAL (ej. Administrador de Operaciones)
+   * - El creador de la propia tarea
+   */
+  private async canOperateStandaloneTask(task: { createdById: string }, userId: string, permissionKey: string): Promise<boolean> {
+    const filter = await this.permissions.scopeFilter(userId, permissionKey);
+    if (!filter) return false;
+    if (filter.kind === 'none') return true;
+    if (task.createdById === userId) return true;
+    return false;
+  }
+
+  /**
    * Obtiene el detalle de una tarea por ID.
    */
   async getById(id: string, userId: string) {
@@ -263,18 +314,25 @@ export class TasksService {
       throw new NotFoundException('La tarea no existe.');
     }
 
-    // Verificar permisos FGA sobre el proyecto asociado
-    const allowed = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'can_view',
-      object: `project:${task.projectId}`,
-    });
-
+    // Validar acceso con PermissionService (que maneja tanto proyectos como tareas sueltas)
+    const scope = await this.permissions.scopeFilter(userId, 'task:read');
+    if (!scope) throw new NotFoundException('La tarea no existe o no tienes acceso.');
+    
+    let allowed = false;
+    if (scope.kind === 'none') {
+      allowed = true;
+    } else if (scope.kind === 'own') {
+      allowed = task.createdById === userId || task.assignedToId === userId;
+    } else if (scope.kind === 'projects') {
+      if (task.createdById === userId || task.assignedToId === userId) allowed = true;
+      else if (task.projectId && scope.ids.includes(task.projectId)) allowed = true;
+    }
+    
     if (!allowed) {
       throw new NotFoundException('La tarea no existe o no tienes acceso.');
     }
 
-    return task;
+    return this.applyPriorityEscalation([task])[0]!;
   }
 
   /**
@@ -284,22 +342,31 @@ export class TasksService {
     const task = await this.getById(id, userId);
 
     // Verificar permisos de asignación/modificación de tareas en el proyecto
-    const canAssign = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'can_assign_task',
-      object: `project:${task.projectId}`,
-    });
+    let canAssign = false;
+    if (task.projectId) {
+      canAssign = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_assign_task',
+        object: `project:${task.projectId}`,
+      });
+    } else {
+      canAssign = await this.canOperateStandaloneTask(task, userId, 'task:update');
+    }
 
     // Permitir cambios solo si es el creador, el asignado o tiene permiso de asignar en el proyecto
     if (!canAssign && task.createdById !== userId && task.assignedToId !== userId) {
       throw new BadRequestException('No tienes permiso para modificar esta tarea.');
     }
 
-    return this.prisma.task.update({
+    const updatedTask = await this.prisma.task.update({
       where: { id },
       data: {
         name: dto.name,
         description: dto.description,
+        parentId: dto.parentId !== undefined ? dto.parentId : undefined,
+        type: dto.type !== undefined ? dto.type : undefined,
+        priorityManual: dto.priorityManual !== undefined ? dto.priorityManual : undefined,
+        startDate: dto.startDate !== undefined ? new Date(dto.startDate) : undefined,
         assignedToId: dto.assignedToId !== undefined ? dto.assignedToId : undefined,
         estimatedPoints: dto.estimatedPoints,
         actualPoints: dto.actualPoints,
@@ -317,6 +384,8 @@ export class TasksService {
         clientUser: true,
       },
     });
+
+    return this.applyPriorityEscalation([updatedTask])[0]!;
   }
 
   /**
@@ -330,10 +399,23 @@ export class TasksService {
     // (supervisor / admin de contrato / gerencia). can_create_task es la puerta
     // general de mover; ser gestión también habilita (un rol custom con solo
     // task:assign es gestión legítima aunque no tenga task:create).
-    const [canCreate, canAssign] = await Promise.all([
-      this.fga.check({ user: `user:${userId}`, relation: 'can_create_task', object: `project:${task.projectId}` }),
-      this.fga.check({ user: `user:${userId}`, relation: 'can_assign_task', object: `project:${task.projectId}` }),
-    ]);
+    let canCreate = false;
+    let canAssign = false;
+    if (task.projectId) {
+      const results = await Promise.all([
+        this.fga.check({ user: `user:${userId}`, relation: 'can_create_task', object: `project:${task.projectId}` }),
+        this.fga.check({ user: `user:${userId}`, relation: 'can_assign_task', object: `project:${task.projectId}` }),
+      ]);
+      canCreate = results[0];
+      canAssign = results[1];
+    } else {
+      const [createOk, assignOk] = await Promise.all([
+        this.canOperateStandaloneTask(task, userId, 'task:create'),
+        this.canOperateStandaloneTask(task, userId, 'task:update')
+      ]);
+      canCreate = createOk;
+      canAssign = assignOk;
+    }
     const isManager = task.createdById === userId || canAssign;
 
     if (!canCreate && !isManager && task.assignedToId !== userId) {
@@ -393,11 +475,11 @@ export class TasksService {
         void this.gamification.awardPoints(task.assignedToId, 'COMPLETE_TASK');
       }
 
-      return updatedTask;
+      return this.applyPriorityEscalation([updatedTask])[0]!;
     }
 
     // Transición de estado normal (no completado)
-    return this.prisma.task.update({
+    const updatedTask = await this.prisma.task.update({
       where: { id },
       data: { status: dto.status, rejectionReason },
       include: {
@@ -408,6 +490,7 @@ export class TasksService {
         clientUser: true,
       },
     });
+    return this.applyPriorityEscalation([updatedTask])[0]!;
   }
 
   /**
@@ -416,11 +499,16 @@ export class TasksService {
   async remove(id: string, userId: string) {
     const task = await this.getById(id, userId);
 
-    const canAssign = await this.fga.check({
-      user: `user:${userId}`,
-      relation: 'can_assign_task',
-      object: `project:${task.projectId}`,
-    });
+    let canAssign = false;
+    if (task.projectId) {
+      canAssign = await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_assign_task',
+        object: `project:${task.projectId}`,
+      });
+    } else {
+      canAssign = await this.canOperateStandaloneTask(task, userId, 'task:update');
+    }
 
     if (!canAssign && task.createdById !== userId) {
       throw new BadRequestException('No tienes permiso para eliminar esta tarea.');
@@ -441,7 +529,7 @@ export class TasksService {
     // Autorización: el asignado puede registrar tiempo; cualquier otro requiere task:time:log.
     if (task.assignedToId !== userId) {
       const decision = await this.permissions.can(userId, 'task:time:log', {
-        projectId: task.projectId,
+        projectId: task.projectId ?? undefined,
       });
       if (decision.effect !== 'allow') {
         throw new BadRequestException('No tienes permiso para registrar tiempo en esta tarea.');
@@ -481,7 +569,7 @@ export class TasksService {
 
     if (task.assignedToId !== userId) {
       const decision = await this.permissions.can(userId, 'task:time:log', {
-        projectId: task.projectId,
+        projectId: task.projectId ?? undefined,
       });
       if (decision.effect !== 'allow') {
         throw new BadRequestException('No tienes permiso para registrar tiempo en esta tarea.');
