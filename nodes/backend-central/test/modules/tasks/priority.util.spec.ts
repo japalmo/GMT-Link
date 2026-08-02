@@ -40,4 +40,32 @@ describe('computeTaskPriority', () => {
     const dueDatePast = new Date('2026-07-27T12:00:00Z'); // -1 día
     expect(computeTaskPriority('BAJA', false, dueDatePast, now)).toBe('URGENTE');
   });
+
+  it('respeta la prioridad ALTA fijada manualmente aunque esté vencida', () => {
+    const dueDatePast = new Date('2026-07-27T12:00:00Z'); // Vencida
+    expect(computeTaskPriority('ALTA', true, dueDatePast, now)).toBe('ALTA');
+  });
+
+  it('resuelve medianoche UTC de dueDate al fin del día en Chile', () => {
+    // Si la tarea vence el 5 de agosto (medianoche UTC en DB: 2026-08-05T00:00:00Z)
+    const dueDate = new Date('2026-08-05T00:00:00Z');
+    
+    // Si 'ahora' es 4 de agosto 20:00 en Chile (2026-08-05T00:00:00Z)
+    // El 'todayUtcAnchor' será 2026-08-04T00:00:00Z.
+    // msToDue será 1 día (ALTA). NO URGENTE!
+    const nowChileEve = new Date('2026-08-05T00:00:00Z'); // 20:00 Chile (invierno)
+    expect(computeTaskPriority('BAJA', false, dueDate, nowChileEve)).toBe('ALTA');
+
+    // Si 'ahora' es 5 de agosto 20:00 en Chile (2026-08-06T00:00:00Z)
+    // El 'todayUtcAnchor' será 2026-08-05T00:00:00Z.
+    // msToDue será 0 días (ALTA).
+    const nowChileDueDay = new Date('2026-08-06T00:00:00Z');
+    expect(computeTaskPriority('BAJA', false, dueDate, nowChileDueDay)).toBe('ALTA');
+
+    // Si 'ahora' es 6 de agosto 01:00 en Chile (2026-08-06T05:00:00Z)
+    // El 'todayUtcAnchor' será 2026-08-06T00:00:00Z.
+    // msToDue será -1 días (URGENTE).
+    const nowChilePast = new Date('2026-08-06T05:00:00Z');
+    expect(computeTaskPriority('BAJA', false, dueDate, nowChilePast)).toBe('URGENTE');
+  });
 });

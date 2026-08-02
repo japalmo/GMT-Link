@@ -9,8 +9,44 @@ import {
   MaxLength,
   Min,
   IsBoolean,
+  ValidateNested,
+  IsArray,
 } from 'class-validator';
-import { TaskStatus, TaskType } from '@prisma/client';
+import { Type } from 'class-transformer';
+import { TaskStatus, TaskType, TaskPriority } from '@prisma/client';
+
+export class CreateTaskStepDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsISO8601({ strict: true })
+  @IsOptional()
+  startDate?: string;
+
+  @IsISO8601({ strict: true })
+  @IsOptional()
+  reviewDate?: string;
+
+  @IsISO8601({ strict: true })
+  @IsOptional()
+  dueDate?: string;
+
+  @IsObject()
+  @IsOptional()
+  dataSpec?: Record<string, unknown>;
+
+  @IsString()
+  @IsOptional()
+  assignedToId?: string;
+  @IsEnum(TaskPriority)
+  @IsOptional()
+  priority?: TaskPriority;
+}
 
 export class CreateTaskDto {
   @IsString()
@@ -32,6 +68,10 @@ export class CreateTaskDto {
   @IsEnum(TaskType)
   @IsOptional()
   type?: TaskType;
+
+  @IsEnum(TaskPriority)
+  @IsOptional()
+  priority?: TaskPriority;
 
   @IsBoolean()
   @IsOptional()
@@ -84,6 +124,12 @@ export class CreateTaskDto {
   @IsString()
   @IsOptional()
   elementId?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTaskStepDto)
+  @IsOptional()
+  steps?: CreateTaskStepDto[];
 }
 
 export class UpdateTaskDto {
@@ -97,11 +143,15 @@ export class UpdateTaskDto {
 
   @IsString()
   @IsOptional()
-  parentId?: string;
+  parentId?: string | null;
 
   @IsEnum(TaskType)
   @IsOptional()
   type?: TaskType;
+
+  @IsEnum(TaskPriority)
+  @IsOptional()
+  priority?: TaskPriority;
 
   @IsBoolean()
   @IsOptional()

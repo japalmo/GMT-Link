@@ -81,6 +81,7 @@ import {
 } from './upload-project-document-dialog';
 import { formatDate } from '@/lib/format';
 import { openProjectDocumentFileInNewTab } from '@/components/documents/project-document-file';
+import { ActividadesTab } from './actividades-tab';
 import type {
   ProjectType,
   ServiceFrequency,
@@ -178,7 +179,7 @@ function newVariableRow(): VariableRow {
    Página Capa 4 — Vista de proyecto
    ========================================================================== */
 
-type TabKey = 'trabajadores' | 'documentacion' | 'fases';
+type TabKey = 'trabajadores' | 'documentacion' | 'fases' | 'actividades';
 
 export default function VistaProyectoPage(): ReactNode {
   const { projectId } = useParams<{ projectId: string }>();
@@ -189,6 +190,7 @@ export default function VistaProyectoPage(): ReactNode {
   const canCreateService = useHasPermission('project:manage');
   const canEditProject = useHasPermission('project:update');
   const canDeleteProject = useHasPermission('project:delete');
+  const canCreateTask = useHasPermission('task:create'); // from backlog
 
   const detail = project as ProjectDetail | null;
   const projectType = detail?.projectType ?? null;
@@ -296,6 +298,7 @@ export default function VistaProyectoPage(): ReactNode {
       label: isRoutine ? 'Servicios' : 'Fases',
       icon: isRoutine ? CalendarClock : Layers,
     },
+    { value: 'actividades', label: 'Actividades', icon: ListChecks },
   ];
   const tabItems = allTabItems.filter(
     (t) => t.value !== 'trabajadores' || canManageTeam,
@@ -420,6 +423,13 @@ export default function VistaProyectoPage(): ReactNode {
             canManage={canManageTeam}
             canCreateService={canCreateService}
             onServiceChanged={refetch}
+          />
+        )}
+        {tab === 'actividades' && (
+          <ActividadesTab
+            projectId={project.id}
+            services={project.services ?? []}
+            canCreate={canCreateTask}
           />
         )}
       </TabPanel>

@@ -90,14 +90,24 @@ export class TasksService {
       }
     }
 
+    if (dto.parentId) {
+      const parent = await this.getById(dto.parentId, userId);
+      if ((parent.projectId || null) !== (dto.projectId || null)) {
+        throw new BadRequestException('La tarea padre debe pertenecer al mismo proyecto (o ambas sueltas).');
+      }
+    }
+
+    const priorityManual = dto.priority !== undefined ? true : (dto.priorityManual || false);
+
     const task = await this.prisma.task.create({
       data: {
         name: dto.name,
         description: dto.description,
         projectId: dto.projectId || null,
         parentId: dto.parentId || null,
+        priority: dto.priority || 'BAJA',
         type: dto.type || 'SPOT',
-        priorityManual: dto.priorityManual || false,
+        priorityManual: priorityManual,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
         serviceId: dto.serviceId || null,
         assignedToId: dto.assignedToId || null,
@@ -111,6 +121,29 @@ export class TasksService {
         elementId: dto.elementId || null,
         dataSpec: dto.dataSpec === undefined ? Prisma.JsonNull : (dto.dataSpec as Prisma.InputJsonValue),
         status: TaskStatus.PENDIENTE,
+        children: dto.steps && dto.steps.length > 0 ? {
+          create: dto.steps.map((step) => ({
+            name: step.name,
+            description: step.description,
+            projectId: dto.projectId || null,
+            type: dto.type || 'SPOT',
+            priority: dto.priority || 'BAJA',
+            priorityManual: priorityManual,
+            startDate: step.startDate ? new Date(step.startDate) : null,
+            serviceId: dto.serviceId || null,
+            assignedToId: step.assignedToId || dto.assignedToId || null,
+            createdById: userId,
+            estimatedPoints: 0,
+            reviewDate: step.reviewDate ? new Date(step.reviewDate) : null,
+            dueDate: step.dueDate ? new Date(step.dueDate) : null,
+            recurrence: dto.recurrence || null,
+            clientUserId: dto.clientUserId || null,
+            phaseId: dto.phaseId || null,
+            elementId: dto.elementId || null,
+            dataSpec: step.dataSpec === undefined ? Prisma.JsonNull : (step.dataSpec as Prisma.InputJsonValue),
+            status: TaskStatus.PENDIENTE,
+          })),
+        } : undefined,
       },
       include: {
         project: true,
@@ -315,19 +348,18 @@ export class TasksService {
     }
 
     // Validar acceso con PermissionService (que maneja tanto proyectos como tareas sueltas)
-    const scope = await this.permissions.scopeFilter(userId, 'task:read');
-    if (!scope) throw new NotFoundException('La tarea no existe o no tienes acceso.');
+    const decision = await this.permissions.can(userId, 'task:read', {
+      projectId: task.projectId || undefined,
+      createdById: task.createdById,
+    });
     
-    let allowed = false;
-    if (scope.kind === 'none') {
-      allowed = true;
-    } else if (scope.kind === 'own') {
-      allowed = task.createdById === userId || task.assignedToId === userId;
-    } else if (scope.kind === 'projects') {
-      if (task.createdById === userId || task.assignedToId === userId) allowed = true;
-      else if (task.projectId && scope.ids.includes(task.projectId)) allowed = true;
+    let allowed = decision.effect === 'allow';
+    
+    // Atajo para asignados en tareas sueltas (ya que el PermissionService no mira assignedToId)
+    if (!task.projectId && !allowed && decision.filter.kind !== 'none') {
+      if (task.assignedToId === userId) allowed = true;
     }
-    
+
     if (!allowed) {
       throw new NotFoundException('La tarea no existe o no tienes acceso.');
     }
@@ -358,14 +390,46 @@ export class TasksService {
       throw new BadRequestException('No tienes permiso para modificar esta tarea.');
     }
 
+    if (dto.parentId !== undefined) {
+      if (dto.parentId === id) {
+        throw new BadRequestException('Una tarea no puede ser padre de sí misma.');
+      }
+      if (dto.parentId !== null) {
+        const parent = await this.getById(dto.parentId, userId);
+        if ((parent.projectId || null) !== (task.projectId || null)) {
+          throw new BadRequestException('La tarea padre debe pertenecer al mismo proyecto (o ambas sueltas).');
+        }
+        // Detección de ciclos indirectos: recorre ancestros del padre propuesto.
+        // Si encontramos `id` en la cadena, aceptar crearía un ciclo.
+        const MAX_ANCESTOR_DEPTH = 20;
+        let cursor: string | null = parent.parentId ?? null;
+        for (let depth = 0; cursor && depth < MAX_ANCESTOR_DEPTH; depth++) {
+          if (cursor === id) {
+            throw new BadRequestException('El parentId crea un ciclo en la jerarquía de tareas.');
+          }
+          const ancestor = await this.prisma.task.findUnique({
+            where: { id: cursor },
+            select: { parentId: true },
+          });
+          cursor = ancestor?.parentId ?? null;
+        }
+      }
+    }
+
+    let priorityManual = dto.priorityManual;
+    if (dto.priority !== undefined) {
+      priorityManual = true;
+    }
+
     const updatedTask = await this.prisma.task.update({
       where: { id },
       data: {
         name: dto.name,
         description: dto.description,
         parentId: dto.parentId !== undefined ? dto.parentId : undefined,
+        priority: dto.priority !== undefined ? dto.priority : undefined,
         type: dto.type !== undefined ? dto.type : undefined,
-        priorityManual: dto.priorityManual !== undefined ? dto.priorityManual : undefined,
+        priorityManual: priorityManual !== undefined ? priorityManual : undefined,
         startDate: dto.startDate !== undefined ? new Date(dto.startDate) : undefined,
         assignedToId: dto.assignedToId !== undefined ? dto.assignedToId : undefined,
         estimatedPoints: dto.estimatedPoints,

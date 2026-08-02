@@ -97,6 +97,15 @@ export interface CreateTaskInput {
   dataSpec?: TaskDataSpec | null;
   phaseId?: string | null;
   elementId?: string | null;
+  steps?: Array<{
+    name: string;
+    description?: string;
+    startDate?: string;
+    reviewDate?: string;
+    dueDate?: string;
+    dataSpec?: TaskDataSpec | null;
+    assignedToId?: string;
+  }>;
 }
 
 /** Entrada para actualizar una tarea (campos editables). */
