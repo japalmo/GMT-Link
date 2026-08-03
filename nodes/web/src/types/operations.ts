@@ -49,8 +49,10 @@ export interface TaskView {
   name: string;
   description: string | null;
   status: TaskStatus;
-  projectId: string;
-  project: ProjectView;
+  projectId: string | null;
+  project?: ProjectView;
+  parentId?: string | null;
+  children?: TaskView[];
   serviceId: string | null;
   service: ServiceView | null;
   assignedToId: string | null;
@@ -61,6 +63,8 @@ export interface TaskView {
   priority?: string;
   priorityManual?: boolean;
   actualPoints: number | null;
+  /** Fecha de inicio planificada, ISO-8601 o null. */
+  startDate?: string | null;
   /** Fecha de revisión planificada (#76), ISO-8601 o null. */
   reviewDate: string | null;
   /** Fecha de entrega comprometida (#76), ISO-8601 o null. */
@@ -85,10 +89,12 @@ export interface CreateTaskInput {
   projectId?: string | null;
   parentId?: string | null;
   type?: string;
+  priority?: string;
   priorityManual?: boolean;
   serviceId?: string;
   assignedToId?: string;
   /** Fechas de planificación (#76), ISO-8601 (date-only). */
+  startDate?: string;
   reviewDate?: string;
   dueDate?: string;
   estimatedPoints?: number;
@@ -100,6 +106,7 @@ export interface CreateTaskInput {
   steps?: Array<{
     name: string;
     description?: string;
+    priority?: string;
     startDate?: string;
     reviewDate?: string;
     dueDate?: string;
@@ -111,14 +118,14 @@ export interface CreateTaskInput {
 /** Entrada para actualizar una tarea (campos editables). */
 export interface UpdateTaskInput {
   name?: string;
-  description?: string;
-  assignedToId?: string;
-  reviewDate?: string;
-  dueDate?: string;
+  description?: string | null;
+  assignedToId?: string | null;
+  reviewDate?: string | null;
+  dueDate?: string | null;
   estimatedPoints?: number;
-  actualPoints?: number;
-  recurrence?: string;
-  clientUserId?: string;
+  actualPoints?: number | null;
+  recurrence?: string | null;
+  clientUserId?: string | null;
 }
 
 /** Entrada para subir un documento de proyecto (metadatos; el archivo va aparte). */

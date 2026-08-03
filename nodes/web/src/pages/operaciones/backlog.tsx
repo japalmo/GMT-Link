@@ -467,14 +467,14 @@ export function BacklogTab(): ReactNode {
       // que las fechas se envíen al backend a través de `update` -> `api.updateTask`.
       const dto: UpdateTaskInput = {
         name: editName,
-        description: editDesc.trim() || undefined,
-        assignedToId: editAssignedId || undefined,
-        reviewDate: editReviewDate || undefined,
-        dueDate: editDueDate || undefined,
+        description: editDesc.trim() || null,
+        assignedToId: editAssignedId || null,
+        reviewDate: editReviewDate || null,
+        dueDate: editDueDate || null,
         estimatedPoints: Number(editEstPoints),
-        actualPoints: editActPoints !== undefined ? Number(editActPoints) : undefined,
-        recurrence: editRecurrence.trim() || undefined,
-        clientUserId: editClientId || undefined,
+        actualPoints: editActPoints !== undefined && editActPoints !== null ? Number(editActPoints) : null,
+        recurrence: editRecurrence.trim() || null,
+        clientUserId: editClientId || null,
       };
       await update(editTask.id, dto);
       tableRefetch();

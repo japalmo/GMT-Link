@@ -154,6 +154,29 @@ describe('TasksService', () => {
         })
       );
     });
+
+    it('un paso sin priority explícita no hereda la prioridad manual del padre', async () => {
+      permissionMock.scopeFilter.mockResolvedValue({ kind: 'none' });
+      prismaMock.task.create.mockResolvedValue({ id: 'parent1', priority: 'URGENTE', priorityManual: true });
+      gamificationMock.awardPoints.mockResolvedValue(undefined);
+
+      const dto = {
+        name: 'Actividad Urgente',
+        priority: 'URGENTE' as TaskPriority,
+        priorityManual: true,
+        steps: [
+          { name: 'Paso con fecha', dueDate: '2026-09-01' }
+        ]
+      };
+
+      await service.create('user1', dto);
+
+      const createCall = prismaMock.task.create.mock.calls[0][0];
+      const stepCreated = createCall.data.children.create[0];
+
+      expect(stepCreated.priority).toBe('BAJA');
+      expect(stepCreated.priorityManual).toBe(false);
+    });
   });
 
   // ─── list ────────────────────────────────────────────────────────────
@@ -288,6 +311,32 @@ describe('TasksService', () => {
 
       // gestor1 is not the creator (user1), not assignedTo (user2), canAssign is false
       await expect(service.update('t1', 'gestor1', { name: 'new name' })).rejects.toThrow(BadRequestException);
+    });
+
+    it('bloquea ciclo directo (parentId === id)', async () => {
+      const task = { id: 't1', createdById: 'user1', projectId: 'p1', priority: 'BAJA', priorityManual: false, dueDate: null };
+      prismaMock.task.findUnique.mockResolvedValue(task);
+      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      fgaMock.check.mockResolvedValue(true);
+
+      await expect(service.update('t1', 'user1', { parentId: 't1' })).rejects.toThrow('Una tarea no puede ser padre de sí misma.');
+    });
+
+    it('bloquea ciclo indirecto (A es ancestro de B y se intenta asignar B como padre de A)', async () => {
+      // t1 (parent=null) -> t2 (parent=t1). Intentamos hacer t1.parentId = t2.
+      const taskA = { id: 't1', createdById: 'user1', projectId: 'p1', parentId: null, priority: 'BAJA', priorityManual: false, dueDate: null };
+      const taskB = { id: 't2', createdById: 'user1', projectId: 'p1', parentId: 't1', priority: 'BAJA', priorityManual: false, dueDate: null };
+
+      prismaMock.task.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
+        if (where.id === 't1') return Promise.resolve(taskA);
+        if (where.id === 't2') return Promise.resolve(taskB);
+        return Promise.resolve(null);
+      });
+
+      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      fgaMock.check.mockResolvedValue(true);
+
+      await expect(service.update('t1', 'user1', { parentId: 't2' })).rejects.toThrow('El parentId crea un ciclo en la jerarquía de tareas.');
     });
   });
 

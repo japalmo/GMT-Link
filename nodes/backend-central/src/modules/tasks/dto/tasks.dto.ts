@@ -11,6 +11,7 @@ import {
   IsBoolean,
   ValidateNested,
   IsArray,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TaskStatus, TaskType, TaskPriority } from '@prisma/client';
@@ -157,23 +158,27 @@ export class UpdateTaskDto {
   @IsOptional()
   priorityManual?: boolean;
 
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsISO8601({ strict: true })
   @IsOptional()
-  startDate?: string;
+  startDate?: string | null;
 
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @IsOptional()
-  assignedToId?: string;
+  assignedToId?: string | null;
 
   /** Fecha de revisión planificada (#76). */
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsISO8601({ strict: true })
   @IsOptional()
-  reviewDate?: string;
+  reviewDate?: string | null;
 
   /** Fecha de entrega comprometida (#76). */
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsISO8601({ strict: true })
   @IsOptional()
-  dueDate?: string;
+  dueDate?: string | null;
 
   @IsInt()
   @Min(0)

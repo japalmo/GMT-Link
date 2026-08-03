@@ -82,6 +82,7 @@ import type {
   ProjectView,
   ServiceView,
   TaskView,
+  UpdateTaskInput,
   ProjectDocumentView,
   TaskStatus,
   TaskTimeLogView,
@@ -1890,21 +1891,7 @@ export function createTask(dto: {
 
 export function updateTask(
   id: string,
-  dto: {
-    name?: string;
-    description?: string;
-    parentId?: string | null;
-    type?: string;
-    priorityManual?: boolean;
-    startDate?: string;
-    assignedToId?: string;
-    reviewDate?: string;
-    dueDate?: string;
-    estimatedPoints?: number;
-    actualPoints?: number;
-    recurrence?: string;
-    clientUserId?: string;
-  },
+  dto: UpdateTaskInput,
 ): Promise<TaskView> {
   return request<TaskView>(`/tasks/${encodeURIComponent(id)}`, {
     method: 'PUT',

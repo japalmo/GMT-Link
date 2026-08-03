@@ -51,7 +51,7 @@ function newStepRow(): StepForm {
 }
 
 export function ActividadesTab({ projectId, services, canCreate }: ActividadesTabProps): ReactNode {
-  const { create } = useTasks({ projectId });
+  const { tasks, loading, create } = useTasks({ projectId });
   const { items: users } = useUsers({ limit: 100 });
 
   const [creatorOpen, setCreatorOpen] = useState(false);
@@ -61,7 +61,10 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
   const [mainName, setMainName] = useState('');
   const [mainDesc, setMainDesc] = useState('');
   const [mainServiceId, setMainServiceId] = useState('');
-  
+  const [mainStartDate, setMainStartDate] = useState('');
+  const [mainReviewDate, setMainReviewDate] = useState('');
+  const [mainDueDate, setMainDueDate] = useState('');
+
   // Steps
   const [steps, setSteps] = useState<StepForm[]>([newStepRow()]);
 
@@ -69,6 +72,9 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
     setMainName('');
     setMainDesc('');
     setMainServiceId('');
+    setMainStartDate('');
+    setMainReviewDate('');
+    setMainDueDate('');
     setSteps([newStepRow()]);
     setCreatorOpen(true);
   };
@@ -78,11 +84,32 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
   };
 
   const removeStep = (key: string) => {
-    setSteps((prev) => prev.filter((s) => s._key !== key));
+    setSteps((prev) => {
+      const next = prev.filter((s) => s._key !== key);
+      recalculateMaxDueDate(next);
+      return next;
+    });
+  };
+
+  const recalculateMaxDueDate = (stepList: StepForm[]) => {
+    const dates = stepList.map((s) => s.dueDate).filter(Boolean);
+    if (dates.length > 0) {
+      dates.sort();
+      const maxDate = dates[dates.length - 1];
+      if (maxDate) {
+        setMainDueDate(maxDate);
+      }
+    }
   };
 
   const updateStep = (key: string, patch: Partial<StepForm>) => {
-    setSteps((prev) => prev.map((s) => (s._key === key ? { ...s, ...patch } : s)));
+    setSteps((prev) => {
+      const next = prev.map((s) => (s._key === key ? { ...s, ...patch } : s));
+      if ('dueDate' in patch) {
+        recalculateMaxDueDate(next);
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,6 +166,9 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
         serviceId: mainServiceId || undefined,
         type: 'SPOT',
         priorityManual: false,
+        startDate: mainStartDate || undefined,
+        reviewDate: mainReviewDate || undefined,
+        dueDate: mainDueDate || undefined,
         steps: mappedSteps,
       });
       toast.success('Actividad creada exitosamente (cascada).');
@@ -149,6 +179,9 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
       setSaving(false);
     }
   };
+
+  // Actividades principales (parentId = null) y sus pasos correspondientes
+  const rootTasks = tasks.filter((t) => !t.parentId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -167,13 +200,81 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
         )}
       </div>
 
-      <div className="border rounded-md p-8 bg-muted/20 flex flex-col items-center justify-center text-center">
-        <EmptyState
-          icon={ListChecks}
-          title="Creador de Actividades"
-          message="Utiliza el botón superior para crear una nueva actividad en cascada para este proyecto."
-        />
-      </div>
+      {loading ? (
+        <div className="text-center py-8 text-sm text-muted-foreground">
+          Cargando actividades...
+        </div>
+      ) : rootTasks.length === 0 ? (
+        <div className="border rounded-md p-8 bg-muted/20 flex flex-col items-center justify-center text-center">
+          <EmptyState
+            icon={ListChecks}
+            title="Creador de Actividades"
+            message="Utiliza el botón superior para crear una nueva actividad en cascada para este proyecto."
+          />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {rootTasks.map((activity) => {
+            const childSteps = tasks.filter((t) => t.parentId === activity.id);
+            return (
+              <div key={activity.id} className="border rounded-lg p-4 bg-card shadow-sm space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-base text-foreground">{activity.name}</h3>
+                      <span className="text-xs px-2 py-0.5 rounded bg-muted font-medium text-muted-foreground">
+                        {activity.status}
+                      </span>
+                      {activity.priority && (
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                          activity.priority === 'URGENTE' ? 'bg-red-100 text-red-700' :
+                          activity.priority === 'ALTA' ? 'bg-orange-100 text-orange-700' :
+                          activity.priority === 'MEDIA' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {activity.priority}
+                        </span>
+                      )}
+                    </div>
+                    {activity.description && (
+                      <p className="text-sm text-muted-foreground mt-1">{activity.description}</p>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right space-y-1">
+                    {activity.startDate && <div>Inicio: {activity.startDate.slice(0, 10)}</div>}
+                    {activity.reviewDate && <div>Revisión: {activity.reviewDate.slice(0, 10)}</div>}
+                    {activity.dueDate && <div>Entrega: {activity.dueDate.slice(0, 10)}</div>}
+                  </div>
+                </div>
+
+                {/* Subpasos / Hijos */}
+                {childSteps.length > 0 && (
+                  <div className="mt-3 pl-4 border-l-2 border-muted space-y-2">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pasos:</h4>
+                    {childSteps.map((step) => (
+                      <div key={step.id} className="flex items-center justify-between text-sm py-1.5 border-b last:border-0 border-muted/50">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{step.name}</span>
+                          <span className="text-xs text-muted-foreground">({step.status})</span>
+                          {step.assignedTo && (
+                            <span className="text-xs text-muted-foreground">
+                              Assigned: {step.assignedTo.firstName} {step.assignedTo.lastName}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          {step.priority && <span className="font-semibold">{step.priority}</span>}
+                          {step.dueDate && <span>Vence: {step.dueDate.slice(0, 10)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <Modal open={creatorOpen} onOpenChange={setCreatorOpen}>
         <ModalContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
@@ -221,6 +322,34 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
                     value={mainDesc}
                     onChange={(e) => setMainDesc(e.target.value)}
                     rows={2}
+                  />
+                </div>
+                {/* Fechas de la Actividad Principal */}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="mainStartDate">Fecha de Inicio</Label>
+                  <Input
+                    id="mainStartDate"
+                    type="date"
+                    value={mainStartDate}
+                    onChange={(e) => setMainStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="mainReviewDate">Fecha de Revisión</Label>
+                  <Input
+                    id="mainReviewDate"
+                    type="date"
+                    value={mainReviewDate}
+                    onChange={(e) => setMainReviewDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label htmlFor="mainDueDate">Fecha de Entrega (Auto-calculada según pasos o manual)</Label>
+                  <Input
+                    id="mainDueDate"
+                    type="date"
+                    value={mainDueDate}
+                    onChange={(e) => setMainDueDate(e.target.value)}
                   />
                 </div>
               </div>
