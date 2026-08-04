@@ -50,3 +50,9 @@ nodes/backend-central/generated/
 
 # Backups locales de la BD de produccion (CSV/dumps con datos reales) - JAMAS versionar ni subir
 /backups/
+
+# Material y scripts locales del dueño: no son parte del código de la plataforma.
+# Entraron una vez por un `git add -A` y se desversionaron; siguen en disco.
+docs/GMT-Digital-Presentacion.pptx
+nodes/backend-central/scripts/import-vehiculos-checklists.ts
+nodes/backend-central/scripts/send-test-emails.ts
