@@ -109,6 +109,7 @@ import type {
 } from '@gmt-platform/contracts';
 import type {
   AssetView,
+  AssetPublicView,
   UpdateAssetInput,
   AssetDocumentView,
   AssetHistoryEntryView,
@@ -2852,3 +2853,22 @@ export function setServiceFrequency(
   );
 }
 
+
+/**
+ * Ficha pública de un activo por su token opaco (el que va en el QR de la
+ * plaquita). Ruta SIN autenticación: no manda credenciales.
+ */
+export function getPublicAsset(token: string): Promise<AssetPublicView> {
+  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(token)}`);
+}
+
+/**
+ * URL fresca para descargar un documento desde la ficha pública. El token del
+ * activo es la credencial; el backend exige además que el documento sea de ese
+ * activo y esté aprobado.
+ */
+export function getPublicAssetDocumentUrl(token: string, docId: string): Promise<{ url: string }> {
+  return request<{ url: string }>(
+    `/assets/public/${encodeURIComponent(token)}/documents/${encodeURIComponent(docId)}/file-url`,
+  );
+}

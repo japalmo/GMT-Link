@@ -22,6 +22,9 @@ import {
   AssetDocumentView,
   AssetHistoryEntryView,
   AssetView,
+  AssetPublicView,
+  AssetPublicDocument,
+  AssetPublicLastChecklist,
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
@@ -1679,6 +1682,102 @@ export class AssetsService {
     });
     if (!doc || doc.assetId !== id) {
       throw new NotFoundException('El documento no existe para este activo.');
+    }
+    return { url: await resolveFreshFileUrl(this.storage, doc.fileUrl) };
+  }
+
+  /**
+   * Ficha pública por TOKEN OPACO no enumerable (sin autenticación). El código
+   * correlativo NO sirve para esta ruta: evita el raspado del parque (GAP3).
+   *
+   * Se retiró en #79 y se restaura por pedido explícito del dueño, que necesita
+   * los QR grabados en las plaquitas de la flota. No expone datos personales ni
+   * el identificador; sí expone la metadata de los documentos APROBADOS y, a
+   * diferencia de la versión anterior, permite descargarlos por
+   * `getPublicDocumentFileUrl`. Esa apertura es deliberada y conocida por el
+   * dueño: quien escanee la plaquita de un vehículo accede a sus documentos.
+   */
+  async getPublicByToken(token: string): Promise<AssetPublicView> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { publicToken: token },
+      include: {
+        project: true,
+        documents: {
+          where: { status: DocumentStatus.APROBADO },
+          orderBy: [{ expirationDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+        },
+        checklistSubmissions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { template: { select: { name: true } } },
+        },
+      },
+    });
+    if (!asset) {
+      throw new NotFoundException('Ficha técnica no encontrada.');
+    }
+
+    const now = Date.now();
+    const EXPIRING_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+    const documents: AssetPublicDocument[] = asset.documents.map((d) => {
+      const expiresMs = d.expirationDate ? d.expirationDate.getTime() : null;
+      return {
+        id: d.id,
+        name: d.name,
+        type: d.type,
+        expiresAt: d.expirationDate ? d.expirationDate.toISOString() : null,
+        expired: expiresMs !== null && expiresMs < now,
+        expiringSoon:
+          expiresMs !== null && expiresMs >= now && expiresMs <= now + EXPIRING_WINDOW_MS,
+      };
+    });
+
+    const lastSubmission = asset.checklistSubmissions[0];
+    const lastChecklist: AssetPublicLastChecklist | null = lastSubmission
+      ? {
+          templateName: lastSubmission.template.name,
+          submittedAt: lastSubmission.createdAt.toISOString(),
+        }
+      : null;
+
+    return {
+      id: asset.id,
+      code: asset.code,
+      type: asset.type,
+      name: asset.name,
+      description: asset.description,
+      manufacturer: asset.manufacturer,
+      vehicleSubtype: asset.vehicleSubtype,
+      status: asset.status,
+      project: asset.project ? { name: asset.project.name } : null,
+      documents,
+      lastChecklist,
+    };
+  }
+
+  /**
+   * URL fresca de descarga de un documento desde la ficha PÚBLICA.
+   *
+   * Sin autenticación, igual que la ficha. Se exige el token del activo Y que el
+   * documento pertenezca a ese activo Y que esté APROBADO: el token opaco es la
+   * credencial, así que conocer el id de un documento no basta para bajarlo si
+   * no se sabe a qué activo pertenece. Un documento en revisión o rechazado no
+   * se entrega nunca por esta vía.
+   */
+  async getPublicDocumentFileUrl(token: string, docId: string): Promise<{ url: string }> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { publicToken: token },
+      select: { id: true },
+    });
+    if (!asset) {
+      throw new NotFoundException('Ficha técnica no encontrada.');
+    }
+    const doc = await this.prisma.assetDocument.findUnique({
+      where: { id: docId },
+      select: { assetId: true, fileUrl: true, status: true },
+    });
+    if (!doc || doc.assetId !== asset.id || doc.status !== DocumentStatus.APROBADO) {
+      throw new NotFoundException('El documento no existe para esta ficha.');
     }
     return { url: await resolveFreshFileUrl(this.storage, doc.fileUrl) };
   }

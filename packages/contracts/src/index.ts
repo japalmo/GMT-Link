@@ -920,6 +920,61 @@ export interface UpdateAssetInput {
   metadata?: Record<string, unknown>;
 }
 
+// ============ Ficha pública de activos (QR de las plaquitas) ============
+
+/**
+ * Documento aprobado en la ficha pública.
+ *
+ * Historia importante: la ficha se retiró en #79 porque documentos e historial
+ * solo se ocultaban en el front. Se restaura ahora por pedido explícito del
+ * dueño, que necesita los QR grabados en las plaquitas de la flota, y esta vez
+ * SÍ expone el archivo: `id` permite pedir una URL de descarga por la ruta
+ * pública. Es una decisión de producto tomada a conciencia, no un descuido:
+ * cualquiera que escanee la plaquita de un vehículo estacionado puede bajar sus
+ * documentos.
+ */
+export interface AssetPublicDocument {
+  /** Id del documento: habilita pedir su URL de descarga en la ruta pública. */
+  id: string;
+  name: string;
+  type: string;
+  /** ISO-8601 o null. */
+  expiresAt: string | null;
+  /** Ya vencido. */
+  expired: boolean;
+  /** Vence en <= 30 días (y aún no vencido). */
+  expiringSoon: boolean;
+}
+
+/** Última inspección (checklist ejecutado) en la ficha pública. */
+export interface AssetPublicLastChecklist {
+  templateName: string;
+  /** ISO-8601. */
+  submittedAt: string;
+}
+
+/** Ficha pública de un activo (respuesta del endpoint público por token, GAP3). */
+export interface AssetPublicView {
+  /**
+   * Id interno del activo. Se expone SOLO para el deep-link post-login desde la
+   * ficha pública (QR) hacia la app autenticada (`/recursos?asset=<id>`); no es
+   * sensible por sí mismo: la app autenticada igual exige login + permiso.
+   */
+  id: string;
+  code: string;
+  type: AssetType;
+  name: string;
+  description: string | null;
+  manufacturer: string | null;
+  vehicleSubtype: VehicleSubtype | null;
+  status: AssetStatus;
+  project?: { name: string } | null;
+  /** Documentos APROBADOS, ordenados por vencimiento (los que vencen antes primero). */
+  documents: AssetPublicDocument[];
+  /** Última inspección de checklist, o null. */
+  lastChecklist: AssetPublicLastChecklist | null;
+}
+
 // ============ Checklist tipado de activos (Tanda 5) ============
 
 /**

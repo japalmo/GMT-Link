@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TaskStatus } from '@prisma/client';
+import type { TaskPriority } from '@prisma/client';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
 import type { FgaService } from '../../../src/fga/fga.service';
 import type { GamificationService } from '../../../src/modules/gamification/gamification.service';
@@ -171,8 +172,8 @@ describe('TasksService', () => {
 
       await service.create('user1', dto);
 
-      const createCall = prismaMock.task.create.mock.calls[0][0];
-      const stepCreated = createCall.data.children.create[0];
+      const createCall = prismaMock.task.create.mock.calls[0]?.[0];
+      const stepCreated = createCall?.data.children.create[0];
 
       expect(stepCreated.priority).toBe('BAJA');
       expect(stepCreated.priorityManual).toBe(false);

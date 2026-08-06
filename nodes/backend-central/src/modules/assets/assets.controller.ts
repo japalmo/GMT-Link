@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import {
   BadRequestException,
   Body,
@@ -50,6 +51,7 @@ import {
   AssetDocumentView,
   AssetHistoryEntryView,
   AssetView,
+  AssetPublicView,
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
@@ -457,6 +459,34 @@ export class AssetsController {
    * una URL absoluta legada se devuelve tal cual. Gate en el SERVICE: el mismo
    * `assertCanManageAssetById` (admin/gerencia) que protege `listDocuments`.
    */
+  /**
+   * Ficha pública accesible SIN autenticación por código QR (plaquitas grabadas).
+   *
+   * No colisiona con las rutas `:id/...` pese a declararse después: `public/:token`
+   * tiene dos segmentos y las de `:id` con dos exigen un literal en el segundo
+   * ("documents", "history", ...). Si alguna vez se agrega un `@Get(':id/:algo')`
+   * con param en segunda posición, esta ruta habría que subirla antes.
+   */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } }) // 20/min por IP: endpoint sin auth
+  @Get('public/:token')
+  getPublicByToken(@Param('token') token: string): Promise<AssetPublicView> {
+    return this.assets.getPublicByToken(token);
+  }
+
+  /**
+   * URL fresca de descarga de un documento desde la ficha pública (sin auth).
+   * El token opaco del activo es la credencial; el servicio exige además que el
+   * documento sea de ese activo y esté APROBADO.
+   */
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Get('public/:token/documents/:docId/file-url')
+  getPublicDocumentFileUrl(
+    @Param('token') token: string,
+    @Param('docId') docId: string,
+  ): Promise<{ url: string }> {
+    return this.assets.getPublicDocumentFileUrl(token, docId);
+  }
+
   @Get(':id/documents/:docId/file-url')
   getDocumentFileUrl(
     @CurrentUser() authUser: AuthUser | undefined,
