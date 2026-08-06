@@ -39,6 +39,7 @@ import {
   FileDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { QrFichaPublica } from './qr-ficha-publica';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -2210,6 +2211,13 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {/* Ficha pública: el QR que va grabado en la plaquita del vehículo.
+              Bajo Operación, junto al checklist, que es donde se administra el
+              activo en terreno. */}
+          {detailTab === 'ficha' && asset?.publicToken && (
+            <QrFichaPublica publicToken={asset.publicToken} code={asset.code} />
           )}
 
           {/* Checklist — bajo la pestaña Operación (visible para todos). */}
