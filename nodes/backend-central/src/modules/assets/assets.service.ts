@@ -1741,7 +1741,6 @@ export class AssetsService {
       : null;
 
     return {
-      id: asset.id,
       code: asset.code,
       type: asset.type,
       name: asset.name,

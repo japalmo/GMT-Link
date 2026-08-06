@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { getPublicAsset, getPublicAssetDocumentUrl } from '@/lib/api';
 import {
   Wrench,
@@ -29,7 +29,6 @@ function formatearFecha(iso: string): string {
 
 export default function PublicAssetPage(): ReactNode {
   const { token } = useParams<{ token: string }>();
-  const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetPublicView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +54,20 @@ export default function PublicAssetPage(): ReactNode {
     }
   }
 
+
+  // La ficha es publica pero NO debe ser indexable: si Google la rastrea, las
+  // fichas de la flota (y sus documentos) quedan buscables sin escanear ninguna
+  // plaquita. Como es una SPA, la etiqueta se pone al montar y se retira al salir
+  // para no dejar el resto de la aplicacion marcada como no indexable.
+  useEffect(() => {
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex, nofollow, noarchive';
+    document.head.appendChild(meta);
+    return () => {
+      meta.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -227,30 +240,6 @@ export default function PublicAssetPage(): ReactNode {
               )}
             </CardContent>
 
-            {/* Acciones con deep-link post-login (Tanda 6): llevan a la app autenticada.
-                Los guards resuelven la sesión: si no hay, ProtectedRoute manda a login
-                preservando el destino y PublicRoute vuelve aquí tras loguear. El id solo
-                se usa dentro de la app (que exige login + permiso). Si por algún motivo
-                no viene (ficha muy vieja), se ocultan. */}
-            {asset.id && (
-              <div className="flex flex-col gap-3 px-6 pb-6">
-                <Button
-                  className="w-full"
-                  onClick={() => navigate(`/recursos?asset=${encodeURIComponent(asset.id)}&accion=ver-docs`)}
-                >
-                  <FileText className="size-4" />
-                  Ver documentos
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => navigate(`/recursos?asset=${encodeURIComponent(asset.id)}&accion=reportar-uso`)}
-                >
-                  <ClipboardCheck className="size-4" />
-                  Registrar uso
-                </Button>
-              </div>
-            )}
 
             <CardFooter className="bg-muted/30 border-t py-4 text-center justify-center">
               <p className="text-[10px] text-muted-foreground">

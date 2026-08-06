@@ -955,12 +955,9 @@ export interface AssetPublicLastChecklist {
 
 /** Ficha pública de un activo (respuesta del endpoint público por token, GAP3). */
 export interface AssetPublicView {
-  /**
-   * Id interno del activo. Se expone SOLO para el deep-link post-login desde la
-   * ficha pública (QR) hacia la app autenticada (`/recursos?asset=<id>`); no es
-   * sensible por sí mismo: la app autenticada igual exige login + permiso.
-   */
-  id: string;
+  // SIN `id`: el id interno solo se exponia para el enlace profundo hacia la
+  // app autenticada. Quitado ese enlace, publicarlo era filtrar un
+  // identificador interno a una ruta sin autenticacion, a cambio de nada.
   code: string;
   type: AssetType;
   name: string;
