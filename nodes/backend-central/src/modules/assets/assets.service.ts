@@ -1608,6 +1608,14 @@ export class AssetsService {
         },
       });
 
+      // Aprobar un documento lo vuelve el vigente: sus avisos de vencimiento
+      // anteriores dejan de aplicar. Sin limpiarlos, un hito ya enviado (por
+      // ejemplo "vencido-0" del documento anterior) impediría avisar del
+      // vencimiento NUEVO, y la alerta quedaría muda justo cuando importa.
+      if (status === DocumentStatus.APROBADO) {
+        await tx.assetDocumentExpiryNotice.deleteMany({ where: { documentId: docId } });
+      }
+
       const statusDesc = status === DocumentStatus.APROBADO ? 'Aprobado' : 'Rechazado';
       const reasonDesc = reason ? ` Motivo: ${reason}` : '';
       await this.createHistoryEntry(

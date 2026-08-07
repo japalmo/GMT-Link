@@ -69,6 +69,7 @@ model User {
   assignedAssets         Asset[]                   @relation("AssignedAssets")
   inUseAssets            Asset[]                   @relation("InUseAssets")
   reviewedAssetDocs      AssetDocument[]           @relation("AssetDocReviewer")
+  expiryNoticesReceived  AssetDocumentExpiryNotice[] @relation("ExpiryNoticeRecipient")
   assetHistoryEntries    AssetHistoryEntry[]       @relation("AssetHistoryActor")
   reviewedChecklists     ChecklistTemplate[]       @relation("ChecklistReviewer")
   submittedChecklists    ChecklistSubmission[]     @relation("ChecklistSubmitter")
@@ -949,8 +950,44 @@ model AssetDocument {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  expiryNotices   AssetDocumentExpiryNotice[]
+
   @@index([assetId])
+  // Barrido de vencimientos: busca documentos APROBADOS con fecha, ordenados.
+  // Sin este índice, el proceso recorrería la tabla entera en cada corrida.
+  @@index([status, expirationDate])
   @@map("asset_documents")
+}
+
+/// Aviso de vencimiento YA ENVIADO para un documento.
+///
+/// Es lo que da idempotencia al proceso de avisos. Sin este registro, un proceso
+/// que corre cada hora mandaria el mismo aviso 24 veces al dia, y la alerta se
+/// vuelve ruido que la gente aprende a ignorar, que es peor que no avisar.
+///
+/// La `clave` viene de `hitoVigente` (antes-30, antes-10, dia-3, vencido-6, ...)
+/// y el par (documento, clave, destinatario) es unico: cada persona recibe cada
+/// hito una sola vez. Al renovar el documento se borran sus avisos, de modo que
+/// el ciclo empieza limpio con la fecha nueva.
+model AssetDocumentExpiryNotice {
+  id         String        @id @default(cuid())
+  documentId String
+  document   AssetDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Destinatario del aviso: la deduplicacion es POR PERSONA, no global. Si se
+  /// suma un admin de vehiculos nuevo, recibe los hitos vigentes aunque otros ya
+  /// los hayan recibido.
+  userId     String
+  user       User          @relation("ExpiryNoticeRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  /// Hito del calendario de avisos (ver `expiry-notices.util.ts`).
+  clave      String
+  /// Canales por los que se envio, para diagnosticar sin revisar logs.
+  enviadoApp Boolean       @default(false)
+  enviadoCorreo Boolean    @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@unique([documentId, userId, clave])
+  @@index([documentId])
+  @@map("asset_document_expiry_notices")
 }
 
 // Historial de eventos del activo (creación, asignación, uso/liberación, docs, checklist, cambios de estado).

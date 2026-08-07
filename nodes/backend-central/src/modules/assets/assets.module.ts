@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { FgaModule } from '../../fga/fga.module';
 import { StorageModule } from '../../common/storage/storage.module';
@@ -6,11 +7,23 @@ import { GamificationModule } from '../gamification/gamification.module';
 import { SignaturesModule } from '../signatures/signatures.module';
 import { AssetsController } from './assets.controller';
 import { AssetsService } from './assets.service';
+import { ExpiryNoticesService } from './expiry-notices.service';
+import { ExpiryNoticesScheduler } from './expiry-notices.scheduler';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, FgaModule, StorageModule, GamificationModule, SignaturesModule],
+  imports: [
+    PrismaModule,
+    FgaModule,
+    StorageModule,
+    GamificationModule,
+    SignaturesModule,
+    NotificationsModule,
+    // El barrido de vencimientos corre dentro del proceso de la API.
+    ScheduleModule.forRoot(),
+  ],
   controllers: [AssetsController],
-  providers: [AssetsService],
-  exports: [AssetsService],
+  providers: [AssetsService, ExpiryNoticesService, ExpiryNoticesScheduler],
+  exports: [AssetsService, ExpiryNoticesService],
 })
 export class AssetsModule {}
