@@ -1654,8 +1654,11 @@ export class AssetsService {
    * sub-recursos que la dueña restringió a admin/gerencia (documentos, historial):
    * la restricción vive en el BACKEND, no solo en el render del front (ADR-0001).
    * 404 si no existe; 403 si el usuario no gestiona el activo.
+   *
+   * Público para que `VehicleUsageService` aplique EXACTAMENTE este gate y no
+   * una copia que pueda quedar desalineada cuando cambien las vías de acceso.
    */
-  private async assertCanManageAssetById(id: string, userId: string): Promise<void> {
+  async assertCanManageAssetById(id: string, userId: string): Promise<void> {
     const asset = await this.prisma.asset.findUnique({
       where: { id },
       select: { id: true, projectId: true },

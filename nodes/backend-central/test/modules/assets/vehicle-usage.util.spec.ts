@@ -37,7 +37,7 @@ describe('limpiarSerie', () => {
     expect(lecturas.map((l) => l.km)).toEqual([1000, 1200, 1500]);
   });
 
-  it('descarta la lectura que retrocede y explica por qué', () => {
+  it('descarta la lectura que retrocede y explica contra qué choca', () => {
     // Un odómetro no baja: es un error de tipeo al cargar el checklist.
     const { lecturas, descartadas } = limpiarSerie(
       serie([0, 50_000], [1, 50_300], [2, 5_030], [3, 50_600]),
@@ -46,10 +46,25 @@ describe('limpiarSerie', () => {
     expect(lecturas.map((l) => l.km)).toEqual([50_000, 50_300, 50_600]);
     expect(descartadas).toHaveLength(1);
     expect(descartadas[0]!.km).toBe(5_030);
-    expect(descartadas[0]!.motivo).toContain('Retrocede');
+    // El motivo nombra las lecturas válidas que la rodean: es lo que alguien
+    // necesita para saber qué debería decir la mal cargada.
+    expect(descartadas[0]!.motivo).toContain('50.300');
+    expect(descartadas[0]!.motivo).toContain('50.600');
   });
 
-  it('compara contra el MÁXIMO, no contra la lectura anterior', () => {
+  it('una lectura errónea HACIA ARRIBA no arrastra a las correctas que siguen', () => {
+    // Este es el caso que hizo cambiar el algoritmo. Comparando contra el
+    // máximo, el 500.000 se volvía el techo y botaba TODO lo posterior: en
+    // producción una sola lectura así descartó 154 de 258 lecturas.
+    const { lecturas, descartadas } = limpiarSerie(
+      serie([0, 50_000], [1, 50_100], [2, 500_200], [3, 50_300], [4, 50_400], [5, 50_500]),
+    );
+
+    expect(lecturas.map((l) => l.km)).toEqual([50_000, 50_100, 50_300, 50_400, 50_500]);
+    expect(descartadas.map((d) => d.km)).toEqual([500_200]);
+  });
+
+  it('conserva la MAYORÍA compatible, no la primera lectura que llegó', () => {
     // Si comparara con la anterior, tras un error hacia abajo todas las
     // correctas que siguen quedarían fuera por "subir demasiado".
     const { lecturas, descartadas } = limpiarSerie(
@@ -57,6 +72,34 @@ describe('limpiarSerie', () => {
     );
     expect(lecturas.map((l) => l.km)).toEqual([50_000, 50_100, 50_200]);
     expect(descartadas).toHaveLength(1);
+  });
+
+  it('con empate en largo prefiere la serie que empieza más alto', () => {
+    // `[50.000, 50.100]` y `[500, 50.100]` miden lo mismo. La segunda implicaría
+    // haber recorrido 49.600 km inventados, así que gana la primera.
+    const { lecturas, descartadas } = limpiarSerie(serie([0, 50_000], [1, 500], [2, 50_100]));
+    expect(lecturas.map((l) => l.km)).toEqual([50_000, 50_100]);
+    expect(descartadas[0]!.km).toBe(500);
+  });
+
+  it('acepta lecturas repetidas: un vehículo detenido no cambia el odómetro', () => {
+    const { lecturas, descartadas } = limpiarSerie(serie([0, 50_000], [1, 50_000], [2, 50_000]));
+    expect(lecturas).toHaveLength(3);
+    expect(descartadas).toHaveLength(0);
+  });
+
+  it('devuelve las descartadas ordenadas por fecha, mezclando ambos motivos', () => {
+    const crudas = [
+      { fecha: fecha(0), km: 1_000 },
+      { fecha: fecha(1), km: Number.NaN },
+      { fecha: fecha(2), km: 50 },
+      { fecha: fecha(3), km: 1_100 },
+    ];
+    const { descartadas } = limpiarSerie(crudas);
+    expect(descartadas.map((d) => d.fecha.getTime())).toEqual([
+      fecha(1).getTime(),
+      fecha(2).getTime(),
+    ]);
   });
 
   it('descarta valores no numéricos o negativos', () => {
@@ -73,6 +116,26 @@ describe('limpiarSerie', () => {
 
   it('una serie vacía no revienta', () => {
     expect(limpiarSerie([])).toEqual({ lecturas: [], descartadas: [] });
+  });
+
+  it('con DOS series completas en la misma ficha conserva la más larga y expone la otra', () => {
+    // Caso real de GMT-VH-0008: alguien carga el odómetro de otra camioneta en
+    // esta ficha. Las dos series son internamente coherentes, así que ningún
+    // cálculo puede repartirlas bien; lo que sí se puede es no esconder el
+    // problema. Las descartadas SON la evidencia para arreglar los datos.
+    const densa: Array<[number, number]> = [];
+    for (let d = 0; d < 12; d += 1) densa.push([d * 2, 55_000 + d * 500]);
+    const dispersa: Array<[number, number]> = [
+      [3, 76_500],
+      [9, 77_000],
+      [15, 81_000],
+    ];
+
+    const { lecturas, descartadas } = limpiarSerie(serie(...densa, ...dispersa));
+
+    expect(lecturas).toHaveLength(12);
+    expect(lecturas[lecturas.length - 1]!.km).toBe(60_500);
+    expect(descartadas.map((d) => d.km)).toEqual([76_500, 77_000, 81_000]);
   });
 });
 

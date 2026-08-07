@@ -23,13 +23,20 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AssetStatus, AssetType } from '@prisma/client';
-import type { TablePage, TableRequest, UsageCycleView } from '@gmt-platform/contracts';
+import type {
+  TablePage,
+  TableRequest,
+  UsageCycleView,
+  UsoGranularidad,
+  UsoVehiculoView,
+} from '@gmt-platform/contracts';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { FgaService } from '../../fga/fga.service';
 import { AssetsService } from './assets.service';
 import type { UsageCycleResult } from './assets.service';
+import { VehicleUsageService } from './vehicle-usage.service';
 import {
   CreateAssetDto,
   UpdateAssetDto,
@@ -63,6 +70,7 @@ import {
 export class AssetsController {
   constructor(
     private readonly assets: AssetsService,
+    private readonly usage: VehicleUsageService,
     private readonly fga: FgaService,
   ) {}
 
@@ -391,6 +399,41 @@ export class AssetsController {
   ): Promise<UsageCycleView[]> {
     const userId = this.requireUserId(authUser);
     return this.assets.listUsageCycles(id, userId);
+  }
+
+  /**
+   * Uso del vehículo: gráfico de kilómetros por período, promedios y proyección
+   * de la próxima mantención, todo derivado del odómetro de sus checklists.
+   *
+   * `granularidad` agrupa el gráfico (día / semana / mes; por defecto semana).
+   * `desde` / `hasta` acotan el rango (ISO-8601, ambos inclusive).
+   * `ultimaMantencionKm` fija la base de la proyección cuando se conoce; sin él
+   * la respuesta viene con `baseEstimada: true`.
+   *
+   * La autorización la aplica `VehicleUsageService.uso` con el mismo gate que el
+   * resto del detalle del activo.
+   */
+  @Get(':id/usage-stats')
+  // `async` a propósito aunque el cuerpo solo delegue: los parseos de abajo
+  // lanzan, y sin `async` un método declarado `Promise` lanzaría de forma
+  // SÍNCRONA, rompiendo a cualquier llamador que espere una promesa rechazada.
+  async usageStats(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Query('granularidad') granularidad?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('ultimaMantencionKm') ultimaMantencionKm?: string,
+  ): Promise<UsoVehiculoView> {
+    const userId = this.requireUserId(authUser);
+    return this.usage.uso(id, userId, {
+      ...(granularidad ? { granularidad: this.parseGranularidad(granularidad) } : {}),
+      ...(desde ? { desde: this.parseFecha(desde, 'desde') } : {}),
+      ...(hasta ? { hasta: this.parseFecha(hasta, 'hasta') } : {}),
+      ...(ultimaMantencionKm
+        ? { ultimaMantencionKm: this.parseKm(ultimaMantencionKm) }
+        : {}),
+    });
   }
 
   /**
@@ -821,6 +864,31 @@ export class AssetsController {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');
     }
     return authUser.id;
+  }
+
+  /** Granularidad del gráfico de uso; rechaza cualquier otro valor. */
+  private parseGranularidad(valor: string): UsoGranularidad {
+    if (valor === 'dia' || valor === 'semana' || valor === 'mes') return valor;
+    throw new BadRequestException('La granularidad debe ser "dia", "semana" o "mes".');
+  }
+
+  private parseFecha(valor: string, campo: string): Date {
+    const d = new Date(valor);
+    // `new Date('cualquier cosa')` da Invalid Date en vez de lanzar: sin esta
+    // guarda la fecha inválida llegaría hasta Prisma y reventaría más abajo con
+    // un error que no dice nada del parámetro que la causó.
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException(`El parámetro "${campo}" no es una fecha válida.`);
+    }
+    return d;
+  }
+
+  private parseKm(valor: string): number {
+    const n = Number(valor);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new BadRequestException('El kilometraje de la última mantención debe ser un número.');
+    }
+    return n;
   }
 
   /**

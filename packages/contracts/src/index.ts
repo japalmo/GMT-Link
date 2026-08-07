@@ -891,6 +891,79 @@ export interface UsageCycleView {
   updatedAt: string;
 }
 
+// ─────────────────────────── uso de vehículos ───────────────────────────
+
+/** Agrupación del gráfico de uso. */
+export type UsoGranularidad = 'dia' | 'semana' | 'mes';
+
+/** Un punto del gráfico: kilómetros recorridos EN ese período. */
+export interface UsoPunto {
+  /** Inicio del período, ISO-8601 solo fecha (AAAA-MM-DD). */
+  periodo: string;
+  km: number;
+}
+
+export interface UsoPromedios {
+  kmPorDia: number;
+  kmPorSemana: number;
+  kmPorMes: number;
+  /** Días que cubre la serie: sirve para saber si el promedio es representativo. */
+  diasCubiertos: number;
+  kmTotales: number;
+}
+
+export interface UsoProyeccionMantencion {
+  /** Odómetro en el que toca la próxima mantención. */
+  kmObjetivo: number;
+  kmRestantes: number;
+  diasEstimados: number;
+  /** Fecha estimada, ISO-8601. */
+  fechaEstimada: string;
+  /** Última lectura válida, base del cálculo. */
+  kmActual: number;
+  /**
+   * Fecha de esa última lectura, ISO-8601. La proyección se cuenta DESDE ahí,
+   * así que si el vehículo lleva meses sin checklist la fecha estimada puede
+   * caer en el pasado. La UI debe mostrar ambas: una fecha vencida con una
+   * última lectura vieja significa "faltan datos", no "la mantención se pasó".
+   */
+  fechaUltimaLectura: string;
+  /** Intervalo de mantención de la flota, en kilómetros. */
+  intervaloKm: number;
+  /**
+   * `true` cuando no se conoce el kilometraje de la última mantención y se
+   * asumió el múltiplo anterior. La UI debe declararlo: es una estimación, no
+   * un registro.
+   */
+  baseEstimada: boolean;
+}
+
+/** Lectura de odómetro que no se pudo usar, para que alguien la corrija. */
+export interface UsoLecturaDescartada {
+  /** Fecha del checklist, ISO-8601. */
+  fecha: string;
+  km: number;
+  motivo: string;
+  conductor: string | null;
+}
+
+
+/**
+ * Uso de un vehículo calculado sobre el odómetro que reportan sus checklists.
+ * `promedios` y `proyeccion` son `null` cuando no hay lecturas suficientes
+ * (menos de dos, o un vehículo que no se movió): preferimos decir "no alcanza"
+ * antes que mostrar un número inventado.
+ */
+export interface UsoVehiculoView {
+  granularidad: UsoGranularidad;
+  serie: UsoPunto[];
+  promedios: UsoPromedios | null;
+  proyeccion: UsoProyeccionMantencion | null;
+  descartadas: UsoLecturaDescartada[];
+  /** Checklists con odómetro leídos, antes de limpiar la serie. */
+  checklistsConsiderados: number;
+}
+
 /**
  * Cuerpo de "terminar uso" (`POST /assets/:id/usage-cycles/:cycleId/end`). Según
  * `endKind`: GPS usa `latitude`/`longitude`; ESTACIONAMIENTO usa `text`; TRASPASO usa

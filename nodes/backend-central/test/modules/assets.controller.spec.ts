@@ -1,9 +1,10 @@
 import 'reflect-metadata';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AssetType } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetsController } from '../../src/modules/assets/assets.controller';
 import type { AssetsService } from '../../src/modules/assets/assets.service';
+import type { VehicleUsageService } from '../../src/modules/assets/vehicle-usage.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import {
@@ -25,6 +26,7 @@ interface Mocks {
   controller: AssetsController;
   check: ReturnType<typeof vi.fn>;
   service: Record<string, ReturnType<typeof vi.fn>>;
+  uso: ReturnType<typeof vi.fn>;
 }
 
 function buildController(options: { allowed?: boolean } = {}): Mocks {
@@ -56,10 +58,14 @@ function buildController(options: { allowed?: boolean } = {}): Mocks {
     getUsageCycle: vi.fn(() => Promise.resolve({ id: 'cyc-1' })),
   };
 
+  const uso = vi.fn(() => Promise.resolve({ granularidad: 'semana', serie: [] }));
+  const usage = { uso } as unknown as VehicleUsageService;
+
   return {
-    controller: new AssetsController(service as unknown as AssetsService, fga),
+    controller: new AssetsController(service as unknown as AssetsService, usage, fga),
     check,
     service,
+    uso,
   };
 }
 
@@ -288,5 +294,68 @@ describe('AssetsController — ciclo de uso (autorización en el servicio)', () 
     await controller.getUsageCycle(USER, 'a-1', 'cyc-1');
     expect(service.getUsageCycle).toHaveBeenCalledWith('a-1', 'cyc-1', 'u1');
     expect(check).not.toHaveBeenCalled();
+  });
+});
+
+describe('AssetsController — uso del vehículo (usage-stats)', () => {
+  it('delega con userId y sin gate FGA propio: el gate lo aplica el servicio', async () => {
+    // Poner el gate en el controlador dejaría abierta la puerta de llamar al
+    // servicio desde otro lado sin autorizar.
+    const { controller, check, uso } = buildController();
+    await controller.usageStats(USER, 'a-1');
+    expect(uso).toHaveBeenCalledWith('a-1', 'u1', {});
+    expect(check).not.toHaveBeenCalled();
+  });
+
+  it('pasa la granularidad válida', async () => {
+    const { controller, uso } = buildController();
+    for (const g of ['dia', 'semana', 'mes']) {
+      await controller.usageStats(USER, 'a-1', g);
+      expect(uso).toHaveBeenLastCalledWith('a-1', 'u1', { granularidad: g });
+    }
+  });
+
+  it('rechaza una granularidad desconocida en vez de caer en el default', async () => {
+    // Silenciarla mostraría un gráfico distinto al pedido sin avisar.
+    const { controller } = buildController();
+    await expect(controller.usageStats(USER, 'a-1', 'trimestre')).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('convierte el rango de fechas a Date', async () => {
+    const { controller, uso } = buildController();
+    await controller.usageStats(USER, 'a-1', undefined, '2026-01-01', '2026-06-30');
+
+    const filtro = uso.mock.calls[0]![2];
+    expect(filtro.desde).toEqual(new Date('2026-01-01'));
+    expect(filtro.hasta).toEqual(new Date('2026-06-30'));
+  });
+
+  it('rechaza una fecha inválida y dice cuál de los dos parámetros es', async () => {
+    const { controller } = buildController();
+    await expect(controller.usageStats(USER, 'a-1', undefined, 'ayer')).rejects.toThrow(/desde/);
+    await expect(
+      controller.usageStats(USER, 'a-1', undefined, undefined, 'mañana'),
+    ).rejects.toThrow(/hasta/);
+  });
+
+  it('convierte ultimaMantencionKm a número y rechaza lo que no lo sea', async () => {
+    const { controller, uso } = buildController();
+    await controller.usageStats(USER, 'a-1', undefined, undefined, undefined, '50000');
+    expect(uso.mock.calls[0]![2].ultimaMantencionKm).toBe(50_000);
+
+    await expect(
+      controller.usageStats(USER, 'a-1', undefined, undefined, undefined, 'muchos'),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      controller.usageStats(USER, 'a-1', undefined, undefined, undefined, '-5'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('no manda claves con undefined: el servicio distingue "sin filtro" de "filtro vacío"', async () => {
+    const { controller, uso } = buildController();
+    await controller.usageStats(USER, 'a-1', 'mes');
+    expect(Object.keys(uso.mock.calls[0]![2])).toEqual(['granularidad']);
   });
 });

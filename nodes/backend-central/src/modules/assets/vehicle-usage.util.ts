@@ -7,27 +7,56 @@
  *
  * ── El problema que este módulo existe para resolver ───────────────────────
  *
- * Los datos reales traen LECTURAS QUE RETROCEDEN: entre un 3% y un 6% de los
- * checklists reportan un odómetro menor que el anterior. Un odómetro no baja;
- * son errores de tipeo al cargar. Si se promedian tal cual, una sola lectura mal
- * escrita mete un salto que ensucia el promedio y termina dando una fecha de
- * mantención equivocada, que es justo lo que la función viene a evitar.
+ * Los datos reales vienen sucios. Sobre el respaldo de producción del
+ * 2026-08-07 (1.972 checklists de 17 vehículos) hay dos tipos de error de tipeo:
  *
- * Por eso las lecturas inconsistentes se DESCARTAN del cálculo y se devuelven
- * aparte: sirven para que alguien las corrija, y mientras tanto no contaminan
- * ningún número.
+ *   - lecturas hacia ABAJO (se escribió 5.030 donde iba 50.300);
+ *   - lecturas hacia ARRIBA por un dígito de más, que son las CARAS: en
+ *     GMT-VH-0008 una lectura de 586.974 km contra una mediana de 57.678
+ *     inflaba el recorrido 10 veces.
+ *
+ * Un odómetro no retrocede, así que ambas contradicen la física del aparato.
+ * Si se promedian tal cual, la fecha de mantención proyectada queda equivocada,
+ * que es justo lo que este módulo viene a evitar.
+ *
+ * ── Cómo se limpia ────────────────────────────────────────────────────────
+ *
+ * Se conserva la SUBSECUENCIA NO DECRECIENTE MÁS LARGA: el mayor conjunto de
+ * lecturas que pueden ser todas ciertas a la vez. El resto se devuelve aparte
+ * para que alguien las corrija, y mientras tanto no contamina ningún número.
+ *
+ * La primera versión comparaba cada lectura contra el MÁXIMO visto. Contra los
+ * datos reales resultó desastroso: una sola lectura inflada se volvía el máximo
+ * y mandaba a la basura todo lo que venía después (154 de 258 lecturas en
+ * GMT-VH-0008, 57% de descarte en la flota). El máximo confía en una lectura
+ * cualquiera; la subsecuencia confía en la MAYORÍA, que es lo correcto cuando
+ * los errores son minoría.
+ *
+ * No hay ningún umbral de "salto demasiado grande" a propósito: sería arbitrario
+ * y una camioneta de faena puede hacer 600 km en un día legítimamente. La regla
+ * es solo la física del odómetro.
  *
  * ── Lo que esta limpieza NO cubre ──────────────────────────────────────────
  *
- * Solo detecta lecturas que van hacia ABAJO, porque son las que contradicen la
- * física de un odómetro. Un dígito de más (escribir 520.000 donde iba 52.000)
- * pasa el filtro: sube, así que parece válido. Ese error inflaría el recorrido y
- * adelantaría la mantención proyectada.
+ * DOS VEHÍCULOS EN UNA MISMA FICHA. En GMT-VH-0008 y GMT-VH-0013 conviven dos
+ * series de odómetro completas y coherentes: en el primero, una densa de muchos
+ * conductores que va de 55.000 a 65.837 km entre marzo y julio de 2026, y otra
+ * dispersa de seis lecturas que va de 76.488 a 87.276 en las mismas fechas.
+ * Alguien está cargando el odómetro de otra camioneta en esta ficha.
  *
- * No se filtra por "salto demasiado grande" a propósito: el umbral sería
- * arbitrario y una camioneta de faena puede hacer 600 km en un día legítimamente.
- * Descartar eso en silencio sería peor que el error que evita. La defensa
- * correcta es que la UI muestre la serie y el operador vea el pico.
+ * Ningún algoritmo puede repartir eso bien: las dos series son internamente
+ * consistentes y solo una persona sabe cuál corresponde al vehículo. Acá se
+ * conserva la más larga y el resto sale en `descartadas`, que es la evidencia
+ * para arreglarlo. Cuando las descartadas son muchas, el problema es la CARGA de
+ * datos y no el cálculo, y la UI debe decirlo en vez de mostrar el promedio como
+ * si nada.
+ *
+ * Se probó recortar la serie al "tramo vigente" detectando ese salto. Contra los
+ * datos reales fue peor: cortaba por tipeos duplicados que se corroboran entre
+ * sí y por caídas de 800 km, y le comía a GMT-VH-0006 261 de sus 303 lecturas.
+ * Cada parámetro que hacía falta para afinarlo era un número ajustado a ocho
+ * vehículos. Se prefirió la regla única (un odómetro no retrocede) y dejar el
+ * caso raro visible.
  *
  * Módulo PURO: sin Prisma ni Nest, para probar la aritmética sin base de datos.
  */
@@ -67,34 +96,118 @@ export interface PuntoUso {
 }
 
 /**
+ * Índices de la subsecuencia no decreciente más larga de `valores`.
+ *
+ * Es la formalización de "el mayor conjunto de lecturas que pueden ser todas
+ * ciertas a la vez", dado que un odómetro nunca baja.
+ *
+ * Cuando hay empate en largo se prefiere la subsecuencia que EMPIEZA MÁS ALTO.
+ * El recorrido total de una subsecuencia es `última - primera`, así que empezar
+ * más alto es recorrer menos: entre dos explicaciones igual de compatibles, gana
+ * la que no inventa kilómetros. Con `[50.000, 500, 50.100, 50.200]` las dos
+ * candidatas miden 3, y este criterio bota el 500 en vez del 50.000.
+ *
+ * O(n²) a propósito: el vehículo con más historia de la flota tiene 334
+ * lecturas, y la versión cuadrática deja el criterio de desempate explícito en
+ * vez de escondido en el backtracking de la versión O(n log n).
+ */
+function indicesNoDecrecientes(valores: number[]): Set<number> {
+  const n = valores.length;
+  if (n === 0) return new Set();
+
+  const largo = new Array<number>(n).fill(1);
+  const primero = [...valores];
+  const previo = new Array<number>(n).fill(-1);
+
+  for (let i = 1; i < n; i += 1) {
+    for (let j = 0; j < i; j += 1) {
+      if (valores[j]! > valores[i]!) continue;
+      const candidato = largo[j]! + 1;
+      const mejorLargo = candidato > largo[i]!;
+      const mismoLargoPeroEmpiezaMasAlto =
+        candidato === largo[i]! && primero[j]! > primero[i]!;
+      if (mejorLargo || mismoLargoPeroEmpiezaMasAlto) {
+        largo[i] = candidato;
+        primero[i] = primero[j]!;
+        previo[i] = j;
+      }
+    }
+  }
+
+  let fin = 0;
+  for (let i = 1; i < n; i += 1) {
+    if (largo[i]! > largo[fin]! || (largo[i]! === largo[fin]! && primero[i]! > primero[fin]!)) {
+      fin = i;
+    }
+  }
+
+  const conservados = new Set<number>();
+  for (let k = fin; k !== -1; k = previo[k]!) conservados.add(k);
+  return conservados;
+}
+
+/** Describe con qué lecturas válidas choca la descartada, para poder corregirla. */
+function motivoDeDescarte(km: number, anterior: number | null, siguiente: number | null): string {
+  const f = (n: number): string => Math.round(n).toLocaleString('es-CL');
+  if (anterior !== null && siguiente !== null) {
+    return `No calza con el odómetro: entre esas fechas iba de ${f(anterior)} a ${f(siguiente)} km.`;
+  }
+  if (anterior !== null) {
+    return `No calza con el odómetro: la última lectura válida antes es ${f(anterior)} km.`;
+  }
+  if (siguiente !== null) {
+    return `No calza con el odómetro: la primera lectura válida después es ${f(siguiente)} km.`;
+  }
+  return `No hay otra lectura con la cual contrastar los ${f(km)} km.`;
+}
+
+/**
  * Ordena y limpia la serie de odómetro.
  *
- * Descarta lecturas no numéricas y las que retroceden respecto del máximo visto:
- * se compara contra el MÁXIMO y no contra la anterior a propósito, porque si no
- * una lectura errónea muy alta dejaría fuera a todas las correctas que vengan
- * después.
+ * Dos pasos: se apartan los valores no numéricos y del resto se conserva la
+ * subsecuencia no decreciente más larga. Ver el comentario de cabecera del
+ * módulo para por qué la limpieza no compara contra el máximo, y para el caso
+ * que esta limpieza NO puede resolver sola.
  */
 export function limpiarSerie(crudas: LecturaOdometro[]): SerieUso {
   const ordenadas = [...crudas].sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
-  const lecturas: LecturaOdometro[] = [];
-  const descartadas: LecturaDescartada[] = [];
-  let maximo = -Infinity;
 
+  const numericas: LecturaOdometro[] = [];
+  const descartadas: LecturaDescartada[] = [];
   for (const l of ordenadas) {
     if (!Number.isFinite(l.km) || l.km < 0) {
       descartadas.push({ ...l, motivo: 'El kilometraje no es un número válido.' });
-      continue;
+    } else {
+      numericas.push(l);
     }
-    if (lecturas.length > 0 && l.km < maximo) {
-      descartadas.push({
-        ...l,
-        motivo: `Retrocede respecto del máximo registrado (${Math.round(maximo).toLocaleString('es-CL')} km).`,
-      });
-      continue;
-    }
-    lecturas.push(l);
-    maximo = Math.max(maximo, l.km);
   }
+
+  const vigentes = numericas;
+  const conservados = indicesNoDecrecientes(vigentes.map((l) => l.km));
+  const lecturas = vigentes.filter((_, i) => conservados.has(i));
+
+  // Las descartadas se explican contra sus vecinas CONSERVADAS, que es lo que
+  // alguien necesita para saber qué debería decir la lectura mal cargada.
+  vigentes.forEach((l, i) => {
+    if (conservados.has(i)) return;
+    let anterior: number | null = null;
+    let siguiente: number | null = null;
+    for (let j = i - 1; j >= 0; j -= 1) {
+      if (conservados.has(j)) {
+        anterior = vigentes[j]!.km;
+        break;
+      }
+    }
+    for (let j = i + 1; j < vigentes.length; j += 1) {
+      if (conservados.has(j)) {
+        siguiente = vigentes[j]!.km;
+        break;
+      }
+    }
+    descartadas.push({ ...l, motivo: motivoDeDescarte(l.km, anterior, siguiente) });
+  });
+
+  descartadas.sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
   return { lecturas, descartadas };
 }
 
