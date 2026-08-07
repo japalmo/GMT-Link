@@ -107,6 +107,10 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // Gate propio de la gestión de activos (crear/asignar/accesorios/plantillas):
   // desacoplado de service:create; project_creator lo deriva en FGA.
   { key: 'asset:manage', label: 'Gestionar activos', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_manage_assets', scopeable: true },
+  // Gestión de la FLOTA COMPLETA: cualquier activo, de todos los proyectos y de
+  // la flota sin proyecto. NO es scopeable: su alcance es la organización, y
+  // acotarlo a un proyecto lo convertiría en `asset:manage`, que ya existe.
+  { key: 'asset:manage:fleet', label: 'Gestionar toda la flota', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_manage_fleet', scopeable: false },
   { key: 'asset:create', label: 'Crear activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_create', scopeable: true },
   { key: 'asset:checklist:run', label: 'Ejecutar checklist', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_run_checklist', scopeable: true },
   { key: 'asset:location:view', label: 'Ver ubicación de activo', module: 'activos', kind: 'STRUCTURAL', fgaRelation: 'can_view_location', scopeable: true },
@@ -263,5 +267,18 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     key: 'conductor',
     label: 'Conductor',
     grants: [g('asset:use:report', 'GLOBAL'), g('asset:checklist:run:any', 'GLOBAL')],
+  },
+  {
+    // Admin de vehículos: entra al catálogo de recursos y carga o edita
+    // información y documentos de CUALQUIER vehículo, sin ser admin de la
+    // plataforma. `asset:read` enciende la pestaña de navegación; los otros dos
+    // habilitan subir y aprobar documentos sin depender del proyecto.
+    key: 'vehicle_admin',
+    label: 'Administrador de vehículos',
+    grants: [
+      g('asset:manage:fleet', 'GLOBAL'),
+      g('asset:read', 'GLOBAL'),
+      g('asset:checklist:run:any', 'GLOBAL'),
+    ],
   },
 ];

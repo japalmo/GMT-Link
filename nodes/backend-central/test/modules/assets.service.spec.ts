@@ -762,7 +762,7 @@ describe('AssetsService', () => {
 
     it('sin permiso de gestión → 403 y NO borra', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-3', projectId: null }));
-      fgaMock.check.mockResolvedValueOnce(false); // assertCanManageAsset: gate estructural denegado
+      fgaMock.check.mockResolvedValue(false); // assertCanManageAsset: gate estructural denegado
 
       await expect(service.remove('a-3', 'sin-permiso')).rejects.toBeInstanceOf(ForbiddenException);
       expect(txMock.asset.delete).not.toHaveBeenCalled();
@@ -796,14 +796,14 @@ describe('AssetsService', () => {
 
     it('un NO gestor recibe 403 y NO consulta los documentos', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
-      fgaMock.check.mockResolvedValueOnce(false); // sin can_manage_assets
+      fgaMock.check.mockResolvedValue(false); // sin can_manage_assets
       await expect(service.listDocuments('a-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
       expect(prismaMock.assetDocument.findMany).not.toHaveBeenCalled();
     });
 
     it('getHistory exige can_manage_assets igual que documentos', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
-      fgaMock.check.mockResolvedValueOnce(false);
+      fgaMock.check.mockResolvedValue(false);
       await expect(service.getHistory('a-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
       expect(prismaMock.assetHistoryEntry.findMany).not.toHaveBeenCalled();
     });
@@ -826,7 +826,7 @@ describe('AssetsService', () => {
 
     it('activo GLOBAL: un NO org-admin recibe 403 en historial', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'g-1', projectId: null });
-      fgaMock.check.mockResolvedValueOnce(false);
+      fgaMock.check.mockResolvedValue(false);
       await expect(service.getHistory('g-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
     });
 
@@ -859,7 +859,7 @@ describe('AssetsService', () => {
 
     it('getDocumentFileUrl exige can_manage_assets (mismo gate que listDocuments)', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
-      fgaMock.check.mockResolvedValueOnce(false); // sin can_manage_assets
+      fgaMock.check.mockResolvedValue(false); // sin can_manage_assets
       await expect(service.getDocumentFileUrl('a-1', 'd-1', 'viewer')).rejects.toBeInstanceOf(
         ForbiddenException,
       );
@@ -896,7 +896,7 @@ describe('AssetsService', () => {
 
     it('sin can_manage_assets sobre el proyecto → 403 y NO borra', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-p', projectId: 'p-1' }));
-      fgaMock.check.mockResolvedValueOnce(false);
+      fgaMock.check.mockResolvedValue(false);
       await expect(service.remove('a-p', 'ajeno')).rejects.toBeInstanceOf(ForbiddenException);
       expect(txMock.asset.delete).not.toHaveBeenCalled();
     });
@@ -961,7 +961,7 @@ describe('AssetsService', () => {
     it('rechaza (403) si el usuario no puede gestionar el activo (solo lectura)', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow());
       // assertCanManageAsset: sin can_manage_assets / admin => fga.check falsy.
-      fgaMock.check.mockResolvedValueOnce(false);
+      fgaMock.check.mockResolvedValue(false);
 
       await expect(
         service.updateStatus('a-1', 'u-viewer', { status: AssetStatus.MANTENIMIENTO }),

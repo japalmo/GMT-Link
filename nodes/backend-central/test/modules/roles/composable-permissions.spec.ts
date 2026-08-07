@@ -27,8 +27,17 @@ describe('composable-permissions (SPINE Fase 2)', () => {
       'task:create': 'project',
       'task:assign': 'project',
       'asset:manage': 'project',
+      // Gestión de toda la flota: alcance ORGANIZACIÓN. Es lo que distingue al
+      // admin de vehículos del gestor de activos de un proyecto concreto.
+      'asset:manage:fleet': 'organization',
       'project:team:manage': 'project',
     });
+  });
+
+  it('asset:manage:fleet es componible y aplica sobre organization', () => {
+    const p: FakePermission = { key: 'asset:manage:fleet', kind: 'STRUCTURAL' };
+    expect(composable(p)).toBe(true);
+    expect(fgaObjectTypeOf(p)).toBe('organization');
   });
 
   it('asset:manage es componible y aplica sobre project (gate propio de activos)', () => {

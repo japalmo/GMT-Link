@@ -37,6 +37,9 @@ export const COMPOSABLE_STRUCTURAL: Readonly<Record<string, FgaObjectType>> = {
   // controller de activos gatea con can_manage_assets. service:create ya NO
   // habilita la gestión de activos.
   'asset:manage': 'project',
+  // Gestión de toda la flota: alcance ORGANIZACIÓN, no proyecto. Es lo que
+  // distingue al admin de vehículos del gestor de activos de un proyecto.
+  'asset:manage:fleet': 'organization',
 };
 
 /**

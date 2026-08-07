@@ -209,7 +209,18 @@ export class AssetsService {
           relation: 'admin',
           object: `organization:${ORG_ID}`,
         });
-    if (!ok) {
+    if (ok) return;
+
+    // Tercera vía: admin de FLOTA. Cubre cualquier activo, con proyecto o sin
+    // él, sin ser admin de la plataforma. Se consulta al final y no al principio
+    // a propósito: es el caso menos frecuente, y ponerlo primero le cobraría una
+    // llamada extra a FGA a todos los demás usuarios en cada operación.
+    const esAdminDeFlota = await this.fga.check({
+      user: `user:${userId}`,
+      relation: 'can_manage_fleet',
+      object: `organization:${ORG_ID}`,
+    });
+    if (!esAdminDeFlota) {
       throw new ForbiddenException('No tienes permiso para gestionar este activo.');
     }
   }

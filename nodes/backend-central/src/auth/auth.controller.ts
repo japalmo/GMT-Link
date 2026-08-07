@@ -81,6 +81,7 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   'task:read': 'operaciones',
   'task:create': 'operaciones',
   'asset:manage': 'recursos',
+  'asset:manage:fleet': 'recursos',
   'asset:fields:edit': 'recursos',
   'asset:read': 'recursos',
   // Rol conductor: reportar uso (tomar/liberar) enciende Recursos para llegar
