@@ -313,7 +313,7 @@ export function parseTemplateItems(raw: unknown): ChecklistTemplateItem[] {
 
 /**
  * ¿La respuesta `value` para `item` cuenta como falla?
- * - BOOLEAN: `false` o `'no'`.
+ * - BOOLEAN: `false` o `'no'`, SALVO que el ítem declare `failOptions`.
  * - ESTADO: el valor coincide (case-insensitive) con alguna `failOptions`
  *   (default `['Malo']`).
  * - SVG: NUNCA es falla (los comentarios de carrocería son observaciones).
@@ -331,6 +331,17 @@ export function isFailure(
     return false;
   }
   if (item?.type === 'BOOLEAN') {
+    // Hay preguntas donde la respuesta MALA es "sí": "¿consume algún medicamento
+    // que induzca sueño?". Sin esto, contestar la verdad tranquilizadora ("no")
+    // se registraría como falla y la respuesta peligrosa ("sí") pasaría limpia,
+    // que es exactamente al revés. `failOptions` deja que el ítem diga cuál de
+    // los dos lados es el malo; sin declararlo se mantiene el comportamiento
+    // histórico (`false` = falla).
+    const fail = item.config?.failOptions;
+    if (fail && fail.length > 0) {
+      const normalizado = value === true ? 'true' : value === false ? 'false' : String(value);
+      return fail.some((o) => o.toLowerCase() === normalizado.toLowerCase());
+    }
     return value === false || value === 'no';
   }
   if (item?.type === 'ESTADO') {

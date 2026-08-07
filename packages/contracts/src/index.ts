@@ -1124,3 +1124,17 @@ export interface TaskDataSpec {
   fields?: Record<string, any>;
   label?: string;
 }
+
+// ─────────────────────── checklist de vehículos ───────────────────────
+// La plantilla real de la flota vive en su propio archivo por tamaño (32 ítems
+// con sus observaciones), pero se reexporta acá para que los consumidores sigan
+// importando todo desde `@gmt-platform/contracts`.
+export {
+  CHECKLIST_VEHICULO_GMT,
+  SECCIONES_CHECKLIST_VEHICULO,
+  ITEMS_DE_ESTADO,
+  ESTADO_OPCIONES,
+  ESTADO_FALLA,
+} from './vehicle-checklist.js';
+export { DIAGRAMA_CAMIONETA, PARTES_CARROCERIA } from './vehicle-diagram.js';
+export type { ParteDiagrama } from './vehicle-diagram.js';
