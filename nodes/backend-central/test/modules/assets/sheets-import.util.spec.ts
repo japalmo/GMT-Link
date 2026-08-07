@@ -127,9 +127,11 @@ describe('mapearFila', () => {
     expect('descarte' in res && res.descarte.motivo).toContain('Sin idForm');
   });
 
-  it('descarta la fila cuya patente no se reconoce', () => {
+  it('descarta la fila SIN idVeh y con patente irreconocible', () => {
+    // Con idVeh la patente escrita da igual: manda el maestro. Solo se descarta
+    // cuando no hay ninguno de los dos.
     const res = mapear({ patente: 'Prueba' });
-    expect('descarte' in res && res.descarte.motivo).toContain('Patente no reconocible');
+    expect('descarte' in res && res.descarte.motivo).toContain('Sin idVeh');
     expect('descarte' in res && res.descarte.externalId).toBe('F0004');
   });
 

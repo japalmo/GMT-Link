@@ -30,8 +30,14 @@ import {
 export interface RegistroImportado {
   /** `idForm` de la planilla: lo que da idempotencia a la importación. */
   externalId: string;
-  /** Patente ya normalizada, para buscar el vehículo. */
-  patente: string;
+  /**
+   * Id del vehículo en el maestro de la planilla (V005, V007, …). Es la clave
+   * AUTORITATIVA: la columna `patente` trae cientos de filas con la placa
+   * cruzada. `null` solo en las filas que no lo traen.
+   */
+  idVeh: string | null;
+  /** Patente escrita en la fila. Respaldo cuando no hay `idVeh`. */
+  patente: string | null;
   /** Fecha real del checklist, NO la de importación. */
   fecha: Date;
   /** Nombre del conductor tal como venía. Informativo, no es autoría. */
@@ -146,13 +152,21 @@ export function mapearFila(
     return { descarte: { fila: numeroFila, externalId: null, motivo: 'Sin idForm.' } };
   }
 
+  // El vehículo se identifica por `idVeh`, NO por la columna `patente`.
+  //
+  // La importación anterior de esta misma planilla ya había detectado que
+  // `patente` es poco confiable: cientos de filas traen la patente cruzada, o
+  // sea la de otro vehículo. `idVeh` (V005, V007, …) apunta al maestro de
+  // VEHICULOS y es estable. La patente escrita queda solo como respaldo para
+  // las filas que no traen idVeh.
+  const idVeh = normalizarTexto(leer('idVeh'))?.toUpperCase() ?? null;
   const patente = normalizarPatente(leer('patente'));
-  if (!patente) {
+  if (!idVeh && !patente) {
     return {
       descarte: {
         fila: numeroFila,
         externalId,
-        motivo: `Patente no reconocible: ${JSON.stringify(leer('patente') ?? '')}.`,
+        motivo: `Sin idVeh y con patente no reconocible: ${JSON.stringify(leer('patente') ?? '')}.`,
       },
     };
   }
@@ -232,6 +246,7 @@ export function mapearFila(
   return {
     registro: {
       externalId,
+      idVeh,
       patente,
       fecha,
       conductor: normalizarNombre(leer('nombreTrab')),

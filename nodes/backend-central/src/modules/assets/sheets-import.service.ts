@@ -20,6 +20,9 @@ export const ORIGEN_SHEETS = 'SHEETS';
 /** Pestaña y rango de la planilla que trae los checklists. */
 const RANGO = 'RESPUESTAS!A1:CN20000';
 
+/** Maestro de vehículos: es lo que traduce `idVeh` a una patente confiable. */
+const RANGO_VEHICULOS = 'VEHICULOS!A1:Z3000';
+
 /** Cuántas filas se insertan por sentencia. */
 const LOTE = 500;
 
@@ -158,6 +161,44 @@ export class SheetsImportService {
     return { unicos, repetidos };
   }
 
+  /**
+   * Maestro de la planilla: `idVeh` -> patente normalizada.
+   *
+   * Es la traducción que hace confiable la identificación del vehículo. La
+   * columna `patente` de RESPUESTAS trae cientos de filas con la placa cruzada
+   * (la de otro vehículo), cosa que ya había detectado la importación anterior;
+   * `idVeh` apunta acá y es estable.
+   */
+  private async maestroVehiculos(): Promise<Map<string, string>> {
+    const filas = await this.sheets.leerRango(RANGO_VEHICULOS);
+    const cabecera = filas[0];
+    if (!cabecera) return new Map();
+    const col = indexarCabecera(cabecera);
+    const iId = col.get('idVeh');
+    const iPat = col.get('patente');
+    if (iId === undefined || iPat === undefined) return new Map();
+
+    const mapa = new Map<string, string>();
+    for (const f of filas.slice(1)) {
+      const id = (f[iId] ?? '').trim().toUpperCase();
+      const patente = normalizarPatente(f[iPat]);
+      if (id && patente) mapa.set(id, patente);
+    }
+    return mapa;
+  }
+
+  /**
+   * Patente definitiva de un registro: la del maestro si trae `idVeh`, y si no
+   * la escrita en la fila.
+   */
+  private patenteDe(r: RegistroImportado, maestro: Map<string, string>): string | null {
+    if (r.idVeh) {
+      const delMaestro = maestro.get(r.idVeh);
+      if (delMaestro) return delMaestro;
+    }
+    return r.patente;
+  }
+
   /** Siguiente código libre de la serie GMT-VH-XXXX. */
   private async siguienteCodigo(): Promise<string> {
     const ultimo = await this.prisma.asset.findFirst({
@@ -187,11 +228,13 @@ export class SheetsImportService {
   private async crearVehiculosFaltantes(
     registros: RegistroImportado[],
     vehiculos: Map<string, { id: string; code: string; templateId: string | null }>,
+    maestro: Map<string, string>,
   ): Promise<Array<{ patente: string; code: string; filas: number }>> {
     const faltantes = new Map<string, number>();
     for (const r of registros) {
-      if (!vehiculos.has(r.patente)) {
-        faltantes.set(r.patente, (faltantes.get(r.patente) ?? 0) + 1);
+      const patente = this.patenteDe(r, maestro);
+      if (patente && !vehiculos.has(patente)) {
+        faltantes.set(patente, (faltantes.get(patente) ?? 0) + 1);
       }
     }
 
@@ -284,20 +327,23 @@ export class SheetsImportService {
 
     // 3. Resolver el vehículo de cada uno, creando el que falte.
     const vehiculos = await this.vehiculosPorPatente();
-    const creados = await this.crearVehiculosFaltantes(unicos, vehiculos);
+    const maestro = await this.maestroVehiculos();
+    const creados = await this.crearVehiculosFaltantes(unicos, vehiculos, maestro);
     const sinVehiculo = new Map<string, number>();
     const sinPlantilla = new Map<string, { code: string; filas: number }>();
     const listos: Array<{ registro: RegistroImportado; assetId: string; templateId: string }> = [];
 
     for (const r of unicos) {
-      const v = vehiculos.get(r.patente);
-      if (!v) {
-        sinVehiculo.set(r.patente, (sinVehiculo.get(r.patente) ?? 0) + 1);
+      const patente = this.patenteDe(r, maestro);
+      const v = patente ? vehiculos.get(patente) : undefined;
+      if (!patente || !v) {
+        const clave = patente ?? `sin patente (idVeh ${r.idVeh ?? '∅'})`;
+        sinVehiculo.set(clave, (sinVehiculo.get(clave) ?? 0) + 1);
         continue;
       }
       if (!v.templateId) {
-        const previo = sinPlantilla.get(r.patente);
-        sinPlantilla.set(r.patente, { code: v.code, filas: (previo?.filas ?? 0) + 1 });
+        const previo = sinPlantilla.get(patente);
+        sinPlantilla.set(patente, { code: v.code, filas: (previo?.filas ?? 0) + 1 });
         continue;
       }
       listos.push({ registro: r, assetId: v.id, templateId: v.templateId });

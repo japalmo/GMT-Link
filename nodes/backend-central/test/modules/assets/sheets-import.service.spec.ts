@@ -10,21 +10,46 @@ import type { PrismaService } from '../../../src/prisma/prisma.service';
  * pudo importar salga reportado en vez de desaparecer.
  */
 
-const CABECERA = ['idForm', 'datetime', 'nombreTrab', 'patente', 'kilometraje', 'sistemaFrenos'];
+const CABECERA = [
+  'idForm',
+  'datetime',
+  'nombreTrab',
+  'idVeh',
+  'patente',
+  'kilometraje',
+  'sistemaFrenos',
+];
 
+/** Fila sin idVeh: cae al respaldo de la patente escrita. */
 function fila(id: string, patente: string, fecha = '14/05/2025 9:34:27'): string[] {
-  return [id, fecha, 'yerko jara', patente, '103699', 'Bueno'];
+  return [id, fecha, 'yerko jara', '', patente, '103699', 'Bueno'];
+}
+
+/** Fila con idVeh, que es la clave autoritativa. */
+function filaConId(id: string, idVeh: string, patenteEscrita: string): string[] {
+  return [id, '14/05/2025 9:34:27', 'yerko jara', idVeh, patenteEscrita, '103699', 'Bueno'];
 }
 
 interface Opciones {
   filas?: string[][];
+  /** Filas del maestro VEHICULOS: [idVeh, patente]. */
+  maestro?: string[][];
   vehiculos?: Array<{ id: string; code: string; identifier: string; templateId: string | null }>;
   yaImportados?: string[];
   configurado?: boolean;
 }
 
 function armar(o: Opciones = {}) {
-  const leerRango = vi.fn().mockResolvedValue([CABECERA, ...(o.filas ?? [])]);
+  const leerRango = vi.fn((rango: string) => {
+    // El servicio lee dos pestañas: los checklists y el maestro de vehículos.
+    if (rango.startsWith('VEHICULOS')) {
+      return Promise.resolve([
+        ['idVeh', 'patente'],
+        ...(o.maestro ?? [['V011', 'SKRF88']]),
+      ]);
+    }
+    return Promise.resolve([CABECERA, ...(o.filas ?? [])]);
+  });
   const sheets = {
     estaConfigurado: () => o.configurado ?? true,
     leerRango,
@@ -277,7 +302,7 @@ describe('SheetsImportService: lo que no puede importar lo REPORTA', () => {
     expect(r.leidas).toBe(4);
     expect(r.importadas).toBe(1);
     expect(r.descartadas.map((d) => d.motivo).join(' | ')).toMatch(
-      /Sin idForm.*Patente no reconocible.*Fecha no interpretable/s,
+      /Sin idForm.*Sin idVeh.*Fecha no interpretable/s,
     );
   });
 
@@ -323,5 +348,47 @@ describe('SheetsImportService: códigos de los vehículos creados', () => {
     expect(new Set(codigos).size).toBe(codigos.length);
     expect(codigos).not.toContain('GMT-VH-0016');
     expect(codigos).not.toContain('GMT-VH-0017');
+  });
+});
+
+describe('SheetsImportService: el vehículo se identifica por idVeh', () => {
+  it('cuando la patente escrita está CRUZADA, manda el idVeh', async () => {
+    // La importación anterior ya había detectado que la columna `patente` de
+    // RESPUESTAS trae cientos de filas con la placa de otro vehículo. Confiar en
+    // ella le sumaría kilómetros a una camioneta que nunca hizo ese viaje.
+    const { servicio, createMany, crearAsset } = armar({
+      filas: [filaConId('F0001', 'V011', 'TRBF43')],
+      maestro: [['V011', 'SKRF88']],
+      vehiculos: [{ id: 'a-1', code: 'GMT-VH-0012', identifier: 'SKRF88', templateId: 'tpl-1' }],
+    });
+    const r = await servicio.importar();
+
+    expect(r.importadas).toBe(1);
+    // Fue al vehículo del maestro, no al de la patente escrita.
+    expect((createMany.mock.calls[0]![0].data[0] as { assetId: string }).assetId).toBe('a-1');
+    expect(crearAsset).not.toHaveBeenCalled();
+  });
+
+  it('sin idVeh cae al respaldo de la patente escrita', async () => {
+    const { servicio, createMany } = armar({ filas: [fila('F0001', 'SKRF88')] });
+    const r = await servicio.importar();
+    expect(r.importadas).toBe(1);
+    expect((createMany.mock.calls[0]![0].data[0] as { assetId: string }).assetId).toBe('a-1');
+  });
+
+  it('descarta la fila sin idVeh y con patente irreconocible', async () => {
+    const { servicio } = armar({ filas: [fila('F0001', 'Prueba')] });
+    const r = await servicio.importar();
+    expect(r.importadas).toBe(0);
+    expect(r.descartadas[0]!.motivo).toContain('Sin idVeh');
+  });
+
+  it('un idVeh que no está en el maestro cae a la patente escrita', async () => {
+    const { servicio, createMany } = armar({
+      filas: [filaConId('F0001', 'V999', 'SKRF88')],
+      maestro: [['V011', 'SKRF88']],
+    });
+    expect((await servicio.importar()).importadas).toBe(1);
+    expect((createMany.mock.calls[0]![0].data[0] as { assetId: string }).assetId).toBe('a-1');
   });
 });
