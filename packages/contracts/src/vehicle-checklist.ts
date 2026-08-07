@@ -107,8 +107,16 @@ const ESTADO_GENERAL: ChecklistTemplateItem[] = [
   ...estado(SEC_GENERAL, 'numeroIdentificacion', 'N° de identificación trasero y lateral'),
   ...estado(SEC_GENERAL, 'logoAutorizacionTransito', 'Logo de autorización de tránsito en faena'),
   // AdBlue no se mide Bueno/Regular/Malo sino por nivel: son los valores que
-  // efectivamente trae la planilla, y varios vehículos no lo llevan.
-  ...estado(SEC_GENERAL, 'nivelAdBlue', 'Nivel de AdBlue', ['Lleno', 'Medio', 'Bajo', 'N/A']),
+  // efectivamente trae la planilla ("1/4" aparece 17 veces), y varios vehículos
+  // no lo llevan, de ahí el N/A.
+  ...estado(SEC_GENERAL, 'nivelAdBlue', 'Nivel de AdBlue', [
+    'Lleno',
+    '3/4',
+    'Medio',
+    '1/4',
+    'Bajo',
+    'N/A',
+  ]),
 ];
 
 /** Sección 2 del formato: EQUIPOS DE EMERGENCIA (11 ítems). */
