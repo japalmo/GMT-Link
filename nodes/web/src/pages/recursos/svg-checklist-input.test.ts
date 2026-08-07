@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseSvgUpload, parseCommentMap, sanitizeSvg } from './svg-checklist-input';
+import { DIAGRAMA_CAMIONETA, PARTES_CARROCERIA } from '@gmt-platform/contracts';
 
 const VALID_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <g id="capo" data-part="Capó"><rect x="0" y="0" width="10" height="10" /></g>
@@ -121,5 +122,60 @@ describe('sanitizeSvg', () => {
     expect(clean).not.toContain('https://evil');
     expect(clean.toLowerCase()).not.toContain('url(');
     expect(clean).toContain('fill:#ff0000'); // el estilo legítimo se conserva
+  });
+});
+
+describe('diagrama real de carrocería', () => {
+  /**
+   * El diagrama viene del formulario que la flota usa hoy en AppScript. Si el
+   * saneado se comiera una parte, el conductor no podría marcarla y nadie se
+   * enteraría: el diagrama seguiría dibujándose, solo que sin esa zona.
+   */
+  it('sobrevive el saneado con sus 40 zonas comentables', () => {
+    const limpio = sanitizeSvg(DIAGRAMA_CAMIONETA);
+    for (const parte of PARTES_CARROCERIA) {
+      expect(limpio, `falta la zona ${parte.id}`).toContain(`id="${parte.id}"`);
+    }
+    expect(PARTES_CARROCERIA).toHaveLength(40);
+  });
+
+  it('conserva TODO el trazado, no solo los grupos', () => {
+    // Se compara entrada contra salida en vez de contra un número fijo: así la
+    // prueba sigue valiendo si algún día se redibuja el diagrama, y falla solo
+    // cuando el saneado de verdad se come algo. Sin trazos quedarían los <g>
+    // vacíos y el diagrama saldría en blanco sin ningún error.
+    const dibujo = /<(path|polyline|polygon|circle|rect|ellipse|line)\b/g;
+    const antes = (DIAGRAMA_CAMIONETA.match(dibujo) ?? []).length;
+    const despues = (sanitizeSvg(DIAGRAMA_CAMIONETA).match(dibujo) ?? []).length;
+
+    expect(antes).toBeGreaterThan(0);
+    expect(despues).toBe(antes);
+    expect(sanitizeSvg(DIAGRAMA_CAMIONETA)).toContain('viewBox="0 0 1567.66 877.34"');
+  });
+
+  it('hereda el color en vez de fijar el navy, para servir en ambos temas', () => {
+    expect(DIAGRAMA_CAMIONETA).toContain('fill="currentColor"');
+    expect(DIAGRAMA_CAMIONETA).not.toContain('#26326b');
+  });
+
+  it('no arrastra el <style> ni los scripts del original', () => {
+    const limpio = sanitizeSvg(DIAGRAMA_CAMIONETA);
+    expect(limpio).not.toContain('<style');
+    expect(limpio).not.toContain('<script');
+  });
+
+  it('las cuatro etiquetas equivocadas del original quedaron corregidas', () => {
+    // El sufijo _i es izquierdo y _d derecho: en el original estas cuatro se
+    // contradecían, y marcar la ventana izquierda salía impreso como derecha.
+    const nombre = (id: string) => PARTES_CARROCERIA.find((p) => p.id === id)?.name;
+    expect(nombre('ventana_di')).toBe('Ventana delantera izquierda');
+    expect(nombre('ventana_ti')).toBe('Ventana trasera izquierda');
+    expect(nombre('espj_d')).toBe('Espejo derecho');
+    expect(nombre('faro_dd')).toBe('Faro derecho');
+  });
+
+  it('ninguna zona queda con el nombre repetido', () => {
+    const nombres = PARTES_CARROCERIA.map((p) => p.name);
+    expect(new Set(nombres).size).toBe(nombres.length);
   });
 });
