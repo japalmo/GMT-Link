@@ -37,6 +37,8 @@ import { FgaService } from '../../fga/fga.service';
 import { AssetsService } from './assets.service';
 import type { UsageCycleResult } from './assets.service';
 import { VehicleUsageService } from './vehicle-usage.service';
+import { SheetsImportService } from './sheets-import.service';
+import type { ResumenImportacion } from './sheets-import.service';
 import {
   CreateAssetDto,
   UpdateAssetDto,
@@ -71,6 +73,7 @@ export class AssetsController {
   constructor(
     private readonly assets: AssetsService,
     private readonly usage: VehicleUsageService,
+    private readonly sheetsImport: SheetsImportService,
     private readonly fga: FgaService,
   ) {}
 
@@ -434,6 +437,34 @@ export class AssetsController {
         ? { ultimaMantencionKm: this.parseKm(ultimaMantencionKm) }
         : {}),
     });
+  }
+
+  /**
+   * Importa los checklists que la flota sigue llenando en la planilla de
+   * AppScript. Solo LEE la planilla; nunca escribe de vuelta.
+   *
+   * Es idempotente: correrlo dos veces no duplica nada. Devuelve el resumen de
+   * qué entró, qué ya estaba y qué quedó fuera con su motivo.
+   *
+   * Se declara ANTES de las rutas `:id/...` porque "checklists" ocuparía el
+   * lugar del id si quedara después.
+   */
+  @Post('checklists/import')
+  @HttpCode(200)
+  async importarChecklists(
+    @CurrentUser() authUser: AuthUser | undefined,
+  ): Promise<ResumenImportacion> {
+    const userId = this.requireUserId(authUser);
+    // Toca la flota entera, así que lo restringe al admin de la organización.
+    const esAdmin = await this.fga.check({
+      user: `user:${userId}`,
+      relation: 'admin',
+      object: 'organization:gmt',
+    });
+    if (!esAdmin) {
+      throw new ForbiddenException('Solo un administrador puede importar los checklists.');
+    }
+    return this.sheetsImport.importar();
   }
 
   /**

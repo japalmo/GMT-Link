@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AssetsController } from '../../src/modules/assets/assets.controller';
 import type { AssetsService } from '../../src/modules/assets/assets.service';
 import type { VehicleUsageService } from '../../src/modules/assets/vehicle-usage.service';
+import type { SheetsImportService } from '../../src/modules/assets/sheets-import.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import type { AuthUser } from '../../src/authz/auth-user.types';
 import {
@@ -27,6 +28,7 @@ interface Mocks {
   check: ReturnType<typeof vi.fn>;
   service: Record<string, ReturnType<typeof vi.fn>>;
   uso: ReturnType<typeof vi.fn>;
+  importar: ReturnType<typeof vi.fn>;
 }
 
 function buildController(options: { allowed?: boolean } = {}): Mocks {
@@ -60,12 +62,20 @@ function buildController(options: { allowed?: boolean } = {}): Mocks {
 
   const uso = vi.fn(() => Promise.resolve({ granularidad: 'semana', serie: [] }));
   const usage = { uso } as unknown as VehicleUsageService;
+  const importar = vi.fn(() => Promise.resolve({ configurado: true, importadas: 0 }));
+  const sheetsImport = { importar } as unknown as SheetsImportService;
 
   return {
-    controller: new AssetsController(service as unknown as AssetsService, usage, fga),
+    controller: new AssetsController(
+      service as unknown as AssetsService,
+      usage,
+      sheetsImport,
+      fga,
+    ),
     check,
     service,
     uso,
+    importar,
   };
 }
 
@@ -357,5 +367,24 @@ describe('AssetsController — uso del vehículo (usage-stats)', () => {
     const { controller, uso } = buildController();
     await controller.usageStats(USER, 'a-1', 'mes');
     expect(Object.keys(uso.mock.calls[0]![2])).toEqual(['granularidad']);
+  });
+});
+
+describe('AssetsController — importar checklists de la planilla', () => {
+  it('lo restringe al admin de la ORGANIZACIÓN: toca la flota entera', async () => {
+    const { controller, check, importar } = buildController();
+    await controller.importarChecklists(USER);
+    expect(check).toHaveBeenCalledWith({
+      user: 'user:u1',
+      relation: 'admin',
+      object: 'organization:gmt',
+    });
+    expect(importar).toHaveBeenCalled();
+  });
+
+  it('deniega 403 SIN importar nada cuando el usuario no es admin', async () => {
+    const { controller, importar } = buildController({ allowed: false });
+    await expect(controller.importarChecklists(USER)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(importar).not.toHaveBeenCalled();
   });
 });

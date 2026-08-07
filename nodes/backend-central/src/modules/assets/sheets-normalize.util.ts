@@ -95,19 +95,80 @@ export function normalizarFecha(crudo: unknown): Date | null {
   );
   if (cl) {
     const [, d, m, a, hh = '0', mm = '0', ss = '0'] = cl;
-    const fecha = new Date(
+    return desdeHoraChilena(
       Number(a),
-      Number(m) - 1,
+      Number(m),
       Number(d),
       Number(hh),
       Number(mm),
       Number(ss),
     );
-    return Number.isNaN(fecha.getTime()) ? null : fecha;
   }
 
   const iso = new Date(texto);
   return Number.isNaN(iso.getTime()) ? null : iso;
+}
+
+/** Huso de la planilla: la hora que muestra es la que ve una persona en Chile. */
+const HUSO_PLANILLA = 'America/Santiago';
+
+/**
+ * Cuánto se aparta del UTC el huso de la planilla en ESE instante.
+ *
+ * Se calcula con `Intl` y no con un número fijo porque Chile cambia de hora dos
+ * veces al año: fijar -4 desplazaría medio año de registros en una hora.
+ */
+function desfaseDelHuso(instante: Date): number {
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: HUSO_PLANILLA,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instante);
+
+  const p = Object.fromEntries(partes.map((x) => [x.type, x.value])) as Record<string, string>;
+  // `Intl` devuelve 24 para la medianoche en algunos entornos; Date.UTC lo
+  // interpretaría como el día siguiente y el desfase saldría con 24 h de error.
+  const hora = p.hour === '24' ? 0 : Number(p.hour);
+  const comoSiFueraUTC = Date.UTC(
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    hora,
+    Number(p.minute),
+    Number(p.second),
+  );
+  return comoSiFueraUTC - instante.getTime();
+}
+
+/**
+ * Construye la fecha a partir de una hora de PARED chilena.
+ *
+ * La planilla guarda "14/05/2025 9:34:27" sin decir de qué huso habla: es la
+ * hora que ve quien la abre en Chile. Interpretarla con el huso del SERVIDOR
+ * haría que la misma fila entrara distinta según dónde corra el proceso: en esta
+ * máquina (Chile) queda bien, pero la API corre en Railway con el reloj en UTC,
+ * y ahí cada checklist se guardaría cuatro horas corrido. Los de la madrugada
+ * cambiarían de día y el gráfico de uso los contaría en la fecha equivocada.
+ */
+export function desdeHoraChilena(
+  anio: number,
+  mes: number,
+  dia: number,
+  hh = 0,
+  mm = 0,
+  ss = 0,
+): Date | null {
+  const tentativa = Date.UTC(anio, mes - 1, dia, hh, mm, ss);
+  if (Number.isNaN(tentativa)) return null;
+  // Se resta el desfase medido en la propia tentativa. Basta una pasada: el
+  // error residual solo aparecería en la hora exacta del cambio de horario.
+  const fecha = new Date(tentativa - desfaseDelHuso(new Date(tentativa)));
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
 }
 
 /** Número de la planilla: acepta "1.234,5", "1234.5" y el número puro. */

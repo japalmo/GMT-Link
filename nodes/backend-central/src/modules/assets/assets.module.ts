@@ -10,6 +10,8 @@ import { AssetsService } from './assets.service';
 import { ExpiryNoticesService } from './expiry-notices.service';
 import { ExpiryNoticesScheduler } from './expiry-notices.scheduler';
 import { VehicleUsageService } from './vehicle-usage.service';
+import { SheetsClientService } from './sheets-client.service';
+import { SheetsImportService } from './sheets-import.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -24,7 +26,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ScheduleModule.forRoot(),
   ],
   controllers: [AssetsController],
-  providers: [AssetsService, ExpiryNoticesService, ExpiryNoticesScheduler, VehicleUsageService],
-  exports: [AssetsService, ExpiryNoticesService, VehicleUsageService],
+  providers: [
+    AssetsService,
+    ExpiryNoticesService,
+    ExpiryNoticesScheduler,
+    VehicleUsageService,
+    SheetsClientService,
+    SheetsImportService,
+  ],
+  exports: [AssetsService, ExpiryNoticesService, VehicleUsageService, SheetsImportService],
 })
 export class AssetsModule {}

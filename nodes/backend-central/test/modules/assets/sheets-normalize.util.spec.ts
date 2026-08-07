@@ -56,18 +56,29 @@ describe('normalizarPatente', () => {
 describe('normalizarFecha', () => {
   it('lee el formato chileno con el DÍA primero', () => {
     // Leerlo al revés movería el registro casi un mes sin que nadie lo note.
+    // Se comprueba en UTC y no con getDate()/getHours(), que dependen del huso
+    // de la máquina: en Chile pasarían y en el servidor de Railway no.
     const d = normalizarFecha('14/05/2025 9:34:27')!;
-    expect(d.getDate()).toBe(14);
-    expect(d.getMonth()).toBe(4); // mayo
-    expect(d.getFullYear()).toBe(2025);
-    expect(d.getHours()).toBe(9);
-    expect(d.getMinutes()).toBe(34);
+    expect(d.toISOString()).toBe('2025-05-14T13:34:27.000Z'); // 09:34 en Chile
+  });
+
+  it('interpreta la hora como CHILENA, no como la del servidor', () => {
+    // La planilla guarda la hora de pared que ve una persona en Chile. Si se
+    // leyera con el huso del proceso, la misma fila entraría distinta en esta
+    // máquina y en Railway (que corre en UTC), y los checklists de la madrugada
+    // cambiarían de día.
+    const invierno = normalizarFecha('14/05/2025 09:34:00')!;
+    expect(invierno.toISOString()).toBe('2025-05-14T13:34:00.000Z'); // UTC-4
+
+    // En horario de verano Chile pasa a UTC-3: el desfase se calcula por fecha
+    // y no con un número fijo.
+    const verano = normalizarFecha('14/01/2025 09:34:00')!;
+    expect(verano.toISOString()).toBe('2025-01-14T12:34:00.000Z'); // UTC-3
   });
 
   it('distingue el día del mes en una fecha ambigua', () => {
     const d = normalizarFecha('05/06/2025')!;
-    expect(d.getDate()).toBe(5);
-    expect(d.getMonth()).toBe(5); // junio
+    expect(d.toISOString().slice(0, 10)).toBe('2025-06-05');
   });
 
   it('acepta ISO y el número de serie de la hoja de cálculo', () => {
