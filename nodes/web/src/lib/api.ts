@@ -130,6 +130,8 @@ import type {
   UsageCycleView,
   UsageCycleResult,
   EndUsageCycleInput,
+  UsoGranularidad,
+  UsoVehiculoView,
 } from '@/types/assets';
 
 /** Base de la API (NestJS). Cae a localhost si la var no está definida. */
@@ -2176,6 +2178,35 @@ export function reviewAssetDocument(
 
 export function getAssetHistory(id: string): Promise<AssetHistoryEntryView[]> {
   return request<AssetHistoryEntryView[]>(`/assets/${encodeURIComponent(id)}/history`);
+}
+
+/**
+ * `GET /assets/:id/usage-stats` — uso del vehículo derivado del odómetro de sus
+ * checklists: serie del gráfico, promedios y proyección de mantención.
+ *
+ * Los filtros van por query. `desde`/`hasta` en ISO-8601; la granularidad
+ * agrupa el gráfico y por defecto es semanal.
+ */
+export function getAssetUsageStats(
+  id: string,
+  filtros: {
+    granularidad?: UsoGranularidad;
+    desde?: string;
+    hasta?: string;
+    ultimaMantencionKm?: number;
+  } = {},
+): Promise<UsoVehiculoView> {
+  const query = new URLSearchParams();
+  if (filtros.granularidad) query.set('granularidad', filtros.granularidad);
+  if (filtros.desde) query.set('desde', filtros.desde);
+  if (filtros.hasta) query.set('hasta', filtros.hasta);
+  if (filtros.ultimaMantencionKm !== undefined) {
+    query.set('ultimaMantencionKm', String(filtros.ultimaMantencionKm));
+  }
+  const qs = query.toString();
+  return request<UsoVehiculoView>(
+    `/assets/${encodeURIComponent(id)}/usage-stats${qs ? `?${qs}` : ''}`,
+  );
 }
 
 export function listAssetAccessories(id: string): Promise<AssetAccessoryView[]> {

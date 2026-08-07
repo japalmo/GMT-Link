@@ -11,11 +11,9 @@ import {
   createAsset,
   deleteAsset,
   releaseAssetUse,
-  getAssetDocumentFileUrl,
   ApiError,
   type TableRequest,
 } from '@/lib/api';
-import { FreshFileLink } from '@/components/documents/fresh-file-link';
 import { useProfile } from '@/hooks/use-profile';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import {
@@ -27,7 +25,6 @@ import {
   Clock,
   ArrowLeft,
   AlertCircle,
-  Package,
   ListTodo,
   ClipboardCheck,
   Settings,
@@ -61,20 +58,21 @@ import { AssetEditDialog } from './asset-edit-dialog';
 import { useUsageCycles } from '@/hooks/use-usage-cycles';
 import { UsageCycleTimerCard } from './usage-cycle-card';
 import { EndUsageForm } from './end-usage-form';
-import { UsageHistory } from './usage-history';
-import { SvgChecklistInput, parseCommentMap } from './svg-checklist-input';
+import { SvgChecklistInput } from './svg-checklist-input';
 import { ChecklistFillBody } from './checklist-fill-body';
 import { useChecklistSignature } from './checklist-signature-dialog';
 import { buildChecklistAnswers } from './checklist-answers';
 import { ReportarUsoOverlay } from './reportar-uso-overlay';
+import { DocumentacionVehiculo } from './documentacion-vehiculo';
+import { HistorialChecklists } from './historial-checklists';
+import { UsoWidget } from './uso-widget';
+import { AvisosVehiculo } from './avisos-vehiculo';
 import { useAuth } from '@/context/auth-context';
 import type {
   AssetView,
   AssetType,
   AssetStatus,
   AssetDocumentView,
-  AssetHistoryEntryView,
-  AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
   ChecklistTemplateItem,
@@ -977,16 +975,10 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
   const {
     getById,
     updateStatus,
-    assign,
     releaseUse,
     uploadDoc,
     listDocs,
     reviewDoc,
-    getHistory,
-    listAccessories,
-    addAccessory,
-    updateAccessory,
-    deleteAccessory,
     getTemplate,
     updateTemplate,
     reviewTemplate,
@@ -1007,33 +999,23 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
   const [asset, setAsset] = useState<AssetView | null>(null);
   const [docs, setDocs] = useState<AssetDocumentView[]>([]);
-  const [history, setHistory] = useState<AssetHistoryEntryView[]>([]);
-  const [accessories, setAccessories] = useState<AssetAccessoryView[]>([]);
   const [template, setTemplate] = useState<ChecklistTemplateView | null>(null);
   const [submissions, setSubmissions] = useState<ChecklistSubmissionView[]>([]);
 
   // Ciclo de uso: lista de ciclos (historial) + el activo derivado (a lo más uno
   // EN_PREPARACION o EN_CURSO). El diálogo de "Terminar uso" y el flag de acción
   // en curso viven aparte para no bloquear el resto de las acciones del detalle.
-  const [cycles, setCycles] = useState<UsageCycleView[]>([]);
   const [activeCycle, setActiveCycle] = useState<UsageCycleView | null>(null);
   const [endFormOpen, setEndFormOpen] = useState(false);
   const [cycleActioning, setCycleActioning] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserOption[]>([]);
-  const [docFile, setDocFile] = useState<File | null>(null);
-  const [docName, setDocName] = useState('');
-  const [docType, setDocType] = useState('CERT');
-  const [docError, setDocError] = useState<string | null>(null);
-  const [docExpDate, setDocExpDate] = useState('');
 
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [newStatus, setNewStatus] = useState<AssetStatus>('DISPONIBLE');
   const [statusDesc, setStatusDesc] = useState('');
 
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [newAssignId, setNewAssignId] = useState('');
 
   // Tabs for detailed view. Con `initialTarget='checklist'|'documentos'` (poner en
   // uso desde la tabla o deep-link "Ver documentos") se monta directo en la pestaña
@@ -1060,13 +1042,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
   const [rejectingDocId, setRejectingDocId] = useState<string | null>(null);
   const [rejectingTpl, setRejectingTpl] = useState(false);
-
-  // Accesorios state
-  const [accName, setAccName] = useState('');
-  const [accDesc, setAccDesc] = useState('');
-  const [accSN, setAccSN] = useState('');
-  const [editingAccId, setEditingAccId] = useState<string | null>(null);
-  const [deleteAccId, setDeleteAccId] = useState<string | null>(null);
 
   // Checklist template state & builder
   const [tplName, setTplName] = useState('');
@@ -1105,7 +1080,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       const a = await getById(id);
       setAsset(a);
       setNewStatus(a.status);
-      setNewAssignId(a.assignedToId || '');
 
       // Documentos e historial son admin/gerencia (el backend los gatea con
       // can_manage_assets). Se ramifica sobre `a.canManageAssets` — el flag
@@ -1113,14 +1087,10 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       // el rol coarse: así un gestor del proyecto los ve y un no-gestor no los pide.
       // El `.catch` cierra cualquier borde (403 por carrera) para que jamás tumbe la
       // carga del resto del detalle (operación), que es visible para todos.
-      const [dList, hList] = a.canManageAssets
-        ? await Promise.all([
-            listDocs(id).catch(() => [] as AssetDocumentView[]),
-            getHistory(id).catch(() => [] as AssetHistoryEntryView[]),
-          ])
-        : [[] as AssetDocumentView[], [] as AssetHistoryEntryView[]];
-      const [accList, tpl, subList, cycList] = await Promise.all([
-        listAccessories(id),
+      const dList = a.canManageAssets
+        ? await listDocs(id).catch(() => [] as AssetDocumentView[])
+        : ([] as AssetDocumentView[]);
+      const [tpl, subList, cycList] = await Promise.all([
         getTemplate(id),
         listSubmissions(id),
         // Los ciclos de uso son un endpoint nuevo: si fallara (backend viejo) NO
@@ -1128,14 +1098,11 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
         listCycles(id).catch(() => [] as UsageCycleView[]),
       ]);
       setDocs(dList);
-      setHistory(hList);
-      setAccessories(accList);
       setTemplate(tpl);
       setSubmissions(subList);
       setTplName(tpl?.name || '');
       setTplItems(tpl?.items || []);
       setTplSections(tpl?.sections ?? []);
-      setCycles(cycList);
       // A lo más un ciclo vigente (el backend lo garantiza): el que esté
       // EN_PREPARACION o EN_CURSO manda el timer / las acciones de cierre.
       setActiveCycle(
@@ -1146,7 +1113,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     } finally {
       setLoading(false);
     }
-  }, [id, getById, listDocs, getHistory, listAccessories, getTemplate, listSubmissions, listCycles]);
+  }, [id, getById, listDocs, getTemplate, listSubmissions, listCycles]);
 
   useEffect(() => {
     void loadData();
@@ -1235,13 +1202,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     }
   };
 
-  const handleCloseAssignModal = () => {
-    setAssignModalOpen(false);
-    if (asset) {
-      setNewAssignId(asset.assignedToId || '');
-    }
-  };
-
   const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (actioning) return;
@@ -1259,44 +1219,22 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     }
   };
 
-  const handleAssign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (actioning) return;
-    setActioning('assign');
-    try {
-      await assign(id, newAssignId || null);
-      handleCloseAssignModal();
-      toast.success('Responsable asignado con éxito.');
-      void loadData();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al cambiar responsable.';
-      toast.error(msg);
-    } finally {
-      setActioning(null);
-    }
-  };
-
-  const handleUploadDoc = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setDocError(null);
-    if (!docFile || !docName) {
-      setDocError('Nombre y archivo son requeridos.');
-      return;
-    }
-    try {
-      await uploadDoc(id, docName, docType, docFile, docExpDate || undefined);
-      setDocName('');
-      setDocFile(null);
-      setDocExpDate('');
-      // Reset input element
-      const fileInput = document.getElementById('doc-file') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-      toast.success('Documento subido con éxito.');
-      void loadData();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al subir documento.';
-      setDocError(msg);
-    }
+  /**
+   * Sube un documento del vehículo. El nombre y el tipo los decide el casillero
+   * de `DocumentacionVehiculo`, no un formulario libre.
+   *
+   * PROPAGA el error en vez de tragárselo: el formulario que llamó es el que
+   * tiene que mostrarlo junto al campo y mantenerse abierto para reintentar.
+   */
+  const handleSubirDocumento = async (
+    nombre: string,
+    tipo: string,
+    archivo: File,
+    vencimiento?: string,
+  ): Promise<void> => {
+    await uploadDoc(id, nombre, tipo, archivo, vencimiento);
+    toast.success('Documento subido con éxito.');
+    void loadData();
   };
 
   const handleReviewDoc = async (docId: string, status: 'APROBADO' | 'RECHAZADO', reason?: string) => {
@@ -1311,50 +1249,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al revisar documento.';
       toast.error(msg);
-    }
-  };
-
-  const handleAddAccessory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!accName) return;
-    try {
-      if (editingAccId) {
-        await updateAccessory(id, editingAccId, {
-          name: accName,
-          description: accDesc || undefined,
-          serialNumber: accSN || undefined,
-        });
-        setEditingAccId(null);
-        toast.success('Accesorio actualizado con éxito.');
-      } else {
-        await addAccessory(id, {
-          name: accName,
-          description: accDesc || undefined,
-          serialNumber: accSN || undefined,
-        });
-        toast.success('Accesorio agregado con éxito.');
-      }
-      setAccName('');
-      setAccDesc('');
-      setAccSN('');
-      void loadData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al guardar accesorio.');
-    }
-  };
-
-  const handleDeleteAccessory = async (accId: string) => {
-    if (actioning) return;
-    setActioning('deleteAccessory');
-    try {
-      await deleteAccessory(id, accId);
-      toast.success('Accesorio eliminado con éxito.');
-      void loadData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al eliminar accesorio.');
-    } finally {
-      setActioning(null);
-      setDeleteAccId(null);
     }
   };
 
@@ -1717,7 +1611,9 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header back button */}
+      {/* Header back button. La ficha técnica va arriba a la derecha del nombre:
+          es lo primero que se busca al entrar al detalle. */}
+      <div className="flex items-start justify-between gap-3">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="size-4" />
@@ -1729,6 +1625,15 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
           </div>
           <p className="text-xs text-muted-foreground">Ficha de activo y trazabilidad</p>
         </div>
+      </div>
+
+        {asset.publicToken ? (
+          <QrFichaPublica
+            publicToken={asset.publicToken}
+            code={asset.code}
+            nombre={asset.name}
+          />
+        ) : null}
       </div>
 
       {/* Timer EN VIVO del uso activo (ciclo EN_PREPARACION o EN_CURSO). Va arriba
@@ -1743,7 +1648,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       )}
 
       <div className="flex flex-col gap-6">
-        {/* Pestañas del detalle: Información · Operación · Historial (docs+historial solo admin). */}
+        {/* Pestañas del detalle: Información · Documentación · Historial. */}
         <div className="flex border-b border-border gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
@@ -1765,7 +1670,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            <ClipboardCheck className="size-3.5" /> Operación
+            <FileText className="size-3.5" /> Documentación
           </button>
           {/* Historial: solo quien gestiona el activo (backend: can_manage_assets). */}
           {canManageAsset && (
@@ -1778,12 +1683,16 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              <History className="size-3.5" /> Historial ({history.length})
+              <History className="size-3.5" /> Historial ({submissions.length})
             </button>
           )}
         </div>
 
         {detailTab === 'informacion' && (
+          <div className="flex flex-col gap-6">
+          {/* Información general y avisos en paralelo: la ficha ocupa la mitad y
+              lo que requiere acción queda a la vista sin tener que bajar. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <Card>
             <CardHeader className="pb-3 flex flex-row justify-between items-start gap-4">
               <div>
@@ -1799,14 +1708,9 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 <Button size="sm" variant="outline" onClick={() => setStatusModalOpen(true)}>
                   Cambiar Estado
                 </Button>
-                {isAdmin && (
-                  <Button size="sm" variant="outline" onClick={() => setAssignModalOpen(true)}>
-                    Responsable
-                  </Button>
-                )}
               </div>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <CardContent className="grid grid-cols-1 gap-4 text-sm">
               <div className="space-y-3">
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Tipo de Recurso:</span>
@@ -1819,15 +1723,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Proyecto asignado:</span>
                   <span className="font-medium">{asset.project?.name || 'Global / Libre'}</span>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex justify-between border-b pb-2">
-                  <span className="text-muted-foreground">Responsable a cargo:</span>
-                  <span className="font-medium">
-                    {asset.assignedTo ? `${asset.assignedTo.firstName} ${asset.assignedTo.lastName}` : 'Sin asignar'}
-                  </span>
                 </div>
                 {asset.status === 'EN_USO' && !activeCycle && (
                   <>
@@ -1856,7 +1751,9 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 return (
                   <div className="col-span-full mt-2 bg-muted/20 border p-3 rounded-lg">
                     <p className="text-xs font-semibold text-primary mb-2">Especificaciones de Ficha</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Una sola columna: la tarjeta ahora ocupa media pantalla y
+                        dos columnas dejaban las etiquetas pegadas a los valores. */}
+                    <div className="grid grid-cols-1 gap-2">
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Fabricante:</span>
                         <span className="font-medium text-foreground">{asset.manufacturer || 'No declarado'}</span>
@@ -1944,280 +1841,27 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
               </div>
             </CardFooter>
           </Card>
+
+          <AvisosVehiculo docs={docs} submissions={submissions} />
+          </div>
+
+          {/* Uso del vehículo a ancho completo: el gráfico necesita el espacio y
+              solo aplica a vehículos, que son los que reportan odómetro. */}
+          {asset.type === 'VEHICULO' && canManageAsset && <UsoWidget assetId={asset.id} />}
+          </div>
         )}
 
           {/* Documentos del activo: solo quien gestiona (backend: can_manage_assets). */}
           {detailTab === 'ficha' && canManageAsset && (
-            <Card ref={docsRef}>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileText className="size-4 text-primary" /> Documentos del Activo
-                  </CardTitle>
-                  <CardDescription>Certificaciones, manuales y hojas de vida</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                {/* Form Upload */}
-                <form onSubmit={handleUploadDoc} className="border border-dashed p-4 rounded-lg bg-card/25 flex flex-col gap-3">
-                  <p className="text-xs font-semibold text-foreground">Cargar Documentación</p>
-                  {docError && <p className="text-xs text-destructive">{docError}</p>}
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="doc-name" className="text-xs">Nombre Documento</Label>
-                      <Input
-                        id="doc-name"
-                        required
-                        value={docName}
-                        onChange={(e) => setDocName(e.target.value)}
-                        placeholder="Ej. Certificación TÜV 2026"
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="doc-type" className="text-xs">Categoría</Label>
-                      <Select
-                        id="doc-type"
-                        aria-label="Categoría del documento"
-                        value={docType}
-                        onChange={(e) => setDocType(e.target.value)}
-                        className="h-8 text-xs"
-                      >
-                        <option value="CERT">Certificado</option>
-                        <option value="MANUAL">Manual Técnico</option>
-                        <option value="SEGURO">Seguro / Póliza</option>
-                        <option value="HOJA_VIDA">Hoja de Vida / Checklists</option>
-                      </Select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="doc-exp" className="text-xs">Expiración (Opcional)</Label>
-                      <Input
-                        id="doc-exp"
-                        type="date"
-                        value={docExpDate}
-                        onChange={(e) => setDocExpDate(e.target.value)}
-                        className="h-8 text-xs bg-transparent"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="doc-file" className="text-xs">Archivo (PDF o Imagen)</Label>
-                      <input
-                        id="doc-file"
-                        type="file"
-                        required
-                        onChange={(e) => setDocFile(e.target.files?.[0] || null)}
-                        className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-xs"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end mt-1">
-                    <Button type="submit" size="sm">Subir Documento</Button>
-                  </div>
-                </form>
-
-                {/* Docs list */}
-                {docs.length === 0 ? (
-                  <p className="text-center text-xs text-muted-foreground py-6">No hay documentos registrados para este activo.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {docs.map((doc) => {
-                      const isExpired = doc.expirationDate ? new Date(doc.expirationDate).getTime() < Date.now() : false;
-                      const isExpiringSoon = doc.expirationDate && !isExpired ? (new Date(doc.expirationDate).getTime() - Date.now()) < 30 * 24 * 60 * 60 * 1000 : false;
-                      
-                      return (
-                        <div
-                          key={doc.id}
-                          className="flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border bg-card/30 text-xs gap-3"
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-foreground text-sm">{doc.name}</span>
-                              <Badge variant="outline" className="text-[10px] py-0">{doc.type}</Badge>
-                              {doc.expirationDate && (
-                                <Badge className={`text-[10px] py-0 ${
-                                  isExpired ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
-                                  isExpiringSoon ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse' :
-                                  'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                                }`}>
-                                  {isExpired ? 'Vencido' : isExpiringSoon ? 'Por Vencer' : 'Vigente'}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">
-                              Estado: <span className="font-medium text-foreground">{doc.status}</span>
-                              {doc.expirationDate && (
-                                <span className="ml-2 font-mono text-[10px]">
-                                  (Vence: {formatDate(doc.expirationDate)})
-                                </span>
-                              )}
-                            </p>
-                          </div>
-
-                        <div className="flex items-center gap-3 justify-end">
-                          <FreshFileLink
-                            getUrl={() => getAssetDocumentFileUrl(doc.assetId, doc.id)}
-                            className="text-xs text-primary font-medium hover:underline"
-                            aria-label={`Ver archivo de ${doc.name}`}
-                          >
-                            Ver Archivo
-                          </FreshFileLink>
-
-                          {doc.status === 'EN_REVISION' && isAdmin && (
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                className="bg-emerald-500 hover:bg-emerald-600 text-white"
-                                onClick={() => handleReviewDoc(doc.id, 'APROBADO')}
-                              >
-                                Aprobar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleReviewDoc(doc.id, 'RECHAZADO')}
-                              >
-                                Rechazar
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Accessories — bajo Información (Tanda 5.2). */}
-          {detailTab === 'informacion' && (
-            <Card>
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Package className="size-4 text-primary" /> Accesorios del Activo
-                  </CardTitle>
-                  <CardDescription>Piezas, herramientas secundarias y complementos asignados</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-6">
-                {/* Formulario agregar/editar: visible a quien puede gestionar el activo. */}
-                {canManageAsset && (
-                  <form onSubmit={handleAddAccessory} className="border border-dashed p-4 rounded-lg bg-card/25 flex flex-col gap-3">
-                    <p className="text-xs font-semibold text-foreground">
-                      {editingAccId ? 'Editar Accesorio' : 'Registrar Nuevo Accesorio'}
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="acc-name" className="text-xs">Nombre</Label>
-                        <Input
-                          id="acc-name"
-                          required
-                          value={accName}
-                          onChange={(e) => setAccName(e.target.value)}
-                          placeholder="Ej. Sonda de georradar"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="acc-desc" className="text-xs">Descripción (Opcional)</Label>
-                        <Input
-                          id="acc-desc"
-                          value={accDesc}
-                          onChange={(e) => setAccDesc(e.target.value)}
-                          placeholder="Ej. Sonda de repuesto"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="acc-sn" className="text-xs">N° de Serie (Opcional)</Label>
-                        <Input
-                          id="acc-sn"
-                          value={accSN}
-                          onChange={(e) => setAccSN(e.target.value)}
-                          placeholder="Ej. SN-SNDA-998"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-1">
-                      {editingAccId && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingAccId(null);
-                            setAccName('');
-                            setAccDesc('');
-                            setAccSN('');
-                          }}
-                        >
-                          Cancelar
-                        </Button>
-                      )}
-                      <Button type="submit" size="sm">
-                        {editingAccId ? 'Actualizar Accesorio' : 'Agregar Accesorio'}
-                      </Button>
-                    </div>
-                  </form>
-                )}
-
-                {/* List */}
-                {accessories.length === 0 ? (
-                  <p className="text-center text-xs text-muted-foreground py-6">No hay accesorios asignados a este equipo.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {accessories.map((acc) => (
-                      <div key={acc.id} className="flex justify-between items-center p-3 rounded-lg border bg-card/30 text-xs">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-semibold text-foreground text-sm">{acc.name}</span>
-                          {acc.description && <p className="text-muted-foreground mt-0.5">{acc.description}</p>}
-                          {acc.serialNumber && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                              S/N: {acc.serialNumber}
-                            </p>
-                          )}
-                        </div>
-                        {canManageAsset && (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setEditingAccId(acc.id);
-                                setAccName(acc.name);
-                                setAccDesc(acc.description || '');
-                                setAccSN(acc.serialNumber || '');
-                              }}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive hover:bg-destructive/10"
-                              onClick={() => setDeleteAccId(acc.id)}
-                            >
-                              Eliminar
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Ficha pública: el QR que va grabado en la plaquita del vehículo.
-              Bajo Operación, junto al checklist, que es donde se administra el
-              activo en terreno. */}
-          {detailTab === 'ficha' && asset?.publicToken && (
-            <QrFichaPublica publicToken={asset.publicToken} code={asset.code} />
+            <div ref={docsRef}>
+              <DocumentacionVehiculo
+                assetId={asset.id}
+                docs={docs}
+                puedeRevisar={isAdmin === true}
+                onSubir={handleSubirDocumento}
+                onRevisar={handleReviewDoc}
+              />
+            </div>
           )}
 
           {/* Checklist — bajo la pestaña Operación (visible para todos). */}
@@ -2600,190 +2244,21 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                   </form>
                 )}
 
-                {/* Submissions list */}
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                    <History className="size-3.5" /> Historial de Inspecciones ({submissions.length})
-                  </p>
-                  
-                  {submissions.length === 0 ? (
-                    <p className="text-center text-xs text-muted-foreground border py-6 rounded">
-                      No hay reportes de checklist enviados anteriormente para este activo.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {submissions.map((sub) => {
-                        const hasSubFailure = sub.answers.some(isAnswerFailure);
-
-                        // Observaciones companion cuyo texto ya viaja como `comment`
-                        // del ESTADO padre (envíos nuevos); se ocultan para no
-                        // duplicar. Los envíos viejos que la guardaron como respuesta
-                        // propia se siguen mostrando.
-                        const redundantObsIds = new Set(
-                          sub.answers
-                            .filter((a) => typeof a.comment === 'string' && a.comment.trim() !== '')
-                            .map((a) => template?.items.find((it) => it.id === a.itemId)?.config?.obsItemId)
-                            .filter((v): v is string => Boolean(v)),
-                        );
-
-                        return (
-                          <div
-                            key={sub.id}
-                            className={`p-3 rounded-lg border text-xs gap-3 flex flex-col bg-card/30 ${
-                              hasSubFailure ? 'border-rose-500/20 bg-rose-500/5' : ''
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-foreground">
-                                  Inspección por {sub.user ? `${sub.user.firstName} ${sub.user.lastName}` : 'Desconocido'}
-                                </span>
-                                {hasSubFailure && (
-                                  <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/20 text-[10px] py-0">
-                                    Falla Reportada
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-[10px] text-muted-foreground font-mono">
-                                {new Date(sub.createdAt).toLocaleDateString('es-CL')} {new Date(sub.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1 border-t pt-2 border-border/40">
-                              {sub.answers.map((ans, idx) => {
-                                if (redundantObsIds.has(ans.itemId)) return null;
-                                const tItem = template?.items.find((it) => it.id === ans.itemId);
-
-                                // Ítem SVG: el valor es el JSON del mapa de comentarios.
-                                // Se muestra el conteo + cada parte observada (no el JSON crudo).
-                                if (tItem?.type === 'SVG') {
-                                  const svgMap = parseCommentMap(
-                                    typeof ans.value === 'string' ? ans.value : '',
-                                  );
-                                  const entries = Object.values(svgMap);
-                                  return (
-                                    <div key={idx} className="flex flex-col gap-0.5 text-[11px] border-b border-border/20 pb-1 md:col-span-2">
-                                      <div className="flex justify-between gap-2">
-                                        <span className="text-muted-foreground truncate">{ans.label || ans.itemId}:</span>
-                                        <span className="font-semibold text-foreground">
-                                          {entries.length === 0
-                                            ? 'Sin observaciones'
-                                            : `${entries.length} ${entries.length === 1 ? 'observación' : 'observaciones'}`}
-                                        </span>
-                                      </div>
-                                      {entries.map((entry, i) => (
-                                        <span key={i} className="text-muted-foreground italic break-words">
-                                          {entry.part}: {entry.comment}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  );
-                                }
-
-                                const fail = isAnswerFailure(ans);
-                                const display =
-                                  ans.value === true ? 'Sí' :
-                                  ans.value === false ? 'No' :
-                                  ans.value === null || ans.value === '' ? 'Sin dato' :
-                                  String(ans.value);
-                                return (
-                                  <div key={idx} className="flex flex-col gap-0.5 text-[11px] border-b border-border/20 pb-1">
-                                    <div className="flex justify-between gap-2">
-                                      <span className="text-muted-foreground truncate">{ans.label || ans.itemId}:</span>
-                                      <span className={`font-semibold ${
-                                        fail ? 'text-rose-500' :
-                                        ans.value === true ? 'text-emerald-500' : 'text-foreground'
-                                      }`}>
-                                        {display}
-                                      </span>
-                                    </div>
-                                    {typeof ans.comment === 'string' && ans.comment.trim() !== '' && (
-                                      <span className="text-muted-foreground italic break-words">Obs: {ans.comment}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            <div className="flex justify-end mt-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-[11px]"
-                                disabled={downloadingPdfId !== null}
-                                onClick={() => void handleDownloadPdf(sub.id)}
-                              >
-                                <FileText className="size-3 mr-1.5" />
-                                {downloadingPdfId === sub.id ? 'Generando...' : 'Descargar PDF'}
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Historial de Uso: solo quien gestiona el activo (backend: can_manage_assets). */}
+          {/* Historial: SOLO los checklists. Los ciclos de uso y la bitácora de
+              eventos salieron por decisión de Juan: la trazabilidad que se usa de
+              verdad es la del checklist, con su conductor y su kilometraje. */}
           {detailTab === 'historial' && canManageAsset && (
-            <div className="flex flex-col gap-6">
-              {/* Ciclos de uso: tabla principal del historial (clic en fila = detalle). */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <History className="size-4 text-primary" /> Ciclos de uso
-                  </CardTitle>
-                  <CardDescription>
-                    Cada uso del activo (reporte, checklist, término) con su forma de cierre.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <UsageHistory cycles={cycles} onRetry={() => void loadData()} />
-                </CardContent>
-              </Card>
-
-              {/* Bitácora de eventos (timeline): subsección con el historial crudo. */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <History className="size-4 text-muted-foreground" /> Bitácora de eventos
-                  </CardTitle>
-                  <CardDescription>
-                    Tomas, liberaciones, checklists y cambios de estado del activo.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {history.length === 0 ? (
-                    <p className="text-center text-xs text-muted-foreground border border-dashed py-8 rounded">
-                      No hay registros de uso para este activo todavía.
-                    </p>
-                  ) : (
-                    <div className="relative border-l border-border ml-2 pl-4 space-y-4 py-2">
-                      {history.map((h) => (
-                        <div key={h.id} className="relative text-xs">
-                          <span className="absolute -left-[21px] top-1 size-2 rounded-full bg-primary border border-background" />
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="outline" className="text-[10px] py-0">{h.type}</Badge>
-                              <span className="font-medium text-foreground">{h.description}</span>
-                            </div>
-                            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                              <span>Por {h.actor ? `${h.actor.firstName} ${h.actor.lastName}` : 'Sistema'}</span>
-                              <span className="font-mono">
-                                {new Date(h.createdAt).toLocaleDateString('es-CL')} {new Date(h.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            <HistorialChecklists
+              submissions={submissions}
+              template={template}
+              esFalla={isAnswerFailure}
+              descargandoId={downloadingPdfId}
+              onDescargarPdf={(subId) => void handleDownloadPdf(subId)}
+            />
           )}
       </div>
 
@@ -2896,55 +2371,6 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
       )}
 
       {/* DIALOG ASSIGN RESPONSIBLE */}
-      {assignModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <Card className="w-full max-w-sm bg-card shadow-lg border border-border animate-in fade-in zoom-in duration-200">
-            <form onSubmit={handleAssign}>
-              <CardHeader>
-                <CardTitle>Asignar Responsable</CardTitle>
-                <CardDescription>Asigna el cargo y checklist del activo a un colaborador.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="assign-select">Colaborador Responsable</Label>
-                  <Select
-                    id="assign-select"
-                    aria-label="Colaborador responsable"
-                    value={newAssignId}
-                    onChange={(e) => setNewAssignId(e.target.value)}
-                  >
-                    <option value="">Desasignar responsable</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-                    ))}
-                  </Select>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={handleCloseAssignModal}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={actioning !== null}>
-                  {actioning === 'assign' ? 'Asignando...' : 'Asignar'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={deleteAccId !== null}
-        onOpenChange={(open) => !open && setDeleteAccId(null)}
-        title="¿Eliminar accesorio?"
-        description="Esta acción eliminará de forma permanente el accesorio seleccionado. ¿Deseas continuar?"
-        onConfirm={async () => {
-          if (deleteAccId) {
-            await handleDeleteAccessory(deleteAccId);
-          }
-        }}
-      />
-
       <RejectDialog
         open={rejectingDocId !== null}
         onOpenChange={(open) => !open && setRejectingDocId(null)}

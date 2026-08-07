@@ -27,6 +27,12 @@ import type {
   UsageEndKind,
   EndUsageCycleInput,
   UsageCyclePerson,
+  UsoGranularidad,
+  UsoPunto,
+  UsoPromedios,
+  UsoProyeccionMantencion,
+  UsoLecturaDescartada,
+  UsoVehiculoView,
 } from '@gmt-platform/contracts';
 
 export type {
@@ -50,6 +56,12 @@ export type {
   UsageEndKind,
   EndUsageCycleInput,
   UsageCyclePerson,
+  UsoGranularidad,
+  UsoPunto,
+  UsoPromedios,
+  UsoProyeccionMantencion,
+  UsoLecturaDescartada,
+  UsoVehiculoView,
 };
 
 /**
