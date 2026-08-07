@@ -224,10 +224,11 @@ function UsuariosDirectorioTab(): ReactNode {
         emptyMessage="No hay usuarios que coincidan. Crea el primero o importa un CSV."
         caption="Directorio de usuarios"
         rowActions={(u) => {
-          // Solo PENDING_FIRST_LOGIN admite reenviar clave. Un usuario revocado
-          // (SUSPENDED) NO reaparece aquí: re-otorgar acceso es una acción
-          // explícita, no un efecto colateral del reenvío (ver assertInviteUnused).
-          const invitePending = u.status === 'PENDING_FIRST_LOGIN';
+          // Se puede restablecer la clave de quien nunca entró (reenviarle la
+          // invitación) y de quien ya usa la plataforma y la olvidó. Un usuario
+          // revocado (SUSPENDED) queda fuera: re-otorgar acceso es una acción
+          // explícita, no un efecto colateral (ver assertPuedeRestablecerClave).
+          const puedeRestablecer = u.status !== 'SUSPENDED';
           return (
             <>
               <Button
@@ -239,15 +240,15 @@ function UsuariosDirectorioTab(): ReactNode {
                 <UserCog aria-hidden />
                 Roles
               </Button>
-              {invitePending && (
+              {puedeRestablecer && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setResendUser(u)}
-                  aria-label={`Reenviar clave de ${u.firstName} ${u.lastName}`}
+                  aria-label={`Restablecer la clave de ${u.firstName} ${u.lastName}`}
                 >
                   <KeyRound aria-hidden />
-                  Reenviar clave
+                  Restablecer clave
                 </Button>
               )}
               {u.status !== 'SUSPENDED' && (

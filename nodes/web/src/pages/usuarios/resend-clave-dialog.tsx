@@ -113,17 +113,35 @@ export function ResendClaveDialog({
   }
 
   const canEmail = preview?.canEmail ?? false;
+  // Lo decide el servidor por `firstLoginAt`, no el estado del usuario: tras un
+  // restablecimiento el estado vuelve a PENDING_FIRST_LOGIN, y mirarlo haría
+  // desaparecer la advertencia justo en el segundo intento con la misma persona.
+  const yaIngreso = preview?.yaIngreso ?? false;
 
   return (
     <Modal open={user !== null} onOpenChange={onOpenChange}>
       <ModalContent className="sm:max-w-lg">
         <ModalHeader>
-          <ModalTitle>Reenviar clave</ModalTitle>
+          <ModalTitle>{yaIngreso ? 'Restablecer clave' : 'Reenviar clave'}</ModalTitle>
           <ModalDescription>
             Revisa y ajusta el correo antes de enviarlo. La clave se genera y se
             incluye automáticamente; por seguridad no se muestra aquí.
           </ModalDescription>
         </ModalHeader>
+
+        {/*
+          Para quien nunca entró esto es reenviar una invitación sin estrenar y no
+          rompe nada. Para quien ya usa la plataforma es otra cosa: le invalida la
+          clave con la que entra hoy y lo saca de sus sesiones abiertas. El admin
+          tiene que saberlo ANTES de confirmar, no enterarse por el reclamo.
+        */}
+        {yaIngreso && (
+          <Alert variant="warning">
+            <strong>{user?.firstName}</strong> ya usa la plataforma. Al continuar, su
+            clave actual deja de servir y se cierran sus sesiones abiertas. Tendrá que
+            ingresar con la clave provisoria y definir una nueva.
+          </Alert>
+        )}
 
         {loading && (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">

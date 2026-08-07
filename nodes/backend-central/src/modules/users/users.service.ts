@@ -46,7 +46,12 @@ import {
 
 import { StorageService } from '../../common/storage/storage.service';
 import { EmailService, NoopEmailService } from '../../common/email.service';
-import { credentialsEmail, resendCredentialsEmail, defaultResendMessage } from '../../common/email-templates';
+import {
+  credentialsEmail,
+  resendCredentialsEmail,
+  defaultResendMessage,
+  defaultResetMessage,
+} from '../../common/email-templates';
 
 /** Rol cuya asignación org-scope sí confiere acceso de admin en OpenFGA (§4.3). */
 const ORG_ADMIN_ROLE: RoleKey = 'org_admin';
@@ -236,16 +241,24 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`No existe un usuario con id "${userId}".`);
     }
-    this.assertInviteUnused(user.firstLoginAt, user.status);
+    this.assertPuedeRestablecerClave(user.status);
 
     const to = this.primaryEmail(user);
+    // `firstLoginAt` y no el estado: es el hecho de haber entrado alguna vez, y
+    // no cambia aunque después se restablezca la clave (que devuelve el estado a
+    // PENDING_FIRST_LOGIN). Así la advertencia sigue siendo correcta al segundo
+    // restablecimiento de la misma persona.
+    const yaIngreso = user.firstLoginAt !== null;
     return {
       to,
       canEmail: to.length > 0 && this.isRealEmailProvider(),
       username: user.username,
       nombre: user.firstName,
-      subject: 'Tus credenciales de acceso a GMT Link',
-      message: defaultResendMessage(),
+      subject: yaIngreso
+        ? 'Tu nueva clave de acceso a GMT Link'
+        : 'Tus credenciales de acceso a GMT Link',
+      message: yaIngreso ? defaultResetMessage() : defaultResendMessage(),
+      yaIngreso,
     };
   }
 
@@ -275,7 +288,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`No existe un usuario con id "${userId}".`);
     }
-    this.assertInviteUnused(user.firstLoginAt, user.status);
+    this.assertPuedeRestablecerClave(user.status);
 
     const to = this.primaryEmail(user);
     const wantsEmail = input.sendEmail === true;
@@ -324,16 +337,25 @@ export class UsersService {
   }
 
   /**
-   * 409 si el usuario no está en un estado apto para reenviar clave. Se EXIGE
-   * `PENDING_FIRST_LOGIN` (y sin primer ingreso): así reenviar clave nunca
-   * reactiva de forma implícita una cuenta ACTIVA (ya tiene su clave) ni una
-   * SUSPENDED (acceso revocado a propósito). Re-otorgar acceso a un usuario
-   * revocado debe ser una acción explícita, no un efecto colateral del reenvío.
+   * 409 si el usuario no está en un estado apto para recibir una clave nueva.
+   *
+   * Se rechaza SOLO a los SUSPENDED: re-otorgar acceso a alguien a quien se le
+   * revocó a propósito debe ser una acción explícita, nunca el efecto colateral
+   * de restablecer una clave.
+   *
+   * Los ACTIVE SÍ pasan. Antes se exigía `PENDING_FIRST_LOGIN`, lo que dejaba
+   * fuera justo el caso más común: la persona que ya usaba la plataforma y
+   * olvidó su clave. Existe la recuperación por correo, pero hay gente a la que
+   * se le hace cuesta arriba, y el administrador necesita poder resolverlo a
+   * mano (pedido del dueño).
+   *
+   * Restablecer a un ACTIVE no es inocuo y por eso la UI lo advierte: le cambia
+   * la clave y le cierra las sesiones abiertas.
    */
-  private assertInviteUnused(firstLoginAt: Date | null, status: string): void {
-    if (firstLoginAt !== null || status !== 'PENDING_FIRST_LOGIN') {
+  private assertPuedeRestablecerClave(status: string): void {
+    if (status === 'SUSPENDED') {
       throw new ConflictException(
-        'No se puede reenviar la clave: la invitación ya fue usada o el acceso está revocado.',
+        'No se puede restablecer la clave: el acceso de este usuario está revocado. Reactívalo primero.',
       );
     }
   }

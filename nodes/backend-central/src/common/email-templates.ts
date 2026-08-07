@@ -256,6 +256,16 @@ export function defaultResendMessage(): string {
 }
 
 /**
+ * Texto por defecto cuando se le restablece la clave a alguien que YA usaba la
+ * plataforma. Se separa del reenvío a propósito: decirle "te reenviamos tus
+ * credenciales" a quien lleva meses entrando confunde, y además hay que
+ * advertirle que su clave anterior dejó de servir.
+ */
+export function defaultResetMessage(): string {
+  return 'Restablecimos tu clave de acceso a GMT Link porque no pudiste ingresar. Tu clave anterior ya no sirve: usa la clave provisoria que aparece más abajo y define una nueva en tu primer ingreso.';
+}
+
+/**
  * Credenciales + aviso de que son los PRIMEROS usuarios de prueba (piloto): invita a
  * dar feedback y aclara que pueden existir errores aún no detectados. Reutiliza el
  * shell branded y agrega un bloque informativo antes del aviso de seguridad.

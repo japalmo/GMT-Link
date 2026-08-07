@@ -95,6 +95,13 @@ export interface ResendInvitePreview {
   subject: string;
   /** Mensaje/intro por defecto (editable). La clave se inyecta aparte, server-side. */
   message: string;
+  /**
+   * `true` si la persona YA usaba la plataforma. Cambia lo que significa la
+   * acción: no se le está reenviando una invitación sin estrenar, se le está
+   * reemplazando la clave con la que entra hoy y cerrando sus sesiones. La UI
+   * lo advierte antes de confirmar.
+   */
+  yaIngreso: boolean;
 }
 
 /** Cuerpo de `POST /users/:id/resend-invite`. */

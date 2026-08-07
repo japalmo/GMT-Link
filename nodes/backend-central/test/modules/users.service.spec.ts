@@ -395,15 +395,78 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     expect(typeof data.passwordHash).toBe('string');
   });
 
-  it('resendInvite rechaza (409) si la invitación ya fue usada', async () => {
+  it('resendInvite SÍ restablece la clave de un usuario ACTIVO que la olvidó', async () => {
+    // Antes esto era un 409: se exigía que la invitación estuviera sin estrenar,
+    // lo que dejaba fuera el caso más común, la persona que ya usaba la
+    // plataforma y no puede entrar. El administrador necesita resolverlo a mano.
     const findUnique = vi.fn(() =>
       Promise.resolve({ firstLoginAt: new Date('2026-07-01T00:00:00.000Z'), status: 'ACTIVE' }),
+    );
+    const update = vi.fn((args: { data: Record<string, unknown> }) =>
+      Promise.resolve({ ...args.data }),
+    );
+    const service = serviceWith({ findUnique, update });
+
+    const { provisionalPassword } = await service.resendInvite('u1', { sendEmail: false });
+
+    expect(provisionalPassword).toBeTruthy();
+    const data = update.mock.calls[0]?.[0]?.data as {
+      status: string;
+      passwordHash: string;
+      tokenVersion: { increment: number };
+    };
+    // Vuelve a PENDING_FIRST_LOGIN para obligarlo a definir una clave nueva...
+    expect(data.status).toBe('PENDING_FIRST_LOGIN');
+    // ...y el bump de tokenVersion cierra las sesiones que tuviera abiertas: si
+    // no, alguien con la sesión viva seguiría dentro con la clave ya invalidada.
+    expect(data.tokenVersion).toEqual({ increment: 1 });
+  });
+
+  it('resendInvite rechaza (409) a un usuario SUSPENDIDO', async () => {
+    // Re-otorgar acceso a quien se le revocó a propósito tiene que ser una
+    // acción explícita, nunca el efecto colateral de restablecer una clave.
+    const findUnique = vi.fn(() =>
+      Promise.resolve({ firstLoginAt: new Date('2026-07-01T00:00:00.000Z'), status: 'SUSPENDED' }),
     );
     const update = vi.fn();
     const service = serviceWith({ findUnique, update });
 
     await expect(service.resendInvite('u1', { sendEmail: false })).rejects.toBeInstanceOf(ConflictException);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('la vista previa avisa cuando la persona YA usaba la plataforma', async () => {
+    // El admin tiene que enterarse ANTES de confirmar de que le va a invalidar
+    // la clave con la que entra hoy.
+    const activo = vi.fn(() =>
+      Promise.resolve({
+        firstName: 'Ana',
+        username: 'ana',
+        email: 'ana@gmt.cl',
+        emailInstitucional: 'ana@gmt.cl',
+        emailPersonal: null,
+        firstLoginAt: new Date('2026-07-01T00:00:00.000Z'),
+        status: 'ACTIVE',
+      }),
+    );
+    expect((await serviceWith({ findUnique: activo }).resendInvitePreview('u1')).yaIngreso).toBe(
+      true,
+    );
+
+    const nuevo = vi.fn(() =>
+      Promise.resolve({
+        firstName: 'Ana',
+        username: 'ana',
+        email: 'ana@gmt.cl',
+        emailInstitucional: 'ana@gmt.cl',
+        emailPersonal: null,
+        firstLoginAt: null,
+        status: 'PENDING_FIRST_LOGIN',
+      }),
+    );
+    expect((await serviceWith({ findUnique: nuevo }).resendInvitePreview('u1')).yaIngreso).toBe(
+      false,
+    );
   });
 
   it('resendInvite lanza 404 si el usuario no existe', async () => {
