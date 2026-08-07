@@ -451,9 +451,13 @@ export class AssetsController {
 
   /**
    * Sube un documento asociado al activo.
+   *
+   * SIN `@RequirePermission`: la autorización la resuelve el servicio con el
+   * mismo gate que listar y revisar documentos. El guard anterior consultaba
+   * `can_upload_doc` sobre `asset:<id>`, una tupla que no escribe nadie, así que
+   * rechazaba a todo el mundo (ver el comentario en `AssetsService.uploadDocument`).
    */
   @Post(':id/documents')
-  @RequirePermission('can_upload_doc', { type: 'asset', param: 'id' })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   uploadDocument(
     @CurrentUser() authUser: AuthUser | undefined,

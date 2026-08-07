@@ -1539,6 +1539,17 @@ export class AssetsService {
     if (!asset) {
       throw new NotFoundException('El activo no existe.');
     }
+    // El gate vive ACÁ y no en un guard, igual que el resto de las operaciones
+    // de documentos (listar, revisar, pedir la URL del archivo).
+    //
+    // Antes la ruta se protegía con `@RequirePermission('can_upload_doc', asset)`,
+    // que consultaba una tupla DIRECTA sobre `asset:<id>`. Esa tupla no la escribe
+    // nadie: al crear un activo solo se escriben `project` y `assigned`. O sea que
+    // el guard no lo pasaba NINGÚN usuario, ni siquiera el admin de la
+    // organización, y por eso la tabla de documentos estaba vacía en producción.
+    // `assertCanManageAsset` sí cubre las tres vías reales: gerencia del proyecto,
+    // admin de la organización y admin de flota.
+    await this.assertCanManageAsset(userId, asset);
 
     // Subir archivo a R2 local
     const folder = `assets/${id}/documents`;

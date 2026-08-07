@@ -1790,6 +1790,77 @@ describe('AssetsService', () => {
     });
   });
 
+  describe('uploadDocument — autorización (el guard no la resolvía)', () => {
+    /**
+     * La ruta se protegía con `@RequirePermission('can_upload_doc', asset)`, que
+     * consultaba una tupla DIRECTA sobre `asset:<id>`. Nadie escribe esa tupla:
+     * al crear un activo solo se escriben `project` y `assigned`. Resultado: la
+     * subida la rechazaba para TODOS, y la tabla de documentos quedó vacía en
+     * producción. Estas pruebas fijan que el gate real vive en el servicio.
+     */
+    it('un gestor del proyecto puede subir', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO, projectId: 'p-1' }),
+      );
+      await expect(
+        service.uploadDocument('a-1', 'mgr', 'SOAP', 'SOAP', {
+          buffer: Buffer.from('x'),
+          originalname: 's.pdf',
+          mimetype: 'application/pdf',
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('el ADMIN DE FLOTA puede subir en un activo global sin ser admin de la plataforma', async () => {
+      // Este es el caso que reportó Juan: el rol nuevo entraba a la ficha pero
+      // el guard le rechazaba la subida.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO, projectId: null }),
+      );
+      fgaMock.check.mockImplementation((t: { relation: string }) =>
+        Promise.resolve(t.relation === 'can_manage_fleet'),
+      );
+
+      await expect(
+        service.uploadDocument('a-1', 'flota', 'SOAP', 'SOAP', {
+          buffer: Buffer.from('x'),
+          originalname: 's.pdf',
+          mimetype: 'application/pdf',
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('quien no gestiona el activo recibe 403 y NO se sube el archivo', async () => {
+      // Que el 403 llegue ANTES de tocar el storage importa: si no, un usuario
+      // sin permiso igual dejaría basura en el bucket con cada intento.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO, projectId: 'p-1' }),
+      );
+      fgaMock.check.mockResolvedValue(false);
+
+      await expect(
+        service.uploadDocument('a-1', 'ajeno', 'SOAP', 'SOAP', {
+          buffer: Buffer.from('x'),
+          originalname: 's.pdf',
+          mimetype: 'application/pdf',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(storageMock.save).not.toHaveBeenCalled();
+      expect(txMock.assetDocument.create).not.toHaveBeenCalled();
+    });
+
+    it('activo inexistente → 404', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.uploadDocument('a-x', 'mgr', 'SOAP', 'SOAP', {
+          buffer: Buffer.from('x'),
+          originalname: 's.pdf',
+          mimetype: 'application/pdf',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('vehículos y telemetría', () => {
     it('sube un documento de activo con fecha de expiración', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
