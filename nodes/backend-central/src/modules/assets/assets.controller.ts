@@ -30,7 +30,6 @@ import type {
   UsoGranularidad,
   UsoVehiculoView,
 } from '@gmt-platform/contracts';
-import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { FgaService } from '../../fga/fga.service';
@@ -181,7 +180,7 @@ export class AssetsController {
     // Adjunta `canManageAssets` (mismo permiso que exigen las mutaciones de
     // accesorios/asignación/checklist) para que el front muestre las acciones a
     // quien de verdad puede, en vez de aproximar por roles en el cliente.
-    const canManageAssets = asset.projectId
+    const porElActivo = asset.projectId
       ? await this.fga.check({
           user: `user:${userId}`,
           relation: 'can_manage_assets',
@@ -192,6 +191,17 @@ export class AssetsController {
           relation: 'admin',
           object: 'organization:gmt',
         });
+    // La MISMA tercera vía que aplica el gate del servicio
+    // (`assertCanManageAsset`): el admin de flota gestiona cualquier vehículo.
+    // Faltaba acá, así que el backend le permitía la acción pero el front le
+    // escondía el botón para hacerla: veía la ficha vacía sin explicación.
+    const canManageAssets =
+      porElActivo ||
+      (await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_manage_fleet',
+        object: 'organization:gmt',
+      }));
     return { ...asset, canManageAssets };
   }
 

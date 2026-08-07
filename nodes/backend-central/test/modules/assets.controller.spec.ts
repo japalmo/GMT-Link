@@ -388,3 +388,23 @@ describe('AssetsController — importar checklists de la planilla', () => {
     expect(importar).not.toHaveBeenCalled();
   });
 });
+
+describe('AssetsController — canManageAssets incluye al admin de FLOTA', () => {
+  it('el admin de flota recibe canManageAssets aunque no gestione el proyecto', async () => {
+    // Faltaba esta vía: el backend le permitía la acción y el front le escondía
+    // el botón para hacerla, así que veía la ficha vacía sin explicación.
+    const { controller, check } = buildController();
+    check.mockImplementation((t: { relation: string }) =>
+      Promise.resolve(t.relation === 'can_manage_fleet'),
+    );
+
+    const res = await controller.getById(USER, 'a-1');
+    expect((res as { canManageAssets: boolean }).canManageAssets).toBe(true);
+  });
+
+  it('quien no gestiona el activo NI la flota sigue sin poder gestionar', async () => {
+    const { controller } = buildController({ allowed: false });
+    const res = await controller.getById(USER, 'a-1');
+    expect((res as { canManageAssets: boolean }).canManageAssets).toBe(false);
+  });
+});

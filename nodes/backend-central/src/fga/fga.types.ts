@@ -42,7 +42,14 @@ export const SCOPE_OBJECT_TYPE: Readonly<Record<FgaScopeType, string>> = {
 export const MEMBERSHIP_RELATION_MAP: Readonly<
   Record<FgaScopeType, Readonly<Record<string, string>>>
 > = {
-  ORGANIZATION: { org_admin: 'admin' },
+  ORGANIZATION: {
+    org_admin: 'admin',
+    // El admin de vehículos gestiona la flota COMPLETA, que es alcance de
+    // organización y no de proyecto. Sin esta entrada, asignar el rol no
+    // escribía ninguna tupla y el permiso estructural no existía para FGA: el
+    // usuario tenía el rol en la base y aun así se le negaba todo.
+    vehicle_admin: 'can_manage_fleet',
+  },
   DEPARTMENT: { department_admin: 'admin' },
   PROJECT: {
     project_creator: 'project_creator',

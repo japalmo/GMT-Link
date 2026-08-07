@@ -442,7 +442,10 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
         identifierType,
         vehicleSubtype: newType === 'VEHICULO' ? (newVehicleSubtype || undefined) : undefined,
         projectId: newProjId || undefined,
-        assignedToId: newAssignedId || undefined,
+        // Nunca en un vehículo, aunque el campo traiga un valor de cuando el
+        // formulario estaba en "Equipo": el select está oculto para vehículos y
+        // enviarlo igual dejaría un responsable invisible en la ficha.
+        assignedToId: newType === 'VEHICULO' ? undefined : newAssignedId || undefined,
         metadata,
       });
       handleCloseCreateModal();
@@ -525,12 +528,9 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     },
     { id: 'estado', header: 'Estado', sortable: true, render: (a) => statusBadge(a.status) },
     { id: 'proyecto', header: 'Proyecto', className: 'max-w-[120px] truncate', render: (a) => a.project?.name || 'Global' },
-    {
-      id: 'responsable',
-      header: 'Responsable',
-      render: (a) =>
-        a.assignedTo ? `${a.assignedTo.firstName} ${a.assignedTo.lastName.charAt(0)}.` : 'Sin asignar',
-    },
+    // Sin columna "Responsable": el responsable a cargo se retiró del activo
+    // (decisión del dueño). Quién lo tiene EN USO sigue estando, que es lo que
+    // de verdad se consulta al buscar una camioneta.
     {
       id: 'enUsoPor',
       header: 'En uso por',
@@ -786,20 +786,28 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                     </Select>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="asset-assigned">Responsable</Label>
-                    <Select
-                      id="asset-assigned"
-                      aria-label="Responsable del activo"
-                      value={newAssignedId}
-                      onChange={(e) => setNewAssignedId(e.target.value)}
-                    >
-                      <option value="">Sin asignar</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-                      ))}
-                    </Select>
-                  </div>
+                  {/*
+                    Los vehículos no llevan responsable a cargo (decisión del
+                    dueño): la camioneta la usa quien la toma ese día, y el dato
+                    útil es "en uso por", no un dueño nominal. Los equipos y la
+                    maquinaria sí lo conservan, que es donde tiene sentido.
+                  */}
+                  {newType !== 'VEHICULO' && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="asset-assigned">Responsable</Label>
+                      <Select
+                        id="asset-assigned"
+                        aria-label="Responsable del activo"
+                        value={newAssignedId}
+                        onChange={(e) => setNewAssignedId(e.target.value)}
+                      >
+                        <option value="">Sin asignar</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                        ))}
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Identificador: número de serie para equipo y maquinaria. Para
