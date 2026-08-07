@@ -2228,6 +2228,8 @@ export class AssetsService {
       user: row.user
         ? { firstName: row.user.firstName, lastName: row.user.lastName }
         : null,
+      externalSource: row.externalSource,
+      externalAuthor: row.externalAuthor,
     };
   }
 

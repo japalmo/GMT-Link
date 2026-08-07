@@ -1049,13 +1049,29 @@ model ChecklistSubmission {
   asset      Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
   templateId String
   template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User              @relation("ChecklistSubmitter", fields: [userId], references: [id], onDelete: Cascade)
+  // OPCIONAL: los checklists importados desde la planilla de AppScript no tienen
+  // usuario de la plataforma. Se guardan tal cual llegaron (decisión del dueño):
+  // atribuirlos adivinando la persona por el nombre sería inventar autoría en un
+  // registro que se firma. Los checklists hechos EN GMT Link siempre lo llevan,
+  // porque el formulario exige sesión iniciada.
+  userId     String?
+  user       User?             @relation("ChecklistSubmitter", fields: [userId], references: [id], onDelete: Cascade)
   answers    Json // array de { itemId, value: string/boolean/number, comment?: string }
   createdAt  DateTime          @default(now())
   // Ciclo de uso que abrió este checklist (si el checklist se ejecutó al reportar uso).
   usageCycle UsageCycle?       @relation("UsageCycleChecklist")
 
+  // ── Procedencia externa (importación desde la planilla) ──
+  // De dónde vino: null = hecho en GMT Link, 'SHEETS' = importado.
+  externalSource String?
+  // Id del registro en el origen (`idForm` de la planilla: F0004, F0006, …).
+  // ÚNICO junto con el origen: es lo que hace que reimportar no duplique.
+  externalId     String?
+  // Nombre del conductor tal como venía escrito en la planilla. Es informativo,
+  // NO una atribución de autoría: por eso va aparte de `userId`.
+  externalAuthor String?
+
+  @@unique([externalSource, externalId])
   @@index([assetId])
   @@map("checklist_submissions")
 }

@@ -84,8 +84,17 @@ export interface ChecklistSubmissionView {
   id: string;
   assetId: string;
   templateId: string;
-  userId: string;
+  /** `null` en los checklists importados de la planilla: no tienen usuario. */
+  userId: string | null;
   answers: ChecklistAnswer[];
   createdAt: string; // ISO-8601
   user?: { firstName: string; lastName: string } | null;
+  /** `'SHEETS'` si vino de la planilla; ausente si se hizo en GMT Link. */
+  externalSource?: string | null;
+  /**
+   * Quién lo llenó según la planilla, cuando no hay usuario. Se muestra como
+   * dato informativo y con su origen a la vista: no es una firma de la
+   * plataforma y la pantalla no debe presentarlo como si lo fuera.
+   */
+  externalAuthor?: string | null;
 }
