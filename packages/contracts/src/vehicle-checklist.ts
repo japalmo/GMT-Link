@@ -8,11 +8,14 @@
  *
  * ── Por qué los ids son los de la planilla ─────────────────────────────────
  *
- * Cada `id` de ítem es EXACTAMENTE el nombre de la columna en RESPUESTAS
- * (`sistemaFrenos`, `obsSistemaFrenos`, `neumaticoRepuesto`, …). Así la
- * importación desde la planilla es un mapeo directo columna→ítem, sin tabla de
- * equivalencias que mantener ni forma de que se desalinee en silencio. La única
- * excepción es `kilometraje`, que ya se llamaba igual en las dos partes.
+ * Cada `id` de ítem es el nombre de la columna en RESPUESTAS (`sistemaFrenos`,
+ * `neumaticoRepuesto`, `kilometraje`, …). Así la importación es un mapeo
+ * directo columna→ítem, sin tabla de equivalencias que mantener.
+ *
+ * ÚNICA excepción: las observaciones. Acá se llaman `obs_sistemaFrenos` y en la
+ * planilla `obsSistemaFrenos`. Manda producción, donde esa convención ya está
+ * viva sobre 1.972 checklists reales; alinearla con la planilla dejaría
+ * huérfanas todas las observaciones ya registradas. El importador traduce.
  *
  * ── Fuente única ───────────────────────────────────────────────────────────
  *
@@ -55,7 +58,14 @@ function estado(
   label: string,
   opciones: readonly string[] = ESTADO_OPCIONES,
 ): ChecklistTemplateItem[] {
-  const obsId = `obs${id.charAt(0).toUpperCase()}${id.slice(1)}`;
+  // `obs_xxx` con guion bajo, que es la convención que YA usan las plantillas
+  // vivas en producción sobre 1.972 checklists reales. Cambiarla dejaría
+  // huérfanas todas las observaciones ya registradas.
+  //
+  // Ojo: NO coincide con el nombre de la columna en la planilla, que es
+  // `obsXxx` en camello. Son dos cosas distintas y el importador las traduce
+  // (ver `columnaObservacion` en `sheets-import.util.ts`).
+  const obsId = `obs_${id}`;
   return [
     {
       id,

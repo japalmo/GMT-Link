@@ -12,6 +12,7 @@ import { ExpiryNoticesScheduler } from './expiry-notices.scheduler';
 import { VehicleUsageService } from './vehicle-usage.service';
 import { SheetsClientService } from './sheets-client.service';
 import { SheetsImportService } from './sheets-import.service';
+import { SheetsImportScheduler } from './sheets-import.scheduler';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     VehicleUsageService,
     SheetsClientService,
     SheetsImportService,
+    SheetsImportScheduler,
   ],
   exports: [AssetsService, ExpiryNoticesService, VehicleUsageService, SheetsImportService],
 })

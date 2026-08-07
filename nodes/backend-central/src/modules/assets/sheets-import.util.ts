@@ -48,6 +48,11 @@ export interface FilaDescartada {
 
 const ITEMS = new Map(CHECKLIST_VEHICULO_GMT.map((i) => [i.id, i]));
 
+/** Nombre de la columna de observación en la PLANILLA: `sistemaFrenos` -> `obsSistemaFrenos`. */
+function columnaObservacion(idItem: string): string {
+  return `obs${idItem.charAt(0).toUpperCase()}${idItem.slice(1)}`;
+}
+
 /**
  * Nombre de parte de carrocería -> id, incluyendo los nombres ANTIGUOS con los
  * que la planilla los escribió durante años.
@@ -173,8 +178,11 @@ export function mapearFila(
   for (const id of ITEMS_DE_ESTADO) {
     const valor = normalizarEstado(leer(id));
     if (valor === null) continue;
-    const obsId = ITEMS.get(id)?.config?.obsItemId;
-    const comentario = obsId ? normalizarTexto(leer(obsId)) : null;
+    // La COLUMNA de la planilla, que no es lo mismo que el id del ítem: la
+    // planilla escribe `obsSistemaFrenos` y la plantilla usa `obs_sistemaFrenos`.
+    // Antes se usaba `config.obsItemId` para leer la columna, lo que funcionaba
+    // solo mientras las dos convenciones coincidieran por casualidad.
+    const comentario = normalizarTexto(leer(columnaObservacion(id)));
     answers.push({
       itemId: id,
       label: etiqueta(id),

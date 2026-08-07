@@ -48,12 +48,30 @@ function armar(o: Opciones = {}) {
     Promise.resolve({ count: args.data.length }),
   );
 
+  let serie = vehiculos.length;
+  const findFirst = vi.fn(() =>
+    Promise.resolve({ code: `GMT-VH-${String(serie).padStart(4, '0')}` }),
+  );
+  const crearAsset = vi.fn((args: { data: { code: string } }) => {
+    serie += 1;
+    return Promise.resolve({
+      id: `nuevo-${args.data.code}`,
+      code: args.data.code,
+      checklistTemplate: { id: `tpl-${args.data.code}` },
+    });
+  });
+
   const prisma = {
-    asset: { findMany: findManyAssets },
+    asset: { findMany: findManyAssets, findFirst, create: crearAsset },
     checklistSubmission: { findMany: findManySubs, createMany },
   } as unknown as PrismaService;
 
-  return { servicio: new SheetsImportService(prisma, sheets), leerRango, createMany };
+  return {
+    servicio: new SheetsImportService(prisma, sheets),
+    leerRango,
+    createMany,
+    crearAsset,
+  };
 }
 
 describe('SheetsImportService: configuración', () => {
@@ -173,16 +191,62 @@ describe('SheetsImportService: qué se guarda', () => {
 });
 
 describe('SheetsImportService: lo que no puede importar lo REPORTA', () => {
-  it('reporta la patente que no existe como vehículo, con su conteo', async () => {
-    // No se inventa el vehículo: se reporta para que una persona decida.
-    const { servicio, createMany } = armar({
+  it('CREA el vehículo cuya patente no existe, y sus checklists entran', async () => {
+    // Decisión del dueño: que entren igual y después se ordena. Antes se
+    // reportaban y quedaban fuera.
+    const { servicio, createMany, crearAsset } = armar({
       filas: [fila('F0001', 'PZXP25'), fila('F0002', 'PZXP25'), fila('F0003', 'SKRF88')],
     });
     const r = await servicio.importar();
 
-    expect(r.importadas).toBe(1);
-    expect(r.sinVehiculo).toEqual([{ patente: 'PZXP25', filas: 2 }]);
-    expect(createMany.mock.calls[0]![0].data).toHaveLength(1);
+    expect(r.importadas).toBe(3);
+    expect(r.sinVehiculo).toEqual([]);
+    // El código sigue la serie: había un GMT-VH-0001, así que el nuevo es 0002.
+    expect(r.vehiculosCreados).toEqual([
+      { patente: 'PZXP25', code: 'GMT-VH-0002', filas: 2 },
+    ]);
+    expect(createMany.mock.calls[0]![0].data).toHaveLength(3);
+    expect(crearAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it('crea UN vehículo por patente, no uno por checklist', async () => {
+    const { servicio, crearAsset } = armar({
+      filas: [fila('F0001', 'PZXP25'), fila('F0002', 'PZXP25'), fila('F0003', 'PZXP25')],
+    });
+    await servicio.importar();
+    expect(crearAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it('el vehículo creado queda MARCADO y con su plantilla', async () => {
+    // Algunas de estas patentes son casi con seguridad tipeos: hay que poder
+    // reconocerlos después para fusionarlos o darlos de baja. Y sin plantilla
+    // sus checklists no tendrían de qué colgar.
+    const { servicio, crearAsset } = armar({ filas: [fila('F0001', 'PZXP25')] });
+    await servicio.importar();
+
+    const datos = crearAsset.mock.calls[0]![0].data as {
+      identifier: string;
+      identifierType: string;
+      type: string;
+      status: string;
+      description: string;
+      checklistTemplate: { create: { status: string; items: unknown[] } };
+    };
+    expect(datos.identifier).toBe('PZXP25');
+    expect(datos.identifierType).toBe('PATENTE');
+    expect(datos.type).toBe('VEHICULO');
+    expect(datos.description).toContain('Creado automáticamente');
+    // Nace NO disponible: nadie confirmó todavía que sea un vehículo real.
+    expect(datos.status).toBe('NO_DISPONIBLE');
+    expect(datos.checklistTemplate.create.status).toBe('APROBADO');
+    expect(datos.checklistTemplate.create.items.length).toBeGreaterThan(60);
+  });
+
+  it('NO crea nada cuando la patente ya existe', async () => {
+    const { servicio, crearAsset } = armar({ filas: [fila('F0001', 'SKRF88')] });
+    const r = await servicio.importar();
+    expect(crearAsset).not.toHaveBeenCalled();
+    expect(r.vehiculosCreados).toEqual([]);
   });
 
   it('reporta el vehículo sin plantilla en vez de crearle una', async () => {
@@ -237,5 +301,27 @@ describe('SheetsImportService: dirección', () => {
     const metodos = Object.getOwnPropertyNames(Cliente.prototype);
     expect(metodos.filter((m) => /escrib|write|update|append|set/i.test(m))).toEqual([]);
     expect(metodos).toContain('leerRango');
+  });
+});
+
+describe('SheetsImportService: códigos de los vehículos creados', () => {
+  it('no reusa el código de un vehículo existente', async () => {
+    // Reusarlo reventaría contra la unicidad del código y tumbaría la
+    // importación entera por una patente desconocida.
+    const { servicio, crearAsset } = armar({
+      filas: [fila('F0001', 'PZXP25'), fila('F0002', 'TBFG42')],
+      vehiculos: [
+        { id: 'a-1', code: 'GMT-VH-0016', identifier: 'SKRF88', templateId: 'tpl-1' },
+        { id: 'a-2', code: 'GMT-VH-0017', identifier: 'TRBF43', templateId: 'tpl-2' },
+      ],
+    });
+    await servicio.importar();
+
+    const codigos = crearAsset.mock.calls.map(
+      (c) => (c[0] as { data: { code: string } }).data.code,
+    );
+    expect(new Set(codigos).size).toBe(codigos.length);
+    expect(codigos).not.toContain('GMT-VH-0016');
+    expect(codigos).not.toContain('GMT-VH-0017');
   });
 });

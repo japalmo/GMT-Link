@@ -68,11 +68,19 @@ describe('plantilla de checklist de vehículo', () => {
     expect(item('kilometraje')?.config?.isOdometer).toBe(true);
   });
 
-  it('los ids son los de la planilla, para que la importación sea directa', () => {
+  it('los ids de los ítems son los de la planilla', () => {
     for (const id of ['sistemaFrenos', 'neumaticoRepuesto', 'trabatuercasCheckpointSafelock']) {
       expect(item(id), `falta ${id}`).toBeDefined();
     }
-    expect(item('sistemaFrenos')?.config?.obsItemId).toBe('obsSistemaFrenos');
+  });
+
+  it('las observaciones usan la convención QUE YA VIVE EN PRODUCCIÓN', () => {
+    // `obs_xxx` con guion bajo. Las plantillas desplegadas la usan sobre 1.972
+    // checklists reales: cambiarla dejaría huérfanas todas esas observaciones.
+    // No coincide con el nombre de la columna en la planilla (`obsXxx`), y esa
+    // diferencia la traduce el importador a propósito.
+    expect(item('sistemaFrenos')?.config?.obsItemId).toBe('obs_sistemaFrenos');
+    expect(item('obs_sistemaFrenos')?.type).toBe('TEXTO');
   });
 });
 
