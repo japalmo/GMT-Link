@@ -1519,3 +1519,89 @@ describe('UsersService.uploadAvatar', () => {
     );
   });
 });
+
+describe('asignar un rol de alcance ORGANIZACIÓN escribe su tupla', () => {
+  /**
+   * La rama de organización comparaba a mano contra `org_admin`, así que el
+   * segundo rol de ese alcance (admin de vehículos) se asignaba SIN escribir
+   * ninguna tupla: el usuario quedaba con el rol en la base y sin el permiso
+   * estructural en FGA, o sea con el rol puesto y sin poder nada. Ahora se
+   * consulta `MEMBERSHIP_RELATION_MAP`.
+   */
+  function armar(rolesExtra: string[] = []) {
+    const state: PrismaState = {
+      rolesInCatalog: new Set([...ALL_ROLES, ...rolesExtra]),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
+    const { prisma } = buildPrismaMock(state);
+    const fga = buildFgaMock();
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
+    return { service, writeTuples: fga.writeTuples };
+  }
+
+  it('vehicle_admin escribe can_manage_fleet sobre la organización', async () => {
+    const { service, writeTuples } = armar(['vehicle_admin']);
+    await service.assignRole('u1', 'vehicle_admin');
+
+    expect(writeTuples).toHaveBeenCalledWith([
+      { user: 'user:u1', relation: 'can_manage_fleet', object: 'organization:gmt' },
+    ]);
+  });
+
+  it('org_admin sigue escribiendo admin', async () => {
+    const { service, writeTuples } = armar();
+    await service.assignRole('u1', 'org_admin');
+
+    expect(writeTuples).toHaveBeenCalledWith([
+      { user: 'user:u1', relation: 'admin', object: 'organization:gmt' },
+    ]);
+  });
+
+  it('un rol de organización SIN relación FGA no escribe tupla', async () => {
+    // Los roles funcionales a nivel org no generan tupla, y eso es correcto.
+    const { service, writeTuples } = armar();
+    await service.assignRole('u1', 'finance');
+    expect(writeTuples).not.toHaveBeenCalled();
+  });
+
+  it('quitar el rol BORRA la misma tupla que puso al asignarlo', async () => {
+    // Sin simetría el permiso sobreviviría al rol: se le quita el rol de admin
+    // de vehículos y sigue gestionando la flota entera. El mock compartido no
+    // recuerda las membresías creadas, así que este caso arma el suyo.
+    const fga = buildFgaMock();
+    const prisma = {
+      user: { findUnique: vi.fn(() => Promise.resolve({ id: 'u1' })) },
+      membership: {
+        findUnique: vi.fn(() => Promise.resolve({ id: 'm1' })),
+        delete: vi.fn(() => Promise.resolve({})),
+        findMany: vi.fn(() => Promise.resolve([])),
+      },
+      // `validateRoleKeys` exige que el rol exista en el catálogo.
+      role: { findMany: vi.fn(() => Promise.resolve([{ key: 'vehicle_admin' }])) },
+      permission: { findMany: vi.fn(() => Promise.resolve([])) },
+    } as unknown as PrismaService;
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
+
+    await service.removeRole('u1', 'vehicle_admin');
+
+    expect(fga.deleteTuples).toHaveBeenCalledWith([
+      { user: 'user:u1', relation: 'can_manage_fleet', object: 'organization:gmt' },
+    ]);
+  });
+});

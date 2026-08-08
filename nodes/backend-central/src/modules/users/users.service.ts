@@ -25,6 +25,7 @@ import type {
   WorkScheduleView,
 } from '@gmt-platform/contracts';
 import { SHIFT_PATTERN_CYCLE } from '@gmt-platform/contracts';
+import { MEMBERSHIP_RELATION_MAP } from '../../fga/fga.types';
 import { ORG_ID } from '../../common/org.constant';
 import { generateProvisionalPassword } from '../../common/provisional-password';
 import { hashPassword } from '../../common/password';
@@ -136,11 +137,16 @@ export class UsersService {
       throw error;
     }
 
-    // Acceso org en FGA: member siempre; admin además si trae org_admin.
+    // Acceso org en FGA: `member` siempre, más la relación de cada rol de
+    // alcance ORGANIZACIÓN que traiga (org_admin -> admin, vehicle_admin ->
+    // can_manage_fleet). Se consulta el mapa y no se compara a mano contra
+    // `org_admin`: crear un usuario ya con el rol de admin de vehículos lo
+    // dejaba sin su tupla y por tanto sin el permiso.
     try {
       const orgWrites: TupleKey[] = [this.orgAccessTuple(user.id, 'member')];
-      if (roleKeys.includes(ORG_ADMIN_ROLE)) {
-        orgWrites.push(this.orgAccessTuple(user.id, 'admin'));
+      for (const rk of roleKeys) {
+        const relacion = MEMBERSHIP_RELATION_MAP.ORGANIZATION[rk];
+        if (relacion) orgWrites.push(this.orgAccessTuple(user.id, relacion));
       }
       await this.fga.writeTuples(orgWrites);
     } catch (error: unknown) {
@@ -1050,11 +1056,18 @@ export class UsersService {
     await this.prisma.membership.create({
       data: { userId, roleKey: key, scopeType: 'ORGANIZATION', scopeId: ORG_ID },
     });
-    // Solo org_admin altera el acceso FGA (→ organization#admin). Los roles
-    // funcionales son "rol por defecto" (Postgres); el acceso member ya existe
-    // desde la provisión. No se reescribe member (write FGA no es idempotente).
-    if (key === ORG_ADMIN_ROLE) {
-      await this.fga.writeTuples([this.orgAccessTuple(userId, 'admin')]);
+    // Los roles de alcance ORGANIZACIÓN con relación FGA escriben su tupla:
+    // `org_admin` -> admin, `vehicle_admin` -> can_manage_fleet. Los roles
+    // funcionales son "rol por defecto" (Postgres) y no generan ninguna; el
+    // acceso `member` ya existe desde la provisión y no se reescribe (write FGA
+    // no es idempotente).
+    //
+    // Se consulta el MAPA y no se compara a mano contra `org_admin`: escrito a
+    // mano, el rol de admin de vehículos se asignaba sin tupla y el usuario
+    // quedaba con el rol puesto y sin poder nada.
+    const relacionOrg = MEMBERSHIP_RELATION_MAP.ORGANIZATION[key];
+    if (relacionOrg) {
+      await this.fga.writeTuples([this.orgAccessTuple(userId, relacionOrg)]);
     }
 
     return this.currentRoles(userId);
@@ -1081,10 +1094,13 @@ export class UsersService {
     }
 
     await this.prisma.membership.delete({ where: { id: membership.id } });
-    // Quitar org_admin retira el acceso admin; el usuario sigue siendo member.
-    // Quitar un rol funcional no toca FGA (era solo "rol por defecto").
-    if (key === ORG_ADMIN_ROLE) {
-      await this.fga.deleteTuples([this.orgAccessTuple(userId, 'admin')]);
+    // Quitar un rol de alcance ORGANIZACIÓN retira su relación; el usuario sigue
+    // siendo `member`. Quitar un rol funcional no toca FGA (era solo "rol por
+    // defecto"). Simétrico con `assignRole`: si el alta escribe la tupla, la
+    // baja tiene que borrarla, o el permiso sobreviviría al rol.
+    const relacionOrg = MEMBERSHIP_RELATION_MAP.ORGANIZATION[key];
+    if (relacionOrg) {
+      await this.fga.deleteTuples([this.orgAccessTuple(userId, relacionOrg)]);
     }
 
     return this.currentRoles(userId);
@@ -1255,8 +1271,14 @@ export class UsersService {
   ): Promise<void> {
     if (isSystem) {
       if (input.scopeType === 'ORGANIZATION') {
-        if (input.roleKey === ORG_ADMIN_ROLE) {
-          const tuple = this.orgAccessTuple(input.userId, 'admin');
+        // Se consulta el MAPA en vez de comparar contra `org_admin` a mano.
+        // Estaba escrito a mano y por eso el rol de admin de vehículos, que es
+        // el segundo rol con alcance de organización, no escribía ninguna tupla
+        // al asignarse: el usuario quedaba con el rol en la base y sin el
+        // permiso estructural en FGA, o sea con el rol puesto y sin poder nada.
+        const relacion = MEMBERSHIP_RELATION_MAP.ORGANIZATION[input.roleKey];
+        if (relacion) {
+          const tuple = this.orgAccessTuple(input.userId, relacion);
           if (op === 'create') {
             await this.fga.writeTuples([tuple]);
           } else {
@@ -1375,7 +1397,13 @@ export class UsersService {
   }
 
   /** Tupla de acceso org en FGA (`organization:gmt#admin|member`) para un usuario. */
-  private orgAccessTuple(userId: string, relation: 'admin' | 'member'): TupleKey {
+  /**
+   * Tupla de acceso a la organización. La relación es un `string` y no una unión
+   * cerrada: además de `admin`/`member` existen las relaciones de los roles de
+   * alcance ORGANIZACIÓN (`can_manage_fleet`), y encerrarla obligaba a tocar
+   * este tipo por cada rol nuevo, que es justo lo que se olvidó la vez pasada.
+   */
+  private orgAccessTuple(userId: string, relation: string): TupleKey {
     return { user: `user:${userId}`, relation, object: `organization:${ORG_ID}` };
   }
 
