@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OpenFgaClient } from '@openfga/sdk';
 import { FgaService } from './fga.service';
+import { FgaModelPublisher } from './fga-model-publisher.service';
 import { FGA_CLIENT } from './fga.types';
 import type { FgaClientLike } from './fga.types';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -15,7 +16,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 @Global()
 @Module({
   imports: [PrismaModule],
-  providers: [
+  providers: [FgaModelPublisher, 
     {
       provide: FGA_CLIENT,
       inject: [ConfigService],

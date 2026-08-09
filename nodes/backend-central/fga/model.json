@@ -1,0 +1,891 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user",
+      "relations": {},
+      "metadata": null
+    },
+    {
+      "type": "organization",
+      "relations": {
+        "admin": {
+          "this": {}
+        },
+        "member": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_users": {
+          "computedUserset": {
+            "relation": "admin"
+          }
+        },
+        "can_view_directory_extended": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_review_documents": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_finance": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_fleet": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_roles": {
+          "computedUserset": {
+            "relation": "admin"
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "admin": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_users": {
+            "directly_related_user_types": []
+          },
+          "can_view_directory_extended": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_review_documents": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_finance": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_fleet": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_roles": {
+            "directly_related_user_types": []
+          }
+        }
+      }
+    },
+    {
+      "type": "department",
+      "relations": {
+        "organization": {
+          "this": {}
+        },
+        "admin": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "admin"
+                  },
+                  "tupleset": {
+                    "relation": "organization"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "member": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "admin"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "organization": {
+            "directly_related_user_types": [
+              {
+                "type": "organization"
+              }
+            ]
+          },
+          "admin": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "client",
+      "relations": {
+        "member": {
+          "this": {}
+        }
+      },
+      "metadata": {
+        "relations": {
+          "member": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "project",
+      "relations": {
+        "department": {
+          "this": {}
+        },
+        "client": {
+          "this": {}
+        },
+        "project_creator": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "admin"
+                  },
+                  "tupleset": {
+                    "relation": "department"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "operator": {
+          "this": {}
+        },
+        "qa": {
+          "this": {}
+        },
+        "finance": {
+          "this": {}
+        },
+        "viewer": {
+          "this": {}
+        },
+        "client_ito": {
+          "this": {}
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "viewer"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "qa"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "finance"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "client_ito"
+                }
+              }
+            ]
+          }
+        },
+        "can_create_task": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              }
+            ]
+          }
+        },
+        "can_assign_task": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "admin"
+                  },
+                  "tupleset": {
+                    "relation": "department"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_define_kpi": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              }
+            ]
+          }
+        },
+        "can_create_service": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_assets": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              }
+            ]
+          }
+        },
+        "can_manage_team": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "admin"
+                  },
+                  "tupleset": {
+                    "relation": "department"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_submit_measurements": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "operator"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "qa"
+                }
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "department": {
+            "directly_related_user_types": [
+              {
+                "type": "department"
+              }
+            ]
+          },
+          "client": {
+            "directly_related_user_types": [
+              {
+                "type": "client"
+              }
+            ]
+          },
+          "project_creator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "operator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "qa": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "finance": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "viewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "client_ito": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_view": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_create_task": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_assign_task": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_define_kpi": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_create_service": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_assets": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_team": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_submit_measurements": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "service",
+      "relations": {
+        "project": {
+          "this": {}
+        },
+        "qa": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "qa"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "operator": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "operator"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "client_signer": {
+          "this": {}
+        },
+        "can_view": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_view"
+            },
+            "tupleset": {
+              "relation": "project"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "project": {
+            "directly_related_user_types": [
+              {
+                "type": "project"
+              }
+            ]
+          },
+          "qa": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "operator": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "client_signer": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_view": {
+            "directly_related_user_types": []
+          }
+        }
+      }
+    },
+    {
+      "type": "document",
+      "relations": {
+        "service": {
+          "this": {}
+        },
+        "owner": {
+          "this": {}
+        },
+        "can_view": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "owner"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "service"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_upload_revision": {
+          "union": {
+            "child": [
+              {
+                "computedUserset": {
+                  "relation": "owner"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "operator"
+                  },
+                  "tupleset": {
+                    "relation": "service"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_sign_qa": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "qa"
+            },
+            "tupleset": {
+              "relation": "service"
+            }
+          }
+        },
+        "can_sign_client": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "client_signer"
+            },
+            "tupleset": {
+              "relation": "service"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "service": {
+            "directly_related_user_types": [
+              {
+                "type": "service"
+              }
+            ]
+          },
+          "owner": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_view": {
+            "directly_related_user_types": []
+          },
+          "can_upload_revision": {
+            "directly_related_user_types": []
+          },
+          "can_sign_qa": {
+            "directly_related_user_types": []
+          },
+          "can_sign_client": {
+            "directly_related_user_types": []
+          }
+        }
+      }
+    },
+    {
+      "type": "asset",
+      "relations": {
+        "project": {
+          "this": {}
+        },
+        "assigned": {
+          "this": {}
+        },
+        "can_view_list": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "can_view"
+                  },
+                  "tupleset": {
+                    "relation": "project"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "can_run_checklist": {
+          "computedUserset": {
+            "relation": "assigned"
+          }
+        },
+        "can_view_location": {
+          "this": {}
+        },
+        "can_view_history": {
+          "this": {}
+        },
+        "can_view_speed": {
+          "this": {}
+        },
+        "can_create": {
+          "tupleToUserset": {
+            "computedUserset": {
+              "relation": "can_manage_assets"
+            },
+            "tupleset": {
+              "relation": "project"
+            }
+          }
+        },
+        "can_upload_doc": {
+          "this": {}
+        },
+        "can_upload_and_approve_doc": {
+          "this": {}
+        }
+      },
+      "metadata": {
+        "relations": {
+          "project": {
+            "directly_related_user_types": [
+              {
+                "type": "project"
+              }
+            ]
+          },
+          "assigned": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_view_list": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_run_checklist": {
+            "directly_related_user_types": []
+          },
+          "can_view_location": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_view_history": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_view_speed": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_create": {
+            "directly_related_user_types": []
+          },
+          "can_upload_doc": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_upload_and_approve_doc": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
