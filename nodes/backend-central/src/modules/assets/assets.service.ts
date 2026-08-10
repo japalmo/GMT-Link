@@ -14,7 +14,9 @@ import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
 import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
-import { composeChecklistPdf, composeTemplatePreviewPdf, formatSvgAnswerValue } from './checklist-pdf.util';
+import { composeTemplatePreviewPdf } from './checklist-pdf.util';
+import { composeChecklistFormatoPdf } from './checklist-formato-pdf.util';
+import { construirFormato } from './checklist-formato.builder';
 import type { TemplatePreviewSection } from './checklist-pdf.util';
 import { sanitizeSvgMarkup } from './svg-sanitize.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
@@ -2593,61 +2595,36 @@ export class AssetsService {
     const templateItems = (submission.template.items as unknown as Record<string, unknown>[]) ?? [];
     const answers = (submission.answers as unknown as Record<string, unknown>[]) ?? [];
 
-    // Indexa respuestas por itemId para resolver el valor de cada ítem de la plantilla.
-    const answerByItemId = new Map<string, Record<string, unknown>>();
-    for (const ans of answers) {
-      const key = ans.itemId ?? ans.id;
-      if (key !== undefined && key !== null) {
-        answerByItemId.set(String(key), ans);
-      }
-    }
-
-    // Construye una fila por cada ítem de la plantilla (preserva orden y etiquetas).
-    // Si la plantilla no tiene ítems, cae a las respuestas crudas.
-    const source = templateItems.length > 0 ? templateItems : answers;
-    const rows = source.map((item) => {
-      const itemId = item.id ?? item.itemId;
-      const ans = itemId !== undefined && itemId !== null ? answerByItemId.get(String(itemId)) : undefined;
-      const effective = ans ?? item;
-      const label = String(item.label ?? item.itemId ?? item.id ?? 'Ítem sin nombre');
-      const comment = effective.comment !== undefined && effective.comment !== null && String(effective.comment) !== ''
-        ? String(effective.comment)
-        : undefined;
-
-      // Ítem SVG (diagrama de carrocería): el value es un JSON string del mapa
-      // `{ [partId]: { part, comment } }`. Se expande a un resumen ("N
-      // observaciones") + una línea `parte: comentario` por parte, en vez de
-      // volcar el JSON crudo ilegible. Se detecta por el tipo del ítem de la
-      // plantilla o, en fallback (respuestas sin plantilla), porque el value
-      // parsea a ese mapa. Si el value no parsea (SVG sin responder, etc.) cae al
-      // formateo común (`formatChecklistValue`), robusto ante datos legacy.
-      const isSvgItem = String(item.type ?? '') === 'SVG';
-      const svgSummary = formatSvgAnswerValue(effective.value);
-      if (isSvgItem || svgSummary) {
-        if (svgSummary) {
-          return { label, valueLabel: svgSummary.summary, comment, details: svgSummary.lines };
-        }
-      }
-
-      return {
-        label,
-        valueLabel: this.formatChecklistValue(effective.value),
-        comment,
-      };
-    });
-
+    // El nombre sale del usuario cuando el checklist se hizo en la plataforma, y
+    // de `externalAuthor` cuando vino de la planilla. El PDF advierte el origen.
     const submittedByName = submission.user
       ? `${submission.user.firstName} ${submission.user.lastName}`.trim()
-      : 'Desconocido';
+      : (submission.externalAuthor ?? 'Sin registrar');
 
-    return composeChecklistPdf({
-      assetCode: submission.asset.code,
-      assetName: submission.asset.name,
-      templateName: submission.template.name,
-      submittedBy: submittedByName,
-      submittedAt: submission.createdAt.toISOString(),
-      rows,
+    // Los vencimientos del bloque del vehículo salen de sus documentos
+    // APROBADOS: son los que la ficha considera vigentes.
+    const documentos = await this.prisma.assetDocument.findMany({
+      where: { assetId, status: DocumentStatus.APROBADO },
+      select: { name: true, type: true, expirationDate: true },
     });
+
+    const proyecto = await this.prisma.asset.findUnique({
+      where: { id: assetId },
+      select: { project: { select: { name: true } } },
+    });
+
+    return composeChecklistFormatoPdf(
+      construirFormato({
+        proyecto: proyecto?.project?.name ?? null,
+        fecha: submission.createdAt,
+        conductor: submittedByName,
+        origen: submission.externalSource,
+        patente: submission.asset.identifier,
+        items: templateItems as never,
+        answers: answers as never,
+        documentos,
+      }),
+    );
   }
 
   /** Etiqueta legible por tipo de ítem para el PDF de preview del formulario. */
