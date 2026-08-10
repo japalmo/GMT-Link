@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { OpenFgaClient } from '@openfga/sdk';
 import { FgaService } from './fga.service';
 import { FgaModelPublisher } from './fga-model-publisher.service';
+import { FgaOrgRolesResync } from './fga-org-roles-resync.service';
 import { FGA_CLIENT } from './fga.types';
 import type { FgaClientLike } from './fga.types';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -16,7 +17,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 @Global()
 @Module({
   imports: [PrismaModule],
-  providers: [FgaModelPublisher, 
+  providers: [FgaModelPublisher, FgaOrgRolesResync, 
     {
       provide: FGA_CLIENT,
       inject: [ConfigService],
