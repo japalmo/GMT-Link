@@ -47,6 +47,7 @@ export class FgaOrgRolesResync implements OnApplicationBootstrap {
       });
 
       let escritas = 0;
+      let yaEstaban = 0;
       let sinRelacion = 0;
       for (const m of membresias) {
         const relacion = MEMBERSHIP_RELATION_MAP.ORGANIZATION[m.roleKey];
@@ -62,15 +63,22 @@ export class FgaOrgRolesResync implements OnApplicationBootstrap {
           escritas += 1;
           this.logger.log(`Tupla asegurada: ${m.user.username} -> ${relacion}`);
         } catch (error) {
-          this.logger.error(
-            `No se pudo escribir ${relacion} de ${m.user.username}: ${(error as Error).message}`,
-          );
+          // Que la tupla ya exista es ÉXITO, no fallo: el objetivo es que esté,
+          // no haberla escrito esta vez. Registrarlo como error hacía leer un
+          // resync correcto como si todo hubiera fallado.
+          const msg = (error as Error).message;
+          if (/already exist/i.test(msg)) {
+            yaEstaban += 1;
+          } else {
+            this.logger.error(`No se pudo escribir ${relacion} de ${m.user.username}: ${msg}`);
+          }
         }
       }
 
       this.logger.warn(
-        `Resincronización de roles de organización: ${escritas} tuplas aseguradas, ` +
-          `${sinRelacion} membresías sin relación FGA (correcto). ` +
+        `Resincronización de roles de organización: ${escritas} tuplas escritas, ` +
+          `${yaEstaban} ya existían, ${sinRelacion} membresías sin relación FGA ` +
+          `(correcto: los roles funcionales a nivel org no generan tupla). ` +
           `Apaga FGA_RESYNC_ORG_ROLES.`,
       );
     } catch (error) {
