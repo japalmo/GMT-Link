@@ -544,12 +544,15 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
     { id: 'fabricante', header: 'Fabricante', sortable: true, render: (a) => a.manufacturer || 'N/A' },
     {
       id: 'identificador',
-      header: 'Identificador',
+      // Para vehículos el identificador ES la patente, así que la columna se
+      // titula "Patente" y omite la subetiqueta del tipo (sería redundante).
+      // Equipos y maquinaria usan número de serie y conservan "Identificador".
+      header: subsection === 'vehiculos' ? 'Patente' : 'Identificador',
       render: (a) =>
         a.identifier ? (
           <div className="flex flex-col text-xs">
             <span className="font-mono">{a.identifier}</span>
-            {a.identifierType && (
+            {subsection !== 'vehiculos' && a.identifierType && (
               <span className="text-[10px] text-muted-foreground">{IDENTIFIER_TYPE_LABELS[a.identifierType]}</span>
             )}
           </div>
@@ -885,7 +888,7 @@ function ActivosCatalogView({ subsection, onSelectAsset }: ActivosCatalogViewPro
                         />
                       </div>
                       <div className="flex flex-col gap-1">
-                        <Label htmlFor="vh-placa" className="text-xs">Patente / Placa</Label>
+                        <Label htmlFor="vh-placa" className="text-xs">Patente</Label>
                         <Input
                           id="vh-placa"
                           maxLength={6}

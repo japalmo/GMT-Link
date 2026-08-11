@@ -145,7 +145,8 @@ export function AssetEditDialog({
         description: form.description.trim() || null,
         manufacturer: form.manufacturer.trim() || null,
         identifier: form.identifier.trim() || null,
-        identifierType: form.identifierType === '' ? null : form.identifierType,
+        // Un vehículo siempre es PATENTE (el selector está oculto para él).
+        identifierType: isVehicle ? 'PATENTE' : form.identifierType === '' ? null : form.identifierType,
         vehicleSubtype: isVehicle ? (form.vehicleSubtype === '' ? null : form.vehicleSubtype) : null,
         metadata: buildMetadata(),
       };
@@ -199,21 +200,26 @@ export function AssetEditDialog({
                 onChange={(e) => update('manufacturer', e.target.value)}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`${baseId}-idtype`}>Tipo de identificador</Label>
-              <Select
-                id={`${baseId}-idtype`}
-                aria-label="Tipo de identificador"
-                value={form.identifierType}
-                onChange={(e) => update('identifierType', e.target.value as '' | AssetIdentifierType)}
-              >
-                <option value="">Sin especificar</option>
-                <option value="PATENTE">{IDENTIFIER_TYPE_LABELS.PATENTE}</option>
-                <option value="NUMERO_SERIE">{IDENTIFIER_TYPE_LABELS.NUMERO_SERIE}</option>
-              </Select>
-            </div>
+            {/* El tipo de identificador solo se elige para equipo y maquinaria.
+                Un vehículo siempre se identifica por patente, así que el selector
+                se oculta y el tipo se fija en PATENTE al guardar. */}
+            {!isVehicle && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${baseId}-idtype`}>Tipo de identificador</Label>
+                <Select
+                  id={`${baseId}-idtype`}
+                  aria-label="Tipo de identificador"
+                  value={form.identifierType}
+                  onChange={(e) => update('identifierType', e.target.value as '' | AssetIdentifierType)}
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="PATENTE">{IDENTIFIER_TYPE_LABELS.PATENTE}</option>
+                  <option value="NUMERO_SERIE">{IDENTIFIER_TYPE_LABELS.NUMERO_SERIE}</option>
+                </Select>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor={`${baseId}-id`}>Identificador (patente / número de serie)</Label>
+              <Label htmlFor={`${baseId}-id`}>{isVehicle ? 'Patente' : 'Identificador (número de serie)'}</Label>
               <Input
                 id={`${baseId}-id`}
                 value={form.identifier}
