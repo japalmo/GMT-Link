@@ -44,6 +44,7 @@ import {
   UpdateAssetStatusDto,
   AssignAssetDto,
   ReviewAssetDocDto,
+  SetFicheVisibilityDto,
   CreateAccessoryDto,
   UpdateAccessoryDto,
   UpdateChecklistTemplateDto,
@@ -60,6 +61,7 @@ import {
   AssetHistoryEntryView,
   AssetView,
   AssetPublicView,
+  AssetPublicResolved,
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
@@ -562,6 +564,24 @@ export class AssetsController {
   }
 
   /**
+   * Resuelve el token público de la ficha al activo, para un usuario AUTENTICADO.
+   *
+   * Lo usa el formulario de checklist independiente: el conductor llega desde el
+   * QR (que solo lleva el token, sin el id interno) y, ya logueado, necesita el
+   * id del activo para cargar la plantilla y enviar el checklist con los
+   * endpoints normales. La autorización (poder ver el activo) la resuelve el
+   * servicio: el conductor ve los vehículos de flota aunque no entre al detalle.
+   */
+  @Get('resolve/:token')
+  resolveByToken(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('token') token: string,
+  ): Promise<AssetPublicResolved> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.resolveByToken(token, userId);
+  }
+
+  /**
    * URL fresca de descarga de un documento desde la ficha pública (sin auth).
    * El token opaco del activo es la credencial; el servicio exige además que el
    * documento sea de ese activo y esté APROBADO.
@@ -606,6 +626,21 @@ export class AssetsController {
       throw new ForbiddenException('No tienes permisos para revisar documentos de activos.');
     }
     return this.assets.reviewDocument(id, docId, userId, dto.status, dto.reason);
+  }
+
+  /**
+   * Marca o desmarca un documento como visible en la ficha pública. La
+   * autorización (gestión del activo) la resuelve el servicio.
+   */
+  @Patch(':id/documents/:docId/fiche-visibility')
+  setDocumentFicheVisibility(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+    @Body() dto: SetFicheVisibilityDto,
+  ): Promise<AssetDocumentView> {
+    const userId = this.requireUserId(authUser);
+    return this.assets.setDocumentFicheVisibility(id, docId, userId, dto.visible);
   }
 
   /**

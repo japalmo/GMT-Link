@@ -260,6 +260,7 @@ interface MockPrisma {
   assetDocument: {
     findMany: MockFunction;
     findUnique: MockFunction;
+    update: MockFunction;
   };
   assetHistoryEntry: {
     findMany: MockFunction;
@@ -380,6 +381,7 @@ describe('AssetsService', () => {
       assetDocument: {
         findMany: vi.fn(() => Promise.resolve([])),
         findUnique: vi.fn(),
+        update: vi.fn(),
       },
       assetHistoryEntry: {
         findMany: vi.fn(() => Promise.resolve([])),
@@ -784,6 +786,181 @@ describe('AssetsService', () => {
       expect(fgaMock.deleteTuples).toHaveBeenCalledWith([
         { user: 'user:u-9', relation: 'assigned', object: 'asset:a-fga' },
       ]);
+    });
+  });
+
+  describe('setDocumentFicheVisibility — visibilidad en la ficha pública', () => {
+    function docRow(over: Record<string, unknown> = {}) {
+      return {
+        id: 'd-1',
+        assetId: 'a-1',
+        name: 'SOAP',
+        type: 'SOAP',
+        fileUrl: 'assets/a-1/documents/soap.pdf',
+        status: 'APROBADO',
+        previousFileUrl: null,
+        reviewedById: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        expirationDate: null,
+        visibleInFiche: false,
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+        ...over,
+      };
+    }
+
+    it('un gestor marca el documento como visible y recibe la vista actualizada', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      prismaMock.assetDocument.findUnique.mockResolvedValueOnce({ assetId: 'a-1' });
+      prismaMock.assetDocument.update.mockResolvedValueOnce(docRow({ visibleInFiche: true }));
+
+      const res = await service.setDocumentFicheVisibility('a-1', 'd-1', 'mgr', true);
+
+      expect(res.visibleInFiche).toBe(true);
+      expect(prismaMock.assetDocument.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'd-1' }, data: { visibleInFiche: true } }),
+      );
+    });
+
+    it('un NO gestor recibe 403 y NO toca el documento', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      fgaMock.check.mockResolvedValue(false);
+      await expect(
+        service.setDocumentFicheVisibility('a-1', 'd-1', 'ajeno', true),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prismaMock.assetDocument.update).not.toHaveBeenCalled();
+    });
+
+    it('404 si el documento no es de ese activo', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
+      prismaMock.assetDocument.findUnique.mockResolvedValueOnce({ assetId: 'OTRO' });
+      await expect(
+        service.setDocumentFicheVisibility('a-1', 'd-1', 'mgr', true),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('descarga pública de un documento respeta la visibilidad', () => {
+    it('404 si el documento NO es visible en ficha, aunque esté aprobado', async () => {
+      // El token es la credencial, pero un documento oculto no debe poder
+      // descargarse ni con el id: la ruta es pública.
+      prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1' });
+      prismaMock.assetDocument.findUnique.mockResolvedValueOnce({
+        assetId: 'a-1',
+        fileUrl: 'k',
+        status: 'APROBADO',
+        visibleInFiche: false,
+      });
+      await expect(service.getPublicDocumentFileUrl('tok', 'd-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('getPublicByToken — botón "Llenar checklist" (canFillChecklist)', () => {
+    function publicRow(over: Record<string, unknown> = {}) {
+      return {
+        code: 'GMT-VH-0001',
+        type: AssetType.VEHICULO,
+        name: 'Camioneta',
+        description: null,
+        manufacturer: null,
+        vehicleSubtype: null,
+        status: AssetStatus.DISPONIBLE,
+        project: null,
+        documents: [],
+        checklistSubmissions: [],
+        checklistTemplate: null,
+        ...over,
+      };
+    }
+
+    it('un vehículo SIEMPRE ofrece checklist, aunque su plantilla no esté materializada', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        publicRow({ type: AssetType.VEHICULO, checklistTemplate: null }),
+      );
+      const res = await service.getPublicByToken('tok');
+      expect(res.canFillChecklist).toBe(true);
+    });
+
+    it('un activo NO vehículo sin plantilla configurada NO ofrece checklist', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        publicRow({ type: AssetType.EQUIPO, checklistTemplate: null }),
+      );
+      const res = await service.getPublicByToken('tok');
+      expect(res.canFillChecklist).toBe(false);
+    });
+
+    it('un activo NO vehículo con plantilla VACÍA (items []) NO ofrece checklist', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        publicRow({ type: AssetType.EQUIPO, checklistTemplate: { items: [] } }),
+      );
+      const res = await service.getPublicByToken('tok');
+      expect(res.canFillChecklist).toBe(false);
+    });
+
+    it('un activo NO vehículo con plantilla de ítems SÍ ofrece checklist', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        publicRow({
+          type: AssetType.EQUIPO,
+          checklistTemplate: {
+            items: [{ id: 'i1', label: 'Nivel de aceite', type: 'BOOLEAN', required: true }],
+          },
+        }),
+      );
+      const res = await service.getPublicByToken('tok');
+      expect(res.canFillChecklist).toBe(true);
+    });
+
+    it('token inexistente → 404', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(null);
+      await expect(service.getPublicByToken('tok-x')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('resolveByToken — del token público al activo (checklist como form aparte)', () => {
+    it('devuelve id/código/identificador cuando el usuario puede ver el activo', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({
+        id: 'a-1',
+        code: 'GMT-VH-0001',
+        name: 'Camioneta',
+        type: AssetType.VEHICULO,
+        identifier: 'JJXX-11',
+        projectId: null,
+      });
+      // scopeFilter 'none' por defecto → ve todo.
+      const res = await service.resolveByToken('tok', 'conductor');
+      expect(res).toEqual({
+        id: 'a-1',
+        code: 'GMT-VH-0001',
+        name: 'Camioneta',
+        type: AssetType.VEHICULO,
+        identifier: 'JJXX-11',
+      });
+    });
+
+    it('404 si el usuario NO puede ver el activo (no confirma que el token existe)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce({
+        id: 'a-9',
+        code: 'GMT-VH-0009',
+        name: 'Ajeno',
+        type: AssetType.VEHICULO,
+        identifier: null,
+        projectId: 'p-otro',
+      });
+      // Sin acceso: scope acotado a proyectos, activo de un proyecto ajeno,
+      // sin permisos funcionales (default deny) y fga niega el gate estructural.
+      permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'projects', ids: [] });
+      fgaMock.check.mockResolvedValue(false);
+      await expect(service.resolveByToken('tok', 'ajeno')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('404 si el token no existe', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(null);
+      await expect(service.resolveByToken('tok-x', 'conductor')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 

@@ -1,4 +1,5 @@
 import { DocumentStatus } from '@prisma/client';
+import type { AssetType as AssetTypeValue } from '@gmt-platform/contracts';
 
 /**
  * Los tipos de dominio de activos (unions + vistas) viven en
@@ -38,9 +39,25 @@ export interface AssetDocumentView {
   reviewedById: string | null;
   reviewedAt: string | null; // ISO-8601
   expirationDate: string | null; // ISO-8601
+  /** ¿Se muestra en la ficha pública (accesible por QR)? Lo controla el detalle. */
+  visibleInFiche: boolean;
   createdAt: string; // ISO-8601
   updatedAt: string; // ISO-8601
   reviewedBy?: { firstName: string; lastName: string } | null;
+}
+
+/**
+ * Mínimo que el formulario de checklist independiente necesita del activo, tras
+ * resolver el token público. NO expone la ficha completa: solo lo justo para
+ * cargar la plantilla y rotular el formulario.
+ */
+export interface AssetPublicResolved {
+  id: string;
+  code: string;
+  name: string;
+  type: AssetTypeValue;
+  /** Patente (vehículos) o número de serie. */
+  identifier: string | null;
 }
 
 export interface AssetHistoryEntryView {

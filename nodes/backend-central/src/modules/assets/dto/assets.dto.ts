@@ -8,6 +8,7 @@ import {
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsNotEmpty,
@@ -136,6 +137,11 @@ export class ReviewAssetDocDto {
   @IsString()
   @IsOptional()
   reason?: string;
+}
+
+export class SetFicheVisibilityDto {
+  @IsBoolean({ message: 'visible debe ser booleano' })
+  visible!: boolean;
 }
 
 export class CreateAccessoryDto {

@@ -25,6 +25,7 @@ import {
   AssetHistoryEntryView,
   AssetView,
   AssetPublicView,
+  AssetPublicResolved,
   AssetPublicDocument,
   AssetPublicLastChecklist,
   AssetAccessoryView,
@@ -323,6 +324,7 @@ export class AssetsService {
       reviewedById: row.reviewedById,
       reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
       expirationDate: row.expirationDate ? row.expirationDate.toISOString() : null,
+      visibleInFiche: row.visibleInFiche,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       reviewedBy: row.reviewedBy
@@ -1697,6 +1699,35 @@ export class AssetsService {
   }
 
   /**
+   * Marca (o desmarca) un documento como visible en la ficha PÚBLICA.
+   *
+   * Mismo gate que el resto de la gestión de documentos: solo quien administra
+   * el activo decide qué se expone en una ruta sin autenticación. Devuelve la
+   * vista actualizada para que la UI refleje el nuevo estado sin recargar.
+   */
+  async setDocumentFicheVisibility(
+    assetId: string,
+    docId: string,
+    userId: string,
+    visible: boolean,
+  ): Promise<AssetDocumentView> {
+    await this.assertCanManageAssetById(assetId, userId);
+    const doc = await this.prisma.assetDocument.findUnique({
+      where: { id: docId },
+      select: { assetId: true },
+    });
+    if (!doc || doc.assetId !== assetId) {
+      throw new NotFoundException('El documento no existe para este activo.');
+    }
+    const updated = await this.prisma.assetDocument.update({
+      where: { id: docId },
+      data: { visibleInFiche: visible },
+      include: { reviewedBy: true },
+    });
+    return this.toDocView(updated);
+  }
+
+  /**
    * URL de descarga/visualización FRESCA del archivo de un documento del activo
    * (Fase 1B): `fileUrl` puede ser una CLAVE de storage (documentos nuevos, se
    * presigna al leer) o una URL absoluta legada (passthrough; si es del propio
@@ -1738,7 +1769,10 @@ export class AssetsService {
       include: {
         project: true,
         documents: {
-          where: { status: DocumentStatus.APROBADO },
+          // La ficha es PÚBLICA: solo los documentos marcados como visibles se
+          // exponen, además de estar aprobados. `visibleInFiche` lo controla el
+          // dueño desde la vista detalle.
+          where: { status: DocumentStatus.APROBADO, visibleInFiche: true },
           orderBy: [{ expirationDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
         },
         checklistSubmissions: {
@@ -1746,6 +1780,7 @@ export class AssetsService {
           take: 1,
           include: { template: { select: { name: true } } },
         },
+        checklistTemplate: { select: { items: true } },
       },
     });
     if (!asset) {
@@ -1775,6 +1810,13 @@ export class AssetsService {
         }
       : null;
 
+    // El botón "Llenar checklist" sale solo si hay algo que llenar: los
+    // vehículos siempre lo tienen (checklist de flota por defecto); los demás
+    // activos, únicamente si su plantilla ya se configuró con ítems.
+    const templateItems = asset.checklistTemplate?.items;
+    const templateItemCount = Array.isArray(templateItems) ? templateItems.length : 0;
+    const canFillChecklist = asset.type === AssetType.VEHICULO || templateItemCount > 0;
+
     return {
       code: asset.code,
       type: asset.type,
@@ -1786,6 +1828,34 @@ export class AssetsService {
       project: asset.project ? { name: asset.project.name } : null,
       documents,
       lastChecklist,
+      canFillChecklist,
+    };
+  }
+
+  /**
+   * Resuelve el token público al activo, para un usuario AUTENTICADO.
+   *
+   * Es lo que le permite al formulario de checklist independiente pasar del token
+   * (lo único que trae el QR) al id interno que necesitan los endpoints de
+   * plantilla y envío. Se exige poder VER el activo con el mismo criterio que el
+   * resto: el conductor ve los vehículos de flota (globales) aunque no tenga
+   * acceso al detalle. 404 (no 403) si no lo ve, para no confirmar que el token
+   * existe a quien no debería.
+   */
+  async resolveByToken(token: string, userId: string): Promise<AssetPublicResolved> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { publicToken: token },
+      select: { id: true, code: true, name: true, type: true, identifier: true, projectId: true },
+    });
+    if (!asset || !(await this.canViewAsset(userId, asset))) {
+      throw new NotFoundException('Ficha técnica no encontrada.');
+    }
+    return {
+      id: asset.id,
+      code: asset.code,
+      name: asset.name,
+      type: asset.type,
+      identifier: asset.identifier,
     };
   }
 
@@ -1808,9 +1878,17 @@ export class AssetsService {
     }
     const doc = await this.prisma.assetDocument.findUnique({
       where: { id: docId },
-      select: { assetId: true, fileUrl: true, status: true },
+      select: { assetId: true, fileUrl: true, status: true, visibleInFiche: true },
     });
-    if (!doc || doc.assetId !== asset.id || doc.status !== DocumentStatus.APROBADO) {
+    // Además de pertenecer a la ficha y estar aprobado, el documento tiene que
+    // ser VISIBLE en ficha. Sin esta condición, alguien con el id del documento
+    // podría descargar por esta ruta uno que se ocultó a propósito.
+    if (
+      !doc ||
+      doc.assetId !== asset.id ||
+      doc.status !== DocumentStatus.APROBADO ||
+      !doc.visibleInFiche
+    ) {
       throw new NotFoundException('El documento no existe para esta ficha.');
     }
     return { url: await resolveFreshFileUrl(this.storage, doc.fileUrl) };

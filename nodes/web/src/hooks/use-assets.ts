@@ -11,6 +11,7 @@ import {
   uploadAssetDocument,
   listAssetDocuments,
   reviewAssetDocument,
+  setAssetDocumentFicheVisibility,
   getAssetHistory,
   listAssetAccessories,
   addAssetAccessory,
@@ -81,6 +82,7 @@ export interface UseAssetsResult {
   uploadDoc: (id: string, name: string, type: string, file: File, expirationDate?: string) => Promise<AssetDocumentView>;
   listDocs: (id: string) => Promise<AssetDocumentView[]>;
   reviewDoc: (id: string, docId: string, input: ReviewAssetDocInput) => Promise<AssetDocumentView>;
+  setDocFicheVisibility: (id: string, docId: string, visible: boolean) => Promise<AssetDocumentView>;
   getHistory: (id: string) => Promise<AssetHistoryEntryView[]>;
   getById: (id: string) => Promise<AssetView>;
   listAccessories: (id: string) => Promise<AssetAccessoryView[]>;
@@ -300,6 +302,14 @@ export function useAssets(): UseAssetsResult {
     return doc;
   }, []);
 
+  const setDocFicheVisibility = useCallback(
+    async (id: string, docId: string, visible: boolean) => {
+      const doc = await setAssetDocumentFicheVisibility(id, docId, visible);
+      return doc;
+    },
+    [],
+  );
+
   const getHistory = useCallback(async (id: string) => {
     const history = await getAssetHistory(id);
     return history;
@@ -386,6 +396,7 @@ export function useAssets(): UseAssetsResult {
     uploadDoc,
     listDocs,
     reviewDoc,
+    setDocFicheVisibility,
     getHistory,
     getById,
     listAccessories,

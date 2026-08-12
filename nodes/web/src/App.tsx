@@ -18,6 +18,7 @@ import PublicAssetPage from '@/pages/public/activo';
 // Páginas secundarias y pesadas (lazy): se cargan al navegar. Esto saca del
 // bundle inicial las dependencias grandes (Three.js en v-metric, mapas en
 // herramientas) y reduce el tiempo de carga inicial en producción.
+const LlenarChecklistPage = lazy(() => import('@/pages/checklist/llenar-checklist'));
 const UsuariosPage = lazy(() => import('@/pages/usuarios'));
 const RolesPage = lazy(() => import('@/pages/roles'));
 const PerfilPage = lazy(() => import('@/pages/perfil'));
@@ -93,6 +94,10 @@ const router = createBrowserRouter([
     children: [
       // Cambio de clave forzado: protegido pero fuera del shell.
       { path: '/first-login', element: <FirstLoginPage /> },
+      // Checklist independiente: protegido (exige sesión) pero FUERA del shell y
+      // sin RequireModule, porque el conductor puede no tener el módulo Recursos.
+      // Llega desde el QR de la ficha pública con el token del vehículo.
+      { path: '/checklist/:token', element: lazyRoute(<LlenarChecklistPage />) },
       // App con shell (sidebar + topbar).
       {
         element: <AppShell />,

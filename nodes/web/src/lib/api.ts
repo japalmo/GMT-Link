@@ -112,6 +112,7 @@ import type {
   AssetPublicView,
   UpdateAssetInput,
   AssetDocumentView,
+  AssetPublicResolved,
   AssetHistoryEntryView,
   AssetType,
   AssetStatus,
@@ -2174,6 +2175,31 @@ export function reviewAssetDocument(
       body: JSON.stringify(dto),
     },
   );
+}
+
+/**
+ * `PATCH /assets/:id/documents/:docId/fiche-visibility` — muestra u oculta un
+ * documento en la ficha pública (accesible por QR). Mismo gate que la gestión
+ * de documentos.
+ */
+export function setAssetDocumentFicheVisibility(
+  id: string,
+  docId: string,
+  visible: boolean,
+): Promise<AssetDocumentView> {
+  return request<AssetDocumentView>(
+    `/assets/${encodeURIComponent(id)}/documents/${encodeURIComponent(docId)}/fiche-visibility`,
+    { method: 'PATCH', body: JSON.stringify({ visible }) },
+  );
+}
+
+/**
+ * `GET /assets/resolve/:token` — resuelve el token público de la ficha al activo,
+ * para un usuario autenticado. Lo usa el formulario de checklist independiente,
+ * que llega desde el QR con el token y necesita el id para cargar la plantilla.
+ */
+export function resolveAssetByToken(token: string): Promise<AssetPublicResolved> {
+  return request<AssetPublicResolved>(`/assets/resolve/${encodeURIComponent(token)}`);
 }
 
 export function getAssetHistory(id: string): Promise<AssetHistoryEntryView[]> {

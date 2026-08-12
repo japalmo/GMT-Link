@@ -93,6 +93,8 @@ export interface AssetDocumentView {
   reviewedById: string | null;
   reviewedAt: string | null; // ISO-8601
   expirationDate: string | null; // ISO-8601
+  /** ¿Se muestra en la ficha pública (por QR, sin login)? Se controla en el detalle. */
+  visibleInFiche: boolean;
   createdAt: string; // ISO-8601
   updatedAt: string; // ISO-8601
   reviewedBy?: { firstName: string; lastName: string } | null;
@@ -106,6 +108,19 @@ export interface AssetHistoryEntryView {
   actorId: string | null;
   createdAt: string; // ISO-8601
   actor?: { firstName: string; lastName: string } | null;
+}
+
+/**
+ * Mínimo del activo que devuelve `GET /assets/resolve/:token` para un usuario
+ * autenticado: lo justo para que el formulario de checklist independiente cargue
+ * la plantilla y rotule el vehículo.
+ */
+export interface AssetPublicResolved {
+  id: string;
+  code: string;
+  name: string;
+  type: AssetType;
+  identifier: string | null;
 }
 
 export interface CreateAssetInput {

@@ -990,6 +990,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     uploadDoc,
     listDocs,
     reviewDoc,
+    setDocFicheVisibility,
     getTemplate,
     updateTemplate,
     reviewTemplate,
@@ -1246,6 +1247,16 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
     await uploadDoc(id, nombre, tipo, archivo, vencimiento);
     toast.success('Documento subido con éxito.');
     void loadData();
+  };
+
+  const handleToggleFiche = async (docId: string, visible: boolean) => {
+    try {
+      await setDocFicheVisibility(id, docId, visible);
+      toast.success(visible ? 'Documento visible en la ficha.' : 'Documento oculto de la ficha.');
+      void loadData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo cambiar la visibilidad.');
+    }
   };
 
   const handleReviewDoc = async (docId: string, status: 'APROBADO' | 'RECHAZADO', reason?: string) => {
@@ -1871,6 +1882,7 @@ function AssetDetailView({ id, initialTarget = null, onBack }: AssetDetailViewPr
                 puedeRevisar={isAdmin === true}
                 onSubir={handleSubirDocumento}
                 onRevisar={handleReviewDoc}
+                onToggleFiche={handleToggleFiche}
               />
             </div>
           )}

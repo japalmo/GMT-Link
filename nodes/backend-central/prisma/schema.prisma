@@ -947,6 +947,10 @@ model AssetDocument {
   reviewedBy      User?          @relation("AssetDocReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt      DateTime?
   expirationDate  DateTime?
+  // ¿Se muestra este documento en la ficha PÚBLICA (accesible por QR, sin login)?
+  // Por defecto NO: la ficha es pública, así que cada documento se hace visible
+  // a propósito. Se controla desde la vista detalle (decisión del dueño).
+  visibleInFiche  Boolean        @default(false)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 

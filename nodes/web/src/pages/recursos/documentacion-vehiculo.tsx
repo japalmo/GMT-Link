@@ -4,6 +4,8 @@ import {
   CircleCheck,
   CircleDashed,
   Clock,
+  Eye,
+  EyeOff,
   FileText,
   Loader2,
   Upload,
@@ -142,6 +144,31 @@ export interface DocumentacionVehiculoProps {
   puedeRevisar: boolean;
   onSubir: (nombre: string, tipo: string, archivo: File, vencimiento?: string) => Promise<void>;
   onRevisar: (docId: string, estado: Extract<DocumentStatus, 'APROBADO' | 'RECHAZADO'>) => void;
+  /** Mostrar u ocultar el documento en la ficha pública. */
+  onToggleFiche: (docId: string, visible: boolean) => void;
+}
+
+/** Interruptor "visible en ficha": un botón con estado claro, sin componente Switch. */
+function ToggleFicha({
+  visible,
+  onToggle,
+}: {
+  visible: boolean;
+  onToggle: () => void;
+}): ReactNode {
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={onToggle}
+      aria-pressed={visible}
+      title={visible ? 'Se muestra en la ficha pública' : 'Oculto en la ficha pública'}
+      className={visible ? 'text-primary' : 'text-muted-foreground'}
+    >
+      {visible ? <Eye className="mr-1.5 size-3.5" /> : <EyeOff className="mr-1.5 size-3.5" />}
+      {visible ? 'En ficha' : 'Oculto'}
+    </Button>
+  );
 }
 
 export function DocumentacionVehiculo({
@@ -150,6 +177,7 @@ export function DocumentacionVehiculo({
   puedeRevisar,
   onSubir,
   onRevisar,
+  onToggleFiche,
 }: DocumentacionVehiculoProps): ReactNode {
   const tiposDeCasillero = useMemo(() => new Set(CASILLEROS.map((c) => c.tipo as string)), []);
   const otros = docs.filter((d) => !tiposDeCasillero.has(d.type));
@@ -181,6 +209,7 @@ export function DocumentacionVehiculo({
             puedeRevisar={puedeRevisar}
             onSubir={onSubir}
             onRevisar={onRevisar}
+            onToggleFiche={onToggleFiche}
           />
         ))}
 
@@ -195,9 +224,11 @@ export function DocumentacionVehiculo({
               {otros.map((d) => (
                 <OtroDocumento
                   key={d.id}
+                  assetId={assetId}
                   doc={d}
                   puedeRevisar={puedeRevisar}
                   onRevisar={onRevisar}
+                  onToggleFiche={onToggleFiche}
                 />
               ))}
             </div>
@@ -216,6 +247,7 @@ function CasilleroDocumento({
   puedeRevisar,
   onSubir,
   onRevisar,
+  onToggleFiche,
 }: {
   assetId: string;
   casillero: Casillero;
@@ -223,6 +255,7 @@ function CasilleroDocumento({
   puedeRevisar: boolean;
   onSubir: DocumentacionVehiculoProps['onSubir'];
   onRevisar: DocumentacionVehiculoProps['onRevisar'];
+  onToggleFiche: DocumentacionVehiculoProps['onToggleFiche'];
 }): ReactNode {
   const [abierto, setAbierto] = useState(false);
   const estado = estadoDe(doc);
@@ -258,6 +291,12 @@ function CasilleroDocumento({
             >
               Ver
             </FreshFileLink>
+          ) : null}
+          {doc ? (
+            <ToggleFicha
+              visible={doc.visibleInFiche}
+              onToggle={() => onToggleFiche(doc.id, !doc.visibleInFiche)}
+            />
           ) : null}
           <Button size="sm" variant="outline" onClick={() => setAbierto((v) => !v)}>
             <Upload className="mr-1.5 size-3.5" />
@@ -384,13 +423,17 @@ function FormularioCarga({
 }
 
 function OtroDocumento({
+  assetId,
   doc,
   puedeRevisar,
   onRevisar,
+  onToggleFiche,
 }: {
+  assetId: string;
   doc: AssetDocumentView;
   puedeRevisar: boolean;
   onRevisar: DocumentacionVehiculoProps['onRevisar'];
+  onToggleFiche: DocumentacionVehiculoProps['onToggleFiche'];
 }): ReactNode {
   const estado = estadoDe(doc);
   return (
@@ -406,12 +449,16 @@ function OtroDocumento({
           {PRESENTACION[estado].etiqueta}
         </Badge>
         <FreshFileLink
-          getUrl={() => getAssetDocumentFileUrl(doc.assetId, doc.id)}
+          getUrl={() => getAssetDocumentFileUrl(assetId, doc.id)}
           className="text-xs font-medium text-primary hover:underline"
           aria-label={`Ver ${doc.name}`}
         >
           Ver
         </FreshFileLink>
+        <ToggleFicha
+          visible={doc.visibleInFiche}
+          onToggle={() => onToggleFiche(doc.id, !doc.visibleInFiche)}
+        />
         {doc.status === 'EN_REVISION' && puedeRevisar ? (
           <>
             <Button

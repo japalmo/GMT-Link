@@ -1050,6 +1050,13 @@ export interface AssetPublicView {
   documents: AssetPublicDocument[];
   /** Última inspección de checklist, o null. */
   lastChecklist: AssetPublicLastChecklist | null;
+  /**
+   * `true` cuando hay un checklist que llenar: es vehículo (siempre tiene el
+   * checklist por defecto de flota) o su plantilla ya se configuró con ítems.
+   * Gobierna el botón "Llenar checklist" de la ficha pública para no mandar al
+   * conductor a un formulario vacío.
+   */
+  canFillChecklist: boolean;
 }
 
 // ============ Checklist tipado de activos (Tanda 5) ============

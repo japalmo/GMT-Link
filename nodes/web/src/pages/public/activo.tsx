@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getPublicAsset, getPublicAssetDocumentUrl } from '@/lib/api';
 import {
   Wrench,
@@ -29,6 +29,7 @@ function formatearFecha(iso: string): string {
 
 export default function PublicAssetPage(): ReactNode {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetPublicView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +151,18 @@ export default function PublicAssetPage(): ReactNode {
             </CardHeader>
 
             <CardContent className="space-y-4 px-6 text-sm">
+              {/* Acción principal para el conductor que escanea la plaquita: el
+                  checklist es un formulario aparte (ruta protegida). Si no tiene
+                  sesión, pasa por el login y vuelve solo a este mismo checklist. */}
+              {asset.canFillChecklist && token && (
+                <Button
+                  className="h-12 w-full gap-2 text-base"
+                  onClick={() => navigate(`/checklist/${token}`)}
+                >
+                  <ClipboardCheck className="size-5" /> Llenar checklist
+                </Button>
+              )}
+
               <div className="flex justify-between items-center border-b border-border/60 pb-3">
                 <span className="text-muted-foreground">Tipo de Activo:</span>
                 <span className="font-semibold text-foreground">
