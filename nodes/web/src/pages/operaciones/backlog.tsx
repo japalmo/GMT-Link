@@ -131,7 +131,13 @@ export function BacklogTab(): ReactNode {
   // Read initial states from search params, fallback to 'all' or empty
   const filterProject = searchParams.get('project') || 'all';
   const filterService = searchParams.get('service') || 'all';
-  const filterAssignee = searchParams.get('assignee') || 'all';
+  // Por defecto el backlog muestra SOLO las tareas asignadas al usuario. Aplica a
+  // supervisores/admins (que si no verían TODAS las tareas de sus proyectos); el
+  // operador ya está acotado a lo suyo por el backend y el ITO ve solo COMPLETADO,
+  // así que a esos se les deja 'all' para no vaciarles la vista. Es un default
+  // limpiable: eligiendo "Todos los responsables" se ven todas.
+  const filterAssignee =
+    searchParams.get('assignee') || (isSupervisorOrAdmin ? profile?.id || 'all' : 'all');
   const filterSearch = searchParams.get('search') || '';
 
   const setFilterProject = (val: string) => {
