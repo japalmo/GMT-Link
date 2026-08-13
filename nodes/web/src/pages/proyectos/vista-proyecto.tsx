@@ -11,6 +11,7 @@ import {
   FolderGit2,
   Layers,
   ListChecks,
+  LayoutDashboard,
   Pencil,
   Plus,
   Trash2,
@@ -82,6 +83,7 @@ import {
 import { formatDate } from '@/lib/format';
 import { openProjectDocumentFileInNewTab } from '@/components/documents/project-document-file';
 import { ActividadesTab } from './actividades-tab';
+import { DashboardTab } from './dashboard-tab';
 import type {
   ProjectType,
   ServiceFrequency,
@@ -179,7 +181,7 @@ function newVariableRow(): VariableRow {
    Página Capa 4 — Vista de proyecto
    ========================================================================== */
 
-type TabKey = 'trabajadores' | 'documentacion' | 'fases' | 'actividades';
+type TabKey = 'dashboard' | 'trabajadores' | 'documentacion' | 'fases' | 'actividades';
 
 export default function VistaProyectoPage(): ReactNode {
   const { projectId } = useParams<{ projectId: string }>();
@@ -291,6 +293,7 @@ export default function VistaProyectoPage(): ReactNode {
   }
 
   const allTabItems: TabItem<TabKey>[] = [
+    { value: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { value: 'trabajadores', label: 'Trabajadores', icon: Users },
     { value: 'documentacion', label: 'Documentación', icon: FileText },
     {
@@ -405,6 +408,7 @@ export default function VistaProyectoPage(): ReactNode {
 
       {/* Contenido del tab */}
       <TabPanel idBase={idBase} value={tab}>
+        {tab === 'dashboard' && <DashboardTab projectId={project.id} />}
         {tab === 'trabajadores' && canManageTeam && (
           <TrabajadoresTab projectId={project.id} />
         )}

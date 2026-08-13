@@ -754,6 +754,10 @@ model Task {
   // Fechas de planificación (#76): revisión y entrega. Opcionales.
   reviewDate      DateTime? // fecha de revisión planificada
   dueDate         DateTime? // fecha de entrega comprometida
+  // Momento en que la actividad pasó a COMPLETADO (Dashboard de producción):
+  // habilita la curva de avance real acumulado en el tiempo. Se setea al pasar
+  // el estado a COMPLETADO y se limpia si vuelve atrás. Sin historial retroactivo.
+  completedAt     DateTime?
   // Motivo si el gestor rechaza la tarea en revisión (#77): vuelve a EN_PROGRESO.
   rejectionReason String?
   recurrence      String? // cron expression para tareas cíclicas

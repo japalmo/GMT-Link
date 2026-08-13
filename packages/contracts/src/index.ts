@@ -1059,6 +1059,53 @@ export interface AssetPublicView {
   canFillChecklist: boolean;
 }
 
+// ============ Dashboard de producción (avance de proyecto) ============
+
+/** Cómo se agrupan las actividades del proyecto en el Dashboard. */
+export type DashboardGrouping = 'SERVICE' | 'PHASE';
+
+/** Un punto de una curva de avance acumulado: fecha ISO (día) y % (0..100). */
+export interface DashboardCurvePoint {
+  date: string; // YYYY-MM-DD
+  progress: number; // 0..100
+}
+
+/**
+ * Indicadores de avance de un conjunto de actividades (el TOTAL o un servicio).
+ * `realProgress` y las curvas se ponderan por el peso de cada actividad
+ * (`estimatedPoints`, o 1 si todas son 0). Las fechas van en ISO o null si el
+ * modelo aún no tiene la información para calcularlas.
+ */
+export interface DashboardMetrics {
+  total: number; // total de actividades
+  completed: number; // "Listas" (COMPLETADO)
+  inProgress: number; // "En proceso" (el resto)
+  realProgress: number; // % avance real ponderado, a hoy
+  projectedProgress: number; // % avance planificado, a hoy
+  realCurve: DashboardCurvePoint[]; // avance real acumulado en el tiempo
+  projectedCurve: DashboardCurvePoint[]; // avance planificado acumulado en el tiempo
+  programEndDate: string | null; // término según programa (máx. fecha de entrega)
+  estimatedEndDate: string | null; // término estimado por el ritmo real observado
+  deviationDays: number | null; // estimado - programa, en días (+ = atraso)
+}
+
+/** Un grupo del Dashboard (un servicio o una fase) con sus indicadores. */
+export interface DashboardGroup {
+  id: string;
+  name: string;
+  metrics: DashboardMetrics;
+}
+
+/** Respuesta del Dashboard de producción de un proyecto. */
+export interface ProjectDashboard {
+  projectId: string;
+  projectName: string;
+  grouping: DashboardGrouping;
+  total: DashboardMetrics; // vista TOTAL (consolida todos los grupos)
+  groups: DashboardGroup[]; // por servicio (o fase); vacío si no hay
+  generatedAt: string; // ISO del cálculo (fecha de referencia "hoy")
+}
+
 // ============ Checklist tipado de activos (Tanda 5) ============
 
 /**

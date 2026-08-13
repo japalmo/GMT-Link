@@ -527,6 +527,7 @@ export class TasksService {
           status: TaskStatus.COMPLETADO,
           actualPoints: finalPoints,
           rejectionReason: null, // aprobada: se limpia cualquier motivo previo
+          completedAt: new Date(), // marca de completado para la curva real del Dashboard
         },
         include: {
           project: true,
@@ -545,10 +546,11 @@ export class TasksService {
       return this.applyPriorityEscalation([updatedTask])[0]!;
     }
 
-    // Transición de estado normal (no completado)
+    // Transición de estado normal (no completado): si salió de COMPLETADO
+    // (REABRIR), se limpia la marca para que la curva real no la cuente.
     const updatedTask = await this.prisma.task.update({
       where: { id },
-      data: { status: dto.status, rejectionReason },
+      data: { status: dto.status, rejectionReason, completedAt: null },
       include: {
         project: true,
         service: true,

@@ -20,6 +20,7 @@ import type {
   UploadDocumentFields,
 } from '@/types/documents';
 import type { DashboardLayoutItem, DashboardView } from '@/types/dashboard';
+import type { ProjectDashboard } from '@gmt-platform/contracts';
 import type {
   CreateOvertimeInput,
   CreateReimbursementInput,
@@ -2811,6 +2812,11 @@ export function deleteFaena(id: string): Promise<void> {
 /** `GET /projects/:id` — detalle de un proyecto. 404 si no existe. */
 export function getProject(id: string): Promise<ProjectView> {
   return request<ProjectView>(`/projects/${encodeURIComponent(id)}`);
+}
+
+/** `GET /projects/:id/dashboard` — avance de producción (por servicio + curvas). */
+export function getProjectDashboard(id: string): Promise<ProjectDashboard> {
+  return request<ProjectDashboard>(`/projects/${encodeURIComponent(id)}/dashboard`);
 }
 
 /**

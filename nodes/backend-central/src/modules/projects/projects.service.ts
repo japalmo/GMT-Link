@@ -17,6 +17,8 @@ import {
   UpdateProjectKpisDto,
   UpdateServiceFrequencyDto,
 } from './dto/projects.dto';
+import type { ProjectDashboard } from '@gmt-platform/contracts';
+import { computeProjectDashboard, type DashboardActivity } from './dashboard.util';
 
 @Injectable()
 export class ProjectsService {
@@ -223,6 +225,51 @@ export class ProjectsService {
   /**
    * Obtiene un proyecto por ID y valida acceso con OpenFGA.
    */
+  /**
+   * Dashboard de producción del proyecto: consolida las actividades (Tasks) por
+   * SERVICIO y calcula avance real (ponderado por `estimatedPoints`), avance
+   * proyectado (por `dueDate`), curvas acumuladas, y término programado vs.
+   * estimado por ritmo real. La autorización la da el guard `can_view` del
+   * endpoint. Lee datos REALES; hoy puede venir vacío si no hay actividades.
+   */
+  async getDashboard(projectId: string): Promise<ProjectDashboard> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true },
+    });
+    if (!project) {
+      throw new NotFoundException('El proyecto no existe.');
+    }
+
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId },
+      select: {
+        status: true,
+        estimatedPoints: true,
+        startDate: true,
+        dueDate: true,
+        completedAt: true,
+        serviceId: true,
+        service: { select: { name: true } },
+      },
+    });
+
+    // Agrupación por servicio; las tareas sin servicio caen a "Sin servicio".
+    // Las fases cuelgan de un servicio (Phase.serviceId), así que agrupar por
+    // servicio ya consolida también lo organizado por fase.
+    const activities: DashboardActivity[] = tasks.map((t) => ({
+      groupId: t.serviceId ?? 'sin-servicio',
+      groupName: t.service?.name ?? 'Sin servicio',
+      status: t.status,
+      weight: t.estimatedPoints,
+      startDate: t.startDate,
+      dueDate: t.dueDate,
+      completedAt: t.completedAt,
+    }));
+
+    return computeProjectDashboard(project.id, project.name, 'SERVICE', activities, new Date());
+  }
+
   async getById(projectId: string, userId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },

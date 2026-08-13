@@ -106,6 +106,20 @@ export class ProjectsController {
   }
 
   /**
+   * Dashboard de producción del proyecto (avance por servicio + curvas).
+   * Mismo gate de visibilidad que el detalle (`can_view`).
+   */
+  @Get(':id/dashboard')
+  @RequirePermission('can_view', { type: 'project', param: 'id' })
+  getDashboard(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.getDashboard(id);
+  }
+
+  /**
    * Actualización GENERAL del proyecto (solo `name`/`description` en este corte).
    * Gate: permiso FUNCTIONAL `project:update` (project-scope) resuelto INLINE con
    * `PermissionService.can` (no es STRUCTURAL FGA, así que no usa `@RequirePermission`).
