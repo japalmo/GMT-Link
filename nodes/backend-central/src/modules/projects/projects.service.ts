@@ -602,8 +602,18 @@ export class ProjectsService {
       throw new NotFoundException('El servicio no existe en este proyecto.');
     }
     if (service._count.tasks > 0 || service._count.documents > 0) {
+      // Mensaje específico: dice EXACTAMENTE qué bloquea (y cuántos), para no
+      // confundir "tiene documentos" con "tiene actividades".
+      const partes: string[] = [];
+      if (service._count.tasks > 0) {
+        partes.push(`${service._count.tasks} actividad(es)`);
+      }
+      if (service._count.documents > 0) {
+        partes.push(`${service._count.documents} documento(s)`);
+      }
       throw new ConflictException(
-        'El servicio tiene actividades o documentos asociados. Elimínalos o muévelos antes de borrar el servicio.',
+        `El servicio tiene ${partes.join(' y ')} asociado(s). ` +
+          'Elimínalos (pestañas Actividades / Documentación) antes de borrar el servicio.',
       );
     }
     await this.prisma.service.delete({ where: { id: serviceId } });
