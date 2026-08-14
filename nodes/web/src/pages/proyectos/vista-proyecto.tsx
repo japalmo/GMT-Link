@@ -42,6 +42,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/components/ui/modal';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { useProject, useAssignments } from '@/hooks/use-project-hierarchy';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { roleLabel } from '@/lib/role-labels';
@@ -50,10 +51,13 @@ import {
   listUsers,
   listMetricPhases,
   createMetricPhase,
+  updateMetricPhase,
+  deleteMetricPhase,
   createService,
   fetchServiceTypes,
   setPhaseDataSpec,
   setServiceFrequency,
+  deleteService,
   listProjectDocuments,
   uploadProjectDocument,
   deleteProjectDocument,
@@ -1268,6 +1272,40 @@ function ServiceBlock({
     }
   };
 
+  // Renombrar / borrar el servicio (backend PATCH/DELETE /projects/:id/services/:sid).
+  const [renameSrvOpen, setRenameSrvOpen] = useState(false);
+  const [renameSrvName, setRenameSrvName] = useState(service.name);
+  const [savingSrv, setSavingSrv] = useState(false);
+  const [deleteSrvOpen, setDeleteSrvOpen] = useState(false);
+
+  const handleRenameService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renameSrvName.trim()) return;
+    setSavingSrv(true);
+    try {
+      await setServiceFrequency(projectId, service.id, { name: renameSrvName.trim() });
+      toast.success('Servicio actualizado.');
+      setRenameSrvOpen(false);
+      await onServiceChanged();
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo renombrar el servicio.'));
+    } finally {
+      setSavingSrv(false);
+    }
+  };
+
+  const handleDeleteService = async () => {
+    try {
+      await deleteService(projectId, service.id);
+      toast.success('Servicio eliminado.');
+      await onServiceChanged();
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo eliminar el servicio.'));
+    } finally {
+      setDeleteSrvOpen(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1285,10 +1323,35 @@ function ServiceBlock({
             </CardDescription>
           </div>
           {canManage && (
-            <Button size="sm" variant="outline" onClick={() => setPhaseDialogOpen(true)}>
-              <Plus className="mr-1 size-4" />
-              {isRoutine ? 'Nueva rutina' : 'Nueva fase'}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setPhaseDialogOpen(true)}>
+                <Plus className="mr-1 size-4" />
+                {isRoutine ? 'Nueva rutina' : 'Nueva fase'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={() => {
+                  setRenameSrvName(service.name);
+                  setRenameSrvOpen(true);
+                }}
+                aria-label={`Renombrar ${service.name}`}
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-destructive hover:text-destructive"
+                onClick={() => setDeleteSrvOpen(true)}
+                aria-label={`Borrar ${service.name}`}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
           )}
         </div>
       </CardHeader>
@@ -1418,6 +1481,47 @@ function ServiceBlock({
           </form>
         </ModalContent>
       </Modal>
+
+      {/* Renombrar servicio */}
+      <Modal open={renameSrvOpen} onOpenChange={setRenameSrvOpen}>
+        <ModalContent>
+          <form onSubmit={handleRenameService} className="flex flex-col gap-4">
+            <ModalHeader>
+              <ModalTitle>Renombrar servicio</ModalTitle>
+            </ModalHeader>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`rename-srv-${service.id}`}>Nombre</Label>
+              <Input
+                id={`rename-srv-${service.id}`}
+                value={renameSrvName}
+                onChange={(e) => setRenameSrvName(e.target.value)}
+              />
+            </div>
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setRenameSrvOpen(false)}
+                disabled={savingSrv}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingSrv}>
+                {savingSrv ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      <ConfirmDialog
+        open={deleteSrvOpen}
+        onOpenChange={setDeleteSrvOpen}
+        title="Borrar servicio"
+        description={`¿Borrar el servicio "${service.name}"? Si tiene actividades o documentos asociados no se podrá borrar. Sus fases vacías se eliminarán.`}
+        confirmLabel="Borrar"
+        onConfirm={handleDeleteService}
+      />
     </Card>
   );
 }
@@ -1454,6 +1558,40 @@ function PhaseRow({
   const [rows, setRows] = useState<VariableRow[]>(() => toRows(phase.variables));
   const [saving, setSaving] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
+
+  // Renombrar / borrar la fase (backend PATCH/DELETE /metrics/phases/:id).
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameName, setRenameName] = useState(phase.name);
+  const [savingRename, setSavingRename] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const handleRename = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renameName.trim()) return;
+    setSavingRename(true);
+    try {
+      await updateMetricPhase(phase.id, { name: renameName.trim() });
+      toast.success('Fase actualizada.');
+      setRenameOpen(false);
+      await onSaved();
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo renombrar la fase.'));
+    } finally {
+      setSavingRename(false);
+    }
+  };
+
+  const handleDeletePhase = async () => {
+    try {
+      await deleteMetricPhase(phase.id);
+      toast.success('Fase eliminada.');
+      await onSaved();
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo eliminar la fase.'));
+    } finally {
+      setDeleteOpen(false);
+    }
+  };
 
   const variableCount = phase.variables?.length ?? 0;
 
@@ -1536,10 +1674,35 @@ function PhaseRow({
           </p>
         </div>
         {canManage && (
-          <Button size="sm" variant="outline" onClick={openEditor}>
-            <ListChecks className="mr-1 size-4" />
-            Datos esperados
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" onClick={openEditor}>
+              <ListChecks className="mr-1 size-4" />
+              Datos esperados
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              onClick={() => {
+                setRenameName(phase.name);
+                setRenameOpen(true);
+              }}
+              aria-label={`Renombrar ${phase.name}`}
+            >
+              <Pencil className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              aria-label={`Borrar ${phase.name}`}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
         )}
       </div>
 
@@ -1696,6 +1859,47 @@ function PhaseRow({
           </div>
         </ModalContent>
       </Modal>
+
+      {/* Renombrar fase */}
+      <Modal open={renameOpen} onOpenChange={setRenameOpen}>
+        <ModalContent>
+          <form onSubmit={handleRename} className="flex flex-col gap-4">
+            <ModalHeader>
+              <ModalTitle>Renombrar fase</ModalTitle>
+            </ModalHeader>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`rename-phase-${phase.id}`}>Nombre</Label>
+              <Input
+                id={`rename-phase-${phase.id}`}
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+              />
+            </div>
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setRenameOpen(false)}
+                disabled={savingRename}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingRename}>
+                {savingRename ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Borrar fase"
+        description={`¿Borrar la fase "${phase.name}"? Se eliminarán también sus datos capturados. Esta acción no se puede deshacer.`}
+        confirmLabel="Borrar"
+        onConfirm={handleDeletePhase}
+      />
     </div>
   );
 }

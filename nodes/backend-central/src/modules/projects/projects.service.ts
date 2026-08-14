@@ -582,8 +582,32 @@ export class ProjectsService {
     }
     return this.prisma.service.update({
       where: { id: serviceId },
-      data: { frequency: dto.frequency },
+      data: {
+        ...(dto.frequency !== undefined ? { frequency: dto.frequency } : {}),
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+      },
     });
+  }
+
+  /**
+   * Borra un servicio del proyecto. Se bloquea si tiene actividades o documentos
+   * asociados (para no perderlos por cascada); las fases vacías sí se arrastran.
+   */
+  async deleteService(projectId: string, serviceId: string): Promise<{ ok: true }> {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: { _count: { select: { tasks: true, documents: true } } },
+    });
+    if (!service || service.projectId !== projectId) {
+      throw new NotFoundException('El servicio no existe en este proyecto.');
+    }
+    if (service._count.tasks > 0 || service._count.documents > 0) {
+      throw new ConflictException(
+        'El servicio tiene actividades o documentos asociados. Elimínalos o muévelos antes de borrar el servicio.',
+      );
+    }
+    await this.prisma.service.delete({ where: { id: serviceId } });
+    return { ok: true };
   }
 
   // ── Asignación de trabajadores a proyecto ──────────────────────────────────

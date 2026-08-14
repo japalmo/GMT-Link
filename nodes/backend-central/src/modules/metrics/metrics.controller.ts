@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Logger, Param, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Logger, Param, Patch, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { MetricsService } from './metrics.service';
 import { CurrentUser } from '../../auth/current-user.decorator';
@@ -10,6 +10,7 @@ import { sanitizeFilename } from '../../common/storage/local-storage.service';
 import {
   CreateElementDto,
   CreatePhaseDto,
+  UpdatePhaseDto,
   BulkSaveDataDto,
   GenerateOtpDto,
   VerifyOtpDto,
@@ -152,6 +153,31 @@ export class MetricsController {
     const projectId = await this.service.getProjectIdForPhaseId(phaseId);
     await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
     return this.service.setPhaseDataSpec(phaseId, dto);
+  }
+
+  /** Renombra una fase. Mismo gate que crear/editar fase. */
+  @Patch('phases/:id')
+  async updatePhase(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') phaseId: string,
+    @Body() dto: UpdatePhaseDto,
+  ) {
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForPhaseId(phaseId);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
+    return this.service.updatePhase(phaseId, dto);
+  }
+
+  /** Borra una fase (arrastra variables y datos por cascada). */
+  @Delete('phases/:id')
+  async deletePhase(
+    @CurrentUser() user: AuthUser | undefined,
+    @Param('id') phaseId: string,
+  ) {
+    const userId = this.requireUserId(user);
+    const projectId = await this.service.getProjectIdForPhaseId(phaseId);
+    await this.requireProjectPermission(userId, projectId, 'can_submit_measurements');
+    return this.service.deletePhase(phaseId);
   }
 
   // ── Datos de Medición / Cubicaciones ─────────────────────────────────────────

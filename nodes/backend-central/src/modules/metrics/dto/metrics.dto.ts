@@ -41,6 +41,13 @@ export class CreatePhaseDto {
   serviceId!: string;
 }
 
+export class UpdatePhaseDto {
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string;
+}
+
 // ── DataSpec de una fase: definición de las Variables a capturar ────────────
 
 export class DataSpecVariableDto {

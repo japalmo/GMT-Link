@@ -2674,6 +2674,21 @@ export function createMetricPhase(dto: {
   });
 }
 
+/** `PATCH /metrics/phases/:id` — renombra una fase. */
+export function updateMetricPhase(id: string, dto: { name: string }): Promise<MetricPhase> {
+  return request<MetricPhase>(`/metrics/phases/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `DELETE /metrics/phases/:id` — borra una fase (arrastra sus datos por cascada). */
+export function deleteMetricPhase(id: string): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/metrics/phases/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function listMetricVariables(phaseId: string): Promise<MetricVariable[]> {
   return request<MetricVariable[]>(`/metrics/variables?phaseId=${encodeURIComponent(phaseId)}`);
 }
@@ -2908,11 +2923,19 @@ export function setPhaseDataSpec(
 export function setServiceFrequency(
   projectId: string,
   serviceId: string,
-  dto: { frequency: ServiceFrequency },
+  dto: { frequency?: ServiceFrequency; name?: string },
 ): Promise<ServiceView> {
   return request<ServiceView>(
     `/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(serviceId)}`,
     { method: 'PATCH', body: JSON.stringify(dto) },
+  );
+}
+
+/** `DELETE /projects/:id/services/:sid` — borra un servicio (409 si tiene actividades/documentos). */
+export function deleteService(projectId: string, serviceId: string): Promise<{ ok: true }> {
+  return request<{ ok: true }>(
+    `/projects/${encodeURIComponent(projectId)}/services/${encodeURIComponent(serviceId)}`,
+    { method: 'DELETE' },
   );
 }
 

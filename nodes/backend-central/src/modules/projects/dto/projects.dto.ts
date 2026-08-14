@@ -87,11 +87,16 @@ export class UpdateProjectKpisDto {
   kpis!: Prisma.InputJsonValue;
 }
 
-/** Setea la frecuencia de un servicio del proyecto. */
+/** Edita un servicio del proyecto: su frecuencia y/o su nombre (ambos opcionales). */
 export class UpdateServiceFrequencyDto {
   @IsEnum(ServiceFrequency)
+  @IsOptional()
+  frequency?: ServiceFrequency;
+
+  @IsString()
   @IsNotEmpty()
-  frequency!: ServiceFrequency;
+  @IsOptional()
+  name?: string;
 }
 
 // ── Asignación de trabajadores a proyecto ──────────────────────────────────

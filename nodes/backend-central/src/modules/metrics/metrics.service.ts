@@ -10,6 +10,7 @@ import { R2StorageService } from '../../common/storage/r2-storage.service';
 import {
   CreateElementDto,
   CreatePhaseDto,
+  UpdatePhaseDto,
   SaveDataPointDto,
   SaveCubicacionDto,
   SaveReservorioMetadataDto,
@@ -266,6 +267,28 @@ export class MetricsService {
         serviceId: dto.serviceId,
       },
     });
+  }
+
+  /** Renombra una fase. */
+  async updatePhase(phaseId: string, dto: UpdatePhaseDto) {
+    const phase = await this.prisma.phase.findUnique({ where: { id: phaseId } });
+    if (!phase) {
+      throw new NotFoundException('La fase no existe.');
+    }
+    return this.prisma.phase.update({
+      where: { id: phaseId },
+      data: dto.name !== undefined ? { name: dto.name } : {},
+    });
+  }
+
+  /** Borra una fase (arrastra sus variables y datos por cascada). */
+  async deletePhase(phaseId: string): Promise<{ ok: true }> {
+    const phase = await this.prisma.phase.findUnique({ where: { id: phaseId } });
+    if (!phase) {
+      throw new NotFoundException('La fase no existe.');
+    }
+    await this.prisma.phase.delete({ where: { id: phaseId } });
+    return { ok: true };
   }
 
   async getPhases(serviceId: string) {

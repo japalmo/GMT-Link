@@ -201,6 +201,21 @@ export class ProjectsController {
     return this.projects.setServiceFrequency(id, sid, dto);
   }
 
+  /**
+   * Borra un servicio del proyecto (409 si tiene actividades o documentos).
+   * Mismo gate de configuración del proyecto que crear/editar servicios.
+   */
+  @Delete(':id/services/:sid')
+  @RequirePermission('can_define_kpi', { type: 'project', param: 'id' })
+  deleteService(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('sid') sid: string,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.deleteService(id, sid);
+  }
+
   // ── Asignación de trabajadores (project:team:manage → can_manage_team) ──────
 
   @Get(':id/assignments')
