@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ import { useUsers } from '@/hooks/use-users';
 import { EmptyState } from '@/components/ui/states';
 import { ListChecks } from 'lucide-react';
 import { errorToMessage } from '@/lib/api';
-import type { ServiceView } from '@/types/operations';
+import type { ServiceView, TaskView } from '@/types/operations';
 import type { TaskDataSpec } from '@gmt-platform/contracts';
 
 interface ActividadesTabProps {
@@ -51,11 +52,71 @@ function newStepRow(): StepForm {
 }
 
 export function ActividadesTab({ projectId, services, canCreate }: ActividadesTabProps): ReactNode {
-  const { tasks, loading, create } = useTasks({ projectId });
+  const { tasks, loading, create, update, remove } = useTasks({ projectId });
   const { items: users } = useUsers({ limit: 100 });
 
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Editar / borrar una actividad (raíz). El backend (PUT/DELETE /tasks/:id) ya
+  // autoriza; en la UI se muestra a quien puede gestionar el plan (canCreate).
+  const [editing, setEditing] = useState<TaskView | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editAssignee, setEditAssignee] = useState('');
+  const [editReviewDate, setEditReviewDate] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPoints, setEditPoints] = useState(0);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleting, setDeleting] = useState<TaskView | null>(null);
+
+  const openEdit = (t: TaskView) => {
+    setEditing(t);
+    setEditName(t.name);
+    setEditDesc(t.description ?? '');
+    setEditAssignee(t.assignedToId ?? '');
+    setEditReviewDate(t.reviewDate ? t.reviewDate.slice(0, 10) : '');
+    setEditDueDate(t.dueDate ? t.dueDate.slice(0, 10) : '');
+    setEditPoints(t.estimatedPoints ?? 0);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    if (!editName.trim()) {
+      toast.error('Ingresa el nombre de la actividad.');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await update(editing.id, {
+        name: editName.trim(),
+        description: editDesc.trim() || null,
+        assignedToId: editAssignee || null,
+        reviewDate: editReviewDate || null,
+        dueDate: editDueDate || null,
+        estimatedPoints: editPoints,
+      });
+      toast.success('Actividad actualizada.');
+      setEditing(null);
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo actualizar la actividad.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    try {
+      await remove(deleting.id);
+      toast.success('Actividad eliminada.');
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo eliminar la actividad.'));
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   // Main Activity
   const [mainName, setMainName] = useState('');
@@ -240,10 +301,36 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
                       <p className="text-sm text-muted-foreground mt-1">{activity.description}</p>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground text-right space-y-1">
-                    {activity.startDate && <div>Inicio: {activity.startDate.slice(0, 10)}</div>}
-                    {activity.reviewDate && <div>Revisión: {activity.reviewDate.slice(0, 10)}</div>}
-                    {activity.dueDate && <div>Entrega: {activity.dueDate.slice(0, 10)}</div>}
+                  <div className="flex flex-col items-end gap-2">
+                    {canCreate && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          onClick={() => openEdit(activity)}
+                          aria-label={`Editar ${activity.name}`}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleting(activity)}
+                          aria-label={`Borrar ${activity.name}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground text-right space-y-1">
+                      {activity.startDate && <div>Inicio: {activity.startDate.slice(0, 10)}</div>}
+                      {activity.reviewDate && <div>Revisión: {activity.reviewDate.slice(0, 10)}</div>}
+                      {activity.dueDate && <div>Entrega: {activity.dueDate.slice(0, 10)}</div>}
+                    </div>
                   </div>
                 </div>
 
@@ -476,6 +563,103 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
           </form>
         </ModalContent>
       </Modal>
+
+      {/* Editar actividad */}
+      <Modal open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+        <ModalContent>
+          <form onSubmit={handleEdit} className="flex flex-col gap-4">
+            <ModalHeader>
+              <ModalTitle>Editar actividad</ModalTitle>
+              <ModalDescription>Actualiza los datos de la actividad.</ModalDescription>
+            </ModalHeader>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-act-name">Nombre</Label>
+                <Input id="edit-act-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-act-desc">Descripción</Label>
+                <Textarea
+                  id="edit-act-desc"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-act-assignee">Responsable</Label>
+                <Select
+                  id="edit-act-assignee"
+                  aria-label="Responsable de la actividad"
+                  value={editAssignee}
+                  onChange={(e) => setEditAssignee(e.target.value)}
+                >
+                  <option value="">Sin asignar</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-act-review">Revisión</Label>
+                  <Input
+                    id="edit-act-review"
+                    type="date"
+                    value={editReviewDate}
+                    onChange={(e) => setEditReviewDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-act-due">Entrega</Label>
+                  <Input
+                    id="edit-act-due"
+                    type="date"
+                    value={editDueDate}
+                    onChange={(e) => setEditDueDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-act-points">Puntos estimados</Label>
+                <Input
+                  id="edit-act-points"
+                  type="number"
+                  min={0}
+                  value={editPoints}
+                  onChange={(e) => setEditPoints(Number(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <ModalFooter>
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)} disabled={savingEdit}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingEdit}>
+                {savingEdit ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      {/* Borrar actividad */}
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleting(null);
+        }}
+        title="Borrar actividad"
+        description={
+          deleting
+            ? `¿Borrar la actividad "${deleting.name}"? Se eliminarán también sus pasos. Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Borrar"
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }
