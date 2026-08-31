@@ -1,0 +1,50 @@
+name: Reporte de defecto
+description: Registrar un comportamiento incorrecto de forma reproducible
+title: 'fix: '
+labels: [bug, triage]
+body:
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Ambiente
+      options:
+        - Local
+        - CI
+        - Staging
+        - Producción
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Comportamiento actual
+      description: Incluye pasos para reproducir, sin secretos ni datos personales.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Commit o versión
+      description: SHA, tag o enlace del despliegue observado.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia sanitizada
+      description: Logs, capturas o respuestas HTTP sin credenciales ni información sensible.
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impacto
+      options:
+        - Bloquea operación
+        - Función degradada
+        - Error menor
+        - Mejora preventiva
+    validations:
+      required: true

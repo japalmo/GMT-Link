@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      openfga:
+        image: openfga/openfga:v1.18.1
+        ports:
+          - 8080:8080
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate contracts and Prisma client
+        run: pnpm ci:prepare
+
+      - name: Check formatting
+        env:
+          FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test shared contracts
+        run: pnpm --filter @gmt-platform/contracts test
+
+      - name: Wait for OpenFGA
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "OpenFGA did not become healthy" >&2
+          exit 1
+
+      - name: Test backend, including OpenFGA model
+        env:
+          FGA_API_URL: http://localhost:8080
+        run: pnpm --filter @gmt-platform/backend-central test
+
+      - name: Test frontend
+        run: pnpm --filter @gmt-platform/web test
+
+      - name: Build deployable workspace
+        run: pnpm build

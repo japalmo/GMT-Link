@@ -2,25 +2,17 @@
 # En Railway: RAILWAY_DOCKERFILE_PATH=nodes/web/Dockerfile (root dir = raíz del repo).
 # Las VITE_* se hornean en build: Railway las pasa como build args si hay ARG con su nombre.
 FROM node:22-slim AS build
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@9.15.9
 WORKDIR /app
 COPY . .
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 # Compilar los tipos compartidos ANTES del build de web: su `dist/` es gitignored
 # (no llega al contexto Docker), y sin él `tsc` no encuentra @gmt-platform/contracts.
 RUN pnpm --filter @gmt-platform/contracts build
 
 ARG VITE_API_URL=""
-ARG VITE_FIREBASE_API_KEY=""
-ARG VITE_FIREBASE_AUTH_DOMAIN=""
-ARG VITE_FIREBASE_PROJECT_ID=""
-ARG VITE_FIREBASE_AUTH_EMULATOR=""
-ENV VITE_API_URL=$VITE_API_URL \
-    VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY \
-    VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN \
-    VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID \
-    VITE_FIREBASE_AUTH_EMULATOR=$VITE_FIREBASE_AUTH_EMULATOR
+ENV VITE_API_URL=$VITE_API_URL
 
 RUN pnpm --filter @gmt-platform/web build
 

@@ -1,0 +1,10 @@
+# Responsable temporal global. Reemplazar o complementar con equipos de GitHub
+# cuando se creen, por ejemplo: @gmt/backend, @gmt/frontend y @gmt/platform.
+* @japalmo
+
+/nodes/backend-central/ @japalmo
+/nodes/web/ @japalmo
+/packages/contracts/ @japalmo
+/.github/ @japalmo
+/deploy/ @japalmo
+/docs/adr/ @japalmo
