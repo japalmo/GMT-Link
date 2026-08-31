@@ -1518,7 +1518,7 @@ function ServiceBlock({
         open={deleteSrvOpen}
         onOpenChange={setDeleteSrvOpen}
         title="Borrar servicio"
-        description={`¿Borrar el servicio "${service.name}"? Si tiene actividades o documentos asociados no se podrá borrar. Sus fases vacías se eliminarán.`}
+        description={`¿Borrar el servicio "${service.name}"? Sus actividades y documentos quedan en el proyecto (se desvinculan del servicio). Solo se eliminan sus fases y los datos capturados. Esta acción no se puede deshacer.`}
         confirmLabel="Borrar"
         onConfirm={handleDeleteService}
       />

@@ -33,7 +33,9 @@ interface PrismaMock {
   service: {
     findFirst: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
+    findUnique: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
   serviceType: { findUnique: ReturnType<typeof vi.fn> };
   asset: { count: ReturnType<typeof vi.fn> };
@@ -56,7 +58,13 @@ function buildPrisma(): { prisma: PrismaService; mock: PrismaMock } {
     },
     faena: { findUnique: vi.fn() },
     membership: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
-    service: { findFirst: vi.fn(), findMany: vi.fn(() => Promise.resolve([])), create: vi.fn() },
+    service: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(() => Promise.resolve([])),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
     serviceType: { findUnique: vi.fn() },
     asset: { count: vi.fn(() => Promise.resolve(0)) },
     task: {
@@ -330,6 +338,23 @@ describe('ProjectsService', () => {
       expect(mock.service.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ code: 'CUB3' }) }),
       );
+    });
+  });
+
+  describe('deleteService', () => {
+    it('responde 404 si el servicio no existe o pertenece a otro proyecto', async () => {
+      mock.service.findUnique.mockResolvedValue({ id: 's1', projectId: 'otro' });
+
+      await expect(service.deleteService('p1', 's1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(mock.service.delete).not.toHaveBeenCalled();
+    });
+
+    it('borra el servicio sin exigir borrar antes actividades ni documentos', async () => {
+      mock.service.findUnique.mockResolvedValue({ id: 's1', projectId: 'p1' });
+      mock.service.delete.mockResolvedValue({ id: 's1' });
+
+      await expect(service.deleteService('p1', 's1')).resolves.toEqual({ ok: true });
+      expect(mock.service.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
     });
   });
 

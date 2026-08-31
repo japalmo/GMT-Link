@@ -590,31 +590,16 @@ export class ProjectsService {
   }
 
   /**
-   * Borra un servicio del proyecto. Se bloquea si tiene actividades o documentos
-   * asociados (para no perderlos por cascada); las fases vacías sí se arrastran.
+   * Borra un servicio del proyecto. NO bloquea: las actividades y los documentos
+   * cuelgan del PROYECTO, así que se DESVINCULAN del servicio (su `serviceId`
+   * queda en null y siguen en el proyecto). Solo se eliminan las fases y sus datos
+   * capturados, que sí son propios del servicio. No se pierde ninguna actividad ni
+   * documento.
    */
   async deleteService(projectId: string, serviceId: string): Promise<{ ok: true }> {
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
-      include: { _count: { select: { tasks: true, documents: true } } },
-    });
+    const service = await this.prisma.service.findUnique({ where: { id: serviceId } });
     if (!service || service.projectId !== projectId) {
       throw new NotFoundException('El servicio no existe en este proyecto.');
-    }
-    if (service._count.tasks > 0 || service._count.documents > 0) {
-      // Mensaje específico: dice EXACTAMENTE qué bloquea (y cuántos), para no
-      // confundir "tiene documentos" con "tiene actividades".
-      const partes: string[] = [];
-      if (service._count.tasks > 0) {
-        partes.push(`${service._count.tasks} actividad(es)`);
-      }
-      if (service._count.documents > 0) {
-        partes.push(`${service._count.documents} documento(s)`);
-      }
-      throw new ConflictException(
-        `El servicio tiene ${partes.join(' y ')} asociado(s). ` +
-          'Elimínalos (pestañas Actividades / Documentación) antes de borrar el servicio.',
-      );
     }
     await this.prisma.service.delete({ where: { id: serviceId } });
     return { ok: true };

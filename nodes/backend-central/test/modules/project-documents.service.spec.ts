@@ -276,6 +276,23 @@ describe('ProjectDocumentsService', () => {
         }),
       );
     });
+
+    it('pasa a APROBADO si el servicio fue borrado y el documento quedó desvinculado', async () => {
+      mock.projectDocument.findUnique.mockResolvedValue({
+        id: 'd1',
+        version: 0,
+        service: null,
+      });
+      fga.check.mockResolvedValue(true);
+
+      await service.signQA('d1', 'u1');
+
+      expect(mock.projectDocument.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: ProjectDocumentStatus.APROBADO, version: 1 }),
+        }),
+      );
+    });
   });
 
   describe('signClient', () => {

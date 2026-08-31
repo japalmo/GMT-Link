@@ -823,8 +823,11 @@ model ProjectDocument {
   previousFileUrl String?
   projectId       String
   project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  serviceId       String
-  service         Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  // El documento cuelga del PROYECTO; el servicio es solo su clasificación. Por
+  // eso `serviceId` es opcional y con SetNull: borrar un servicio NO borra sus
+  // documentos, solo los desvincula (siguen en el proyecto).
+  serviceId       String?
+  service         Service?              @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   // Entregable de una tarea (#77): linkea el documento a la tarea que lo produjo,
   // además del proyecto. Opcional (los documentos de proyecto normales no llevan tarea).
   taskId          String?

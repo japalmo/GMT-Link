@@ -279,8 +279,9 @@ export class ProjectDocumentsService {
       throw new BadRequestException('No tienes permiso de QA para firmar este documento.');
     }
 
-    // Validar config del servicio
-    const config = doc.service.docCodingConfig as Record<string, unknown>;
+    // Validar config del servicio. El documento puede estar desvinculado de su
+    // servicio (serviceId null): sin clasificación no exigimos firma de cliente.
+    const config = (doc.service?.docCodingConfig ?? {}) as Record<string, unknown>;
     const requiresClient = config?.requiresClientSignature === true;
 
     // Si es rev0 (version 0), al ser aprobado por QA transiciona a revA (version 1)

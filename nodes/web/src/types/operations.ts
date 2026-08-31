@@ -152,8 +152,11 @@ export interface ProjectDocumentView {
   previousFileUrl: string | null;
   projectId: string;
   project: ProjectView;
-  serviceId: string;
-  service: ServiceView;
+  /** El documento cuelga del proyecto; el servicio es solo su clasificación y es
+   * opcional: queda null si se borra el servicio (el documento se desvincula y
+   * sigue en el proyecto). */
+  serviceId: string | null;
+  service: ServiceView | null;
   /** Tarea que produjo el entregable (#77), o null para documentos normales. */
   taskId: string | null;
   ownerId: string;
