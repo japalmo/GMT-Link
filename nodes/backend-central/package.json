@@ -16,6 +16,8 @@
     "seed:capstone": "tsx prisma/seed-capstone.ts",
     "seed:mockups": "tsx prisma/seed-mockups.ts",
     "test": "pnpm run typecheck:test && vitest run",
+    "test:unit": "pnpm run typecheck:test && vitest run --exclude test/fga-model.spec.ts",
+    "test:integration:fga": "vitest run test/fga-model.spec.ts",
     "typecheck:test": "tsc -p tsconfig.test.json"
   },
   "dependencies": {

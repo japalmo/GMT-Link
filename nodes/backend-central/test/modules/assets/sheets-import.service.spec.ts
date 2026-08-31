@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { SheetsImportService } from '../../../src/modules/assets/sheets-import.service';
-import type { SheetsClientService } from '../../../src/modules/assets/sheets-client.service';
+import { SheetsClientService } from '../../../src/modules/assets/sheets-client.service';
 import type { PrismaService } from '../../../src/prisma/prisma.service';
 
 /**
@@ -43,10 +43,7 @@ function armar(o: Opciones = {}) {
   const leerRango = vi.fn((rango: string) => {
     // El servicio lee dos pestañas: los checklists y el maestro de vehículos.
     if (rango.startsWith('VEHICULOS')) {
-      return Promise.resolve([
-        ['idVeh', 'patente'],
-        ...(o.maestro ?? [['V011', 'SKRF88']]),
-      ]);
+      return Promise.resolve([['idVeh', 'patente'], ...(o.maestro ?? [['V011', 'SKRF88']])]);
     }
     return Promise.resolve([CABECERA, ...(o.filas ?? [])]);
   });
@@ -69,7 +66,7 @@ function armar(o: Opciones = {}) {
   const findManySubs = vi
     .fn()
     .mockResolvedValue((o.yaImportados ?? []).map((externalId) => ({ externalId })));
-  const createMany = vi.fn((args: { data: unknown[] }) =>
+  const createMany = vi.fn((args: { data: unknown[]; skipDuplicates?: boolean }) =>
     Promise.resolve({ count: args.data.length }),
   );
 
@@ -227,9 +224,7 @@ describe('SheetsImportService: lo que no puede importar lo REPORTA', () => {
     expect(r.importadas).toBe(3);
     expect(r.sinVehiculo).toEqual([]);
     // El código sigue la serie: había un GMT-VH-0001, así que el nuevo es 0002.
-    expect(r.vehiculosCreados).toEqual([
-      { patente: 'PZXP25', code: 'GMT-VH-0002', filas: 2 },
-    ]);
+    expect(r.vehiculosCreados).toEqual([{ patente: 'PZXP25', code: 'GMT-VH-0002', filas: 2 }]);
     expect(createMany.mock.calls[0]![0].data).toHaveLength(3);
     expect(crearAsset).toHaveBeenCalledTimes(1);
   });
@@ -249,7 +244,7 @@ describe('SheetsImportService: lo que no puede importar lo REPORTA', () => {
     const { servicio, crearAsset } = armar({ filas: [fila('F0001', 'PZXP25')] });
     await servicio.importar();
 
-    const datos = crearAsset.mock.calls[0]![0].data as {
+    const datos = crearAsset.mock.calls[0]![0].data as unknown as {
       identifier: string;
       identifierType: string;
       type: string;
@@ -320,10 +315,7 @@ describe('SheetsImportService: dirección', () => {
     // GMT Link es el sistema principal: la planilla se lee y nunca se actualiza
     // (decisión del dueño). Se fija estructuralmente para que agregar una
     // escritura sea una decisión consciente y no un descuido.
-    const { SheetsClientService: Cliente } = await import(
-      '../../../src/modules/assets/sheets-client.service'
-    );
-    const metodos = Object.getOwnPropertyNames(Cliente.prototype);
+    const metodos = Object.getOwnPropertyNames(SheetsClientService.prototype);
     expect(metodos.filter((m) => /escrib|write|update|append|set/i.test(m))).toEqual([]);
     expect(metodos).toContain('leerRango');
   });

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { EmailService } from '../../../src/common/email.service';
 import { ExpiryNoticesService } from '../../../src/modules/assets/expiry-notices.service';
+import type { NotificationsService } from '../../../src/modules/notifications/notifications.service';
+import type { PrismaService } from '../../../src/prisma/prisma.service';
 
 /**
  * Lo que importa verificar del barrido:
@@ -22,9 +25,9 @@ function enDias(n: number): Date {
 }
 
 interface Mocks {
-  prisma: any;
-  notifications: any;
-  email: any;
+  prisma: Record<string, unknown>;
+  notifications: Record<string, unknown>;
+  email: Record<string, unknown>;
 }
 
 function construir(overrides: Partial<Mocks> = {}) {
@@ -41,15 +44,27 @@ function construir(overrides: Partial<Mocks> = {}) {
     assetDocumentExpiryNotice: {
       // El "ya enviado" se resuelve contra la lista en memoria: así el test
       // ejerce la deduplicación de verdad y no un mock que siempre dice que no.
-      findUnique: vi.fn(({ where }: any) => {
-        const { documentId, userId, clave } = where.documentId_userId_clave;
-        const hit = enviados.find(
-          (e) => e.documentId === documentId && e.userId === userId && e.clave === clave,
-        );
-        return Promise.resolve(hit ? { id: 'x' } : null);
-      }),
-      create: vi.fn(({ data }: any) => {
-        enviados.push({ documentId: data.documentId, userId: data.userId, clave: data.clave });
+      findUnique: vi.fn(
+        ({
+          where,
+        }: {
+          where: {
+            documentId_userId_clave: { documentId: string; userId: string; clave: string };
+          };
+        }) => {
+          const { documentId, userId, clave } = where.documentId_userId_clave;
+          const hit = enviados.find(
+            (e) => e.documentId === documentId && e.userId === userId && e.clave === clave,
+          );
+          return Promise.resolve(hit ? { id: 'x' } : null);
+        },
+      ),
+      create: vi.fn(({ data }: { data: { documentId: string; userId: string; clave: string } }) => {
+        enviados.push({
+          documentId: data.documentId,
+          userId: data.userId,
+          clave: data.clave,
+        });
         return Promise.resolve({ id: 'n-1' });
       }),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -63,10 +78,17 @@ function construir(overrides: Partial<Mocks> = {}) {
     ...(overrides.prisma ?? {}),
   };
 
-  const notifications = { create: vi.fn().mockResolvedValue({ id: 'noti' }), ...(overrides.notifications ?? {}) };
+  const notifications = {
+    create: vi.fn().mockResolvedValue({ id: 'noti' }),
+    ...(overrides.notifications ?? {}),
+  };
   const email = { send: vi.fn().mockResolvedValue(undefined), ...(overrides.email ?? {}) };
 
-  const service = new ExpiryNoticesService(prisma as any, notifications as any, email as any);
+  const service = new ExpiryNoticesService(
+    prisma as unknown as PrismaService,
+    notifications as unknown as NotificationsService,
+    email as unknown as EmailService,
+  );
   return { service, prisma, notifications, email, enviados };
 }
 
@@ -93,8 +115,8 @@ describe('ExpiryNoticesService', () => {
     expect(notifications.create).toHaveBeenCalledTimes(1);
     expect(email.send).toHaveBeenCalledTimes(1);
     // El aviso identifica el vehículo por su patente, no por el id interno.
-    expect(email.send.mock.calls[0][0].subject).toContain('Revisión técnica');
-    expect(email.send.mock.calls[0][0].body).toContain('SKWR57');
+    expect(email.send.mock.calls[0]![0]!.subject).toContain('Revisión técnica');
+    expect(email.send.mock.calls[0]![0]!.body).toContain('SKWR57');
   });
 
   it('NO repite el aviso si el barrido corre dos veces', async () => {
@@ -114,7 +136,7 @@ describe('ExpiryNoticesService', () => {
     const { service, prisma } = construir();
     prisma.assetDocument.findMany.mockResolvedValue([doc({ expirationDate: enDias(3) })]);
 
-    await service.barrer(HOY);                                  // dia-3
+    await service.barrer(HOY); // dia-3
     const despues = await service.barrer(new Date(2026, 7, 9)); // dia-1
 
     expect(despues.avisosEnviados).toBe(1);
@@ -132,15 +154,19 @@ describe('ExpiryNoticesService', () => {
 
   it('un fallo de correo no detiene el resto del barrido', async () => {
     const { service, prisma, notifications } = construir({
-      prisma: { membership: { findMany: vi.fn().mockResolvedValue([{ userId: 'u-1' }, { userId: 'u-2' }]) } },
-      email: { send: vi.fn().mockRejectedValueOnce(new Error('SMTP caído')).mockResolvedValue(undefined) },
+      prisma: {
+        membership: { findMany: vi.fn().mockResolvedValue([{ userId: 'u-1' }, { userId: 'u-2' }]) },
+      },
+      email: {
+        send: vi.fn().mockRejectedValueOnce(new Error('SMTP caído')).mockResolvedValue(undefined),
+      },
     });
     prisma.assetDocument.findMany.mockResolvedValue([doc()]);
 
     const resumen = await service.barrer(HOY);
 
     expect(resumen.errores).toBe(1);
-    expect(resumen.avisosEnviados).toBe(1);   // el segundo destinatario sí recibió
+    expect(resumen.avisosEnviados).toBe(1); // el segundo destinatario sí recibió
     expect(notifications.create).toHaveBeenCalledTimes(2);
   });
 
@@ -182,7 +208,7 @@ describe('ExpiryNoticesService', () => {
     const { service, prisma } = construir();
     await service.barrer(HOY);
 
-    const where = prisma.assetDocument.findMany.mock.calls[0][0].where;
+    const where = prisma.assetDocument.findMany.mock.calls[0]![0]!.where;
     expect(where.status).toBe('APROBADO');
     expect(where.asset.type).toBe('VEHICULO');
     expect(where.expirationDate).toEqual({ not: null });

@@ -19,8 +19,6 @@ import {
  * 19 de 303 en otro), y una sola mal tipeada basta para ensuciar el promedio.
  */
 
-const DIA = 86_400_000;
-
 function fecha(dia: number): Date {
   return new Date(2026, 0, 1 + dia);
 }

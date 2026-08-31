@@ -1182,7 +1182,7 @@ export type TaskReturnType = 'DATO' | 'FOTO' | 'DOCUMENTO' | 'TEXTO' | 'NINGUNO'
 export interface TaskDataSpec {
   type: TaskReturnType;
   /** Definición de campos si type === 'DATO'. Se reutiliza el contrato visual si aplica. */
-  fields?: Record<string, any>;
+  fields?: Record<string, unknown>;
   label?: string;
 }
 
