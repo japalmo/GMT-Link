@@ -19,11 +19,6 @@ jobs:
     name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    services:
-      openfga:
-        image: openfga/openfga:v1.18.1
-        ports:
-          - 8080:8080
 
     steps:
       - name: Checkout
@@ -57,6 +52,11 @@ jobs:
       - name: Test shared contracts
         run: pnpm --filter @gmt-platform/contracts test
 
+      - name: Start isolated OpenFGA
+        run: >-
+          docker run --detach --rm --name gmt-link-ci-openfga
+          --publish 8080:8080 openfga/openfga:v1.18.1 run
+
       - name: Wait for OpenFGA
         shell: bash
         run: |
@@ -79,3 +79,7 @@ jobs:
 
       - name: Build deployable workspace
         run: pnpm build
+
+      - name: Stop isolated OpenFGA
+        if: always()
+        run: docker stop gmt-link-ci-openfga || true
