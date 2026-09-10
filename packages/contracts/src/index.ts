@@ -1166,6 +1166,38 @@ export interface ObraBreakdown {
   lines: ObraLine[];
 }
 
+/** Estado de un cerco en el mapa, derivado de cuánto lleva ejecutado. */
+export type ObraPointStatus = 'PENDIENTE' | 'EN_EJECUCION' | 'TERMINADO';
+
+/**
+ * Un cerco ubicado en el terreno, para el mapa satelital de la faena. Los 63
+ * cercos del Cierre Perimetral están repartidos en 7,5 km, así que el mapa es
+ * la única vista donde se ve de un golpe dónde está trabajando la cuadrilla.
+ */
+export interface ObraMapPoint {
+  id: string;
+  /** Código del cerco: "A-I", "B-XXVII". */
+  code: string;
+  /** Tipo de cerco: "A", "B" o "C". Define el icono. */
+  workType: string;
+  sector: string | null;
+  lat: number;
+  lng: number;
+  percent: number;
+  stepsDone: number;
+  stepsTotal: number;
+  status: ObraPointStatus;
+  /** Etapa en la que está ahora. `null` si no ha empezado o ya terminó. */
+  currentStep: string | null;
+}
+
+/** El mapa de la obra: los puntos ubicados y cuántos faltan por ubicar. */
+export interface ObraMap {
+  points: ObraMapPoint[];
+  /** Cercos sin coordenadas confirmadas. Existen, pero no se pueden dibujar. */
+  unlocated: number;
+}
+
 /**
  * Un avance reportado, para el panel de últimos movimientos. NO lleva quién lo
  * reportó: el panel es público y no expone nombres de personas.
@@ -1205,6 +1237,8 @@ export interface ObraDashboard {
   phases: ObraPhase[];
   /** Cortes por etapa, tipo y sector. Vacío si la obra no está desglosada. */
   breakdowns: ObraBreakdown[];
+  /** Cercos ubicados en la faena, para el mapa satelital. */
+  map: ObraMap;
   /** Últimos avances reportados, del más nuevo al más viejo. */
   recent: ObraRecentReport[];
   milestones: ObraMilestone[];

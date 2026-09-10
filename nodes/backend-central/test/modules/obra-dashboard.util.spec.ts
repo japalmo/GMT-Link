@@ -383,3 +383,87 @@ describe('cortes que mezclan unidades', () => {
     expect(etapa?.lines[0]?.quantityDone).toBe(3);
   });
 });
+
+describe('mapa de la faena', () => {
+  /** Un cerco ubicado, con dos etapas cuyo avance define su estado. */
+  function cercoUbicado(
+    codigo: string,
+    sector: string,
+    coords: { lat: number; lng: number } | null,
+    hechas: number,
+  ) {
+    const etapas = ['Excavación de dados', 'Montaje de pilares galvanizados'];
+    return [
+      act({ id: `c-${codigo}`, name: `Cerco ${codigo} · ${sector}`, quantityTotal: null }),
+      ...etapas.map((nombre, i) =>
+        act({
+          id: `c-${codigo}-${i}`,
+          name: nombre,
+          parentId: `c-${codigo}`,
+          quantityTotal: 6,
+          start: d(`2026-01-0${i + 1}`),
+          ...(coords ?? {}),
+          progress: i < hechas ? [rep('2026-01-05', 6)] : [],
+        }),
+      ),
+    ];
+  }
+
+  const MB = { lat: -23.4386, lng: -70.0901 };
+
+  it('ubica cada cerco una sola vez, con su código y su tipo', () => {
+    const r = computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, 0), d('2026-01-06'));
+    expect(r.map.points).toHaveLength(1);
+    expect(r.map.points[0]).toMatchObject({
+      code: 'A-I',
+      workType: 'A',
+      sector: 'PF8',
+      lat: MB.lat,
+      lng: MB.lng,
+    });
+  });
+
+  it('el estado sale del avance: pendiente, en ejecución o terminado', () => {
+    const estado = (hechas: number) =>
+      computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, hechas), d('2026-01-06'))
+        .map.points[0]?.status;
+    expect(estado(0)).toBe('PENDIENTE');
+    expect(estado(1)).toBe('EN_EJECUCION');
+    expect(estado(2)).toBe('TERMINADO');
+  });
+
+  it('un cerco en ejecución dice en qué etapa va, en orden de programa', () => {
+    const r = computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, 1), d('2026-01-06'));
+    expect(r.map.points[0]?.currentStep).toBe('Montaje de pilares galvanizados');
+    expect(r.map.points[0]?.stepsDone).toBe(1);
+  });
+
+  it('un cerco terminado o sin empezar no declara etapa en curso', () => {
+    const sinEmpezar = computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, 0), d('2026-01-06'));
+    const listo = computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, 2), d('2026-01-06'));
+    expect(sinEmpezar.map.points[0]?.currentStep).toBeNull();
+    expect(listo.map.points[0]?.currentStep).toBeNull();
+  });
+
+  it('los cercos sin coordenadas se cuentan aparte, no se inventan', () => {
+    const r = computeObraDashboard(
+      'p',
+      'P',
+      [...cercoUbicado('A-I', 'PF8', MB, 0), ...cercoUbicado('B-XL', 'DC1', null, 0)],
+      d('2026-01-06'),
+    );
+    expect(r.map.points).toHaveLength(1);
+    expect(r.map.unlocated).toBe(1);
+  });
+
+  it('una partida que no es cerco no entra al mapa', () => {
+    const r = computeObraDashboard(
+      'p',
+      'P',
+      [act({ id: 'zanja', name: 'Excavación zanja eléctrica', quantityTotal: 1000, lat: MB.lat, lng: MB.lng })],
+      d('2026-01-06'),
+    );
+    expect(r.map.points).toEqual([]);
+    expect(r.map.unlocated).toBe(0);
+  });
+});

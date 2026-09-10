@@ -99,24 +99,13 @@ export default function PublicObraDashboardPage(): ReactNode {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-          {/* Certificación del sistema de gestión de GMT. Va sobre blanco por lo
-              mismo que el logo corporativo: el sello es gris sobre transparente. */}
-          <span className="hidden items-center rounded-md bg-white px-2 py-1 sm:flex">
-            <img
-              src={isoLogo}
-              alt="Certificación ISO 9001 otorgada por Bureau Veritas"
-              className="h-7 w-auto sm:h-8"
-            />
-          </span>
-          <div className="text-right">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Datos al
-            </p>
-            <p className="text-sm font-bold tabular-nums sm:text-base">
-              {fechaLarga(data?.asOf ?? null)}
-            </p>
-          </div>
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Datos al
+          </p>
+          <p className="text-sm font-bold tabular-nums sm:text-base">
+            {fechaLarga(data?.asOf ?? null)}
+          </p>
         </div>
       </header>
 
@@ -126,10 +115,21 @@ export default function PublicObraDashboardPage(): ReactNode {
         {!loading && !error && data && <ObraTablero data={data} />}
       </main>
 
-      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-card px-4 py-1.5 text-[11px] text-muted-foreground sm:px-6">
-        <span>GMT Link · avance físico informado por el equipo de obra.</span>
-        <span className="tabular-nums">
-          {hora ? `Pantalla actualizada a las ${hora} · ` : ''}se actualiza sola cada 5 minutos.
+      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-border bg-card px-4 py-2 sm:px-6">
+        <div className="min-w-0 text-[11px] text-muted-foreground">
+          <p className="truncate">GMT Link · avance físico informado por el equipo de obra.</p>
+          <p className="truncate tabular-nums">
+            {hora ? `Pantalla actualizada a las ${hora} · ` : ''}se actualiza sola cada 5 minutos.
+          </p>
+        </div>
+        {/* La certificación cierra la pantalla abajo a la derecha, que es donde
+            se lee al final. Va sobre blanco: el sello es gris sobre transparente. */}
+        <span className="flex shrink-0 items-center rounded-md bg-white px-2.5 py-1.5">
+          <img
+            src={isoLogo}
+            alt="Certificación ISO 9001 otorgada por Bureau Veritas"
+            className="h-9 w-auto sm:h-12"
+          />
         </span>
       </footer>
     </div>

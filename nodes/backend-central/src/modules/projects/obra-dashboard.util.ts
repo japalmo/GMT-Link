@@ -17,6 +17,9 @@
 import type {
   ObraActivityLine,
   ObraBreakdown,
+  ObraMap,
+  ObraMapPoint,
+  ObraPointStatus,
   ObraCurvePoint,
   ObraDashboard,
   ObraLine,
@@ -64,6 +67,9 @@ export interface ObraActivity {
    * el de sus hijas, si no la obra contaría dos veces lo mismo.
    */
   parentId?: string | null;
+  /** Ubicación en terreno (WGS84). Solo la traen los cercos. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 function dayISO(d: Date): string {
@@ -441,6 +447,57 @@ export function computeObraDashboard(
     breakdowns.push({ key: 'sector', label: 'Avance por sector', lines: porSector });
   }
 
+  // ── Mapa de la faena ──
+  // Un cerco es su padre; las coordenadas viven en las etapas (que son las
+  // filas con ubicación), así que se toma la primera que la traiga. La
+  // agrupación es propia: la de las fases vive dentro de cada fase.
+  const porCerco = new Map<string, ObraActivity[]>();
+  for (const a of medibles) {
+    const clave = a.parentId ?? a.id;
+    const previo = porCerco.get(clave);
+    if (previo) previo.push(a);
+    else porCerco.set(clave, [a]);
+  }
+
+  const puntos: ObraMapPoint[] = [];
+  let sinUbicar = 0;
+  for (const [clave, grupo] of porCerco.entries()) {
+    const codigo = codigoDeCerco(porId.get(clave)?.name ?? grupo[0]?.name);
+    if (!codigo) continue;
+    const conCoords = grupo.find((a) => a.lat != null && a.lng != null);
+    if (!conCoords || conCoords.lat == null || conCoords.lng == null) {
+      sinUbicar += 1;
+      continue;
+    }
+    const porcentaje = porcentajeDe(grupo);
+    const terminadas = grupo.filter(terminada).length;
+    const estado: ObraPointStatus =
+      terminadas >= grupo.length ? 'TERMINADO' : porcentaje > 0 ? 'EN_EJECUCION' : 'PENDIENTE';
+    // La etapa actual es la primera sin terminar, en orden de programa: es la
+    // que la cuadrilla está haciendo o la que sigue.
+    const enCurso =
+      estado === 'EN_EJECUCION'
+        ? (grupo.slice().sort(porPrograma).find((a) => !terminada(a))?.name ?? null)
+        : null;
+    puntos.push({
+      id: clave,
+      code: codigo,
+      workType: tipoDeCerco(porId.get(clave)?.name ?? grupo[0]?.name) ?? '',
+      sector: sectorDeCerco(porId.get(clave)?.name ?? grupo[0]?.name),
+      lat: conCoords.lat,
+      lng: conCoords.lng,
+      percent: porcentaje,
+      stepsDone: terminadas,
+      stepsTotal: grupo.length,
+      status: estado,
+      currentStep: enCurso,
+    });
+  }
+  const map: ObraMap = {
+    points: puntos.sort((x, y) => x.code.localeCompare(y.code, 'es')),
+    unlocated: sinUbicar,
+  };
+
   // ── Últimos avances reportados ──
   const recent: ObraRecentReport[] = medibles
     .flatMap((a) => {
@@ -488,6 +545,7 @@ export function computeObraDashboard(
     status: semaforo(deviation),
     phases,
     breakdowns,
+    map,
     recent,
     milestones,
     curves,
@@ -508,6 +566,12 @@ export function computeObraDashboard(
  * dashboard corta por tipo y por sector leyendo justamente esto.
  */
 const NOMBRE_CERCO = /^Cerco\s+([ABC])-[IVXLCDM]+(?:\s+·\s+(.+))?$/u;
+
+/** Código del cerco ("A-I", "B-XXVII") a partir del nombre. */
+export function codigoDeCerco(nombre: string | null | undefined): string | null {
+  const m = /^Cerco\s+([ABC]-[IVXLCDM]+)/u.exec(nombre ?? '');
+  return m?.[1] ?? null;
+}
 
 /** Tipo de cerco (A, B o C) a partir del nombre. `null` si no es un cerco. */
 export function tipoDeCerco(nombre: string | null | undefined): string | null {

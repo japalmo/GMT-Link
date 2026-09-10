@@ -325,6 +325,8 @@ export class ProjectsService {
         type: true,
         unit: true,
         quantityTotal: true,
+        latitude: true,
+        longitude: true,
         startDate: true,
         dueDate: true,
         earlyStart: true,
@@ -354,6 +356,8 @@ export class ProjectsService {
       lateStart: t.lateStart,
       lateFinish: t.lateFinish,
       parentId: t.parentId,
+      lat: t.latitude,
+      lng: t.longitude,
       progress: t.progress.map((r) => ({ id: r.id, date: r.date, quantity: r.quantity })),
     }));
 

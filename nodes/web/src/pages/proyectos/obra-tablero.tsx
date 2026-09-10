@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Flag, TrendingDown, TrendingUp, Minus, MapPin, Layers, Activity } from 'lucide-react';
+import { Flag, TrendingDown, TrendingUp, Minus, MapPin, Layers, Activity, Map as MapIcon } from 'lucide-react';
 import type {
   ObraBreakdown,
   ObraCurvePoint,
@@ -9,6 +9,7 @@ import type {
   ObraRecentReport,
   ObraStatus,
 } from '@gmt-platform/contracts';
+import { ObraMapa } from './obra-mapa';
 
 /**
  * Tablero de avance de obra en UNA pantalla, sin scroll: entra completo en la
@@ -140,25 +141,22 @@ export function ObraTablero({
   fijo?: boolean;
 }): ReactNode {
   const quieto = usaMenosMovimiento();
-  const paneles = useMemo(() => construirPaneles(data), [data]);
+  const duplas = useMemo(() => emparejar(construirPaneles(data)), [data]);
   const [turno, setTurno] = useState(0);
 
-  // La rotación se reinicia si cambia la cantidad de paneles, para no quedar
+  // La rotación se reinicia si cambia la cantidad de duplas, para no quedar
   // apuntando a un índice que ya no existe.
   useEffect(() => {
     setTurno(0);
-  }, [paneles.length]);
+  }, [duplas.length]);
 
   useEffect(() => {
-    if (paneles.length < 2) return;
-    const id = window.setInterval(
-      () => setTurno((t) => (t + 1) % paneles.length),
-      TURNO_MS,
-    );
+    if (duplas.length < 2) return;
+    const id = window.setInterval(() => setTurno((t) => (t + 1) % duplas.length), TURNO_MS);
     return () => window.clearInterval(id);
-  }, [paneles.length]);
+  }, [duplas.length]);
 
-  const actual = paneles[Math.min(turno, paneles.length - 1)];
+  const actual = duplas[Math.min(turno, duplas.length - 1)] ?? [];
 
   return (
     <div
@@ -170,30 +168,75 @@ export function ObraTablero({
     >
       <Indicadores data={data} quieto={quieto} />
 
-      <section
-        className={`flex min-h-0 flex-col rounded-xl border border-border bg-card ${
+      {/* Dos cards por turno: una sola ocupando todo el ancho dejaba la mitad
+          de la pantalla vacía en una TV. */}
+      <div
+        className={`grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 ${
           fijo ? 'md:flex-1' : ''
         }`}
         aria-live="polite"
       >
-        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-2.5 sm:px-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold sm:text-base">
-            {actual?.Icon && <actual.Icon className="size-4 text-primary" aria-hidden />}
-            {actual?.titulo}
-          </h2>
-          <Turnos total={paneles.length} activo={turno} quieto={quieto} onIr={setTurno} />
-        </header>
+        {actual.map((panel, i) => (
+          <section
+            key={panel.id}
+            className={`flex min-h-0 flex-col rounded-xl border border-border bg-card ${
+              fijo ? 'md:min-h-0' : ''
+            } ${actual.length === 1 ? 'md:col-span-2' : ''}`}
+          >
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-2.5">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <panel.Icon className="size-4 text-primary" aria-hidden />
+                {panel.titulo}
+              </h2>
+              {/* Los puntos van una sola vez, en la card de la derecha. */}
+              {i === actual.length - 1 && (
+                <Turnos total={duplas.length} activo={turno} quieto={quieto} onIr={setTurno} />
+              )}
+            </header>
 
-        {/* La `key` fuerza el remontaje: cada panel entra animándose de nuevo. */}
-        <div
-          key={actual?.id}
-          className={`min-h-0 flex-1 px-4 py-3 sm:px-5 sm:py-4 ${quieto ? '' : 'animate-panel'}`}
-        >
-          {actual?.contenido}
-        </div>
-      </section>
+            {/* La `key` fuerza el remontaje: cada panel entra animándose. */}
+            <div
+              key={panel.id}
+              className={`min-h-[220px] flex-1 px-4 py-3 md:min-h-0 ${
+                quieto ? '' : 'animate-panel'
+              }`}
+            >
+              {panel.contenido}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
+}
+
+/**
+ * Arma las duplas que se muestran juntas. El orden no es mecánico: se junta lo
+ * que se lee bien al lado (la curva con los hitos, el mapa con las etapas), y
+ * lo que sobre se empareja de a dos como venga.
+ */
+function emparejar(paneles: Panel[]): Panel[][] {
+  const porId = new Map(paneles.map((p) => [p.id, p]));
+  const PREFERIDAS: Array<[string, string]> = [
+    ['curva', 'hitos'],
+    ['mapa', 'corte-etapa'],
+    ['corte-sector', 'corte-tipo'],
+    ['fases', 'avances'],
+  ];
+
+  const duplas: Panel[][] = [];
+  const usados = new Set<string>();
+  for (const [a, b] of PREFERIDAS) {
+    const par = [porId.get(a), porId.get(b)].filter((x): x is Panel => !!x);
+    if (par.length === 0) continue;
+    par.forEach((x) => usados.add(x.id));
+    duplas.push(par);
+  }
+  const sobrantes = paneles.filter((p) => !usados.has(p.id));
+  for (let i = 0; i < sobrantes.length; i += 2) {
+    duplas.push(sobrantes.slice(i, i + 2));
+  }
+  return duplas;
 }
 
 /** Puntos de la rotación. Se pueden tocar para saltar a un panel. */
@@ -439,6 +482,15 @@ function construirPaneles(data: ObraDashboard): Panel[] {
           )}
         />
       ),
+    });
+  }
+
+  if (data.map.points.length > 0) {
+    paneles.push({
+      id: 'mapa',
+      titulo: 'Mapa de la faena',
+      Icon: MapIcon,
+      contenido: <ObraMapa mapa={data.map} />,
     });
   }
 

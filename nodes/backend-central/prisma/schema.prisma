@@ -775,6 +775,11 @@ model Task {
   quantityTotal   Float?
   /// Unidad de la cantidad: "un", "ml", "m2", "pto", "sist".
   unit            String?
+  // Ubicación en terreno (WGS84). Los 63 cercos del Cierre Perimetral están
+  // repartidos en 7,5 km de faena: sin esto no hay mapa de avance. Nullable
+  // porque la mayoría de las actividades no son un punto en el terreno.
+  latitude        Float?
+  longitude       Float?
   progress        TaskProgress[]    @relation("TaskProgressEntries")
   // Fechas TEMPRANAS y TARDÍAS del programa (CPM del MS Project). Sin ellas la
   // curva S solo puede mostrar programada y real; con ellas se dibuja la banda

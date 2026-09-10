@@ -212,13 +212,34 @@
   to { transform: scaleX(1); }
 }
 
+/* Marcadores del mapa de cercos: el divIcon de Leaflet trae fondo y borde
+   propios, y acá el icono es el SVG entero. El pulso marca los cercos donde
+   la cuadrilla está trabajando ahora. */
+.marcador-cerco {
+  background: transparent;
+  border: 0;
+  /* Sobre imagen satelital el marcador se confunde con el terreno: la sombra
+     lo despega del fondo sin ensuciar la forma. */
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.65));
+}
+.pulso-cerco {
+  transform-origin: center;
+  animation: pulso-cerco 2s ease-out infinite;
+}
+@keyframes pulso-cerco {
+  0% { transform: scale(0.6); opacity: 0.5; }
+  70% { transform: scale(1.5); opacity: 0; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
 /* Quien pidió menos movimiento ve el mismo tablero, pero sin animaciones. */
 @media (prefers-reduced-motion: reduce) {
   .animate-panel,
   .animate-entrada,
   .animate-barra,
   .animate-trazo,
-  .animate-turno {
+  .animate-turno,
+  .pulso-cerco {
     animation: none !important;
   }
   .animate-barra { width: var(--barra, 0%); }
