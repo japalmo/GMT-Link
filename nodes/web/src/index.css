@@ -215,6 +215,39 @@
 /* Marcadores del mapa de cercos: el divIcon de Leaflet trae fondo y borde
    propios, y acá el icono es el SVG entero. El pulso marca los cercos donde
    la cuadrilla está trabajando ahora. */
+/*
+ * Vidrio del tablero de obra. Las tarjetas flotan sobre la imagen satelital,
+ * no sobre una superficie de la aplicación: por eso el color va fijo y oscuro
+ * en vez de salir de los tokens del tema. El terreno de Mantos Blancos es
+ * arena clara, así que un vidrio oscuro con texto blanco es lo único que se
+ * lee a tres metros. El brillo interior superior es lo que le da el relieve.
+ */
+.vidrio {
+  background: rgb(15 23 42 / 0.62);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow:
+    0 10px 34px rgb(0 0 0 / 0.38),
+    inset 0 1px 0 rgb(255 255 255 / 0.22);
+  color: rgb(255 255 255 / 0.95);
+}
+/* Sin soporte de desenfoque, el vidrio se opaca: legibilidad antes que efecto. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .vidrio {
+    background: rgb(15 23 42 / 0.88);
+  }
+}
+.vidrio-sutil {
+  background: rgb(255 255 255 / 0.1);
+  border: 1px solid rgb(255 255 255 / 0.14);
+}
+.vidrio-activo {
+  background: rgb(255 255 255 / 0.92);
+  color: rgb(15 23 42);
+  border-color: rgb(255 255 255 / 0.9);
+}
+
 .marcador-cerco {
   background: transparent;
   border: 0;

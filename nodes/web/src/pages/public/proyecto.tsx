@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
-import { ErrorState, LoadingState } from '@/components/ui/states';
 import { errorToMessage, getPublicObraDashboard } from '@/lib/api';
 import type { ObraDashboard } from '@gmt-platform/contracts';
 import { ObraTablero, fechaLarga } from '@/pages/proyectos/obra-tablero';
@@ -81,11 +80,11 @@ export default function PublicObraDashboardPage(): ReactNode {
     : null;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background md:h-dvh md:overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 py-2.5 sm:px-6">
+    <div className="relative flex min-h-dvh flex-col bg-slate-900 md:h-dvh md:overflow-hidden">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-slate-950 px-4 py-2.5 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           {/* El logo corporativo va sobre blanco: el isotipo es navy sobre
-              transparente y se perdería contra el fondo oscuro del tema. */}
+              transparente y se perdería contra el fondo oscuro. */}
           <span className="flex shrink-0 items-center rounded-md bg-white px-2 py-1">
             <img src={gmtLogo} alt="GMT" className="h-7 w-auto sm:h-8" />
           </span>
@@ -93,30 +92,43 @@ export default function PublicObraDashboardPage(): ReactNode {
             <h1 className="truncate text-base font-bold leading-tight sm:text-xl">
               {data?.projectName ?? 'Avance de obra'}
             </h1>
-            <p className="truncate text-xs text-muted-foreground sm:text-sm">
+            <p className="truncate text-xs text-white/60 sm:text-sm">
               {data?.clientName ? `${data.clientName} · ` : ''}Avance físico de obra
             </p>
           </div>
         </div>
 
         <div className="shrink-0 text-right">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Datos al
-          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60">Datos al</p>
           <p className="text-sm font-bold tabular-nums sm:text-base">
             {fechaLarga(data?.asOf ?? null)}
           </p>
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col px-3 py-3 sm:px-6 sm:py-4">
-        {loading && <LoadingState rows={6} label="Cargando el avance de la obra…" />}
-        {!loading && error && <ErrorState message={error} onRetry={() => load()} />}
+      <main className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">
+        {loading && (
+          <div className="flex flex-1 items-center justify-center text-sm text-white/70">
+            Cargando el avance de la obra…
+          </div>
+        )}
+        {!loading && error && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <p className="text-sm text-white/80">{error}</p>
+            <button
+              type="button"
+              onClick={() => load()}
+              className="rounded-md bg-white/15 px-3 py-1.5 text-sm text-white transition-colors hover:bg-white/25"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
         {!loading && !error && data && <ObraTablero data={data} />}
       </main>
 
-      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-border bg-card px-4 py-2 sm:px-6">
-        <div className="min-w-0 text-[11px] text-muted-foreground">
+      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-white/10 bg-slate-950 px-4 py-2 text-white sm:px-6">
+        <div className="min-w-0 text-[11px] text-white/60">
           <p className="truncate">GMT Link · avance físico informado por el equipo de obra.</p>
           <p className="truncate tabular-nums">
             {hora ? `Pantalla actualizada a las ${hora} · ` : ''}se actualiza sola cada 5 minutos.
@@ -124,11 +136,11 @@ export default function PublicObraDashboardPage(): ReactNode {
         </div>
         {/* La certificación cierra la pantalla abajo a la derecha, que es donde
             se lee al final. Va sobre blanco: el sello es gris sobre transparente. */}
-        <span className="flex shrink-0 items-center rounded-md bg-white px-2.5 py-1.5">
+        <span className="flex shrink-0 items-center rounded-md bg-white px-3 py-1.5">
           <img
             src={isoLogo}
             alt="Certificación ISO 9001 otorgada por Bureau Veritas"
-            className="h-9 w-auto sm:h-12"
+            className="h-11 w-auto sm:h-14"
           />
         </span>
       </footer>
