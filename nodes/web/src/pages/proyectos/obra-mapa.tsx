@@ -22,9 +22,16 @@ import type { ObraMap, ObraMapPoint, ObraPointStatus } from '@gmt-platform/contr
  * tonos están elegidos para que la letra blanca encima se lea.
  */
 export const COLOR_ESTADO: Record<ObraPointStatus, string> = {
-  TERMINADO: '#059669',
-  EN_EJECUCION: '#d97706',
-  PENDIENTE: '#475569',
+  TERMINADO: '#16a34a',
+  EN_EJECUCION: '#eab308',
+  PENDIENTE: '#dc2626',
+};
+
+/** El amarillo necesita texto oscuro encima; los otros dos, blanco. */
+const COLOR_LETRA: Record<ObraPointStatus, string> = {
+  TERMINADO: '#ffffff',
+  EN_EJECUCION: '#1c1917',
+  PENDIENTE: '#ffffff',
 };
 
 export const NOMBRE_ESTADO: Record<ObraPointStatus, string> = {
@@ -32,6 +39,13 @@ export const NOMBRE_ESTADO: Record<ObraPointStatus, string> = {
   EN_EJECUCION: 'En ejecución',
   PENDIENTE: 'Pendiente',
 };
+
+/** Lo que el tablero puede pedirle al mapa desde sus propios botones. */
+export interface ControlesMapa {
+  acercar: () => void;
+  alejar: () => void;
+  encuadrar: () => void;
+}
 
 /** Qué cercos se dibujan. Un eje vacío no filtra. */
 export interface FiltroMapa {
@@ -72,7 +86,7 @@ function iconoHtml(p: ObraMapPoint): string {
     ${pulso}
     <circle cx="16" cy="16" r="11" fill="${color}" stroke="#ffffff" stroke-width="2.5" />
     <text x="16" y="20.5" text-anchor="middle" font-family="system-ui, sans-serif"
-          font-size="13" font-weight="700" fill="#ffffff">${escapar(p.workType)}</text>
+          font-size="13" font-weight="700" fill="${COLOR_LETRA[p.status]}">${escapar(p.workType)}</text>
   </svg>`;
 }
 
@@ -99,15 +113,25 @@ function popupHtml(p: ObraMapPoint): string {
 export function ObraMapa({
   mapa,
   filtro = SIN_FILTRO,
+  onControles,
 }: {
   mapa: ObraMap;
   filtro?: FiltroMapa;
+  /**
+   * Entrega el control del zoom al tablero. Los botones propios de Leaflet no
+   * combinan con el vidrio, así que los dibuja el tablero y llama acá.
+   */
+  onControles?: (c: ControlesMapa | null) => void;
 }): ReactNode {
   const contenedor = useRef<HTMLDivElement>(null);
   const instancia = useRef<L.Map | null>(null);
   const capa = useRef<L.LayerGroup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [listo, setListo] = useState(false);
+  // Contador que fuerza un reencuadre cuando el usuario aprieta el botón.
+  const [encuadres, setEncuadres] = useState(0);
+  const controles = useRef(onControles);
+  controles.current = onControles;
 
   // Montaje. Una sola vez: los marcadores se redibujan por separado.
   useEffect(() => {
@@ -121,19 +145,22 @@ export function ObraMapa({
         const mapaLocal = Lmod.map(contenedor.current, {
           zoomControl: false,
           attributionControl: true,
-          // En la TV nadie interactúa; que la rueda no mueva el mapa sola.
-          scrollWheelZoom: false,
+          scrollWheelZoom: true,
+          // Sin inercia el mapa se siente pesado al arrastrarlo en una TV táctil.
+          inertia: true,
         });
         Lmod.tileLayer(
           'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           { attribution: 'Imagen satelital &copy; Esri', maxZoom: 19 },
         ).addTo(mapaLocal);
-        // Abajo a la izquierda: arriba y a la derecha va el vidrio.
-        Lmod.control.zoom({ position: 'bottomleft' }).addTo(mapaLocal);
-
         instancia.current = mapaLocal;
         capa.current = Lmod.layerGroup().addTo(mapaLocal);
         setListo(true);
+        controles.current?.({
+          acercar: () => mapaLocal.zoomIn(),
+          alejar: () => mapaLocal.zoomOut(),
+          encuadrar: () => setEncuadres((n) => n + 1),
+        });
       } catch {
         if (vivo) setError('No se pudo cargar el mapa satelital.');
       }
@@ -141,6 +168,7 @@ export function ObraMapa({
 
     return () => {
       vivo = false;
+      controles.current?.(null);
       instancia.current?.remove();
       instancia.current = null;
       capa.current = null;
@@ -204,7 +232,7 @@ export function ObraMapa({
     return () => {
       vivo = false;
     };
-  }, [listo, mapa, filtro]);
+  }, [listo, mapa, filtro, encuadres]);
 
   return (
     // `z-0` con posición crea contexto de apilado y encierra los paneles de

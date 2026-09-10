@@ -7,6 +7,7 @@ import { errorToMessage, getObraDashboard } from '@/lib/api';
 import type { ObraDashboard } from '@gmt-platform/contracts';
 import { ObraTablero } from './obra-tablero';
 import { ObraDetalle } from './obra-detalle';
+import { ObraClavePublica } from './obra-clave-publica';
 
 /**
  * Pestaña Dashboard para proyectos de OBRAS CIVILES: avance físico contra la
@@ -16,11 +17,18 @@ import { ObraDetalle } from './obra-detalle';
 export function ObraDashboardTab({
   projectId,
   publicToken,
+  publicPasswordSet = false,
+  canManage = false,
 }: {
   projectId: string;
+  /** ¿El enlace público pide clave? Solo el estado; el hash no sale del backend. */
+  publicPasswordSet?: boolean;
+  /** ¿Este usuario puede configurar la clave del enlace? */
+  canManage?: boolean;
   publicToken?: string | null;
 }): ReactNode {
   const [data, setData] = useState<ObraDashboard | null>(null);
+  const [protegido, setProtegido] = useState(publicPasswordSet);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +77,13 @@ export function ObraDashboardTab({
           <RefreshCw className="mr-2 size-4" aria-hidden />
           Actualizar
         </Button>
+        {publicUrl && canManage && (
+          <ObraClavePublica
+            projectId={projectId}
+            protegido={protegido}
+            onCambio={setProtegido}
+          />
+        )}
         {publicUrl && (
           <>
             <Button variant="outline" size="sm" onClick={copiarEnlace}>

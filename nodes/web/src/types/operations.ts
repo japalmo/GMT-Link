@@ -4,6 +4,10 @@ export interface ProjectView {
   id: string;
   code: string;
   name: string;
+  /** Token opaco del enlace público del tablero de obra. */
+  publicToken?: string;
+  /** ¿El enlace público pide clave? El hash nunca sale del backend. */
+  publicPasswordSet?: boolean;
   departmentId: string;
   clientId: string;
   kpis: Record<string, unknown>;

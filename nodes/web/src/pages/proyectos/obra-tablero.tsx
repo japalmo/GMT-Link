@@ -27,8 +27,11 @@ import {
   ObraMapa,
   SIN_FILTRO,
   pasaFiltro,
+  type ControlesMapa,
   type FiltroMapa,
 } from './obra-mapa';
+import { useDisposicion } from './usar-arrastre';
+import { Arrastrable, ControlesTablero, PanelClima } from './obra-piezas';
 
 /**
  * Tablero de avance de obra: el mapa satelital de la faena es el FONDO y todo
@@ -141,6 +144,10 @@ export function ObraTablero({
 }): ReactNode {
   const quieto = usaMenosMovimiento();
   const [filtro, setFiltro] = useState<FiltroMapa>(SIN_FILTRO);
+  const [controles, setControles] = useState<ControlesMapa | null>(null);
+  // La disposición se guarda por proyecto: mover los paneles de una obra no
+  // debe descolocar los de la siguiente.
+  const { posiciones, mover, reiniciar, movido } = useDisposicion(data.projectId);
   const paneles = useMemo(() => construirPaneles(data), [data]);
   const duplas = useMemo(() => emparejar(paneles), [paneles]);
   const [turno, setTurno] = useState(0);
@@ -206,7 +213,7 @@ export function ObraTablero({
     >
       {conMapa && (
         <div className="relative h-[280px] shrink-0 overflow-hidden rounded-xl border border-white/10 sm:h-[340px] lg:absolute lg:inset-0 lg:h-auto lg:rounded-none lg:border-0">
-          <ObraMapa mapa={data.map} filtro={filtro} />
+          <ObraMapa mapa={data.map} filtro={filtro} onControles={setControles} />
           {/* Velo: el terreno de Mantos Blancos es arena clara y el vidrio
               necesita fondo para que el texto blanco se lea también sobre las
               zonas planas. */}
@@ -220,20 +227,39 @@ export function ObraTablero({
       {/* Capa de contenido. Sobre el mapa no captura el puntero salvo en las
           tarjetas, para que el mapa se arrastre por los huecos. */}
       <div className="flex flex-col gap-2 sm:gap-3 lg:pointer-events-none lg:absolute lg:inset-0 lg:z-20 lg:p-3">
-        <Indicadores data={data} quieto={quieto} />
+        <Arrastrable id="indicadores" posiciones={posiciones} onMover={mover} asaCompleta>
+          <Indicadores data={data} quieto={quieto} />
+        </Arrastrable>
 
         <div className="flex flex-col gap-2 sm:gap-3 lg:min-h-0 lg:flex-1 lg:flex-row">
-          {leyenda && (
-            <div className="order-2 flex flex-col justify-end lg:pointer-events-auto lg:order-1 lg:w-[250px] lg:shrink-0">
-              {leyenda}
-            </div>
-          )}
+          <div className="order-2 flex flex-col gap-2 sm:gap-3 lg:order-1 lg:w-[264px] lg:shrink-0 lg:justify-between">
+            {data.weather && (
+              <Arrastrable id="clima" posiciones={posiciones} onMover={mover}>
+                <PanelClima weather={data.weather} />
+              </Arrastrable>
+            )}
+            {leyenda && (
+              <Arrastrable id="leyenda" posiciones={posiciones} onMover={mover}>
+                {leyenda}
+              </Arrastrable>
+            )}
+          </div>
 
-          {/* Hueco por el que se ve el mapa. */}
-          <div className="hidden flex-1 lg:block" />
+          {/* Hueco por el que se ve el mapa; abajo van los controles del mapa. */}
+          <div className="hidden flex-1 flex-col items-center justify-end lg:flex">
+            {conMapa && (
+              <ControlesTablero
+                controles={controles}
+                movido={movido}
+                onReiniciar={reiniciar}
+              />
+            )}
+          </div>
 
           <div className="order-1 flex flex-col gap-2 sm:gap-3 lg:order-2 lg:min-h-0 lg:w-[440px] lg:flex-none">
-            {tarjetas}
+            <Arrastrable id="tarjetas" posiciones={posiciones} onMover={mover} columna>
+              {tarjetas}
+            </Arrastrable>
           </div>
         </div>
       </div>

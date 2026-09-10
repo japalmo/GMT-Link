@@ -13,6 +13,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { Headers } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
@@ -27,6 +28,8 @@ import {
   UpdateProjectDto,
   UpdateProjectKpisDto,
   UpdateServiceFrequencyDto,
+  SetPublicPasswordDto,
+  UnlockPublicDto,
 } from './dto/projects.dto';
 
 @Controller('projects')
@@ -104,8 +107,39 @@ export class ProjectsController {
    */
   @Throttle({ default: { limit: 60, ttl: 60_000 } }) // 60/min por IP: la TV refresca sola
   @Get('public/:token/obra-dashboard')
-  getPublicObraDashboard(@Param('token') token: string) {
-    return this.projects.getPublicObraDashboard(token);
+  async getPublicObraDashboard(
+    @Param('token') token: string,
+    @Headers('x-obra-pase') pase?: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    // Con sesión iniciada vale el permiso de siempre; sin sesión, el pase que
+    // entrega la clave. Así el enlace protegido se abre de las dos formas que
+    // pidió el negocio sin duplicar la regla de autorización.
+    const sesionAutorizada = user
+      ? await this.projects.puedeVerPorToken(token, user.id)
+      : false;
+    return this.projects.getPublicObraDashboard(token, { pase, sesionAutorizada });
+  }
+
+  /**
+   * Canjea la clave del enlace público por un pase de jornada. Va MUY limitado
+   * por IP: es el único punto donde se puede probar una clave.
+   */
+  @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  @Post('public/:token/unlock')
+  unlockPublic(@Param('token') token: string, @Body() dto: UnlockPublicDto) {
+    return this.projects.unlockPublicDashboard(token, dto.password);
+  }
+
+  /**
+   * Fija o quita la clave del enlace público del proyecto. Exige el mismo
+   * permiso que editar el proyecto: quien puede cambiar la obra puede decidir
+   * quién ve su tablero.
+   */
+  @Patch(':id/public-password')
+  @RequirePermission('can_edit', { type: 'project', param: 'id' })
+  setPublicPassword(@Param('id') id: string, @Body() dto: SetPublicPasswordDto) {
+    return this.projects.setPublicPassword(id, dto.password ?? null);
   }
 
   /**

@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma, ScopeType, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -19,6 +20,9 @@ import {
 } from './dto/projects.dto';
 import type { ProjectDashboard } from '@gmt-platform/contracts';
 import { computeProjectDashboard, type DashboardActivity } from './dashboard.util';
+import { ClimaService } from './clima.service';
+import { hashPassword, verifyPassword } from '../../common/password';
+import { signObraPass, verifyObraPass } from '../../common/jwt';
 import {
   computeObraDashboard,
   type ObraActivity,
@@ -32,6 +36,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fga: FgaService,
+    private readonly clima: ClimaService,
   ) {}
 
   /**
@@ -299,16 +304,94 @@ export class ProjectsService {
    * Expone SOLO avance físico, hitos y fechas. Nada de costos, nombres de
    * personas ni datos internos: quien tiene el link no tiene por qué verlos.
    */
-  async getPublicObraDashboard(token: string): Promise<ObraDashboard> {
+  async getPublicObraDashboard(
+    token: string,
+    credencial: { pase?: string; sesionAutorizada?: boolean } = {},
+  ): Promise<ObraDashboard> {
     const project = await this.prisma.project.findUnique({
       where: { publicToken: token },
-      select: { id: true, name: true, client: { select: { name: true } } },
+      select: {
+        id: true,
+        name: true,
+        publicPasswordHash: true,
+        client: { select: { name: true } },
+      },
     });
+    // El proyecto con clave solo abre con el pase de la clave o con una sesión
+    // de GMT Link que ya tenga permiso de ver el proyecto.
+    if (project?.publicPasswordHash) {
+      const conPase = credencial.pase ? verifyObraPass(credencial.pase, token) : false;
+      if (!conPase && !credencial.sesionAutorizada) {
+        throw new UnauthorizedException('Este tablero pide clave o iniciar sesión.');
+      }
+    }
     // Anti-enumeración: un token inválido responde igual que uno inexistente.
     if (!project) {
       throw new NotFoundException('El dashboard no existe o el enlace ya no es válido.');
     }
     return this.buildObraDashboard(project.id, project.name, project.client?.name ?? null);
+  }
+
+  /**
+   * ¿Este usuario ya puede ver el proyecto que hay detrás del token público?
+   * Sirve para que quien tiene sesión en GMT Link entre al tablero protegido
+   * sin escribir la clave. Devuelve `false` ante cualquier duda.
+   */
+  async puedeVerPorToken(token: string, userId: string): Promise<boolean> {
+    const project = await this.prisma.project.findUnique({
+      where: { publicToken: token },
+      select: { id: true },
+    });
+    if (!project) return false;
+    try {
+      return await this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_view',
+        object: `project:${project.id}`,
+      });
+    } catch {
+      // Si el servicio de autorización no responde, se pide la clave. Fallar
+      // cerrado: nunca abrir un tablero protegido porque OpenFGA está caído.
+      return false;
+    }
+  }
+
+  /**
+   * Fija o quita la clave del enlace público. `null` deja el enlace abierto.
+   * La clave se guarda hasheada: el enlace se comparte con el cliente y una
+   * clave en claro en base sería un regalo.
+   */
+  async setPublicPassword(projectId: string, password: string | null): Promise<{ publicPasswordSet: boolean }> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
+    if (!project) throw new NotFoundException('El proyecto no existe.');
+
+    const hash = password === null ? null : await hashPassword(password);
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: { publicPasswordHash: hash },
+    });
+    return { publicPasswordSet: hash !== null };
+  }
+
+  /**
+   * Canjea la clave del enlace por un pase de jornada. Responde igual ante
+   * token inexistente y clave incorrecta: quien prueba enlaces al azar no debe
+   * poder distinguir "no existe" de "existe pero erré la clave".
+   */
+  async unlockPublicDashboard(token: string, password: string): Promise<{ pass: string }> {
+    const project = await this.prisma.project.findUnique({
+      where: { publicToken: token },
+      select: { publicPasswordHash: true },
+    });
+    const hash = project?.publicPasswordHash ?? null;
+    const correcta = hash !== null && (await verifyPassword(password, hash));
+    if (!correcta) {
+      throw new UnauthorizedException('La clave no es correcta.');
+    }
+    return { pass: signObraPass(token) };
   }
 
   /** Carga las actividades del proyecto y delega el cálculo al util puro. */
@@ -361,7 +444,20 @@ export class ProjectsService {
       progress: t.progress.map((r) => ({ id: r.id, date: r.date, quantity: r.quantity })),
     }));
 
-    return { ...computeObraDashboard(id, name, activities, new Date()), clientName };
+    const dashboard = computeObraDashboard(id, name, activities, new Date());
+
+    // El clima se pide en el centro de los cercos ubicados: es donde está la
+    // cuadrilla. Si el proyecto no tiene ubicaciones, no hay dónde consultar.
+    const puntos = dashboard.map.points;
+    const weather =
+      puntos.length > 0
+        ? await this.clima.enPunto(
+            puntos.reduce((s, p) => s + p.lat, 0) / puntos.length,
+            puntos.reduce((s, p) => s + p.lng, 0) / puntos.length,
+          )
+        : null;
+
+    return { ...dashboard, clientName, weather };
   }
 
   async getById(projectId: string, userId: string) {
@@ -849,8 +945,16 @@ export class ProjectsService {
         ? (project.kpis as Record<string, unknown>)
         : {};
 
+    // El hash de la clave del enlace público NO sale del backend: se reemplaza
+    // por un booleano que dice si el enlace está protegido. La bandera solo se
+    // agrega si la consulta trajo el campo, para no afirmar "sin clave" en
+    // listados que ni siquiera lo seleccionaron.
+    const { publicPasswordHash, ...resto } = project as T & { publicPasswordHash?: string | null };
+    const traeCampo = Object.hasOwn(project as object, 'publicPasswordHash');
+
     return {
-      ...project,
+      ...(resto as T),
+      ...(traeCampo ? { publicPasswordSet: publicPasswordHash !== null } : {}),
       kpis: {
         ...existingKpis,
         current,

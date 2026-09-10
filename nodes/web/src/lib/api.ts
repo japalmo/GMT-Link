@@ -2870,9 +2870,40 @@ export function getObraDashboard(id: string): Promise<ObraDashboard> {
 /**
  * Mismo dashboard resuelto por el token público del proyecto y SIN sesión: es
  * lo que se proyecta en la TV de faena y lo que se comparte con el cliente.
+ *
+ * Si el proyecto tiene clave, responde 401 salvo que se acompañe el pase que
+ * entrega {@link unlockPublicObraDashboard} o que haya sesión con permiso.
  */
-export function getPublicObraDashboard(token: string): Promise<ObraDashboard> {
-  return request<ObraDashboard>(`/projects/public/${encodeURIComponent(token)}/obra-dashboard`);
+export function getPublicObraDashboard(token: string, pase?: string | null): Promise<ObraDashboard> {
+  return request<ObraDashboard>(`/projects/public/${encodeURIComponent(token)}/obra-dashboard`, {
+    headers: pase ? { 'X-Obra-Pase': pase } : undefined,
+  });
+}
+
+/**
+ * Canjea la clave del enlace público por un pase de jornada. 401 si la clave no
+ * es correcta; el backend responde igual si el token no existe, para que nadie
+ * pueda distinguir un enlace inválido de una clave errada.
+ */
+export function unlockPublicObraDashboard(token: string, password: string): Promise<{ pass: string }> {
+  return request<{ pass: string }>(`/projects/public/${encodeURIComponent(token)}/unlock`, {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+}
+
+/**
+ * `PATCH /projects/:id/public-password` — fija la clave del enlace público del
+ * proyecto, o la quita con `null` para dejarlo abierto.
+ */
+export function setProjectPublicPassword(
+  id: string,
+  password: string | null,
+): Promise<{ publicPasswordSet: boolean }> {
+  return request<{ publicPasswordSet: boolean }>(
+    `/projects/${encodeURIComponent(id)}/public-password`,
+    { method: 'PATCH', body: JSON.stringify({ password }) },
+  );
 }
 
 /**

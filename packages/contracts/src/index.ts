@@ -1191,6 +1191,37 @@ export interface ObraMapPoint {
   currentStep: string | null;
 }
 
+/** Umbral superado por una condición climática en faena. */
+export interface ObraWeatherAlert {
+  key: 'VIENTO' | 'RAFAGA' | 'UV' | 'FRIO' | 'CALOR';
+  level: 'AVISO' | 'CRITICO';
+  /** Qué mirar y qué implica, en una línea que se lee en la TV. */
+  message: string;
+}
+
+/**
+ * Condiciones en faena. En el desierto de Atacama el UV es el riesgo diario y
+ * el viento es el que suspende izajes, así que ambos van al frente.
+ */
+export interface ObraWeather {
+  /** Hora local de la observación (aaaa-mm-ddThh:mm). */
+  observedAt: string;
+  temperature: number;
+  apparentTemperature: number;
+  humidity: number;
+  /** km/h. */
+  windSpeed: number;
+  windGusts: number;
+  /** Grados desde el norte, de donde VIENE el viento. */
+  windDirection: number;
+  uvIndex: number;
+  /** Máximo de UV previsto para hoy. */
+  uvIndexMax: number;
+  /** Máximo de viento previsto para hoy, en km/h. */
+  windSpeedMax: number;
+  alerts: ObraWeatherAlert[];
+}
+
 /** El mapa de la obra: los puntos ubicados y cuántos faltan por ubicar. */
 export interface ObraMap {
   points: ObraMapPoint[];
@@ -1239,6 +1270,8 @@ export interface ObraDashboard {
   breakdowns: ObraBreakdown[];
   /** Cercos ubicados en la faena, para el mapa satelital. */
   map: ObraMap;
+  /** Condiciones en faena. `null` si no hay ubicación o el servicio no responde. */
+  weather: ObraWeather | null;
   /** Últimos avances reportados, del más nuevo al más viejo. */
   recent: ObraRecentReport[];
   milestones: ObraMilestone[];

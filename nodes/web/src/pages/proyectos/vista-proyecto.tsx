@@ -163,6 +163,8 @@ type ProjectDetail = ProjectView & {
   description?: string | null;
   /** Credencial del dashboard público de obra (mismo patrón que la ficha de activos). */
   publicToken?: string | null;
+  /** ¿El enlace público pide clave? El hash nunca sale del backend. */
+  publicPasswordSet?: boolean;
 };
 
 type ServiceWithFrequency = ServiceView & { frequency?: ServiceFrequency | null };
@@ -419,7 +421,12 @@ export default function VistaProyectoPage(): ReactNode {
             avance de producción por actividades listas. Son dashboards distintos. */}
         {tab === 'dashboard' &&
           (projectType === 'OBRAS_CIVILES' ? (
-            <ObraDashboardTab projectId={project.id} publicToken={detail?.publicToken ?? null} />
+            <ObraDashboardTab
+              projectId={project.id}
+              publicToken={detail?.publicToken ?? null}
+              publicPasswordSet={detail?.publicPasswordSet ?? false}
+              canManage={canManageTeam}
+            />
           ) : (
             <DashboardTab projectId={project.id} />
           ))}

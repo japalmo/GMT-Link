@@ -47,3 +47,32 @@ export function verifyToken(token: string): AuthTokenPayload | null {
     return null;
   }
 }
+
+/**
+ * Pase temporal del tablero público de obra. Lo entrega el backend cuando
+ * alguien acierta la clave del proyecto, y solo sirve para ESE proyecto: el
+ * token público va firmado dentro, así que un pase no abre otro tablero.
+ *
+ * Dura una jornada: la TV de faena se desbloquea en la mañana y no vuelve a
+ * pedir la clave durante el turno.
+ */
+const TTL_PASE_OBRA = '12h';
+
+export function signObraPass(projectPublicToken: string): string {
+  return jwt.sign({ pt: projectPublicToken, kind: 'obra' }, secret(), {
+    algorithm: 'HS256',
+    expiresIn: TTL_PASE_OBRA,
+  } as jwt.SignOptions);
+}
+
+/** ¿Este pase es válido y corresponde a este proyecto? */
+export function verifyObraPass(pase: string, projectPublicToken: string): boolean {
+  try {
+    const decoded = jwt.verify(pase, secret(), { algorithms: ['HS256'] });
+    if (typeof decoded !== 'object' || decoded === null) return false;
+    const d = decoded as jwt.JwtPayload & { pt?: unknown; kind?: unknown };
+    return d.kind === 'obra' && d.pt === projectPublicToken;
+  } catch {
+    return false;
+  }
+}

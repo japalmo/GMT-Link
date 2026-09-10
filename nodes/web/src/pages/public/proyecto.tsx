@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
-import { errorToMessage, getPublicObraDashboard } from '@/lib/api';
+import { ApiError, errorToMessage, getPublicObraDashboard } from '@/lib/api';
+import { PuertaClave, leerPase, olvidarPase } from './obra-puerta';
 import type { ObraDashboard } from '@gmt-platform/contracts';
 import { ObraTablero, fechaLarga } from '@/pages/proyectos/obra-tablero';
-import gmtLogo from '@/assets/branding/gmt-corporativo.png';
+import gmtLogo from '@/assets/branding/gmt-corporativo-blanco.png';
 import isoLogo from '@/assets/branding/iso-9001-bureau-veritas.png';
 
 /** Cada cuánto se refresca solo. La TV de faena queda encendida todo el día. */
@@ -23,18 +24,32 @@ export default function PublicObraDashboardPage(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actualizado, setActualizado] = useState<Date | null>(null);
+  // El tablero pide clave cuando el proyecto la tiene configurada y quien mira
+  // no trae sesión con permiso. El pase se guarda por pestaña.
+  const [pideClave, setPideClave] = useState(false);
 
   const load = useCallback(
     (silencioso = false) => {
       if (!token) return;
       if (!silencioso) setLoading(true);
-      getPublicObraDashboard(token)
+      getPublicObraDashboard(token, leerPase(token))
         .then((d) => {
           setData(d);
           setError(null);
+          setPideClave(false);
           setActualizado(new Date());
         })
         .catch((e: unknown) => {
+          // 401 no es un error de red: es un tablero protegido. Puede aparecer
+          // en un refresco silencioso si el pase venció durante el turno, y ahí
+          // sí corresponde volver a pedirla.
+          if (e instanceof ApiError && e.status === 401) {
+            olvidarPase(token);
+            setPideClave(true);
+            setData(null);
+            setError(null);
+            return;
+          }
           // En un refresco automático se conserva lo que ya está en pantalla:
           // un corte de red no debe dejar la TV de faena en blanco.
           if (!silencioso) {
@@ -83,11 +98,9 @@ export default function PublicObraDashboardPage(): ReactNode {
     <div className="relative flex min-h-dvh flex-col bg-slate-900 md:h-dvh md:overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-slate-950 px-4 py-2.5 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-          {/* El logo corporativo va sobre blanco: el isotipo es navy sobre
-              transparente y se perdería contra el fondo oscuro. */}
-          <span className="flex shrink-0 items-center rounded-md bg-white px-2 py-1">
-            <img src={gmtLogo} alt="GMT" className="h-7 w-auto sm:h-8" />
-          </span>
+          {/* Versión en blanco de la marca: va directo sobre el fondo oscuro,
+              sin el recuadro blanco que antes hacía falta para que se leyera. */}
+          <img src={gmtLogo} alt="GMT" className="h-14 w-auto shrink-0 sm:h-16" />
           <div className="min-w-0">
             <h1 className="truncate text-base font-bold leading-tight sm:text-xl">
               {data?.projectName ?? 'Avance de obra'}
@@ -107,12 +120,15 @@ export default function PublicObraDashboardPage(): ReactNode {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">
-        {loading && (
+        {pideClave && token && (
+          <PuertaClave token={token} onAbierto={() => load()} />
+        )}
+        {!pideClave && loading && (
           <div className="flex flex-1 items-center justify-center text-sm text-white/70">
             Cargando el avance de la obra…
           </div>
         )}
-        {!loading && error && (
+        {!pideClave && !loading && error && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-white/80">{error}</p>
             <button
@@ -124,7 +140,7 @@ export default function PublicObraDashboardPage(): ReactNode {
             </button>
           </div>
         )}
-        {!loading && !error && data && <ObraTablero data={data} />}
+        {!pideClave && !loading && !error && data && <ObraTablero data={data} />}
       </main>
 
       <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-white/10 bg-slate-950 px-4 py-2 text-white sm:px-6">
@@ -135,14 +151,13 @@ export default function PublicObraDashboardPage(): ReactNode {
           </p>
         </div>
         {/* La certificación cierra la pantalla abajo a la derecha, que es donde
-            se lee al final. Va sobre blanco: el sello es gris sobre transparente. */}
-        <span className="flex shrink-0 items-center rounded-md bg-white px-3 py-1.5">
-          <img
-            src={isoLogo}
-            alt="Certificación ISO 9001 otorgada por Bureau Veritas"
-            className="h-11 w-auto sm:h-14"
-          />
-        </span>
+            se lee al final. El archivo ya viene sin fondo y no tiene tonos
+            oscuros, así que se apoya directo sobre el fondo del pie. */}
+        <img
+          src={isoLogo}
+          alt="Certificación ISO 9001 otorgada por Bureau Veritas"
+          className="h-[88px] w-auto shrink-0 sm:h-28"
+        />
       </footer>
     </div>
   );

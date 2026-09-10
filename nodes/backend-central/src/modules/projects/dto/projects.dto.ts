@@ -1,4 +1,14 @@
-import { IsEnum, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsISO8601,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { Prisma, ProjectType, ProjectWorkerStatus, ServiceFrequency } from '@prisma/client';
 
 /**
@@ -139,4 +149,26 @@ export class UpdateAssignmentDto {
   @IsISO8601()
   @IsOptional()
   endDate?: string;
+}
+
+/**
+ * Clave del enlace público del proyecto. `null` la quita y deja el enlace
+ * abierto. El mínimo de 6 caracteres es el mismo criterio del resto de la
+ * plataforma: una clave de 3 letras no protege nada.
+ */
+export class SetPublicPasswordDto {
+  @IsOptional()
+  @ValidateIf((_, valor) => valor !== null)
+  @IsString()
+  @MinLength(6, { message: 'La clave debe tener al menos 6 caracteres.' })
+  @MaxLength(72, { message: 'La clave no puede superar los 72 caracteres.' })
+  password!: string | null;
+}
+
+/** Canje de la clave del enlace público por un pase de jornada. */
+export class UnlockPublicDto {
+  @IsString()
+  @MinLength(1, { message: 'Ingresa la clave.' })
+  @MaxLength(72)
+  password!: string;
 }

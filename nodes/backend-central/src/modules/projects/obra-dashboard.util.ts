@@ -546,6 +546,9 @@ export function computeObraDashboard(
     phases,
     breakdowns,
     map,
+    // El clima no sale del cálculo: lo adjunta el servicio, que es quien puede
+    // salir a la red. Acá viaja en null para que el contrato quede completo.
+    weather: null,
     recent,
     milestones,
     curves,

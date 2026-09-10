@@ -5,6 +5,7 @@ import { ScopeType } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import { ProjectsService } from '../../src/modules/projects/projects.service';
+import type { ClimaService } from '../../src/modules/projects/clima.service';
 import type {
   CreateProjectDto,
   CreateServiceDto,
@@ -103,7 +104,14 @@ describe('ProjectsService', () => {
       writeTuples: vi.fn(() => Promise.resolve()),
       deleteTuples: vi.fn(() => Promise.resolve()),
     };
-    service = new ProjectsService(prisma, fga as unknown as FgaService);
+    // El clima sale a la red: en las pruebas se responde null, que es
+    // exactamente lo que hace el servicio real cuando el proveedor falla.
+    const clima = { enPunto: vi.fn(() => Promise.resolve(null)) };
+    service = new ProjectsService(
+      prisma,
+      fga as unknown as FgaService,
+      clima as unknown as ClimaService,
+    );
   });
 
   describe('create', () => {
