@@ -15,11 +15,14 @@
  */
 
 import type {
+  ObraActivityLine,
+  ObraBreakdown,
   ObraCurvePoint,
   ObraDashboard,
   ObraLine,
   ObraMilestone,
   ObraPhase,
+  ObraRecentReport,
 } from '@gmt-platform/contracts';
 
 export type { ObraDashboard };
@@ -28,6 +31,7 @@ const MS_DAY = 86_400_000;
 
 /** Reporte de avance de un día. */
 export interface ProgressEntry {
+  id: string;
   date: Date;
   quantity: number;
 }
@@ -54,6 +58,12 @@ export interface ObraActivity {
   lateStart: Date | null;
   lateFinish: Date | null;
   progress: ProgressEntry[];
+  /**
+   * Actividad de la que cuelga. En el Cierre Perimetral cada cerco es el padre
+   * y sus 7 etapas de montaje son las hijas. El padre NO se mide: su avance es
+   * el de sus hijas, si no la obra contaría dos veces lo mismo.
+   */
+  parentId?: string | null;
 }
 
 function dayISO(d: Date): string {
@@ -181,6 +191,115 @@ function pct(done: number, total: number): number {
   return total > 0 ? Math.round((done / total) * 1000) / 10 : 0;
 }
 
+/** Acumulado de un conjunto de actividades medibles. */
+function acumulado(acts: ObraActivity[]): {
+  done: number;
+  total: number;
+  weight: number;
+  ponderado: number;
+} {
+  let done = 0;
+  let total = 0;
+  let weight = 0;
+  let ponderado = 0;
+  for (const a of acts) {
+    const t = a.quantityTotal ?? 0;
+    const d = Math.min(doneOf(a), t);
+    const w = weightOf(a);
+    done += d;
+    total += t;
+    weight += w;
+    if (w > 0 && t > 0) ponderado += w * (d / t);
+  }
+  return { done, total, weight, ponderado };
+}
+
+/** Porcentaje ponderado de un grupo; cae al simple si nadie tiene peso. */
+function porcentajeDe(grupo: ObraActivity[]): number {
+  const { done, total, weight, ponderado } = acumulado(grupo);
+  return weight > 0 ? Math.round((ponderado / weight) * 1000) / 10 : pct(done, total);
+}
+
+/** Unidad común de un grupo, o `null` si mezcla unidades (un cerco mezcla). */
+function unidadComun(acts: ObraActivity[]): string | null {
+  const unidades = new Set(acts.map((a) => a.unit).filter((u): u is string => !!u));
+  return unidades.size === 1 ? ([...unidades][0] ?? null) : null;
+}
+
+/** Convierte una actividad medible en su línea de avance. */
+function lineaDe(a: ObraActivity): ObraLine {
+  const total = a.quantityTotal ?? 0;
+  const done = Math.min(doneOf(a), total);
+  return {
+    id: a.id,
+    name: a.name,
+    unit: a.unit,
+    quantityTotal: total,
+    quantityDone: done,
+    percent: pct(done, total),
+  };
+}
+
+/**
+ * Orden de ejecución: por fecha de programa y, a igualdad, por nombre. El
+ * alfabético no sirve acá porque los cercos van en romanos (A-IX iría antes
+ * que A-V) y las etapas se leerían fuera de secuencia.
+ */
+function porPrograma(x: ObraActivity, y: ObraActivity): number {
+  return (
+    (x.start?.getTime() ?? Number.MAX_SAFE_INTEGER) -
+      (y.start?.getTime() ?? Number.MAX_SAFE_INTEGER) || x.name.localeCompare(y.name, 'es')
+  );
+}
+
+/** ¿La actividad está terminada? Sirve para contar etapas listas de un cerco. */
+function terminada(a: ObraActivity): boolean {
+  const total = a.quantityTotal ?? 0;
+  return total > 0 && doneOf(a) >= total;
+}
+
+/**
+ * Agrupa actividades medibles bajo una etiqueta. El porcentaje es PONDERADO:
+ * una partida grande no puede pesar lo mismo que una chica solo por ser una
+ * línea más de la lista.
+ */
+function agrupar(
+  acts: ObraActivity[],
+  etiqueta: (a: ObraActivity) => string | null,
+  orden?: string[],
+  detalle?: (grupo: ObraActivity[]) => string,
+): ObraLine[] {
+  const mapa = new Map<string, ObraActivity[]>();
+  for (const a of acts) {
+    const clave = etiqueta(a);
+    if (clave === null) continue;
+    const previo = mapa.get(clave);
+    if (previo) previo.push(a);
+    else mapa.set(clave, [a]);
+  }
+  const lineas: ObraLine[] = [...mapa.entries()].map(([nombre, grupo]) => {
+    const { done, total } = acumulado(grupo);
+    return {
+      id: nombre,
+      name: nombre,
+      unit: unidadComun(grupo),
+      quantityTotal: total,
+      quantityDone: done,
+      percent: porcentajeDe(grupo),
+      ...(detalle ? { detail: detalle(grupo) } : {}),
+    };
+  });
+  if (orden) {
+    const posicion = new Map(orden.map((k, i) => [k, i]));
+    return lineas.sort(
+      (x, y) =>
+        (posicion.get(x.name) ?? 999) - (posicion.get(y.name) ?? 999) ||
+        x.name.localeCompare(y.name, 'es'),
+    );
+  }
+  return lineas.sort((x, y) => x.name.localeCompare(y.name, 'es'));
+}
+
 /** Arma el dashboard completo de una obra. */
 export function computeObraDashboard(
   projectId: string,
@@ -188,66 +307,154 @@ export function computeObraDashboard(
   activities: ObraActivity[],
   now: Date,
 ): ObraDashboard {
-  const reales = activities.filter((a) => !a.isMilestone);
-  const totalWeight = reales.reduce((s, a) => s + weightOf(a), 0);
+  // Una actividad con hijas es un AGRUPADOR (un cerco), no algo que se mida:
+  // su avance sale de sus hijas. Medir las dos contaría dos veces la misma obra.
+  const conHijas = new Set(
+    activities.map((a) => a.parentId).filter((id): id is string => !!id),
+  );
+  const porId = new Map(activities.map((a) => [a.id, a]));
+  const medibles = activities.filter((a) => !a.isMilestone && !conHijas.has(a.id));
+
+  const totalWeight = medibles.reduce((s, a) => s + weightOf(a), 0);
 
   // ── Avance real ponderado ──
-  let acc = 0;
-  for (const a of reales) {
-    const w = weightOf(a);
-    const total = a.quantityTotal ?? 0;
-    if (w > 0 && total > 0) acc += w * Math.min(1, doneOf(a) / total);
-  }
-  const realProgress = totalWeight > 0 ? Math.round((acc / totalWeight) * 1000) / 10 : 0;
+  const realProgress =
+    totalWeight > 0 ? Math.round((acumulado(medibles).ponderado / totalWeight) * 1000) / 10 : 0;
 
   // ── Avance planificado a la fecha, con el programa vigente ──
   let accPlan = 0;
-  for (const a of reales) {
+  for (const a of medibles) {
     const w = weightOf(a);
     if (w > 0) accPlan += w * plannedFractionAt(now, a.start, a.end);
   }
   const plannedProgress = totalWeight > 0 ? Math.round((accPlan / totalWeight) * 1000) / 10 : 0;
   const deviation = Math.round((realProgress - plannedProgress) * 10) / 10;
 
-  // ── Fases con sus actividades ──
+  // ── Fases → actividades → etapas ──
   const porFase = new Map<string, ObraActivity[]>();
-  for (const a of reales) {
-    const arr = porFase.get(a.phaseId);
-    if (arr) arr.push(a);
+  for (const a of medibles) {
+    const previo = porFase.get(a.phaseId);
+    if (previo) previo.push(a);
     else porFase.set(a.phaseId, [a]);
   }
-  const phases: ObraPhase[] = [...porFase.entries()].map(([phaseId, acts]) => {
-    const activities2: ObraLine[] = acts.map((a) => {
-      const total = a.quantityTotal ?? 0;
-      const done = Math.min(doneOf(a), total);
+
+  const inicioFase = (acts: ObraActivity[]): number =>
+    Math.min(...acts.map((a) => a.start?.getTime() ?? Number.MAX_SAFE_INTEGER));
+
+  const phases: ObraPhase[] = [...porFase.entries()]
+    .sort(([, a], [, b]) => inicioFase(a) - inicioFase(b))
+    .map(([phaseId, acts]) => {
+    // Dentro de la fase, cada actividad cuelga de su padre (el cerco) o va
+    // suelta (una zanja, un letrero).
+    const porPadre = new Map<string, ObraActivity[]>();
+    for (const a of acts) {
+      const clave = a.parentId ?? a.id;
+      const previo = porPadre.get(clave);
+      if (previo) previo.push(a);
+      else porPadre.set(clave, [a]);
+    }
+
+    const inicioDe = (grupo: ObraActivity[]): number =>
+      Math.min(...grupo.map((a) => a.start?.getTime() ?? Number.MAX_SAFE_INTEGER));
+
+    const lineas: Array<ObraActivityLine & { desde: number }> = [...porPadre.entries()].map(([clave, grupo]) => {
+      const suelta = grupo.length === 1 && grupo[0]?.id === clave;
+      const { done, total } = acumulado(grupo);
+      const cabeza = grupo[0];
       return {
-        id: a.id,
-        name: a.name,
-        unit: a.unit,
+        desde: inicioDe(grupo),
+        id: clave,
+        name: (suelta ? cabeza?.name : porId.get(clave)?.name) ?? clave,
+        unit: suelta ? (cabeza?.unit ?? null) : unidadComun(grupo),
         quantityTotal: total,
         quantityDone: done,
-        percent: pct(done, total),
+        percent: porcentajeDe(grupo),
+        steps: suelta ? [] : grupo.slice().sort(porPrograma).map(lineaDe),
+        stepsDone: suelta ? (terminada(cabeza!) ? 1 : 0) : grupo.filter(terminada).length,
+        stepsTotal: grupo.length,
       };
     });
-    // El % de la fase se pondera igual que el global, no es el promedio simple
-    // de sus actividades: si no, una partida chica pesaría lo mismo que una grande.
-    const wFase = acts.reduce((s, a) => s + weightOf(a), 0);
-    let accFase = 0;
-    for (const a of acts) {
-      const w = weightOf(a);
-      const total = a.quantityTotal ?? 0;
-      if (w > 0 && total > 0) accFase += w * Math.min(1, doneOf(a) / total);
-    }
+
     return {
       id: phaseId,
       name: acts[0]?.phaseName ?? 'Sin fase',
       unit: null,
-      quantityTotal: activities2.reduce((s, x) => s + x.quantityTotal, 0),
-      quantityDone: activities2.reduce((s, x) => s + x.quantityDone, 0),
-      percent: wFase > 0 ? Math.round((accFase / wFase) * 1000) / 10 : 0,
-      activities: activities2,
+      quantityTotal: acumulado(acts).total,
+      quantityDone: acumulado(acts).done,
+      percent: porcentajeDe(acts),
+      activities: lineas
+        .sort((x, y) => x.desde - y.desde || x.name.localeCompare(y.name, 'es'))
+        .map(({ desde: _desde, ...linea }) => linea),
     };
   });
+
+  // ── Cortes transversales ──
+  // Las etapas se ordenan por fecha de ejecución, no alfabéticamente: en la TV
+  // se leen como la secuencia de trabajo real.
+  // Una tarea que cuelga de un cerco ES una etapa de montaje, y su nombre es el
+  // nombre canónico de esa etapa. El tipo y el sector salen del nombre del padre.
+  const etapaDe = (a: ObraActivity): string | null => (a.parentId ? a.name : null);
+  const nombreCerco = (a: ObraActivity): string | null =>
+    a.parentId ? (porId.get(a.parentId)?.name ?? null) : a.name;
+
+  const ordenEtapas = [
+    ...new Set(
+      medibles
+        .slice()
+        .sort((x, y) => (x.start?.getTime() ?? 0) - (y.start?.getTime() ?? 0))
+        .map(etapaDe)
+        .filter((e): e is string => !!e),
+    ),
+  ];
+
+  /** Cuántos cercos distintos hay en un grupo de etapas. */
+  const cuentaCercos = (grupo: ObraActivity[]): string => {
+    const cercos = new Set(grupo.map((a) => a.parentId ?? a.id));
+    return `${cercos.size} ${cercos.size === 1 ? 'cerco' : 'cercos'}`;
+  };
+
+  const breakdowns: ObraBreakdown[] = [];
+  const porEtapa = agrupar(medibles, etapaDe, ordenEtapas);
+  if (porEtapa.length > 0) {
+    breakdowns.push({ key: 'etapa', label: 'Avance por etapa', lines: porEtapa });
+  }
+  const porTipo = agrupar(
+    medibles,
+    (a) => {
+      const tipo = tipoDeCerco(nombreCerco(a));
+      return tipo ? `Cerco tipo ${tipo}` : null;
+    },
+    undefined,
+    cuentaCercos,
+  );
+  if (porTipo.length > 0) {
+    breakdowns.push({ key: 'tipo', label: 'Avance por tipo de cerco', lines: porTipo });
+  }
+  // Cortar por sector solo aporta si hay más de un sector con obra asignada.
+  const porSector = agrupar(
+    medibles.filter((a) => tipoDeCerco(nombreCerco(a)) !== null),
+    (a) => sectorDeCerco(nombreCerco(a)) ?? 'Por definir',
+    undefined,
+    cuentaCercos,
+  );
+  if (porSector.length > 1) {
+    breakdowns.push({ key: 'sector', label: 'Avance por sector', lines: porSector });
+  }
+
+  // ── Últimos avances reportados ──
+  const recent: ObraRecentReport[] = medibles
+    .flatMap((a) => {
+      const padre = a.parentId ? porId.get(a.parentId)?.name : null;
+      return a.progress.map((r) => ({
+        id: r.id,
+        date: dayISO(r.date),
+        activityName: padre ? `${padre} · ${a.name}` : a.name,
+        quantity: r.quantity,
+        unit: a.unit,
+      }));
+    })
+    .sort((x, y) => y.date.localeCompare(x.date) || y.id.localeCompare(x.id))
+    .slice(0, 12);
 
   // ── Hitos ──
   const milestones: ObraMilestone[] = activities
@@ -263,14 +470,14 @@ export function computeObraDashboard(
   // ── Curvas ──
   const dias = timeline(activities);
   const curves = {
-    early: plannedCurve(reales, dias, totalWeight, (a) => a.earlyStart, (a) => a.earlyFinish),
-    scheduled: plannedCurve(reales, dias, totalWeight, (a) => a.start, (a) => a.end),
-    late: plannedCurve(reales, dias, totalWeight, (a) => a.lateStart, (a) => a.lateFinish),
-    real: realCurve(reales, dias, totalWeight),
+    early: plannedCurve(medibles, dias, totalWeight, (a) => a.earlyStart, (a) => a.earlyFinish),
+    scheduled: plannedCurve(medibles, dias, totalWeight, (a) => a.start, (a) => a.end),
+    late: plannedCurve(medibles, dias, totalWeight, (a) => a.lateStart, (a) => a.lateFinish),
+    real: realCurve(medibles, dias, totalWeight),
   };
 
-  const inicios = reales.map((a) => a.start).filter((d): d is Date => d !== null);
-  const fines = reales.map((a) => a.end).filter((d): d is Date => d !== null);
+  const inicios = medibles.map((a) => a.start).filter((d): d is Date => d !== null);
+  const fines = medibles.map((a) => a.end).filter((d): d is Date => d !== null);
 
   return {
     projectId,
@@ -280,10 +487,34 @@ export function computeObraDashboard(
     deviation,
     status: semaforo(deviation),
     phases,
+    breakdowns,
+    recent,
     milestones,
     curves,
-    programStart: inicios.length ? dayISO(new Date(Math.min(...inicios.map((d) => d.getTime())))) : null,
+    programStart: inicios.length
+      ? dayISO(new Date(Math.min(...inicios.map((d) => d.getTime()))))
+      : null,
     programEnd: fines.length ? dayISO(new Date(Math.max(...fines.map((d) => d.getTime())))) : null,
     asOf: dayISO(now),
   };
+}
+
+/**
+ * Convención de nombre de un cerco: `Cerco <CÓDIGO> · <SECTOR>`, por ejemplo
+ * `Cerco A-I · PF8`. El código empieza por el tipo (A, B o C) y el sector es
+ * la zona de la faena; un cerco sin ubicación confirmada va sin sector.
+ *
+ * Vive acá, junto al cálculo, para poder probarla sin base de datos: el
+ * dashboard corta por tipo y por sector leyendo justamente esto.
+ */
+const NOMBRE_CERCO = /^Cerco\s+([ABC])-[IVXLCDM]+(?:\s+·\s+(.+))?$/u;
+
+/** Tipo de cerco (A, B o C) a partir del nombre. `null` si no es un cerco. */
+export function tipoDeCerco(nombre: string | null | undefined): string | null {
+  return NOMBRE_CERCO.exec(nombre ?? '')?.[1] ?? null;
+}
+
+/** Sector de la faena a partir del nombre. `null` si el cerco no tiene ubicación. */
+export function sectorDeCerco(nombre: string | null | undefined): string | null {
+  return NOMBRE_CERCO.exec(nombre ?? '')?.[2]?.trim() || null;
 }

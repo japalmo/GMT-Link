@@ -332,8 +332,9 @@ export class ProjectsService {
         lateStart: true,
         lateFinish: true,
         serviceId: true,
+        parentId: true,
         service: { select: { id: true, name: true } },
-        progress: { select: { date: true, quantity: true }, orderBy: { date: 'asc' } },
+        progress: { select: { id: true, date: true, quantity: true }, orderBy: { date: 'asc' } },
       },
       orderBy: [{ startDate: 'asc' }, { id: 'asc' }],
     });
@@ -352,7 +353,8 @@ export class ProjectsService {
       earlyFinish: t.earlyFinish,
       lateStart: t.lateStart,
       lateFinish: t.lateFinish,
-      progress: t.progress.map((r) => ({ date: r.date, quantity: r.quantity })),
+      parentId: t.parentId,
+      progress: t.progress.map((r) => ({ id: r.id, date: r.date, quantity: r.quantity })),
     }));
 
     return { ...computeObraDashboard(id, name, activities, new Date()), clientName };

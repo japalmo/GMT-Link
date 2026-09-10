@@ -1131,11 +1131,51 @@ export interface ObraLine {
   quantityDone: number;
   /** Ejecutado / total, 0-100. */
   percent: number;
+  /**
+   * Qué mostrar en vez de la cantidad cuando sumarla no significa nada. Un
+   * sector mezcla puntos, unidades y paños: "13 cercos" informa, "0 / 949" no.
+   */
+  detail?: string;
+}
+
+/**
+ * Una actividad de obra que puede subdividirse. En el Cierre Perimetral cada
+ * cerco es una actividad y sus 7 etapas de montaje son sus `steps`; una partida
+ * simple (una zanja, un letrero) llega con `steps` vacío.
+ */
+export interface ObraActivityLine extends ObraLine {
+  steps: ObraLine[];
+  /** Etapas terminadas y total. Es lo que se lee de un cerco: "3 de 7". */
+  stepsDone: number;
+  stepsTotal: number;
 }
 
 /** Una fase de la obra (Gestión, Suministros, Construcción, Cierre). */
 export interface ObraPhase extends ObraLine {
-  activities: ObraLine[];
+  activities: ObraActivityLine[];
+}
+
+/**
+ * Corte transversal del avance. La fase responde "cuánto llevamos"; el corte
+ * responde "en qué". Alimenta los paneles que rotan en la TV de faena:
+ * por etapa de montaje, por tipo de cerco y por sector de la faena.
+ */
+export interface ObraBreakdown {
+  key: 'etapa' | 'tipo' | 'sector';
+  label: string;
+  lines: ObraLine[];
+}
+
+/**
+ * Un avance reportado, para el panel de últimos movimientos. NO lleva quién lo
+ * reportó: el panel es público y no expone nombres de personas.
+ */
+export interface ObraRecentReport {
+  id: string;
+  date: string;
+  activityName: string;
+  quantity: number;
+  unit: string | null;
 }
 
 /** Hito contractual: fecha sin cantidad. No aporta avance, marca compromiso. */
@@ -1163,6 +1203,10 @@ export interface ObraDashboard {
   deviation: number;
   status: ObraStatus;
   phases: ObraPhase[];
+  /** Cortes por etapa, tipo y sector. Vacío si la obra no está desglosada. */
+  breakdowns: ObraBreakdown[];
+  /** Últimos avances reportados, del más nuevo al más viejo. */
+  recent: ObraRecentReport[];
   milestones: ObraMilestone[];
   curves: {
     /** Todo lo antes posible (ventana temprana del CPM). */

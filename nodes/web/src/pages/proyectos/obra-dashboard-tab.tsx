@@ -5,12 +5,13 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { errorToMessage, getObraDashboard } from '@/lib/api';
 import type { ObraDashboard } from '@gmt-platform/contracts';
-import { ObraDashboardPanel } from './obra-dashboard-panel';
+import { ObraTablero } from './obra-tablero';
+import { ObraDetalle } from './obra-detalle';
 
 /**
  * Pestaña Dashboard para proyectos de OBRAS CIVILES: avance físico contra la
- * carta Gantt. Muestra exactamente el mismo panel que el enlace público, para
- * que nadie discuta dos versiones del mismo porcentaje.
+ * carta Gantt. Arriba va el mismo tablero del enlace público; abajo, el
+ * detalle navegable por fase, cerco y etapa.
  */
 export function ObraDashboardTab({
   projectId,
@@ -87,7 +88,11 @@ export function ObraDashboardTab({
         )}
       </div>
 
-      <ObraDashboardPanel data={data} />
+      {/* Arriba, el mismo tablero que se proyecta en faena, para que nadie
+          discuta dos versiones del mismo porcentaje. Abajo, el detalle que la
+          TV no muestra: fase → cerco → etapa. */}
+      <ObraTablero data={data} fijo={false} />
+      <ObraDetalle data={data} />
     </div>
   );
 }

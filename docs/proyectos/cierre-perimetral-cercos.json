@@ -1,0 +1,3516 @@
+{
+  "proyecto": "Cierre Perimetral Mantos Blancos",
+  "fuenteCantidades": "Planos REV-B 09-07-2026 (GMT-PL-CP-TIP-A/B/C-01), aprobados por Felipe Díaz",
+  "fuenteUbicaciones": "Lista de poyos expandida GMT (55 de 63); los 8 restantes quedan pendientes de ubicación",
+  "totalCercos": 63,
+  "porTipo": {
+    "A": 11,
+    "B": 45,
+    "C": 7
+  },
+  "piezasPorTipo": {
+    "A": {
+      "dados": 6,
+      "pilares": 6,
+      "mallas": 5,
+      "puerta": 1,
+      "remaches": 40,
+      "puertaAncho": "2,0 m",
+      "plano": "GMT-PL-CP-TIP-A-01"
+    },
+    "B": {
+      "dados": 7,
+      "pilares": 7,
+      "mallas": 6,
+      "puerta": 1,
+      "remaches": 44,
+      "puertaAncho": "1,2 m",
+      "plano": "GMT-PL-CP-TIP-B-01"
+    },
+    "C": {
+      "dados": 9,
+      "pilares": 9,
+      "mallas": 8,
+      "puerta": 1,
+      "remaches": 36,
+      "puertaAncho": "1,2 m",
+      "plano": "GMT-PL-CP-TIP-C-01"
+    }
+  },
+  "totalesPorEtapa": {
+    "Replanteo topográfico": 63,
+    "Excavación de dados": 444,
+    "Colocación de dados de hormigón": 444,
+    "Montaje de pilares galvanizados": 444,
+    "Montaje de mallas ACMAFOR": 381,
+    "Montaje de puerta": 63,
+    "Remachado y fijaciones": 2672
+  },
+  "cercos": [
+    {
+      "codigo": "A-I",
+      "tipo": "A",
+      "codigoMantos": "PF8-PCV-001",
+      "sector": "PF8",
+      "norte": 7407505,
+      "este": 388647,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-II",
+      "tipo": "A",
+      "codigoMantos": "PF8-PCV-002",
+      "sector": "PF8",
+      "norte": 7407556,
+      "este": 388381,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-III",
+      "tipo": "A",
+      "codigoMantos": "PF8-PCV-003",
+      "sector": "PF8",
+      "norte": 7407602,
+      "este": 388118,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-IV",
+      "tipo": "A",
+      "codigoMantos": "PF8-PCV-004",
+      "sector": "PF8",
+      "norte": 7408313,
+      "este": 387959,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-V",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-001_(PE-01)",
+      "sector": "DGR",
+      "norte": 7407288,
+      "este": 393681,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-VI",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-002_(PE-02)",
+      "sector": "DGR",
+      "norte": 7407409,
+      "este": 393663,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-VII",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-003",
+      "sector": "DGR",
+      "norte": 7407427,
+      "este": 394588,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-VIII",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-004",
+      "sector": "DGR",
+      "norte": 7407506,
+      "este": 394547,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-IX",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-005",
+      "sector": "DGR",
+      "norte": 7407597,
+      "este": 3945,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-X",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-006",
+      "sector": "DGR",
+      "norte": 7407864,
+      "este": 394716,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "A-XI",
+      "tipo": "A",
+      "codigoMantos": "DGR-PCV-007",
+      "sector": "DGR",
+      "norte": 7407798,
+      "este": 394534,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-A-01",
+      "puertaAncho": "2,0 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 6
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 5
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 40
+        }
+      ]
+    },
+    {
+      "codigo": "C-I",
+      "tipo": "C",
+      "codigoMantos": "PF8-ACE-001",
+      "sector": "PF8",
+      "norte": 7407408,
+      "este": 388442,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    },
+    {
+      "codigo": "C-II",
+      "tipo": "C",
+      "codigoMantos": "PF8-ACE-002",
+      "sector": "PF8",
+      "norte": 7407730,
+      "este": 388196,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    },
+    {
+      "codigo": "C-III",
+      "tipo": "C",
+      "codigoMantos": "DC1-ACE-001",
+      "sector": "DC1",
+      "norte": 7406514,
+      "este": 391772,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    },
+    {
+      "codigo": "C-IV",
+      "tipo": "C",
+      "codigoMantos": "DC1-ACE-002",
+      "sector": "DC1",
+      "norte": 7406338,
+      "este": 391736,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    },
+    {
+      "codigo": "C-V",
+      "tipo": "C",
+      "codigoMantos": "DGR-ACE-001",
+      "sector": "DGR",
+      "norte": 7407681,
+      "este": 39431,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    },
+    {
+      "codigo": "C-VI",
+      "tipo": "C",
+      "codigoMantos": "DGR-ACE-002",
+      "sector": "DGR",
+      "norte": 7407598,
+      "este": 395111,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    },
+    {
+      "codigo": "B-I",
+      "tipo": "B",
+      "codigoMantos": "PF8-INC-001",
+      "sector": "PF8",
+      "norte": 7407677,
+      "este": 388403,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-II",
+      "tipo": "B",
+      "codigoMantos": "PF8-PCA-001",
+      "sector": "PF8",
+      "norte": 7407638,
+      "este": 388693,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-III",
+      "tipo": "B",
+      "codigoMantos": "PF8-PCA-002",
+      "sector": "PF8",
+      "norte": 7407677,
+      "este": 388397,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-IV",
+      "tipo": "B",
+      "codigoMantos": "PF8-PCA-003",
+      "sector": "PF8",
+      "norte": 7407707,
+      "este": 388172,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-V",
+      "tipo": "B",
+      "codigoMantos": "PF8-PCA-004",
+      "sector": "PF8",
+      "norte": 7408292,
+      "este": 387999,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-VI",
+      "tipo": "B",
+      "codigoMantos": "PCO-01",
+      "sector": "PCO",
+      "norte": 7407331,
+      "este": 388609,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-VII",
+      "tipo": "B",
+      "codigoMantos": "PCO-02",
+      "sector": "PCO",
+      "norte": 7407446,
+      "este": 388108,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-VIII",
+      "tipo": "B",
+      "codigoMantos": "PCO-03",
+      "sector": "PCO",
+      "norte": 7408193,
+      "este": 387615,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-IX",
+      "tipo": "B",
+      "codigoMantos": "P2-Mercedes",
+      "sector": "P2",
+      "norte": 7407255,
+      "este": 388628,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-X",
+      "tipo": "B",
+      "codigoMantos": "DC1-INC-001",
+      "sector": "DC1",
+      "norte": 7406507,
+      "este": 391735,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XI",
+      "tipo": "B",
+      "codigoMantos": "DC1-INC-002",
+      "sector": "DC1",
+      "norte": 7406538,
+      "este": 391928,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XII",
+      "tipo": "B",
+      "codigoMantos": "DC1-INC-003",
+      "sector": "DC1",
+      "norte": 7406571,
+      "este": 392213,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XIII",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-001_(PZ-1a)",
+      "sector": "DC1",
+      "norte": 7406530,
+      "este": 391561,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XIV",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-002_(SV-09-01)",
+      "sector": "DC1",
+      "norte": 7406529,
+      "este": 39181,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XV",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-003_(PZ-3a)",
+      "sector": "DC1",
+      "norte": 7406564,
+      "este": 392119,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XVI",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-004_(PZ-04)",
+      "sector": "DC1",
+      "norte": 7406592,
+      "este": 392366,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XVII",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-005_(SV-09-05)",
+      "sector": "DC1",
+      "norte": 7406382,
+      "este": 391797,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XVIII",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-006_(SV-09-06)",
+      "sector": "DC1",
+      "norte": 7406433,
+      "este": 392109,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XIX",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-007_(DD-9908)",
+      "sector": "DC1",
+      "norte": 7406445,
+      "este": 392201,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XX",
+      "tipo": "B",
+      "codigoMantos": "DC1-PCA-008",
+      "sector": "DC1",
+      "norte": 7406520,
+      "este": 391791,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXI",
+      "tipo": "B",
+      "codigoMantos": "DGR-INC-001",
+      "sector": "DGR",
+      "norte": 7406810,
+      "este": 393662,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXII",
+      "tipo": "B",
+      "codigoMantos": "DGR-PCA-001",
+      "sector": "DGR",
+      "norte": 7407027,
+      "este": 394259,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXIII",
+      "tipo": "B",
+      "codigoMantos": "DGR-PCA-002",
+      "sector": "DGR",
+      "norte": 7407026,
+      "este": 393624,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXIV",
+      "tipo": "B",
+      "codigoMantos": "DGR-PCA-003_(PC-03)",
+      "sector": "DGR",
+      "norte": 7406674,
+      "este": 393737,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXV",
+      "tipo": "B",
+      "codigoMantos": "DGR-PCA-004_(PC-04)",
+      "sector": "DGR",
+      "norte": 7407200,
+      "este": 394694,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXVI",
+      "tipo": "B",
+      "codigoMantos": "DGR-PCA-005_(PC-05)",
+      "sector": "DGR",
+      "norte": 7407896,
+      "este": 394907,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXVII",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-01_(P-01)",
+      "sector": "DC2",
+      "norte": 7406657,
+      "este": 39251,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXVIII",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-02_(P-02)",
+      "sector": "DC2",
+      "norte": 7406668,
+      "este": 392666,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXIX",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-03_(P-03/PA-09)",
+      "sector": "DC2",
+      "norte": 7406520,
+      "este": 392644,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXX",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-05_(PA-05)",
+      "sector": "DC2",
+      "norte": 7406797,
+      "este": 392585,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXI",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-06_(PA-06)",
+      "sector": "DC2",
+      "norte": 7406750,
+      "este": 39316,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXII",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-07_(PA-07)",
+      "sector": "DC2",
+      "norte": 7406803,
+      "este": 393369,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXIII",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-08_(PA-08)",
+      "sector": "DC2",
+      "norte": 7406956,
+      "este": 393409,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXIV",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-10_(PA-10)",
+      "sector": "DC2",
+      "norte": 7406748,
+      "este": 39315,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXV",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-11_(PA-11)",
+      "sector": "DC2",
+      "norte": 7407110,
+      "este": 393371,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXVI",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-12_(PP-02)",
+      "sector": "DC2",
+      "norte": 7406530,
+      "este": 39271,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXVII",
+      "tipo": "B",
+      "codigoMantos": "DC2-PCA-13_(CR-04)",
+      "sector": "DC2",
+      "norte": 7406585,
+      "este": 393191,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXVIII",
+      "tipo": "B",
+      "codigoMantos": "DC2-INC-01",
+      "sector": "DC2",
+      "norte": 7406732,
+      "este": 393035,
+      "ubicacionConfirmada": true,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XXXIX",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XL",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XLI",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XLII",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XLIII",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XLIV",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "B-XLV",
+      "tipo": "B",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-B-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 7
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 6
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 44
+        }
+      ]
+    },
+    {
+      "codigo": "C-VII",
+      "tipo": "C",
+      "codigoMantos": null,
+      "sector": null,
+      "norte": null,
+      "este": null,
+      "ubicacionConfirmada": false,
+      "plano": "GMT-PL-CP-TIP-C-01",
+      "puertaAncho": "1,2 m",
+      "etapas": [
+        {
+          "orden": 1,
+          "nombre": "Replanteo topográfico",
+          "unidad": "pto",
+          "cantidad": 1
+        },
+        {
+          "orden": 2,
+          "nombre": "Excavación de dados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 3,
+          "nombre": "Colocación de dados de hormigón",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 4,
+          "nombre": "Montaje de pilares galvanizados",
+          "unidad": "un",
+          "cantidad": 9
+        },
+        {
+          "orden": 5,
+          "nombre": "Montaje de mallas ACMAFOR",
+          "unidad": "paño",
+          "cantidad": 8
+        },
+        {
+          "orden": 6,
+          "nombre": "Montaje de puerta",
+          "unidad": "un",
+          "cantidad": 1
+        },
+        {
+          "orden": 7,
+          "nombre": "Remachado y fijaciones",
+          "unidad": "un",
+          "cantidad": 36
+        }
+      ]
+    }
+  ]
+}

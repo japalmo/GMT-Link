@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
-import { HardHat } from 'lucide-react';
-import { BrandLogo } from '@/components/branding/brand-logo';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { errorToMessage, getPublicObraDashboard } from '@/lib/api';
 import type { ObraDashboard } from '@gmt-platform/contracts';
-import { ObraDashboardPanel, fechaLarga } from '@/pages/proyectos/obra-dashboard-panel';
+import { ObraTablero, fechaLarga } from '@/pages/proyectos/obra-tablero';
+import gmtLogo from '@/assets/branding/gmt-corporativo.png';
 
 /** Cada cuánto se refresca solo. La TV de faena queda encendida todo el día. */
 const REFRESCO_MS = 5 * 60_000;
 
 /**
- * Dashboard público de una obra, por token opaco. Es el mismo panel de la
- * plataforma, sin sesión y sin datos internos: solo avance físico, hitos y
- * fechas. Se abre en la TV de faena y se comparte con el cliente.
+ * Tablero público de una obra, por token opaco. Sin sesión y sin datos
+ * internos: solo avance físico, hitos y fechas. Se proyecta en la TV de faena
+ * y se comparte con el cliente.
+ *
+ * En TV y notebook entra completo en una pantalla (`h-dvh`, sin scroll); en
+ * móvil el alto se suelta, porque comprimirlo ahí lo dejaría ilegible.
  */
 export default function PublicObraDashboardPage(): ReactNode {
   const { token } = useParams<{ token: string }>();
@@ -54,8 +56,8 @@ export default function PublicObraDashboardPage(): ReactNode {
   }, [load]);
 
   /*
-   * El panel es público pero NO indexable: si Google lo rastrea, el avance de
-   * cada obra queda buscable sin que nadie comparta el link. Como es una SPA,
+   * El tablero es público pero NO indexable: si Google lo rastrea, el avance de
+   * cada obra queda buscable sin que nadie comparta el enlace. Como es una SPA,
    * la etiqueta se pone al montar y se retira al salir para no dejar marcado el
    * resto de la aplicación.
    */
@@ -69,46 +71,54 @@ export default function PublicObraDashboardPage(): ReactNode {
     };
   }, []);
 
+  const hora = actualizado
+    ? actualizado.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : null;
+
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-8">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <HardHat className="size-6" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold sm:text-2xl">
-                {data?.projectName ?? 'Avance de obra'}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {data?.clientName ? `${data.clientName} · ` : ''}Avance físico de obra
-              </p>
-            </div>
+    <div className="flex min-h-dvh flex-col bg-background md:h-dvh md:overflow-hidden">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4 py-2.5 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          {/* El logo corporativo va sobre blanco: el isotipo es navy sobre
+              transparente y se perdería contra el fondo oscuro del tema. */}
+          <span className="flex shrink-0 items-center rounded-md bg-white px-2 py-1">
+            <img src={gmtLogo} alt="GMT" className="h-7 w-auto sm:h-8" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-bold leading-tight sm:text-xl">
+              {data?.projectName ?? 'Avance de obra'}
+            </h1>
+            <p className="truncate text-xs text-muted-foreground sm:text-sm">
+              {data?.clientName ? `${data.clientName} · ` : ''}Avance físico de obra
+            </p>
           </div>
-          <BrandLogo className="h-12 shrink-0" />
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Datos al
+          </p>
+          <p className="text-sm font-bold tabular-nums sm:text-base">
+            {fechaLarga(data?.asOf ?? null)}
+          </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-8 sm:py-8">
+      <main className="flex min-h-0 flex-1 flex-col px-3 py-3 sm:px-6 sm:py-4">
         {loading && <LoadingState rows={6} label="Cargando el avance de la obra…" />}
         {!loading && error && <ErrorState message={error} onRetry={() => load()} />}
-        {!loading && !error && data && <ObraDashboardPanel data={data} size="tv" />}
+        {!loading && !error && data && <ObraTablero data={data} />}
       </main>
 
-      <footer className="mx-auto max-w-[1600px] px-4 pb-8 text-xs text-muted-foreground sm:px-8">
-        <p>
-          Datos al {fechaLarga(data?.asOf ?? null)}
-          {actualizado
-            ? ` · pantalla actualizada a las ${actualizado.toLocaleTimeString('es-CL', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-              })}`
-            : ''}
-          . Se actualiza solo cada 5 minutos.
-        </p>
-        <p className="mt-1">GMT Link · avance físico informado por el equipo de obra.</p>
+      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-card px-4 py-1.5 text-[11px] text-muted-foreground sm:px-6">
+        <span>GMT Link · avance físico informado por el equipo de obra.</span>
+        <span className="tabular-nums">
+          {hora ? `Pantalla actualizada a las ${hora} · ` : ''}se actualiza sola cada 5 minutos.
+        </span>
       </footer>
     </div>
   );

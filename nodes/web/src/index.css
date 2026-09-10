@@ -162,6 +162,14 @@
   --animate-overlay-out: overlay-out 120ms ease-in;
   --animate-content-in: content-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-content-out: content-out 130ms ease-in;
+
+  /* Tablero de obra: los paneles rotan solos en la TV de faena y cada uno
+     entra animado. `turno` dibuja cuánto le queda al panel en pantalla. */
+  --animate-panel: panel-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-entrada: entrada 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-barra: barra 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-trazo: trazo 1100ms ease-out both;
+  --animate-turno: turno 13s linear both;
 }
 
 @keyframes overlay-in {
@@ -179,6 +187,41 @@
 @keyframes content-out {
   from { opacity: 1; }
   to { opacity: 0; }
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes entrada {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: none; }
+}
+/* La barra crece hasta el porcentaje que le pasa el componente en --barra. */
+@keyframes barra {
+  from { width: 0; }
+  to { width: var(--barra, 0%); }
+}
+/* La curva real se dibuja sola: se traza el path desde el inicio del programa. */
+@keyframes trazo {
+  from { stroke-dasharray: 0 4000; }
+  to { stroke-dasharray: 4000 0; }
+}
+@keyframes turno {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Quien pidió menos movimiento ve el mismo tablero, pero sin animaciones. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-panel,
+  .animate-entrada,
+  .animate-barra,
+  .animate-trazo,
+  .animate-turno {
+    animation: none !important;
+  }
+  .animate-barra { width: var(--barra, 0%); }
 }
 
 /* Estado base de la app: el borde por defecto usa el token, y el body hereda
