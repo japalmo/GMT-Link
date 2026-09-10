@@ -5,6 +5,7 @@ import { errorToMessage, getPublicObraDashboard } from '@/lib/api';
 import type { ObraDashboard } from '@gmt-platform/contracts';
 import { ObraTablero, fechaLarga } from '@/pages/proyectos/obra-tablero';
 import gmtLogo from '@/assets/branding/gmt-corporativo.png';
+import isoLogo from '@/assets/branding/iso-9001-bureau-veritas.png';
 
 /** Cada cuánto se refresca solo. La TV de faena queda encendida todo el día. */
 const REFRESCO_MS = 5 * 60_000;
@@ -98,13 +99,24 @@ export default function PublicObraDashboardPage(): ReactNode {
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Datos al
-          </p>
-          <p className="text-sm font-bold tabular-nums sm:text-base">
-            {fechaLarga(data?.asOf ?? null)}
-          </p>
+        <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+          {/* Certificación del sistema de gestión de GMT. Va sobre blanco por lo
+              mismo que el logo corporativo: el sello es gris sobre transparente. */}
+          <span className="hidden items-center rounded-md bg-white px-2 py-1 sm:flex">
+            <img
+              src={isoLogo}
+              alt="Certificación ISO 9001 otorgada por Bureau Veritas"
+              className="h-7 w-auto sm:h-8"
+            />
+          </span>
+          <div className="text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Datos al
+            </p>
+            <p className="text-sm font-bold tabular-nums sm:text-base">
+              {fechaLarga(data?.asOf ?? null)}
+            </p>
+          </div>
         </div>
       </header>
 

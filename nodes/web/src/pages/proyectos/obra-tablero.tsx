@@ -618,7 +618,7 @@ function Leyenda({
 function Barras({ lineas, detalle }: { lineas: ObraLine[]; detalle?: string[] }): ReactNode {
   if (lineas.length === 0) return <Vacio mensaje="Sin datos para este corte." />;
   return (
-    <ul className="flex h-full min-h-0 flex-col justify-around gap-1.5 overflow-hidden">
+    <ul className="flex h-full min-h-0 flex-col justify-around gap-1.5 overflow-y-auto">
       {lineas.map((l, i) => (
         <li key={l.id} className="min-w-0">
           <div className="flex items-baseline justify-between gap-3">
@@ -653,7 +653,7 @@ function Barras({ lineas, detalle }: { lineas: ObraLine[]; detalle?: string[] })
 
 function Hitos({ items }: { items: ObraMilestone[] }): ReactNode {
   return (
-    <ol className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-hidden">
+    <ol className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto">
       {items.map((h, i) => (
         <li
           key={h.id}
@@ -689,7 +689,7 @@ function Hitos({ items }: { items: ObraMilestone[] }): ReactNode {
 
 function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
   return (
-    <ul className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-hidden">
+    <ul className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto">
       {items.slice(0, 8).map((r, i) => (
         <li
           key={r.id}
