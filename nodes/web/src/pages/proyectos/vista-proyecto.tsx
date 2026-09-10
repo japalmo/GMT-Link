@@ -88,6 +88,7 @@ import { formatDate } from '@/lib/format';
 import { openProjectDocumentFileInNewTab } from '@/components/documents/project-document-file';
 import { ActividadesTab } from './actividades-tab';
 import { DashboardTab } from './dashboard-tab';
+import { ObraDashboardTab } from './obra-dashboard-tab';
 import type {
   ProjectType,
   ServiceFrequency,
@@ -160,6 +161,8 @@ type ProjectDetail = ProjectView & {
   contractNumber?: string | null;
   frequency?: ServiceFrequency | null;
   description?: string | null;
+  /** Credencial del dashboard público de obra (mismo patrón que la ficha de activos). */
+  publicToken?: string | null;
 };
 
 type ServiceWithFrequency = ServiceView & { frequency?: ServiceFrequency | null };
@@ -412,7 +415,14 @@ export default function VistaProyectoPage(): ReactNode {
 
       {/* Contenido del tab */}
       <TabPanel idBase={idBase} value={tab}>
-        {tab === 'dashboard' && <DashboardTab projectId={project.id} />}
+        {/* Obras civiles miden avance FÍSICO contra la carta Gantt; el resto,
+            avance de producción por actividades listas. Son dashboards distintos. */}
+        {tab === 'dashboard' &&
+          (projectType === 'OBRAS_CIVILES' ? (
+            <ObraDashboardTab projectId={project.id} publicToken={detail?.publicToken ?? null} />
+          ) : (
+            <DashboardTab projectId={project.id} />
+          ))}
         {tab === 'trabajadores' && canManageTeam && (
           <TrabajadoresTab projectId={project.id} />
         )}

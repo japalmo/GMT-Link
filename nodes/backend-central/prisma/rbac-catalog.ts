@@ -137,11 +137,34 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // admin. FUNCTIONAL org-scope (siempre GLOBAL); los endpoints lo honran ADEMÁS
   // del respaldo de visibilidad (asset:read funcional o gate estructural por-activo).
   { key: 'asset:use:report', label: 'Reportar uso de activos (conductor)', module: 'recursos', kind: 'FUNCTIONAL', scopeable: false },
+  // ── soporte TI (PR-TI-01) ──
+  // Todos FUNCTIONAL org-scope: un ticket no cuelga de un proyecto, cuelga del
+  // ÁREA que lo levanta, así que no hay nada que delegar a OpenFGA. El alcance
+  // "solo los míos" lo resuelve el servicio con un filtro por requesterId, igual
+  // que `finance:request:create` con las solicitudes propias.
+  { key: 'ticket:create', label: 'Levantar ticket a Informática', module: 'soporte', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'ticket:read:own', label: 'Ver mis tickets', module: 'soporte', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'ticket:read:all', label: 'Ver todos los tickets', module: 'soporte', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'ticket:triage', label: 'Clasificar y mover tickets', module: 'soporte', kind: 'FUNCTIONAL', scopeable: false },
 ];
 
 /** Todo el catálogo a GLOBAL EXCEPTO system:beta:full (org_admin / admin_ti). */
 const ALL_GLOBAL_EXCEPT_BETA = (): ReadonlyArray<{ perm: string; scope: Scope }> =>
   PERMISSIONS.filter((p) => p.key !== 'system:beta:full').map((p) => g(p.key, 'GLOBAL'));
+
+/**
+ * Levantar un ticket a Informática y seguir los propios es un derecho BASE de
+ * todo rol INTERNO (PR-TI-01: "cualquier área levanta una solicitud"). Se declara
+ * en los mismos bundles que `finance:request:create`, por el mismo criterio.
+ * Quedan FUERA a propósito: `client_ito` (es cliente, no personal de GMT) y los
+ * roles COMPLEMENTARIOS conductor / vehicle_admin, que se suman al rol base del
+ * trabajador y por eso no necesitan repetirlo. org_admin y admin_ti ya lo reciben
+ * vía ALL_GLOBAL_EXCEPT_BETA.
+ */
+const TICKET_BASE: ReadonlyArray<{ perm: string; scope: Scope }> = [
+  g('ticket:create', 'GLOBAL'),
+  g('ticket:read:own', 'GLOBAL'),
+];
 
 /**
  * Roles = bundles (§3.1). Keys alineadas con las relaciones de §4.3. `isSystem`.
@@ -183,13 +206,14 @@ export const ROLES: ReadonlyArray<RoleDef> = [
   {
     key: 'trabajador',
     label: 'Trabajador',
-    grants: [g('finance:request:create', 'GLOBAL')],
+    grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE],
   },
   {
     key: 'admin_contrato',
     label: 'Administrador de Contrato',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      ...TICKET_BASE,
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:request:approve', 'GLOBAL'),
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
@@ -203,6 +227,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Administrador de Finanzas',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      ...TICKET_BASE,
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:request:approve', 'GLOBAL'),
       g('finance:payment:register', 'GLOBAL'),
@@ -219,6 +244,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Analista de RH',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      ...TICKET_BASE,
       g('finance:overtime:view:all', 'GLOBAL'),
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:worker', 'GLOBAL'),
@@ -229,6 +255,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Analista de Finanzas',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      ...TICKET_BASE,
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:payment:register', 'GLOBAL'),
       g('finance:print:batch', 'GLOBAL'),
@@ -239,6 +266,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Asesor HSE',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      ...TICKET_BASE,
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:hse', 'GLOBAL'),
     ],
@@ -248,6 +276,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
     label: 'Gerencia de Proyectos',
     grants: [
       g('finance:request:create', 'GLOBAL'),
+      ...TICKET_BASE,
       g('finance:request:view:all', 'GLOBAL'),
       g('finance:request:approve', 'GLOBAL'),
       g('finance:overtime:create:onbehalf', 'GLOBAL'),
@@ -256,8 +285,10 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('asset:checklist:run:any', 'GLOBAL'),
     ],
   },
-  { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
-  { key: 'gerencia_general', label: 'Gerencia General', grants: [g('finance:request:create', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
+  { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('system:beta:full', 'GLOBAL')] },
+  // Gerencia General ve TODOS los tickets (visibilidad de la cola de Informática),
+  // pero NO hace triage: clasificar y mover es de admin_ti / org_admin.
+  { key: 'gerencia_general', label: 'Gerencia General', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('ticket:read:all', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
   { key: 'admin_ti', label: 'Administrador TI', grants: ALL_GLOBAL_EXCEPT_BETA() },
   // ── Rol de sistema Conductor (flota de vehículos): reporta uso (tomar/liberar
   //    la disputa "en uso") y ejecuta el checklist de cualquier activo. Es un rol

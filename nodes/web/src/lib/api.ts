@@ -20,7 +20,7 @@ import type {
   UploadDocumentFields,
 } from '@/types/documents';
 import type { DashboardLayoutItem, DashboardView } from '@/types/dashboard';
-import type { ProjectDashboard } from '@gmt-platform/contracts';
+import type { ObraDashboard, ProjectDashboard } from '@gmt-platform/contracts';
 import type {
   CreateOvertimeInput,
   CreateReimbursementInput,
@@ -62,6 +62,15 @@ import type {
   UserMembership,
   UserStatus,
   WorkScheduleView,
+  TicketView,
+  TicketQueueStats,
+  TicketType,
+  TicketStatus,
+  TicketLane,
+  TicketSize,
+  TicketPriority,
+  TicketPeopleAffected,
+  TicketFrequency,
 } from '@gmt-platform/contracts';
 
 // Re-export para consumidores del front (enmienda A15: los tipos viven en
@@ -78,6 +87,17 @@ export type {
   UpsertWorkScheduleInput,
   UserMembership,
   WorkScheduleView,
+  TicketView,
+  TicketEventView,
+  TicketAllowedTransition,
+  TicketQueueStats,
+  TicketType,
+  TicketStatus,
+  TicketLane,
+  TicketSize,
+  TicketPriority,
+  TicketPeopleAffected,
+  TicketFrequency,
 } from '@gmt-platform/contracts';
 import type {
   ProjectView,
@@ -231,6 +251,7 @@ async function uploadRequest<T>(
   path: string,
   formData: FormData,
   method = 'POST',
+  signal?: AbortSignal,
 ): Promise<T> {
   const headers = new Headers();
   const token = getToken();
@@ -238,8 +259,11 @@ async function uploadRequest<T>(
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { method, body: formData, headers });
-  } catch {
+    res = await fetch(`${API_URL}${path}`, { method, body: formData, headers, signal });
+  } catch (err) {
+    // Un abort (timeout o cancelación del llamador) se propaga tal cual, para que
+    // quien llama lo distinga de una caída de red y no lo reporte como error.
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     throw new ApiError('No se pudo conectar con el servidor.', 0);
   }
 
@@ -1450,10 +1474,10 @@ export interface ReceiptScanResult {
  * `POST /reimbursements/scan-receipt` — OCR NVIDIA de la boleta (multipart `file`).
  * Devuelve campos sugeridos (parciales); el usuario los corrige antes de crear.
  */
-export function scanReceipt(file: File): Promise<ReceiptScanResult> {
+export function scanReceipt(file: File, signal?: AbortSignal): Promise<ReceiptScanResult> {
   const formData = new FormData();
   formData.append('file', file);
-  return uploadRequest<ReceiptScanResult>('/reimbursements/scan-receipt', formData);
+  return uploadRequest<ReceiptScanResult>('/reimbursements/scan-receipt', formData, 'POST', signal);
 }
 
 /**
@@ -2835,6 +2859,23 @@ export function getProjectDashboard(id: string): Promise<ProjectDashboard> {
 }
 
 /**
+ * `GET /projects/:id/obra-dashboard` — avance FÍSICO de una obra civil contra
+ * su carta Gantt (cantidades ejecutadas, hitos y curva S). Distinto del
+ * dashboard de producción, que mide actividades listas.
+ */
+export function getObraDashboard(id: string): Promise<ObraDashboard> {
+  return request<ObraDashboard>(`/projects/${encodeURIComponent(id)}/obra-dashboard`);
+}
+
+/**
+ * Mismo dashboard resuelto por el token público del proyecto y SIN sesión: es
+ * lo que se proyecta en la TV de faena y lo que se comparte con el cliente.
+ */
+export function getPublicObraDashboard(token: string): Promise<ObraDashboard> {
+  return request<ObraDashboard>(`/projects/public/${encodeURIComponent(token)}/obra-dashboard`);
+}
+
+/**
  * `PATCH /projects/:id` — edita un proyecto. En este corte SOLO `name`/
  * `description` ({@link UpdateProjectInput}). Devuelve el proyecto actualizado.
  */
@@ -2957,4 +2998,92 @@ export function getPublicAssetDocumentUrl(token: string, docId: string): Promise
   return request<{ url: string }>(
     `/assets/public/${encodeURIComponent(token)}/documents/${encodeURIComponent(docId)}/file-url`,
   );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Soporte TI (PR-TI-01)
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** `POST /tickets` — levanta un ticket y lo deja ENVIADO (correlativo y SLA los pone el servidor). */
+export function createTicket(dto: {
+  type: TicketType;
+  title: string;
+  departmentId: string;
+  faenaId?: string;
+  projectId?: string;
+  managerName: string;
+  managerAck: boolean;
+  module: string;
+  expected: string;
+  impact: string;
+  peopleAffected: TicketPeopleAffected;
+  frequency: TicketFrequency;
+  dueDate?: string;
+  milestone?: string;
+}): Promise<TicketView> {
+  return request<TicketView>('/tickets', { method: 'POST', body: JSON.stringify(dto) });
+}
+
+/** `GET /tickets/mine` — bandeja del solicitante. */
+export function listMyTickets(): Promise<TicketView[]> {
+  return request<TicketView[]>('/tickets/mine');
+}
+
+/** `GET /tickets/table` — panel de Informática (motor de tablas server-side). */
+export function fetchTicketsTable(req: TableRequest): Promise<TablePage<TicketView>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return request<TablePage<TicketView>>(`/tickets/table?${query.toString()}`);
+}
+
+/** `GET /tickets/stats` — contadores del panel. */
+export function getTicketStats(): Promise<TicketQueueStats> {
+  return request<TicketQueueStats>('/tickets/stats');
+}
+
+/**
+ * `GET /tickets/:id` — detalle con bitácora y `allowedTransitions` YA calculadas
+ * por el servidor: el front pinta solo esos botones, no reimplementa las reglas.
+ */
+export function getTicket(id: string): Promise<TicketView> {
+  return request<TicketView>(`/tickets/${encodeURIComponent(id)}`);
+}
+
+/** `PATCH /tickets/:id/triage` — clasificación de Informática. */
+export function triageTicket(
+  id: string,
+  dto: { lane?: TicketLane; size?: TicketSize; priority?: TicketPriority; assignedToId?: string },
+): Promise<TicketView> {
+  return request<TicketView>(`/tickets/${encodeURIComponent(id)}/triage`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `PATCH /tickets/:id/status` — transición validada contra la máquina de estados. */
+export function transitionTicket(
+  id: string,
+  dto: { to: TicketStatus; comment?: string },
+): Promise<TicketView> {
+  return request<TicketView>(`/tickets/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
+  });
+}
+
+/** `POST /tickets/:id/comments` — comentario en la bitácora, sin cambiar de estado. */
+export function commentTicket(id: string, comment: string): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/tickets/${encodeURIComponent(id)}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ comment }),
+  });
 }

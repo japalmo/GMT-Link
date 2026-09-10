@@ -57,6 +57,14 @@ function getTodayString(): string {
 /** Formato YYYY-MM-DD (necesario para comparar fechas como strings). */
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Tope de espera del OCR. El escaneo es una AYUDA para autocompletar, nunca un
+ * requisito: si NVIDIA no responde dentro de este plazo se corta y el usuario
+ * llena a mano. Sin este tope el `fetch` puede quedarse colgado y dejaba el
+ * formulario sin poder enviarse.
+ */
+const SCAN_TIMEOUT_MS = 20_000;
+
 /** Mapea el string de categoría del OCR a nuestro enum (best-effort). */
 function normalizeCategory(raw: string | undefined): ReimbursementCategory | '' {
   if (!raw) return '';
@@ -134,6 +142,8 @@ export function ReembolsoFormDialog({
 
   const uploadRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  /** Escaneo OCR en vuelo, para poder cortarlo por timeout o al enviar. */
+  const scanAbortRef = useRef<AbortController | null>(null);
 
   // Ventana de fecha del gasto (misma regla que el backend): todo el mes en curso,
   // [día 1 del mes, hoy], en día calendario de Chile. Comparables como strings por
@@ -203,10 +213,19 @@ export function ReembolsoFormDialog({
   }, [category, vehiclesLoaded]);
 
   const handleScan = async (file: File): Promise<void> => {
+    // Solo interesa el último escaneo: si había uno en vuelo (otra boleta), se cancela.
+    scanAbortRef.current?.abort();
+    const controller = new AbortController();
+    scanAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
+    const isCurrent = (): boolean => scanAbortRef.current === controller;
+
     setScanning(true);
     setError(null);
     try {
-      const res = await scanReceipt(file);
+      const res = await scanReceipt(file, controller.signal);
+      // Un escaneo superado (o cancelado al enviar) no debe pisar lo ya escrito.
+      if (!isCurrent()) return;
       if (res.concept) setConcept(res.concept);
       if (typeof res.amount === 'number' && res.amount > 0) setAmount(String(Math.round(res.amount)));
       if (res.date) {
@@ -227,9 +246,15 @@ export function ReembolsoFormDialog({
       const cat = normalizeCategory(res.category);
       if (cat) setCategory(cat);
     } catch {
-      setError('No se pudo leer la boleta automáticamente. Completa los campos a mano.');
+      if (isCurrent()) {
+        setError('No se pudo leer la boleta automáticamente. Completa los campos a mano.');
+      }
     } finally {
-      setScanning(false);
+      window.clearTimeout(timeoutId);
+      if (isCurrent()) {
+        scanAbortRef.current = null;
+        setScanning(false);
+      }
     }
   };
 
@@ -244,6 +269,11 @@ export function ReembolsoFormDialog({
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
+    // El OCR no puede retrasar el envío ni pisar después lo que el usuario
+    // escribió: si quedaba uno en vuelo, se corta aquí mismo.
+    scanAbortRef.current?.abort();
+    scanAbortRef.current = null;
+    setScanning(false);
     setError(null);
 
     const parsedAmount = parseInt(amount, 10);
@@ -357,8 +387,8 @@ export function ReembolsoFormDialog({
                 </span>
               )}
             </div>
-            {/* Aviso de espera: el OCR (NVIDIA) tarda varios segundos; se avisa al
-                usuario para que no cierre ni reenvíe el formulario mientras corre. */}
+            {/* Aviso de espera: el OCR (NVIDIA) tarda varios segundos. Se aclara que
+                NO hay que esperarlo, porque el envío ya no depende del escaneo. */}
             {scanning && (
               <div
                 role="status"
@@ -369,7 +399,7 @@ export function ReembolsoFormDialog({
                 <span>
                   <span className="font-medium">Estamos interpretando la boleta…</span>{' '}
                   <span className="text-muted-foreground">
-                    Puede tardar unos segundos. No cierres ni reenvíes el formulario mientras tanto.
+                    No hace falta esperar: completa los campos a mano y crea la solicitud cuando quieras.
                   </span>
                 </span>
               </div>
@@ -551,7 +581,9 @@ export function ReembolsoFormDialog({
                 Cancelar
               </Button>
             </ModalClose>
-            <Button type="submit" loading={submitting} disabled={scanning}>
+            {/* Sin `disabled={scanning}`: el OCR es opcional y jamás debe impedir
+                crear la solicitud. Si el escaneo sigue corriendo, enviar lo corta. */}
+            <Button type="submit" loading={submitting}>
               {isEdit ? 'Guardar cambios' : 'Crear solicitud'}
             </Button>
           </ModalFooter>

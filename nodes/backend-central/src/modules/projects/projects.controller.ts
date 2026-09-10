@@ -13,6 +13,7 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { RequirePermission } from '../../authz/require-permission.decorator';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
@@ -93,6 +94,21 @@ export class ProjectsController {
   }
 
   /**
+   * Dashboard PÚBLICO de avance de obra, sin sesión: es lo que se proyecta en la
+   * TV de faena y el link que se comparte con el cliente.
+   *
+   * Va declarado ANTES de `@Get(':id')` a propósito: si quedara después, "public"
+   * podría interpretarse como un id de proyecto. El token opaco es la única
+   * credencial, igual que en la ficha pública de vehículos, y el servicio expone
+   * solo avance físico, hitos y fechas.
+   */
+  @Throttle({ default: { limit: 60, ttl: 60_000 } }) // 60/min por IP: la TV refresca sola
+  @Get('public/:token/obra-dashboard')
+  getPublicObraDashboard(@Param('token') token: string) {
+    return this.projects.getPublicObraDashboard(token);
+  }
+
+  /**
    * Detalle de un proyecto.
    */
   @Get(':id')
@@ -117,6 +133,20 @@ export class ProjectsController {
   ) {
     this.requireUserId(authUser);
     return this.projects.getDashboard(id);
+  }
+
+  /**
+   * Dashboard de avance de OBRA (avance físico por cantidad contra la carta
+   * Gantt). Mismo gate de visibilidad que el detalle.
+   */
+  @Get(':id/obra-dashboard')
+  @RequirePermission('can_view', { type: 'project', param: 'id' })
+  getObraDashboard(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    this.requireUserId(authUser);
+    return this.projects.getObraDashboard(id);
   }
 
   /**

@@ -25,10 +25,21 @@ const prisma = new PrismaClient();
  * `admin` de un departamento deriva del `admin` de la organización (model.fga),
  * así que el org_admin es admin de todos.
  */
+/**
+ * Las 7 áreas ORGANIZACIONALES reales de GMT (definidas por Juan, 2026-09-09).
+ * OJO: antes había aquí 'GEO' y 'TOP', que son líneas de SERVICIO, no áreas. Se
+ * borraron de la base y hay que mantenerlas fuera de esta lista: el seed corre
+ * en CADA arranque de la API, así que cualquier código que vuelva acá reaparece
+ * en producción al siguiente despliegue.
+ */
 const DEPARTMENTS = [
   { code: 'OPS', name: 'Operaciones' },
-  { code: 'GEO', name: 'Geofísica y Geotecnia' },
-  { code: 'TOP', name: 'Topografía' },
+  { code: 'RRHH', name: 'Recursos Humanos' },
+  { code: 'OOCC', name: 'Obras Civiles' },
+  { code: 'TIC', name: 'TI' },
+  { code: 'COM', name: 'Compras' },
+  { code: 'GER', name: 'Gerencia General' },
+  { code: 'LEG', name: 'Legal' },
 ];
 
 async function main(): Promise<void> {

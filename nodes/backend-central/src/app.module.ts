@@ -28,6 +28,7 @@ import { PrismaModule } from './prisma/prisma.module';
 
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { TicketsModule } from './modules/tickets/tickets.module';
 import { ProjectDocumentsModule } from './modules/project-documents/project-documents.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { ToolsModule } from './modules/tools/tools.module';
@@ -69,6 +70,7 @@ import { SignaturesModule } from './modules/signatures/signatures.module';
     ProjectsModule,
     ServiceTypesModule,
     TasksModule,
+    TicketsModule,
     ProjectDocumentsModule,
     AssetsModule,
     ToolsModule,

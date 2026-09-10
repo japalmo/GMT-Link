@@ -4,8 +4,23 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gmt-platform/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@gmt-platform/web",
+        "dev"
+      ],
       "port": 5173,
+      "autoPort": false
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@gmt-platform/backend-central",
+        "dev"
+      ],
+      "port": 3001,
       "autoPort": false
     }
   ]

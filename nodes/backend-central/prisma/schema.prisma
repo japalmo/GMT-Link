@@ -12,15 +12,15 @@ datasource db {
 
 // ============ IDENTIDAD ============
 model User {
-  id                     String                    @id @default(cuid())
-  firstName              String
-  secondName             String?
-  lastName               String
-  secondLastName         String?
-  email                  String                    @unique // compat (§4.1 D1): siempre poblado = emailInstitucional ?? emailPersonal
-  username               String                    @unique // login por username (default = prefijo del email institucional)
-  emailInstitucional     String?                   @unique // uno de {emailInstitucional, emailPersonal} obligatorio
-  emailPersonal          String?
+  id                         String                      @id @default(cuid())
+  firstName                  String
+  secondName                 String?
+  lastName                   String
+  secondLastName             String?
+  email                      String                      @unique // compat (§4.1 D1): siempre poblado = emailInstitucional ?? emailPersonal
+  username                   String                      @unique // login por username (default = prefijo del email institucional)
+  emailInstitucional         String?                     @unique // uno de {emailInstitucional, emailPersonal} obligatorio
+  emailPersonal              String?
   // Verificación de correo (feature verificación de correo/contraseña):
   // timestamp de la verificación por OTP de cada correo; null = sin verificar.
   emailInstitucionalVerified DateTime?
@@ -30,68 +30,74 @@ model User {
   // se abandona el flujo, sin efecto: el correo real no cambia hasta confirmar).
   pendingEmail               String?
   pendingEmailKind           EmailKind?
-  avatarUrl              String?
-  cargo                  String? // cargo/puesto declarado (texto libre, opcional); se muestra en el directorio
-  passwordHash           String? // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
-  status                 UserStatus                @default(PENDING_FIRST_LOGIN)
-  tokenVersion           Int                       @default(0) // época de sesión (A3): incrementar invalida todos los JWT previos del usuario
-  firstLoginAt           DateTime? // primer acceso completado; null = invitación aún no usada
-  failedLoginAttempts    Int                       @default(0) // #67 lockout: intentos fallidos consecutivos; se resetea al ingresar ok o recuperar clave
-  lockedUntil            DateTime? // #67 lockout: si > now, la cuenta está bloqueada temporalmente por exceso de intentos
-  lastRecoveryAt         DateTime? // #66 cooldown: última recuperación de clave iniciada; limita reenvío/rotación por cuenta (anti email-bombing/DoS)
-  points                 Int                       @default(0) // gamificación
-  isClientUser           Boolean                   @default(false)
-  clientId               String?
-  client                 Client?                   @relation(fields: [clientId], references: [id])
-  memberships            Membership[]
-  cv                     CV?
-  workSchedule           WorkSchedule?
-  documents              PersonalDocument[]        @relation("UserDocuments")
-  reviewedDocs           PersonalDocument[]        @relation("DocumentReviewer")
-  dashboard              DashboardConfig?
-  preferences            UserPreferences?
-  notifications          Notification[]            @relation("UserNotifications")
-  permissionRequests     PermissionRequest[]       @relation("RequestedBy")
-  decidedRequests        PermissionRequest[]       @relation("DecidedBy")
-  reimbursements         Reimbursement[]           @relation("ReimbursementRequester")
-  approvedReimbursements Reimbursement[]           @relation("ReimbursementApprover")
-  overtimeRequests       OvertimeRequest[]         @relation("OvertimeRequester")
-  approvedOvertime       OvertimeRequest[]         @relation("OvertimeApprover")
-  overtimeOnBehalf       OvertimeRequest[]         @relation("OvertimeOnBehalf")
-  overtimeAuthorized     OvertimeRequest[]         @relation("OvertimeAuthorizer")
-  liquidations           Liquidation[]             @relation("UserLiquidations")
-  tasksAssigned          Task[]                    @relation("TaskAssignee")
-  tasksCreated           Task[]                    @relation("TaskCreator")
-  clientTasksRequested   Task[]                    @relation("TaskClientRequester")
-  projectDocuments       ProjectDocument[]         @relation("ProjectDocumentOwner")
-  signedQADocs           ProjectDocument[]         @relation("DocumentQASigner")
-  signedClientDocs       ProjectDocument[]         @relation("DocumentClientSigner")
-  assignedAssets         Asset[]                   @relation("AssignedAssets")
-  inUseAssets            Asset[]                   @relation("InUseAssets")
-  reviewedAssetDocs      AssetDocument[]           @relation("AssetDocReviewer")
-  expiryNoticesReceived  AssetDocumentExpiryNotice[] @relation("ExpiryNoticeRecipient")
-  assetHistoryEntries    AssetHistoryEntry[]       @relation("AssetHistoryActor")
-  reviewedChecklists     ChecklistTemplate[]       @relation("ChecklistReviewer")
-  submittedChecklists    ChecklistSubmission[]     @relation("ChecklistSubmitter")
-  geminiUsages           GeminiUsage[]             @relation("GeminiUsageActor")
-  pointsLogs             PointsLog[]               @relation("PointsLogUser")
-  achievements           UserAchievement[]         @relation("UserAchievements")
-  dataPointsCreated      DataPoint[]               @relation("DataPointCreator")
-  faenasSupervised       Faena[]                   @relation("FaenaSupervisor")
-  projectsAdmin          Project[]                 @relation("ProjectAdmin")
-  projectAssignments     ProjectWorkerAssignment[] @relation("ProjectAssignments")
-  usageCycles            UsageCycle[]              @relation("UsageCycleUser")
-  handoffUsageCycles     UsageCycle[]              @relation("UsageCycleHandoff")
-  webAuthnCredentials    WebAuthnCredential[]      @relation("UserWebAuthnCredentials")
-  webAuthnChallenges     WebAuthnChallenge[]       @relation("UserWebAuthnChallenges")
-  signatureProofs        SignatureProof[]          @relation("UserSignatureProofs")
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
+  avatarUrl                  String?
+  cargo                      String? // cargo/puesto declarado (texto libre, opcional); se muestra en el directorio
+  passwordHash               String? // hash bcrypt de la contraseña; null hasta que el usuario fija su clave
+  status                     UserStatus                  @default(PENDING_FIRST_LOGIN)
+  tokenVersion               Int                         @default(0) // época de sesión (A3): incrementar invalida todos los JWT previos del usuario
+  firstLoginAt               DateTime? // primer acceso completado; null = invitación aún no usada
+  failedLoginAttempts        Int                         @default(0) // #67 lockout: intentos fallidos consecutivos; se resetea al ingresar ok o recuperar clave
+  lockedUntil                DateTime? // #67 lockout: si > now, la cuenta está bloqueada temporalmente por exceso de intentos
+  lastRecoveryAt             DateTime? // #66 cooldown: última recuperación de clave iniciada; limita reenvío/rotación por cuenta (anti email-bombing/DoS)
+  points                     Int                         @default(0) // gamificación
+  isClientUser               Boolean                     @default(false)
+  clientId                   String?
+  client                     Client?                     @relation(fields: [clientId], references: [id])
+  memberships                Membership[]
+  cv                         CV?
+  workSchedule               WorkSchedule?
+  documents                  PersonalDocument[]          @relation("UserDocuments")
+  reviewedDocs               PersonalDocument[]          @relation("DocumentReviewer")
+  dashboard                  DashboardConfig?
+  preferences                UserPreferences?
+  notifications              Notification[]              @relation("UserNotifications")
+  permissionRequests         PermissionRequest[]         @relation("RequestedBy")
+  decidedRequests            PermissionRequest[]         @relation("DecidedBy")
+  reimbursements             Reimbursement[]             @relation("ReimbursementRequester")
+  approvedReimbursements     Reimbursement[]             @relation("ReimbursementApprover")
+  overtimeRequests           OvertimeRequest[]           @relation("OvertimeRequester")
+  approvedOvertime           OvertimeRequest[]           @relation("OvertimeApprover")
+  overtimeOnBehalf           OvertimeRequest[]           @relation("OvertimeOnBehalf")
+  overtimeAuthorized         OvertimeRequest[]           @relation("OvertimeAuthorizer")
+  liquidations               Liquidation[]               @relation("UserLiquidations")
+  tasksAssigned              Task[]                      @relation("TaskAssignee")
+  tasksCreated               Task[]                      @relation("TaskCreator")
+  clientTasksRequested       Task[]                      @relation("TaskClientRequester")
+  projectDocuments           ProjectDocument[]           @relation("ProjectDocumentOwner")
+  signedQADocs               ProjectDocument[]           @relation("DocumentQASigner")
+  signedClientDocs           ProjectDocument[]           @relation("DocumentClientSigner")
+  assignedAssets             Asset[]                     @relation("AssignedAssets")
+  inUseAssets                Asset[]                     @relation("InUseAssets")
+  reviewedAssetDocs          AssetDocument[]             @relation("AssetDocReviewer")
+  expiryNoticesReceived      AssetDocumentExpiryNotice[] @relation("ExpiryNoticeRecipient")
+  assetHistoryEntries        AssetHistoryEntry[]         @relation("AssetHistoryActor")
+  reviewedChecklists         ChecklistTemplate[]         @relation("ChecklistReviewer")
+  submittedChecklists        ChecklistSubmission[]       @relation("ChecklistSubmitter")
+  geminiUsages               GeminiUsage[]               @relation("GeminiUsageActor")
+  pointsLogs                 PointsLog[]                 @relation("PointsLogUser")
+  achievements               UserAchievement[]           @relation("UserAchievements")
+  dataPointsCreated          DataPoint[]                 @relation("DataPointCreator")
+  faenasSupervised           Faena[]                     @relation("FaenaSupervisor")
+  projectsAdmin              Project[]                   @relation("ProjectAdmin")
+  projectAssignments         ProjectWorkerAssignment[]   @relation("ProjectAssignments")
+  usageCycles                UsageCycle[]                @relation("UsageCycleUser")
+  handoffUsageCycles         UsageCycle[]                @relation("UsageCycleHandoff")
+  webAuthnCredentials        WebAuthnCredential[]        @relation("UserWebAuthnCredentials")
+  webAuthnChallenges         WebAuthnChallenge[]         @relation("UserWebAuthnChallenges")
+  signatureProofs            SignatureProof[]            @relation("UserSignatureProofs")
+  ticketsRequested           Ticket[]                    @relation("TicketRequester")
+  ticketsAssigned            Ticket[]                    @relation("TicketAssignee")
+  ticketEvents               TicketEvent[]               @relation("TicketEventActor")
+  taskProgressReports        TaskProgress[]              @relation("TaskProgressReporter")
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
 }
 
 // ============ FIRMA VERIFICADA (#68 — biometría WebAuthn + OTP fallback) ============
 
-/** Método con que se obtuvo una firma verificada. */
+/**
+ * Método con que se obtuvo una firma verificada.
+ */
 enum SignatureMethod {
   WEBAUTHN // biometría / passkey del dispositivo (no-repudio fuerte)
   EMAIL_OTP // código al correo (fallback para dispositivos compartidos / sin biometría)
@@ -214,6 +220,7 @@ model Faena {
   address      String?
   projects     Project[]
   areas        Area[]
+  tickets      Ticket[]    @relation("TicketFaena")
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -244,37 +251,43 @@ model Department {
   code     String    @unique // 3 chars
   name     String
   projects Project[]
+  tickets  Ticket[]  @relation("TicketDepartment")
 }
 
 model Project {
-  id             String                    @id @default(cuid())
-  code           String // autogenerado: `${faena.code}-${n}`, único dentro de la faena
-  name           String
-  description    String?
+  id               String                    @id @default(cuid())
+  code             String // autogenerado: `${faena.code}-${n}`, único dentro de la faena
+  name             String
+  description      String?
   // departmentId ya no se exige en la creación (jerarquía Cliente→Faena→Proyecto):
   // nullable para no romper filas legacy ni el flujo nuevo.
-  departmentId   String?
-  department     Department?               @relation(fields: [departmentId], references: [id])
-  clientId       String
-  client         Client                    @relation(fields: [clientId], references: [id])
-  contractNumber String?
-  projectType    ProjectType?
-  faenaId        String?
-  faena          Faena?                    @relation(fields: [faenaId], references: [id])
-  projectAdminId String?
-  projectAdmin   User?                     @relation("ProjectAdmin", fields: [projectAdminId], references: [id])
+  departmentId     String?
+  department       Department?               @relation(fields: [departmentId], references: [id])
+  clientId         String
+  client           Client                    @relation(fields: [clientId], references: [id])
+  contractNumber   String?
+  projectType      ProjectType?
+  faenaId          String?
+  faena            Faena?                    @relation(fields: [faenaId], references: [id])
+  projectAdminId   String?
+  projectAdmin     User?                     @relation("ProjectAdmin", fields: [projectAdminId], references: [id])
   // Fechas del proyecto (formulario). Opcionales.
-  startDate      DateTime?
-  endDate        DateTime?
-  workers        ProjectWorkerAssignment[]
-  services       Service[]
-  kpis           Json?
-  tasks          Task[]
-  documents      ProjectDocument[]
-  assets         Asset[]                   @relation("ProjectAssets")
-  elements       Element[]                 @relation("ProjectElements")
-  overtimeRequests OvertimeRequest[]       @relation("OvertimeProject")
-  createdAt      DateTime                  @default(now())
+  startDate        DateTime?
+  endDate          DateTime?
+  workers          ProjectWorkerAssignment[]
+  services         Service[]
+  kpis             Json?
+  tasks            Task[]
+  documents        ProjectDocument[]
+  assets           Asset[]                   @relation("ProjectAssets")
+  elements         Element[]                 @relation("ProjectElements")
+  overtimeRequests OvertimeRequest[]         @relation("OvertimeProject")
+  tickets          Ticket[]                  @relation("TicketProject")
+  /// Token OPACO del dashboard público del proyecto (TV en faena y link al
+  /// cliente). Mismo mecanismo que `Asset.publicToken`: no enumerable y es la
+  /// única credencial del endpoint sin sesión.
+  publicToken      String                    @unique @default(uuid())
+  createdAt        DateTime                  @default(now())
 
   @@unique([faenaId, code])
 }
@@ -578,17 +591,17 @@ model Notification {
 
 // ============ CONFIGURACIÓN (§6-2.3) ============
 model UserPreferences {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  theme       String   @default("system") // system | light | dark
-  notifyInApp Boolean  @default(true)
-  notifyEmail Boolean  @default(false)
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme             String   @default("system") // system | light | dark
+  notifyInApp       Boolean  @default(true)
+  notifyEmail       Boolean  @default(false)
   // Correo destino de las notificaciones por email: 'INSTITUCIONAL' | 'PERSONAL'
   // (string, no enum, por retrocompat de la columna). Solo se acepta apuntando a
   // un correo VERIFICADO; null = sin destino elegido.
   notifyEmailTarget String?
-  updatedAt   DateTime @updatedAt
+  updatedAt         DateTime @updatedAt
 
   @@map("user_preferences")
 }
@@ -720,6 +733,9 @@ enum TaskType {
   RUTINARIA
   DEMANDA
   SPOT
+  /// Hito del programa: duración 0 y sin cantidad. Marca una fecha
+  /// contractual (kick-off, término de suministros, entrega).
+  HITO
 }
 
 enum TaskPriority {
@@ -730,27 +746,44 @@ enum TaskPriority {
 }
 
 model Task {
-  id              String        @id @default(cuid())
+  id              String            @id @default(cuid())
   name            String
   description     String?
-  status          TaskStatus    @default(PENDIENTE)
+  status          TaskStatus        @default(PENDIENTE)
   projectId       String?
-  project         Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parentId        String?
-  parent          Task?         @relation("TaskSteps", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Task[]        @relation("TaskSteps")
-  type            TaskType      @default(SPOT)
-  priority        TaskPriority  @default(BAJA)
-  priorityManual  Boolean       @default(false)
+  parent          Task?             @relation("TaskSteps", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Task[]            @relation("TaskSteps")
+  type            TaskType          @default(SPOT)
+  priority        TaskPriority      @default(BAJA)
+  priorityManual  Boolean           @default(false)
   startDate       DateTime?
   serviceId       String?
-  service         Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  service         Service?          @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   assignedToId    String?
-  assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo      User?             @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdById     String
-  createdBy       User          @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  estimatedPoints Int           @default(0)
+  createdBy       User              @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  estimatedPoints Int               @default(0)
   actualPoints    Int?
+  // ── Avance FÍSICO por cantidad (obras civiles / carta Gantt) ──
+  // Distinto de estimatedPoints, que mide esfuerzo. Acá va la métrica
+  // contractual: 135 dados, 1.000 ml de zanja, 100 letreros. La cantidad
+  // EJECUTADA no se guarda acá: es la suma de `progress`, para que exista
+  // curva real en el tiempo y quede registro de quién reportó cada avance.
+  quantityTotal   Float?
+  /// Unidad de la cantidad: "un", "ml", "m2", "pto", "sist".
+  unit            String?
+  progress        TaskProgress[]    @relation("TaskProgressEntries")
+  // Fechas TEMPRANAS y TARDÍAS del programa (CPM del MS Project). Sin ellas la
+  // curva S solo puede mostrar programada y real; con ellas se dibuja la banda
+  // temprana-tardía, que es lo que permite ver si el atraso consume holgura o
+  // ya empuja la fecha de término.
+  earlyStart      DateTime?
+  earlyFinish     DateTime?
+  lateStart       DateTime?
+  lateFinish      DateTime?
   // Fechas de planificación (#76): revisión y entrega. Opcionales.
   reviewDate      DateTime? // fecha de revisión planificada
   dueDate         DateTime? // fecha de entrega comprometida
@@ -762,7 +795,7 @@ model Task {
   rejectionReason String?
   recurrence      String? // cron expression para tareas cíclicas
   clientUserId    String? // ITO/cliente que solicitó la tarea
-  clientUser      User?         @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
+  clientUser      User?             @relation("TaskClientRequester", fields: [clientUserId], references: [id], onDelete: SetNull)
   // Módulo 5 — instancia de ejecución (captura de datos SEPARADA):
   phaseId         String? // contexto de captura (fase/periodo); soft-link
   // Fase 1B (D4): la tarea se vincula opcionalmente a un área y a un elemento.
@@ -770,15 +803,15 @@ model Task {
   // anula referencias colgantes antes de crear la constraint). SetNull para no
   // bloquear el borrado de elementos del flujo metrics.
   elementId       String? // poza/sector objetivo
-  element         Element?      @relation("TaskElement", fields: [elementId], references: [id], onDelete: SetNull)
+  element         Element?          @relation("TaskElement", fields: [elementId], references: [id], onDelete: SetNull)
   areaId          String?
-  area            Area?         @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  area            Area?             @relation(fields: [areaId], references: [id], onDelete: Restrict)
   dataSpec        Json? // "datos a obtener" que define el Supervisor (variable codes + labels)
   timeLogs        TaskTimeLog[]
   // Entregables subidos al enviar a revisión (#77): ProjectDocument con taskId.
   deliverables    ProjectDocument[] @relation("TaskDeliverables")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([projectId, status])
   @@index([assignedToId])
@@ -887,16 +920,16 @@ enum AssetStatus {
 // Estado de un ciclo de uso de un activo.
 enum UsageCycleStatus {
   EN_PREPARACION // reportó uso, llenando el checklist inicial (activo reservado)
-  EN_CURSO       // en uso (checklist firmado, o inmediato si el activo no tiene plantilla)
-  CERRADO        // uso terminado
-  CANCELADO      // cancelado antes de confirmar (nunca llegó a EN_CURSO)
+  EN_CURSO // en uso (checklist firmado, o inmediato si el activo no tiene plantilla)
+  CERRADO // uso terminado
+  CANCELADO // cancelado antes de confirmar (nunca llegó a EN_CURSO)
 }
 
 // Forma de cierre de un ciclo de uso (formulario de "terminar uso").
 enum UsageEndKind {
-  GPS             // ubicación GPS del dispositivo móvil
+  GPS // ubicación GPS del dispositivo móvil
   ESTACIONAMIENTO // texto libre de dónde quedó estacionado
-  TRASPASO        // se traspasa a otro usuario, que hará su propio checklist
+  TRASPASO // se traspasa a otro usuario, que hará su propio checklist
 }
 
 model Asset {
@@ -961,7 +994,7 @@ model AssetDocument {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  expiryNotices   AssetDocumentExpiryNotice[]
+  expiryNotices AssetDocumentExpiryNotice[]
 
   @@index([assetId])
   // Barrido de vencimientos: busca documentos APROBADOS con fecha, ordenados.
@@ -981,20 +1014,20 @@ model AssetDocument {
 /// hito una sola vez. Al renovar el documento se borran sus avisos, de modo que
 /// el ciclo empieza limpio con la fecha nueva.
 model AssetDocumentExpiryNotice {
-  id         String        @id @default(cuid())
-  documentId String
-  document   AssetDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  id            String        @id @default(cuid())
+  documentId    String
+  document      AssetDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   /// Destinatario del aviso: la deduplicacion es POR PERSONA, no global. Si se
   /// suma un admin de vehiculos nuevo, recibe los hitos vigentes aunque otros ya
   /// los hayan recibido.
-  userId     String
-  user       User          @relation("ExpiryNoticeRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User          @relation("ExpiryNoticeRecipient", fields: [userId], references: [id], onDelete: Cascade)
   /// Hito del calendario de avisos (ver `expiry-notices.util.ts`).
-  clave      String
+  clave         String
   /// Canales por los que se envio, para diagnosticar sin revisar logs.
-  enviadoApp Boolean       @default(false)
-  enviadoCorreo Boolean    @default(false)
-  createdAt  DateTime      @default(now())
+  enviadoApp    Boolean       @default(false)
+  enviadoCorreo Boolean       @default(false)
+  createdAt     DateTime      @default(now())
 
   @@unique([documentId, userId, clave])
   @@index([documentId])
@@ -1385,4 +1418,190 @@ model VmetricCotaReferencia {
 
   @@index([reservorio])
   @@map("vmetric_cotas_referencia")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Soporte TI (PR-TI-01) — canal formal por el que un área levanta una solicitud
+// al área de Informática. Reemplaza el correo y WhatsApp por un registro con
+// estado, dueño y trazabilidad.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TicketType {
+  REQUERIMIENTO
+  INCIDENCIA
+  MEJORA
+  ACCESO
+}
+
+/// Las 13 etapas del procedimiento. Transiciones válidas en `tickets.service.ts`.
+enum TicketStatus {
+  BORRADOR
+  ENVIADO
+  EN_TRIAGE
+  REQUIERE_INFO
+  RECHAZADO
+  EN_BACKLOG
+  EN_LEVANTAMIENTO
+  EN_DISENO
+  EN_DESARROLLO
+  EN_QA
+  EN_UAT
+  ENTREGADO
+  CERRADO
+}
+
+/// Vía de atención decidida en el triage: proyecto (pasa por levantamiento y
+/// diseño) o rápida (se resuelve dentro de EN_BACKLOG).
+enum TicketLane {
+  PROYECTO
+  RAPIDA
+}
+
+enum TicketSize {
+  S
+  M
+  L
+}
+
+enum TicketPriority {
+  CRITICA
+  ALTA
+  NORMAL
+  BAJA
+}
+
+enum TicketPeopleAffected {
+  RANGO_1_3
+  RANGO_4_10
+  RANGO_11_30
+  RANGO_31_MAS
+}
+
+enum TicketFrequency {
+  DIARIA
+  SEMANAL
+  MENSUAL
+  PUNTUAL
+}
+
+enum TicketEventKind {
+  STATUS
+  COMMENT
+}
+
+model Ticket {
+  id           String       @id @default(cuid())
+  ticketNumber String       @unique // TI-{año}-{4 dígitos}, correlativo anual
+  type         TicketType
+  title        String
+  status       TicketStatus @default(BORRADOR)
+
+  // Solicitante. `requesterName`/`requesterEmail` se desnormalizan a propósito
+  // (mismo criterio que reimbursements) para que la bandeja no dependa de joins.
+  requesterId    String
+  requester      User   @relation("TicketRequester", fields: [requesterId], references: [id])
+  requesterName  String
+  requesterEmail String
+
+  // Origen organizacional. `department` es el ÁREA que levanta la solicitud;
+  // `faena`/`project` son contexto opcional cuando nace de un lugar concreto.
+  // OJO: el modelo `Area` de este esquema es un sector DENTRO de una faena, no
+  // un área organizacional; por eso el área del ticket cuelga de Department.
+  departmentId String?
+  department   Department? @relation("TicketDepartment", fields: [departmentId], references: [id])
+  faenaId      String?
+  faena        Faena?      @relation("TicketFaena", fields: [faenaId], references: [id])
+  projectId    String?
+  project      Project?    @relation("TicketProject", fields: [projectId], references: [id])
+
+  /// Jefatura que respalda. Sin ella el ticket no entra a priorización.
+  managerName String
+  managerAck  Boolean @default(false)
+
+  // Qué se pide
+  module         String // módulo del sistema afectado
+  expected       String               @db.Text // resultado esperado, no la solución técnica
+  impact         String               @db.Text // qué pasa hoy si esto no existe
+  peopleAffected TicketPeopleAffected
+  frequency      TicketFrequency
+  dueDate        DateTime?
+  milestone      String               @default("")
+  /// Preparado para adjuntos en R2; sin uploader en esta iteración.
+  attachmentUrls String[]             @default([])
+
+  // Clasificación: la pone Informática en el triage
+  lane            TicketLane?
+  size            TicketSize?
+  priority        TicketPriority?
+  assignedToId    String?
+  assignedTo      User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  rejectionReason String          @default("")
+
+  // Tiempos
+  createdAt      DateTime  @default(now())
+  submittedAt    DateTime?
+  triagedAt      DateTime?
+  closedAt       DateTime?
+  lastEventAt    DateTime?
+  /// submittedAt + 2 días hábiles (solo se saltan sábado y domingo). Se calcula
+  /// en el SERVIDOR al enviar: el reloj del cliente no es confiable.
+  slaTriageDueAt DateTime?
+
+  events TicketEvent[]
+
+  @@index([status, submittedAt])
+  @@index([requesterId, createdAt])
+  @@index([slaTriageDueAt])
+  @@map("tickets")
+}
+
+/// Bitácora del ticket: una fila por transición y por comentario. Es la
+/// trazabilidad que el procedimiento exige, por eso nunca se borra ni se edita.
+model TicketEvent {
+  id       String          @id @default(cuid())
+  ticketId String
+  ticket   Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  at       DateTime        @default(now())
+  byId     String
+  by       User            @relation("TicketEventActor", fields: [byId], references: [id])
+  byName   String
+  kind     TicketEventKind
+  from     TicketStatus?
+  to       TicketStatus?
+  comment  String          @default("")
+
+  @@index([ticketId, at])
+  @@map("ticket_events")
+}
+
+/// Contador del correlativo anual de tickets. Se incrementa dentro de la misma
+/// transacción que crea el ticket, así dos envíos simultáneos no colisionan.
+model TicketCounter {
+  year Int @id
+  seq  Int @default(0)
+
+  @@map("ticket_counters")
+}
+
+/// Reporte de avance físico de una actividad. Cada fila es lo ejecutado EN UNA
+/// FECHA (incremental, no acumulado): así el capataz reporta "hoy 12 dados" en
+/// vez de recalcular el total, y de esa serie sale la curva S real y la
+/// trazabilidad de quién reportó qué. La cantidad ejecutada de una tarea es la
+/// SUMA de sus filas; no se denormaliza para que no pueda quedar desfasada.
+model TaskProgress {
+  id           String   @id @default(cuid())
+  taskId       String
+  task         Task     @relation("TaskProgressEntries", fields: [taskId], references: [id], onDelete: Cascade)
+  /// Día de obra al que corresponde el avance, no el de digitación.
+  date         DateTime
+  /// Cantidad ejecutada ese día, en la unidad de la tarea. Admite negativos para
+  /// corregir un reporte anterior sin borrar el historial.
+  quantity     Float
+  note         String   @default("")
+  reportedById String
+  reportedBy   User     @relation("TaskProgressReporter", fields: [reportedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([taskId, date])
+  @@map("task_progress")
 }

@@ -8,6 +8,7 @@ import {
   Wrench,
   Gauge,
   FolderKanban,
+  LifeBuoy,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -40,6 +41,10 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },
   { label: 'Recursos', to: '/recursos', icon: Package, module: 'recursos' },
+  // Soporte TI (PR-TI-01): SOLO el panel de control de Informática y Gerencia.
+  // Levantar una solicitud NO vive acá: es una pestaña de Operaciones, que es
+  // donde las áreas trabajan. Este ítem lo enciende `ticket:read:all`.
+  { label: 'Soporte TI', to: '/soporte', icon: LifeBuoy, module: 'soporte' },
 ];
 
 /**

@@ -19,6 +19,11 @@ import {
 } from './dto/projects.dto';
 import type { ProjectDashboard } from '@gmt-platform/contracts';
 import { computeProjectDashboard, type DashboardActivity } from './dashboard.util';
+import {
+  computeObraDashboard,
+  type ObraActivity,
+  type ObraDashboard,
+} from './obra-dashboard.util';
 
 @Injectable()
 export class ProjectsService {
@@ -268,6 +273,89 @@ export class ProjectsService {
     }));
 
     return computeProjectDashboard(project.id, project.name, 'SERVICE', activities, new Date());
+  }
+
+  /**
+   * Dashboard de avance de OBRA. A diferencia de `getDashboard`, que mide avance
+   * binario ponderado por esfuerzo, este mide avance FÍSICO por cantidad
+   * (dados, ml de zanja) contra la carta Gantt. Es el que se proyecta en faena.
+   */
+  async getObraDashboard(projectId: string): Promise<ObraDashboard> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true, client: { select: { name: true } } },
+    });
+    if (!project) {
+      throw new NotFoundException('El proyecto no existe.');
+    }
+    return this.buildObraDashboard(project.id, project.name, project.client?.name ?? null);
+  }
+
+  /**
+   * Mismo dashboard, resuelto por el token público del proyecto y SIN sesión:
+   * es lo que se abre en la TV de faena y lo que se comparte con el cliente.
+   * El token opaco es la única credencial, igual que en la ficha de vehículos.
+   *
+   * Expone SOLO avance físico, hitos y fechas. Nada de costos, nombres de
+   * personas ni datos internos: quien tiene el link no tiene por qué verlos.
+   */
+  async getPublicObraDashboard(token: string): Promise<ObraDashboard> {
+    const project = await this.prisma.project.findUnique({
+      where: { publicToken: token },
+      select: { id: true, name: true, client: { select: { name: true } } },
+    });
+    // Anti-enumeración: un token inválido responde igual que uno inexistente.
+    if (!project) {
+      throw new NotFoundException('El dashboard no existe o el enlace ya no es válido.');
+    }
+    return this.buildObraDashboard(project.id, project.name, project.client?.name ?? null);
+  }
+
+  /** Carga las actividades del proyecto y delega el cálculo al util puro. */
+  private async buildObraDashboard(
+    id: string,
+    name: string,
+    clientName: string | null,
+  ): Promise<ObraDashboard> {
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId: id },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        unit: true,
+        quantityTotal: true,
+        startDate: true,
+        dueDate: true,
+        earlyStart: true,
+        earlyFinish: true,
+        lateStart: true,
+        lateFinish: true,
+        serviceId: true,
+        service: { select: { id: true, name: true } },
+        progress: { select: { date: true, quantity: true }, orderBy: { date: 'asc' } },
+      },
+      orderBy: [{ startDate: 'asc' }, { id: 'asc' }],
+    });
+
+    const activities: ObraActivity[] = tasks.map((t) => ({
+      id: t.id,
+      name: t.name,
+      phaseId: t.service?.id ?? 'sin-fase',
+      phaseName: t.service?.name ?? 'Sin fase',
+      unit: t.unit,
+      quantityTotal: t.quantityTotal,
+      isMilestone: t.type === 'HITO',
+      start: t.startDate,
+      end: t.dueDate,
+      earlyStart: t.earlyStart,
+      earlyFinish: t.earlyFinish,
+      lateStart: t.lateStart,
+      lateFinish: t.lateFinish,
+      progress: t.progress.map((r) => ({ date: r.date, quantity: r.quantity })),
+    }));
+
+    return { ...computeObraDashboard(id, name, activities, new Date()), clientName };
   }
 
   async getById(projectId: string, userId: string) {

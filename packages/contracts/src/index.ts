@@ -1106,6 +1106,80 @@ export interface ProjectDashboard {
   generatedAt: string; // ISO del cálculo (fecha de referencia "hoy")
 }
 
+// ============ Dashboard de avance de OBRA (obras civiles) ============
+
+/**
+ * Distinto de {@link ProjectDashboard}, que mide avance BINARIO ponderado por
+ * esfuerzo (actividad lista o no). Acá el avance es FÍSICO y continuo: 48 de
+ * 135 dados, 720 de 1.000 ml de zanja. Es la métrica contractual de la carta
+ * Gantt, la que se proyecta en la TV de faena y la que se comparte al cliente.
+ */
+
+/** Un punto de una curva S: fecha ISO (aaaa-mm-dd) y porcentaje acumulado. */
+export interface ObraCurvePoint {
+  date: string;
+  value: number;
+}
+
+/** Avance físico de una actividad o de una fase. */
+export interface ObraLine {
+  id: string;
+  name: string;
+  /** "un", "ml", "m2", "pto", "sist". `null` cuando agrupa unidades distintas. */
+  unit: string | null;
+  quantityTotal: number;
+  quantityDone: number;
+  /** Ejecutado / total, 0-100. */
+  percent: number;
+}
+
+/** Una fase de la obra (Gestión, Suministros, Construcción, Cierre). */
+export interface ObraPhase extends ObraLine {
+  activities: ObraLine[];
+}
+
+/** Hito contractual: fecha sin cantidad. No aporta avance, marca compromiso. */
+export interface ObraMilestone {
+  id: string;
+  name: string;
+  date: string | null;
+  done: boolean;
+}
+
+/** Semáforo del proyecto, derivado de la desviación real vs planificado. */
+export type ObraStatus = 'ADELANTADO' | 'EN_LINEA' | 'LEVE_ATRASO' | 'ATRASADO';
+
+/** Respuesta del Dashboard de avance de obra (autenticado y público). */
+export interface ObraDashboard {
+  projectId: string;
+  projectName: string;
+  /** Cliente de la obra. Lo agrega el servicio; el cálculo no lo conoce. */
+  clientName?: string | null;
+  /** Avance físico real ponderado, 0-100. */
+  realProgress: number;
+  /** Avance que el programa esperaba a la fecha, 0-100. */
+  plannedProgress: number;
+  /** realProgress - plannedProgress. Negativo = atraso. */
+  deviation: number;
+  status: ObraStatus;
+  phases: ObraPhase[];
+  milestones: ObraMilestone[];
+  curves: {
+    /** Todo lo antes posible (ventana temprana del CPM). */
+    early: ObraCurvePoint[];
+    /** Programa vigente. */
+    scheduled: ObraCurvePoint[];
+    /** Todo lo más tarde permitido sin atrasar la obra. */
+    late: ObraCurvePoint[];
+    /** Ejecutado realmente. Termina en el último reporte, no en el fin del plazo. */
+    real: ObraCurvePoint[];
+  };
+  programStart: string | null;
+  programEnd: string | null;
+  /** Fecha de corte usada para `plannedProgress`. */
+  asOf: string;
+}
+
 // ============ Checklist tipado de activos (Tanda 5) ============
 
 /**
@@ -1199,3 +1273,118 @@ export {
 } from './vehicle-checklist.js';
 export { DIAGRAMA_CAMIONETA, PARTES_CARROCERIA } from './vehicle-diagram.js';
 export type { ParteDiagrama } from './vehicle-diagram.js';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Soporte TI (PR-TI-01) — canal formal de solicitudes al área de Informática.
+   Espejo de los enums de Prisma; el backend valida contra la BD, esto es el
+   contrato back↔front para pintar selects, badges y botones de transición.
+   ────────────────────────────────────────────────────────────────────────── */
+
+export type TicketType = 'REQUERIMIENTO' | 'INCIDENCIA' | 'MEJORA' | 'ACCESO';
+
+/** Las 13 etapas del procedimiento. */
+export type TicketStatus =
+  | 'BORRADOR'
+  | 'ENVIADO'
+  | 'EN_TRIAGE'
+  | 'REQUIERE_INFO'
+  | 'RECHAZADO'
+  | 'EN_BACKLOG'
+  | 'EN_LEVANTAMIENTO'
+  | 'EN_DISENO'
+  | 'EN_DESARROLLO'
+  | 'EN_QA'
+  | 'EN_UAT'
+  | 'ENTREGADO'
+  | 'CERRADO';
+
+export type TicketLane = 'PROYECTO' | 'RAPIDA';
+export type TicketSize = 'S' | 'M' | 'L';
+export type TicketPriority = 'CRITICA' | 'ALTA' | 'NORMAL' | 'BAJA';
+export type TicketPeopleAffected = 'RANGO_1_3' | 'RANGO_4_10' | 'RANGO_11_30' | 'RANGO_31_MAS';
+export type TicketFrequency = 'DIARIA' | 'SEMANAL' | 'MENSUAL' | 'PUNTUAL';
+export type TicketEventKind = 'STATUS' | 'COMMENT';
+
+/** Una entrada de la bitácora del ticket. Nunca se edita ni se borra. */
+export interface TicketEventView {
+  id: string;
+  at: string;
+  byId: string;
+  byName: string;
+  kind: TicketEventKind;
+  from: TicketStatus | null;
+  to: TicketStatus | null;
+  comment: string;
+}
+
+/** Referencia mínima a una entidad relacionada (área, faena, proyecto, persona). */
+export interface TicketRefView {
+  id: string;
+  name: string;
+}
+
+export interface TicketView {
+  id: string;
+  ticketNumber: string;
+  type: TicketType;
+  title: string;
+  status: TicketStatus;
+
+  requesterId: string;
+  requesterName: string;
+  requesterEmail: string;
+
+  /** Área organizacional que levanta la solicitud (Department). */
+  department: TicketRefView | null;
+  /** Contexto opcional: faena y proyecto de donde nace el requerimiento. */
+  faena: TicketRefView | null;
+  project: TicketRefView | null;
+
+  managerName: string;
+  managerAck: boolean;
+
+  module: string;
+  expected: string;
+  impact: string;
+  peopleAffected: TicketPeopleAffected;
+  frequency: TicketFrequency;
+  dueDate: string | null;
+  milestone: string;
+  attachmentUrls: string[];
+
+  lane: TicketLane | null;
+  size: TicketSize | null;
+  priority: TicketPriority | null;
+  assignedTo: TicketRefView | null;
+  rejectionReason: string;
+
+  createdAt: string;
+  submittedAt: string | null;
+  triagedAt: string | null;
+  closedAt: string | null;
+  lastEventAt: string | null;
+  /** Vencimiento del triage (submittedAt + 2 días hábiles), calculado en el servidor. */
+  slaTriageDueAt: string | null;
+
+  /** Solo en el detalle: la bitácora completa, en orden cronológico. */
+  events?: TicketEventView[];
+  /**
+   * Transiciones que ESTE usuario puede ejecutar ahora mismo. La calcula el
+   * servidor cruzando la máquina de estados con sus permisos, para que el front
+   * pinte solo los botones que corresponden en vez de deshabilitarlos.
+   */
+  allowedTransitions?: TicketAllowedTransition[];
+}
+
+export interface TicketAllowedTransition {
+  to: TicketStatus;
+  /** El comentario es obligatorio para confirmar esta transición. */
+  requiresComment: boolean;
+}
+
+/** Contadores del panel de Informática. */
+export interface TicketQueueStats {
+  sinTriage: number;
+  slaVencido: number;
+  enCurso: number;
+}

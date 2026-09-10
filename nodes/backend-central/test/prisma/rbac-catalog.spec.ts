@@ -73,10 +73,19 @@ describe('rbac-catalog — invariantes', () => {
     }
   });
 
-  it('trabajador otorga SOLO el derecho base: finance:request:create a GLOBAL', () => {
+  // Se afirma el conjunto EXACTO a propósito: este test existe para cazar
+  // filtraciones de privilegio al rol base. Si alguien agrega un permiso al
+  // trabajador, tiene que venir aquí y justificarlo.
+  it('trabajador otorga SOLO los derechos base (finanzas propias + levantar ticket)', () => {
     const t = roleByKey.get('trabajador')!.grants;
     expect(new Set(t.map((x) => `${x.perm}@${x.scope}`))).toEqual(
-      new Set(['finance:request:create@GLOBAL']),
+      new Set([
+        'finance:request:create@GLOBAL',
+        // PR-TI-01: cualquier área puede levantar una solicitud a Informática
+        // y seguir las suyas. No incluye ver las ajenas ni clasificar.
+        'ticket:create@GLOBAL',
+        'ticket:read:own@GLOBAL',
+      ]),
     );
   });
 

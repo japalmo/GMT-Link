@@ -14,6 +14,7 @@ import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
 import SuspendedPage from '@/pages/suspended';
 import PublicAssetPage from '@/pages/public/activo';
+import PublicObraDashboardPage from '@/pages/public/proyecto';
 
 // Páginas secundarias y pesadas (lazy): se cargan al navegar. Esto saca del
 // bundle inicial las dependencias grandes (Three.js en v-metric, mapas en
@@ -36,6 +37,8 @@ const ProyectosListaPage = lazy(() => import('@/pages/proyectos/faena-proyectos'
 const ProyectoDetallePage = lazy(() => import('@/pages/proyectos/vista-proyecto'));
 const RecursosPage = lazy(() => import('@/pages/recursos'));
 const GisToolsPage = lazy(() => import('@/pages/gis-tools'));
+const SoportePage = lazy(() => import('@/pages/soporte'));
+const SoporteNuevoPage = lazy(() => import('@/pages/soporte/nuevo'));
 const MetricsDashboard = lazy(() => import('@/pages/v-metric'));
 const DesignDemo = lazy(() => import('@/pages/DesignDemo'));
 const RoleScopedListDemo = lazy(() => import('@/pages/primitives/role-scoped-list-demo'));
@@ -89,6 +92,9 @@ const router = createBrowserRouter([
   // `PublicRoute` a propósito: ese wrapper rebota a quien ya tiene sesión, y la
   // ficha tiene que abrir igual para cualquiera, con sesión o sin ella.
   { path: '/public/activos/:token', element: <PublicAssetPage /> },
+  // Dashboard público de avance de obra: mismo criterio que la ficha del activo
+  // (token opaco como credencial, sin sesión). Se proyecta en la TV de faena.
+  { path: '/public/proyecto/:token', element: <PublicObraDashboardPage /> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -130,6 +136,13 @@ const router = createBrowserRouter([
           { path: '/proyectos/proyecto/:projectId', element: <RequireModule module="proyectos">{lazyRoute(<ProyectoDetallePage />)}</RequireModule> },
           { path: '/recursos', element: <RequireModule module="recursos">{lazyRoute(<RecursosPage />)}</RequireModule> },
           { path: '/herramientas', element: <RequireModule module="herramientas">{lazyRoute(<GisToolsPage />)}</RequireModule> },
+          // Levantar una solicitud a Informática: TODO usuario autenticado. Vive
+          // en /tickets para no colgar de ninguna de las dos secciones: la
+          // bandeja es una pestaña de Operaciones y /soporte es el panel de TI.
+          { path: '/tickets/nuevo', element: lazyRoute(<SoporteNuevoPage />) },
+          // Enlace legacy de la bandeja, que ahora es pestaña de Operaciones.
+          { path: '/soporte/mis-tickets', element: <Navigate to="/operaciones/mis-solicitudes" replace /> },
+          { path: '/soporte', element: <RequireModule module="soporte">{lazyRoute(<SoportePage />)}</RequireModule> },
           { path: '/v-metric', element: <RequireModule module="v-metric">{lazyRoute(<MetricsDashboard />)}</RequireModule> },
           // QA del design system.
           { path: '/design', element: lazyRoute(<DesignDemo />) },

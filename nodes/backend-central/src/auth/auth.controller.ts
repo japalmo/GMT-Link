@@ -64,6 +64,7 @@ const ALL_MODULES = [
   'proyectos',
   'recursos',
   'herramientas',
+  'soporte',
   'v-metric',
 ] as const;
 
@@ -88,6 +89,16 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   // al catálogo de vehículos y su checklist.
   'asset:use:report': 'recursos',
   'vmetric:view': 'v-metric',
+  // Soporte TI: el panel de Informática lo enciende quien puede ver TODOS los
+  // tickets. Levantar un ticket propio NO enciende el módulo: esa entrada vive
+  // en la navegación como "Mis tickets", visible para todo autenticado.
+  'ticket:read:all': 'soporte',
+  // Las solicitudes a Informática viven DENTRO de Operaciones, que es donde las
+  // áreas trabajan. Por eso poder levantar un ticket enciende `operaciones`: sin
+  // esto, RH, Finanzas o Compras no verían la sección y no podrían pedir, porque
+  // ese módulo lo encendía solo `task:read`. Las pestañas se gatean una a una en
+  // la página, así quien entra solo por esto no ve Backlog ni Documentos.
+  'ticket:create': 'operaciones',
 };
 
 /** Respuesta de completar el primer login. */
