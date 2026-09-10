@@ -73,7 +73,7 @@ export default function PublicObraDashboardPage(): ReactNode {
     <div className="min-h-dvh bg-background">
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-8">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <HardHat className="size-6" aria-hidden />
             </span>
