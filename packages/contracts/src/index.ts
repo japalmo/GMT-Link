@@ -1166,6 +1166,13 @@ export interface ObraBreakdown {
   lines: ObraLine[];
 }
 
+/** Una foto de avance de un cerco, con la fecha en que se tomó el registro. */
+export interface ObraPointPhoto {
+  url: string;
+  /** aaaa-mm-dd. */
+  date: string;
+}
+
 /** Estado de un cerco en el mapa, derivado de cuánto lleva ejecutado. */
 export type ObraPointStatus = 'PENDIENTE' | 'EN_EJECUCION' | 'TERMINADO';
 
@@ -1189,6 +1196,22 @@ export interface ObraMapPoint {
   status: ObraPointStatus;
   /** Etapa en la que está ahora. `null` si no ha empezado o ya terminó. */
   currentStep: string | null;
+  /**
+   * Avance ejecutado al cierre de cada semana informada, 0-100. Índice = índice
+   * de semana. Vacío si la obra no tiene control semanal.
+   */
+  realByWeek: number[];
+  /**
+   * Avance que el programa espera al cierre de cada semana, 0-100. Llega hasta
+   * el fin de obra, así que mirar una semana futura muestra la proyección.
+   */
+  planByWeek: number[];
+  /**
+   * Fotos de avance del área, de la más nueva a la más vieja. El tablero elige
+   * la más reciente ANTERIOR a la semana que se esté mirando, así que retroceder
+   * en el tiempo muestra la foto que correspondía. Vacío mientras nadie suba una.
+   */
+  photos: ObraPointPhoto[];
 }
 
 /** Umbral superado por una condición climática en faena. */
@@ -1249,6 +1272,65 @@ export interface ObraMilestone {
   done: boolean;
 }
 
+/**
+ * Una semana del control de avance por HH. `par` es lo de ESA semana y `acm` lo
+ * acumulado: la barra del informe usa la primera y la curva S la segunda.
+ */
+export interface ObraWeek {
+  /** Rótulo del programa: "S-0", "S-1", … */
+  code: string;
+  /** Orden, 0 para S-0. */
+  index: number;
+  /** Cierre de semana, aaaa-mm-dd. */
+  closeDate: string;
+  /** HH que el programa reparte esa semana. */
+  hhPlan: number;
+  /** Avance de la semana, 0-100. */
+  parPlan: number;
+  /** Avance real de la semana, 0-100. `null` = semana sin corte todavía. */
+  parReal: number | null;
+  acmPlan: number;
+  acmReal: number | null;
+  /** Real menos plan acumulado, en puntos porcentuales. `null` sin corte. */
+  deviation: number | null;
+}
+
+/**
+ * Una fase del programa a lo largo de las semanas. `plan` llega hasta el fin
+ * de obra; `real` termina en la última semana informada, y esa diferencia de
+ * largo es justamente la que deja ver hasta dónde hay dato duro.
+ */
+export interface ObraControlPhase {
+  name: string;
+  hh: number;
+  activities: number;
+  /** Acumulado plan por semana, 0-100. Índice = índice de semana. */
+  plan: number[];
+  /** Acumulado real por semana, 0-100. Más corto que `plan`. */
+  real: number[];
+}
+
+/**
+ * Control de avance por HH: el informe semanal que se le entrega al cliente
+ * (GMT-MB-OOCC-CS-xx). Convive con el avance físico por cerco sin reemplazarlo:
+ * uno mide cuánto del contrato va ejecutado, el otro dónde está la cuadrilla.
+ */
+export interface ObraControl {
+  /** Fecha de corte del informe, aaaa-mm-dd. */
+  cutoff: string;
+  totalHh: number;
+  /** Avance real al corte, 0-100. */
+  realPercent: number;
+  /** Avance que el programa esperaba al corte, 0-100. */
+  planPercent: number;
+  /** Real menos plan, en puntos porcentuales. */
+  deviation: number;
+  weeks: ObraWeek[];
+  /** Índice de la última semana con corte real. -1 si aún no hay ninguna. */
+  lastClosed: number;
+  phases: ObraControlPhase[];
+}
+
 /** Semáforo del proyecto, derivado de la desviación real vs planificado. */
 export type ObraStatus = 'ADELANTADO' | 'EN_LINEA' | 'LEVE_ATRASO' | 'ATRASADO';
 
@@ -1272,6 +1354,11 @@ export interface ObraDashboard {
   map: ObraMap;
   /** Condiciones en faena. `null` si no hay ubicación o el servicio no responde. */
   weather: ObraWeather | null;
+  /**
+   * Control de avance por HH. `null` en obras sin programa cargado: ahí la
+   * curva S sigue saliendo del avance físico, que es lo único que hay.
+   */
+  control: ObraControl | null;
   /** Últimos avances reportados, del más nuevo al más viejo. */
   recent: ObraRecentReport[];
   milestones: ObraMilestone[];

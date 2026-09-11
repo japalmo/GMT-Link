@@ -19,6 +19,7 @@ import type {
   ObraBreakdown,
   ObraMap,
   ObraMapPoint,
+  ObraPointPhoto,
   ObraPointStatus,
   ObraCurvePoint,
   ObraDashboard,
@@ -226,6 +227,44 @@ function porcentajeDe(grupo: ObraActivity[]): number {
   return weight > 0 ? Math.round((ponderado / weight) * 1000) / 10 : pct(done, total);
 }
 
+/**
+ * Avance ponderado de un grupo contando SOLO lo reportado hasta `at`. Es lo
+ * mismo que `porcentajeDe`, pero mirando el cierre de una semana pasada: sin
+ * esto el mapa solo sabría dibujar el estado de hoy.
+ */
+function porcentajeAl(grupo: ObraActivity[], at: Date): number {
+  let peso = 0;
+  let ponderado = 0;
+  for (const a of grupo) {
+    const total = a.quantityTotal ?? 0;
+    const w = weightOf(a);
+    if (w <= 0 || total <= 0) continue;
+    const hecho = a.progress
+      .filter((p) => p.date.getTime() <= at.getTime())
+      .reduce((sum, p) => sum + p.quantity, 0);
+    peso += w;
+    ponderado += w * Math.min(1, Math.max(0, hecho / total));
+  }
+  return peso > 0 ? Math.round((ponderado / peso) * 1000) / 10 : 0;
+}
+
+/**
+ * Avance que el programa espera de un grupo a una fecha. Mirar una semana
+ * futura con esto es la proyección: qué cercos deberían estar listos para el
+ * cierre de esa semana si la obra sigue el programa.
+ */
+function planificadoAl(grupo: ObraActivity[], at: Date): number {
+  let peso = 0;
+  let ponderado = 0;
+  for (const a of grupo) {
+    const w = weightOf(a);
+    if (w <= 0) continue;
+    peso += w;
+    ponderado += w * plannedFractionAt(at, a.start, a.end);
+  }
+  return peso > 0 ? Math.round((ponderado / peso) * 1000) / 10 : 0;
+}
+
 /** Unidad común de un grupo, o `null` si mezcla unidades (un cerco mezcla). */
 function unidadComun(acts: ObraActivity[]): string | null {
   const unidades = new Set(acts.map((a) => a.unit).filter((u): u is string => !!u));
@@ -312,6 +351,14 @@ export function computeObraDashboard(
   projectName: string,
   activities: ObraActivity[],
   now: Date,
+  control: {
+    /** Cierres de semana del control, en orden. Vacío en obras sin programa. */
+    semanas?: Date[];
+    /** Cuántas de esas semanas tienen informe. El resto es proyección. */
+    informadas?: number;
+    /** Fotos de avance por cerco, indexadas por el id de la actividad padre. */
+    fotos?: Map<string, ObraPointPhoto[]>;
+  } = {},
 ): ObraDashboard {
   // Una actividad con hijas es un AGRUPADOR (un cerco), no algo que se mida:
   // su avance sale de sus hijas. Medir las dos contaría dos veces la misma obra.
@@ -479,6 +526,20 @@ export function computeObraDashboard(
       estado === 'EN_EJECUCION'
         ? (grupo.slice().sort(porPrograma).find((a) => !terminada(a))?.name ?? null)
         : null;
+    // Historia y proyección del cerco, para que el mapa siga a la semana que
+    // se esté mirando. El real llega hasta la última semana informada; el plan
+    // llega hasta el fin de obra.
+    const semanas = control.semanas ?? [];
+    const informadas = Math.min(control.informadas ?? 0, semanas.length);
+    const realByWeek: number[] = [];
+    const planByWeek: number[] = [];
+    for (let w = 0; w < semanas.length; w += 1) {
+      const cierre = semanas[w];
+      if (!cierre) continue;
+      if (w < informadas) realByWeek.push(porcentajeAl(grupo, cierre));
+      planByWeek.push(planificadoAl(grupo, cierre));
+    }
+
     puntos.push({
       id: clave,
       code: codigo,
@@ -491,6 +552,9 @@ export function computeObraDashboard(
       stepsTotal: grupo.length,
       status: estado,
       currentStep: enCurso,
+      realByWeek,
+      planByWeek,
+      photos: control.fotos?.get(clave) ?? [],
     });
   }
   const map: ObraMap = {
@@ -546,9 +610,11 @@ export function computeObraDashboard(
     phases,
     breakdowns,
     map,
-    // El clima no sale del cálculo: lo adjunta el servicio, que es quien puede
-    // salir a la red. Acá viaja en null para que el contrato quede completo.
+    // Ni el clima ni el control por HH salen del cálculo: los adjunta el
+    // servicio, que es quien sale a la red y a las otras tablas. Acá viajan en
+    // null para que el contrato quede completo.
     weather: null,
+    control: null,
     recent,
     milestones,
     curves,

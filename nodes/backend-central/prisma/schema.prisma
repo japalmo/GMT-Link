@@ -289,9 +289,73 @@ model Project {
   publicToken        String                    @unique @default(uuid())
   /// Clave opcional del enlace público, hasheada con bcrypt. `null` = abierto.
   publicPasswordHash String?
+  // ── Control de avance por HH (documento GMT-MB-OOCC-CS-xx) ──
+  // El avance físico por cerco responde "cuántos cercos"; este responde
+  // "cuánto del contrato", ponderado por horas hombre del programa. Es la
+  // métrica que se le informa al cliente, así que manda en la curva S.
+  /// HH totales del programa. `null` en proyectos sin control por HH.
+  totalHh            Float?
+  /// Fecha de corte del último informe de avance.
+  cutoffDate         DateTime?
+  /// Avance del programa a la fecha de corte, 0-1. No se deriva de las semanas:
+  /// el corte cae a media semana y el plan se prorratea por día.
+  planAtCutoff       Float?
+  weeks              ProjectWeek[]
+  activities         ProjectActivity[]
   createdAt          DateTime                  @default(now())
 
   @@unique([faenaId, code])
+}
+
+/// Una semana del control de avance. `S-0` es el arranque y no aporta avance.
+model ProjectWeek {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Rótulo del programa: "S-0", "S-1", … Es el eje del informe.
+  code      String
+  /// Orden de la semana, 0 para S-0. Evita ordenar por texto ("S-10" < "S-2").
+  index     Int
+  /// Cierre de semana (domingo). El corte real puede caer antes.
+  closeDate DateTime
+  /// HH que el programa reparte en esa semana.
+  hhPlan    Float
+  /// Avance de la semana, 0-1. Parcial: no acumulado.
+  parPlan   Float
+  /// Avance real de la semana, 0-1. `null` mientras la semana no tiene corte.
+  parReal   Float?
+  acmPlan   Float
+  acmReal   Float?
+
+  @@unique([projectId, code])
+  @@index([projectId, index])
+  @@map("project_weeks")
+}
+
+/// Una actividad del programa base, con su reparto de HH semana a semana.
+/// El reparto va en arreglos y no en filas: son 33 actividades por 11 semanas
+/// y una tabla de 363 filas no aporta nada que estos dos campos no digan.
+model ProjectActivity {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// ID de la actividad en el programa (MS Project). Ancla el cruce con el PDF.
+  wbsId      Int
+  name       String
+  /// Fase: Hitos, Gestión, Suministros, Construcción, Cierre.
+  phase      String
+  hh         Float
+  startDate  DateTime
+  endDate    DateTime
+  /// HH planificadas por semana, desde S-1. Índice 0 = S-1.
+  hhByWeek   Float[]
+  /// Avance acumulado real, 0-1, por semana con corte. Índice 0 = S-1. El
+  /// largo dice hasta qué semana hay informe: no hay huecos ni centinelas.
+  realByWeek Float[]
+
+  @@unique([projectId, wbsId])
+  @@index([projectId])
+  @@map("project_activities")
 }
 
 // ============ ASIGNACIÓN DE TRABAJADORES A PROYECTO ============

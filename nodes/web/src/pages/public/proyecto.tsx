@@ -5,7 +5,7 @@ import { PuertaClave, leerPase, olvidarPase } from './obra-puerta';
 import type { ObraDashboard } from '@gmt-platform/contracts';
 import { ObraTablero, fechaLarga } from '@/pages/proyectos/obra-tablero';
 import gmtLogo from '@/assets/branding/gmt-corporativo-blanco.png';
-import isoLogo from '@/assets/branding/iso-9001-bureau-veritas.png';
+import isoLogo from '@/assets/branding/certificacion-iso-9001-bureau-veritas.png';
 
 /** Cada cuánto se refresca solo. La TV de faena queda encendida todo el día. */
 const REFRESCO_MS = 5 * 60_000;
@@ -95,26 +95,28 @@ export default function PublicObraDashboardPage(): ReactNode {
     : null;
 
   return (
-    <div className="relative flex min-h-dvh flex-col bg-slate-900 md:h-dvh md:overflow-hidden">
+    <div className="relative flex min-h-dvh flex-col bg-slate-900 lg:h-dvh lg:overflow-hidden">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-slate-950 px-4 py-2.5 text-white sm:px-6">
         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           {/* Versión en blanco de la marca: va directo sobre el fondo oscuro,
               sin el recuadro blanco que antes hacía falta para que se leyera. */}
-          <img src={gmtLogo} alt="GMT" className="h-8 w-auto shrink-0 sm:h-12 lg:h-16" />
+          <img src={gmtLogo} alt="GMT" className="h-8 w-auto shrink-0 sm:h-12 2xl:h-16" />
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold leading-tight sm:text-xl lg:text-2xl">
+            <h1 className="truncate text-base font-bold leading-tight sm:text-xl 2xl:text-2xl">
               {data?.projectName ?? 'Avance de obra'}
             </h1>
-            <p className="truncate text-xs text-white/60 sm:text-sm lg:text-base">
-              {data?.clientName ? `${data.clientName} · ` : ''}Avance físico de obra
+            <p className="truncate text-xs text-white/60 sm:text-sm 2xl:text-base">
+              {data?.clientName ? `${data.clientName} · ` : ''}Avance de obra
             </p>
           </div>
         </div>
 
         <div className="hidden shrink-0 text-right sm:block">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 lg:text-xs">Datos al</p>
-          <p className="text-sm font-bold tabular-nums sm:text-base lg:text-xl">
-            {fechaLarga(data?.asOf ?? null)}
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 lg:text-xs">
+            {data?.control ? 'Corte del informe' : 'Datos al'}
+          </p>
+          <p className="text-sm font-bold tabular-nums sm:text-base 2xl:text-xl">
+            {fechaLarga(data?.control?.cutoff ?? data?.asOf ?? null)}
           </p>
         </div>
       </header>
@@ -151,12 +153,12 @@ export default function PublicObraDashboardPage(): ReactNode {
           </p>
         </div>
         {/* La certificación cierra la pantalla abajo a la derecha, que es donde
-            se lee al final. El archivo ya viene sin fondo y no tiene tonos
-            oscuros, así que se apoya directo sobre el fondo del pie. */}
+            se lee al final. Es el sello de Bureau Veritas tal como se entrega:
+            placa blanca con el borde recortado, sin fondo alrededor. */}
         <img
           src={isoLogo}
           alt="Certificación ISO 9001 otorgada por Bureau Veritas"
-          className="h-10 w-auto shrink-0 sm:h-16 lg:h-28"
+          className="h-10 w-auto shrink-0 sm:h-16 lg:h-20 2xl:h-28"
         />
       </footer>
     </div>

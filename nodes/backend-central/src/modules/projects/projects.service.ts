@@ -28,6 +28,7 @@ import {
   type ObraActivity,
   type ObraDashboard,
 } from './obra-dashboard.util';
+import { computeControlSemanal } from './control-semanal.util';
 
 @Injectable()
 export class ProjectsService {
@@ -400,6 +401,33 @@ export class ProjectsService {
     name: string,
     clientName: string | null,
   ): Promise<ObraDashboard> {
+    // El control por HH y el avance físico se leen en paralelo: son fuentes
+    // distintas de la misma obra y el tablero las muestra juntas.
+    const [control, semanas, actividades, fotos] = await Promise.all([
+      this.prisma.project.findUnique({
+        where: { id },
+        select: { totalHh: true, cutoffDate: true, planAtCutoff: true },
+      }),
+      this.prisma.projectWeek.findMany({ where: { projectId: id }, orderBy: { index: 'asc' } }),
+      this.prisma.projectActivity.findMany({ where: { projectId: id }, orderBy: { wbsId: 'asc' } }),
+      // Foto de avance del área: el documento de imagen más nuevo colgado de
+      // la tarea. Mientras nadie suba una, el mapa muestra la vista satelital.
+      this.prisma.projectDocument.findMany({
+        where: {
+          projectId: id,
+          taskId: { not: null },
+          OR: [
+            { fileUrl: { endsWith: '.jpg', mode: 'insensitive' } },
+            { fileUrl: { endsWith: '.jpeg', mode: 'insensitive' } },
+            { fileUrl: { endsWith: '.png', mode: 'insensitive' } },
+            { fileUrl: { endsWith: '.webp', mode: 'insensitive' } },
+          ],
+        },
+        select: { taskId: true, fileUrl: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
     const tasks = await this.prisma.task.findMany({
       where: { projectId: id },
       select: {
@@ -444,7 +472,32 @@ export class ProjectsService {
       progress: t.progress.map((r) => ({ id: r.id, date: r.date, quantity: r.quantity })),
     }));
 
-    const dashboard = computeObraDashboard(id, name, activities, new Date());
+    const controlSemanal = computeControlSemanal(
+      {
+        totalHh: control?.totalHh ?? null,
+        cutoffDate: control?.cutoffDate ?? null,
+        planAtCutoff: control?.planAtCutoff ?? null,
+      },
+      semanas,
+      actividades,
+    );
+
+    // Todas las fotos por tarea, de la más nueva a la más vieja: el tablero
+    // elige cuál corresponde a la semana que se esté mirando.
+    const porTarea = new Map<string, Array<{ url: string; date: string }>>();
+    for (const d of fotos) {
+      if (!d.taskId) continue;
+      const lista = porTarea.get(d.taskId) ?? [];
+      lista.push({ url: d.fileUrl, date: d.createdAt.toISOString().slice(0, 10) });
+      porTarea.set(d.taskId, lista);
+    }
+
+    const dashboard = computeObraDashboard(id, name, activities, new Date(), {
+      semanas: semanas.map((w) => w.closeDate),
+      // `lastClosed` es un índice; como cantidad de semanas informadas es +1.
+      informadas: (controlSemanal?.lastClosed ?? -1) + 1,
+      fotos: porTarea,
+    });
 
     // El clima se pide en el centro de los cercos ubicados: es donde está la
     // cuadrilla. Si el proyecto no tiene ubicaciones, no hay dónde consultar.
@@ -457,7 +510,7 @@ export class ProjectsService {
           )
         : null;
 
-    return { ...dashboard, clientName, weather };
+    return { ...dashboard, clientName, weather, control: controlSemanal };
   }
 
   async getById(projectId: string, userId: string) {

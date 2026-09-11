@@ -3,8 +3,10 @@ import {
   GripVertical,
   Locate,
   RotateCcw,
+  Sun,
   Thermometer,
   TriangleAlert,
+  Wind,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -156,7 +158,7 @@ export function PanelClima({ weather }: { weather: ObraWeather }): ReactNode {
   ];
 
   return (
-    <div className="vidrio flex flex-col gap-2 rounded-xl px-3 py-2.5 lg:pointer-events-auto">
+    <div className="vidrio flex flex-col gap-1.5 rounded-xl px-3 py-2 lg:pointer-events-auto">
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide lg:text-sm">
           <Thermometer className="size-3.5 opacity-80" aria-hidden />
@@ -171,16 +173,19 @@ export function PanelClima({ weather }: { weather: ObraWeather }): ReactNode {
         <Dato
           valor={`${weather.temperature.toLocaleString('es-CL')}°`}
           etiqueta="Temperatura"
+          Icon={Thermometer}
           pie={`ST ${weather.apparentTemperature.toLocaleString('es-CL')}°`}
         />
         <Dato
           valor={weather.windSpeed.toLocaleString('es-CL')}
           etiqueta={`Viento ${rumbo(weather.windDirection)}`}
+          Icon={Wind}
           pie={`ráf. ${weather.windGusts.toLocaleString('es-CL')} km/h`}
         />
         <Dato
           valor={weather.uvIndex.toLocaleString('es-CL')}
           etiqueta="Índice UV"
+          Icon={Sun}
           pie={`máx. hoy ${weather.uvIndexMax.toLocaleString('es-CL')}`}
           clase={colorUV(Math.max(weather.uvIndex, weather.uvIndexMax))}
         />
@@ -215,16 +220,21 @@ function Dato({
   valor,
   etiqueta,
   pie,
+  Icon,
   clase = 'text-white',
 }: {
   valor: string;
   etiqueta: string;
   pie: string;
+  Icon: typeof Thermometer;
   clase?: string;
 }): ReactNode {
   return (
     <div className="min-w-0">
-      <p className={`text-lg font-bold leading-none tabular-nums lg:text-2xl ${clase}`}>{valor}</p>
+      <p className={`flex items-center gap-1 text-lg font-bold leading-none tabular-nums 2xl:text-2xl ${clase}`}>
+        <Icon className="size-3.5 shrink-0 opacity-70 lg:size-4" aria-hidden />
+        {valor}
+      </p>
       <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-white/55 lg:text-xs">{etiqueta}</p>
       <p className="truncate text-[10px] text-white/70 lg:text-xs">{pie}</p>
     </div>

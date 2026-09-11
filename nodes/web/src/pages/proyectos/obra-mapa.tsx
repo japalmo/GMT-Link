@@ -90,12 +90,71 @@ function iconoHtml(p: ObraMapPoint): string {
   </svg>`;
 }
 
-function popupHtml(p: ObraMapPoint): string {
+/** Dónde cae un punto dentro del mundo teselado, en píxeles, a un zoom dado. */
+function pixelesDe(lat: number, lng: number, z: number): { x: number; y: number } {
+  const mundo = 256 * 2 ** z;
+  const sen = Math.sin((lat * Math.PI) / 180);
+  return {
+    x: ((lng + 180) / 360) * mundo,
+    y: (0.5 - Math.log((1 + sen) / (1 - sen)) / (4 * Math.PI)) * mundo,
+  };
+}
+
+const ANCHO_VISTA = 264;
+const ALTO_VISTA = 132;
+// 17 y no 18: sobre el desierto de Mantos Blancos, Esri no tiene imagen a
+// zoom 18 y devuelve una tesela gris plana. 17 es el último con detalle real.
+const ZOOM_VISTA = 17;
+
+/**
+ * Vista satelital del área del cerco, armada con las mismas teselas del mapa.
+ * El servicio de Esri no expone exportación de imagen para este layer, así que
+ * el recorte se hace con cuatro teselas desplazadas hasta dejar el cerco al
+ * centro: es imagen real del terreno, no una miniatura genérica.
+ */
+function vistaSatelitalHtml(p: ObraMapPoint): string {
+  const { x, y } = pixelesDe(p.lat, p.lng, ZOOM_VISTA);
+  const x0 = Math.floor((x - ANCHO_VISTA / 2) / 256);
+  const y0 = Math.floor((y - ALTO_VISTA / 2) / 256);
+  const izq = -(x - ANCHO_VISTA / 2 - x0 * 256);
+  const arriba = -(y - ALTO_VISTA / 2 - y0 * 256);
+
+  let teselas = '';
+  for (let dy = 0; dy < 2; dy += 1) {
+    for (let dx = 0; dx < 2; dx += 1) {
+      const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${ZOOM_VISTA}/${y0 + dy}/${x0 + dx}`;
+      teselas += `<img src="${url}" alt="" width="256" height="256" loading="lazy"
+        style="position:absolute;left:${dx * 256}px;top:${dy * 256}px" />`;
+    }
+  }
+
+  return `<div style="position:absolute;inset:0;transform:translate(${izq}px,${arriba}px)">${teselas}</div>
+    <span style="position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;
+      border-radius:9999px;border:2px solid #fff;box-shadow:0 0 0 2px rgba(15,23,42,.55)"></span>`;
+}
+
+/**
+ * Ficha del cerco. Muestra el área y el estado de la SEMANA que se esté
+ * mirando: retroceder en el tablero retrocede también esta ventana.
+ */
+function popupHtml(p: ObraMapPoint, pie: string, foto: { url: string; date: string } | null): string {
   const etapa = p.currentStep
-    ? `<div style="margin-top:5px">Ahora: <strong>${escapar(p.currentStep)}</strong></div>`
+    ? `<div style="margin-top:4px">Ahora: <strong>${escapar(p.currentStep)}</strong></div>`
     : '';
-  return `<div style="font-family:inherit;min-width:180px">
-    <strong style="font-size:13px">Cerco ${escapar(p.code)}</strong>
+  const medio = foto
+    ? `<img src="${escapar(foto.url)}" alt="Avance del cerco ${escapar(p.code)}"
+         style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />`
+    : vistaSatelitalHtml(p);
+  const rotulo = foto ? `Foto de avance · ${escapar(foto.date)}` : 'Vista satelital del área';
+
+  return `<div style="font-family:inherit;width:${ANCHO_VISTA}px">
+    <div style="position:relative;width:${ANCHO_VISTA}px;height:${ALTO_VISTA}px;overflow:hidden;
+      border-radius:8px;background:#1e293b">
+      ${medio}
+      <span style="position:absolute;left:0;right:0;bottom:0;padding:3px 6px;font-size:10px;
+        color:#f1f5f9;background:linear-gradient(transparent,rgba(2,6,23,.85))">${rotulo}</span>
+    </div>
+    <strong style="display:block;margin-top:6px;font-size:13px">Cerco ${escapar(p.code)}</strong>
     <div style="color:#64748b;font-size:11px">Tipo ${escapar(p.workType)}${
       p.sector ? ` · Sector ${escapar(p.sector)}` : ''
     }</div>
@@ -107,16 +166,20 @@ function popupHtml(p: ObraMapPoint): string {
         'es-CL',
       )}%)
     </div>${etapa}
+    <div style="margin-top:5px;color:#64748b;font-size:11px">${escapar(pie)}</div>
   </div>`;
 }
 
 export function ObraMapa({
   mapa,
   filtro = SIN_FILTRO,
+  corte,
   onControles,
 }: {
   mapa: ObraMap;
   filtro?: FiltroMapa;
+  /** Qué semana se está mirando, para rotular la ficha y elegir la foto. */
+  corte?: { etiqueta: string; hasta: string };
   /**
    * Entrega el control del zoom al tablero. Los botones propios de Leaflet no
    * combinan con el vidrio, así que los dibuja el tablero y llama acá.
@@ -200,7 +263,16 @@ export function ObraMapa({
           keyboard: false,
           riseOnHover: true,
         })
-          .bindPopup(popupHtml(p))
+          .bindPopup(
+            popupHtml(
+              p,
+              corte?.etiqueta ?? 'Estado a hoy',
+              // La foto que correspondía a esa fecha: la más nueva anterior al
+              // cierre de la semana. Antes de la primera, ninguna.
+              p.photos.find((f) => !corte || f.date <= corte.hasta) ?? null,
+            ),
+            { minWidth: ANCHO_VISTA, maxWidth: ANCHO_VISTA + 24 },
+          )
           .addTo(grupo);
       }
 
@@ -215,8 +287,11 @@ export function ObraMapa({
         mapaL.fitBounds(
           Lmod.latLngBounds(encuadrar.map((p) => [p.lat, p.lng] as [number, number])),
           {
-            paddingTopLeft: amplio ? [40, 110] : [40, 40],
-            paddingBottomRight: amplio ? [470, 60] : [40, 40],
+            // Arriba los indicadores, a la izquierda clima y leyenda, a la
+            // derecha las tarjetas y abajo la curva: sin este margen desparejo
+            // los cercos quedan justo debajo del vidrio.
+            paddingTopLeft: amplio ? [300, 130] : [40, 40],
+            paddingBottomRight: amplio ? [450, 230] : [40, 40],
             maxZoom: 17,
             animate: true,
           },
@@ -232,7 +307,7 @@ export function ObraMapa({
     return () => {
       vivo = false;
     };
-  }, [listo, mapa, filtro, encuadres]);
+  }, [listo, mapa, filtro, corte, encuadres]);
 
   return (
     // `z-0` con posición crea contexto de apilado y encierra los paneles de

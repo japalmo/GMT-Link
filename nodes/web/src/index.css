@@ -168,6 +168,7 @@
   --animate-panel: panel-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-entrada: entrada 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-barra: barra 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-barra-alto: barra-alto 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-trazo: trazo 1100ms ease-out both;
   --animate-turno: turno 13s linear both;
 }
@@ -201,6 +202,16 @@
 @keyframes barra {
   from { width: 0; }
   to { width: var(--barra, 0%); }
+}
+/* Las barras semanales de la curva S son <rect> de SVG y no divs: no se puede
+   animar el ancho, así que crecen desde su base con una escala vertical. */
+@keyframes barra-alto {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.animate-barra-alto {
+  transform-box: fill-box;
+  transform-origin: bottom;
 }
 /* La curva real se dibuja sola: se traza el path desde el inicio del programa. */
 @keyframes trazo {
@@ -270,6 +281,7 @@
   .animate-panel,
   .animate-entrada,
   .animate-barra,
+  .animate-barra-alto,
   .animate-trazo,
   .animate-turno,
   .pulso-cerco {
