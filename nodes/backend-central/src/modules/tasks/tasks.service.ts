@@ -15,7 +15,13 @@ import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagin
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/tasks.dto';
 import { computeTaskPriority } from './priority.util';
 
-/** Include común de las consultas de tareas (misma forma para list y listTable). */
+/**
+ * Relaciones que acompañan a TODA tarea que sale de este servicio.
+ *
+ * Es una constante y no un `include` escrito en cada consulta porque ya pasó:
+ * había cinco copias con juegos distintos de relaciones y la cuadrilla no
+ * llegaba al detalle ni al mover una tarjeta en el kanban, solo al asignarla.
+ */
 const TASK_INCLUDE = {
   project: true,
   service: true,
@@ -164,13 +170,7 @@ export class TasksService {
           }),
         } : undefined,
       },
-      include: {
-        project: true,
-        service: true,
-        assignedTo: true,
-        createdBy: true,
-        clientUser: true,
-      },
+      include: TASK_INCLUDE,
     });
 
     // Gamificación: puntos por crear tarea (best-effort)
@@ -352,14 +352,7 @@ export class TasksService {
   async getById(id: string, userId: string) {
     const task = await this.prisma.task.findUnique({
       where: { id },
-      include: {
-        project: true,
-        service: true,
-        assignedTo: true,
-        createdBy: true,
-        clientUser: true,
-        timeLogs: { orderBy: { startedAt: 'asc' } },
-      },
+      include: TASK_INCLUDE,
     });
 
     if (!task) {
@@ -459,13 +452,7 @@ export class TasksService {
         recurrence: dto.recurrence,
         clientUserId: dto.clientUserId,
       },
-      include: {
-        project: true,
-        service: true,
-        assignedTo: true,
-        createdBy: true,
-        clientUser: true,
-      },
+      include: TASK_INCLUDE,
     });
 
     return this.applyPriorityEscalation([updatedTask])[0]!;
@@ -545,13 +532,7 @@ export class TasksService {
           rejectionReason: null, // aprobada: se limpia cualquier motivo previo
           completedAt: new Date(), // marca de completado para la curva real del Dashboard
         },
-        include: {
-          project: true,
-          service: true,
-          assignedTo: true,
-          createdBy: true,
-          clientUser: true,
-        },
+        include: TASK_INCLUDE,
       });
 
       // Gamificación: otorgar puntos al asignado por completar tarea (best-effort)
@@ -567,13 +548,7 @@ export class TasksService {
     const updatedTask = await this.prisma.task.update({
       where: { id },
       data: { status: dto.status, rejectionReason, completedAt: null },
-      include: {
-        project: true,
-        service: true,
-        assignedTo: true,
-        createdBy: true,
-        clientUser: true,
-      },
+      include: TASK_INCLUDE,
     });
     return this.applyPriorityEscalation([updatedTask])[0]!;
   }
@@ -723,7 +698,9 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException('La tarea no existe.');
 
-    const decision = await this.permissions.can(userId, 'task:manage', {
+    // `task:assign` es el permiso que ya existe para poner gente en una tarea.
+    // (`task:manage` no está en el catálogo: usarlo habría negado a todos.)
+    const decision = await this.permissions.can(userId, 'task:assign', {
       projectId: task.projectId ?? undefined,
     });
     if (decision.effect !== 'allow') {

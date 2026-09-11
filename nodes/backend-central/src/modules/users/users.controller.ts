@@ -119,16 +119,21 @@ export class UsersController {
     return this.fieldWorkers.remove(id, force === 'true');
   }
 
-  /** Gate de la cuadrilla: administrar proyectos, o administrar usuarios. */
+  /**
+   * Gate de la cuadrilla. Los tres permisos del catálogo que corresponden:
+   * quien arma el equipo de un proyecto, quien lo administra, o quien crea
+   * usuarios. Se consultan por clave y NO se compara contra roles (ADR-0001).
+   */
   private async assertPuedeGestionarCuadrilla(authUser: AuthUser | undefined): Promise<void> {
     if (!authUser) {
       throw new UnauthorizedException('Se requiere un usuario autenticado.');
     }
-    const [proyectos, usuarios] = await Promise.all([
-      this.permissions.can(authUser.id, 'project:manage'),
-      this.permissions.can(authUser.id, 'user:manage'),
-    ]);
-    if (proyectos.effect !== 'allow' && usuarios.effect !== 'allow') {
+    const decisiones = await Promise.all(
+      (['project:team:manage', 'project:manage', 'user:create'] as const).map((clave) =>
+        this.permissions.can(authUser.id, clave),
+      ),
+    );
+    if (!decisiones.some((d) => d.effect === 'allow')) {
       throw new ForbiddenException('No tienes permisos para gestionar la cuadrilla.');
     }
   }

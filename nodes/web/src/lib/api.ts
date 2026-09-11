@@ -6,6 +6,11 @@ import type {
 import { getToken, setToken } from '@/lib/auth-token';
 import type { AuthedUser } from '@/types/auth';
 import type {
+  CreateFieldWorkerInput,
+  FieldWorker,
+  SetTaskCrewInput,
+} from '@gmt-platform/contracts';
+import type {
   CvCertificationInput,
   CvCertificationView,
   CvEducationInput,
@@ -1962,6 +1967,62 @@ export function finishTaskTime(id: string, note?: string): Promise<TaskTimeLogVi
 
 export function getTaskAssignees(projectId: string): Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>> {
   return request<Array<{ id: string; firstName: string; lastName: string; email: string }>>(`/tasks/assignees?projectId=${encodeURIComponent(projectId)}`);
+}
+
+/* --- Cuadrilla de faena --- */
+
+/**
+ * Fichas de la gente que va a terreno. No son cuentas: se crean sin clave y no
+ * reciben credenciales, porque no hay ninguna que recibir.
+ */
+export function listFieldWorkers(search?: string): Promise<FieldWorker[]> {
+  const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<FieldWorker[]>(`/users/field-workers${query}`);
+}
+
+export function createFieldWorker(input: CreateFieldWorkerInput): Promise<FieldWorker> {
+  return request<FieldWorker>('/users/field-workers', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateFieldWorker(
+  id: string,
+  input: Partial<CreateFieldWorkerInput>,
+): Promise<FieldWorker> {
+  return request<FieldWorker>(`/users/field-workers/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** `force` confirma que se le saque de las cuadrillas en las que esté. */
+export function deleteFieldWorker(
+  id: string,
+  force = false,
+): Promise<{ removed: true; assignments: number }> {
+  return request<{ removed: true; assignments: number }>(
+    `/users/field-workers/${encodeURIComponent(id)}${force ? '?force=true' : ''}`,
+    { method: 'DELETE' },
+  );
+}
+
+/** Trabajadores elegibles para la cuadrilla de una tarea de este proyecto. */
+export function getCrewOptions(
+  projectId: string,
+): Promise<Array<{ id: string; firstName: string; lastName: string; cargo: string | null }>> {
+  return request<Array<{ id: string; firstName: string; lastName: string; cargo: string | null }>>(
+    `/tasks/crew-options?projectId=${encodeURIComponent(projectId)}`,
+  );
+}
+
+/** Reemplaza la cuadrilla completa de una tarea. */
+export function setTaskCrew(id: string, input: SetTaskCrewInput): Promise<TaskView> {
+  return request<TaskView>(`/tasks/${encodeURIComponent(id)}/crew`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
 }
 
 /* --- Documentos de Proyecto --- */

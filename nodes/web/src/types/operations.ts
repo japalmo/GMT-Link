@@ -48,6 +48,15 @@ export interface TaskTimeLogView {
 
 
 
+/** Datos de la persona en una cuadrilla, como los devuelve la API de tareas. */
+export interface CrewUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  cargo: string | null;
+  isFieldWorker: boolean;
+}
+
 export interface TaskView {
   id: string;
   name: string;
@@ -79,6 +88,12 @@ export interface TaskView {
   clientUserId: string | null;
   clientUser: { id: string; firstName: string; lastName: string; email: string } | null;
   timeLogs?: TaskTimeLogView[];
+  /**
+   * Cuadrilla que va a terreno, con el jefe primero. Distinta de `assignedTo`,
+   * que es el responsable con cuenta: en una etapa de cerco el responsable puede
+   * ser el jefe de terreno y la cuadrilla, cuatro trabajadores sin acceso.
+   */
+  crew?: Array<{ userId: string; lead: boolean; user: CrewUser }>;
   dataSpec?: TaskDataSpec | null;
   phaseId?: string | null;
   elementId?: string | null;

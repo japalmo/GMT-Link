@@ -43,6 +43,7 @@ import { DataTable, type DataTableColumn } from '@/components/primitives/data-ta
 import { useDataTable } from '@/hooks/use-data-table';
 import type { TableRequest, TaskDataSpec } from '@gmt-platform/contracts';
 import type { TaskView, TaskStatus, UpdateTaskInput } from '@/types/operations';
+import { Cuadrilla } from '@/pages/proyectos/cuadrilla';
 
 /** Etiqueta legible + variante de `Badge` por estado de tarea del backlog. */
 const TASK_STATUS_META: Record<
@@ -880,11 +881,14 @@ export function BacklogTab(): ReactNode {
     },
     {
       id: 'responsable',
-      header: 'Responsable',
+      header: 'Responsable y cuadrilla',
       render: (t) => (
-        <div className="flex items-center gap-1.5 text-xs">
-          <User className="size-3 text-muted-foreground/60" />
-          <span>{t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}</span>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="flex items-center gap-1.5">
+            <User className="size-3 text-muted-foreground/60" />
+            {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}
+          </span>
+          {(t.crew?.length ?? 0) > 0 && <Cuadrilla crew={t.crew ?? []} max={4} />}
         </div>
       ),
     },
@@ -1246,11 +1250,16 @@ export function BacklogTab(): ReactNode {
                         <CardFooter className="p-3 pt-3 flex flex-col gap-3 border-t mt-3 bg-muted/10">
                           {/* User assignments & points details */}
                           <div className="flex justify-between items-center w-full text-xs">
-                            <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <User className="size-3 text-muted-foreground/60" />
-                              <span className="truncate max-w-[100px]" title={t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}>
-                                {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName.substring(0,1)}.` : 'Sin asignar'}
+                            <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <User className="size-3 text-muted-foreground/60" />
+                                <span className="truncate max-w-[90px]" title={t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName}` : 'Sin asignar'}>
+                                  {t.assignedTo ? `${t.assignedTo.firstName} ${t.assignedTo.lastName.substring(0,1)}.` : 'Sin asignar'}
+                                </span>
                               </span>
+                              {/* Quién va a terreno. El responsable es quien
+                                  responde; la cuadrilla es quien ejecuta. */}
+                              {(t.crew?.length ?? 0) > 0 && <Cuadrilla crew={t.crew ?? []} max={3} />}
                             </div>
                             <div className="font-medium flex flex-col items-end">
                               <span className="text-foreground">Est: {t.estimatedPoints} Pts</span>

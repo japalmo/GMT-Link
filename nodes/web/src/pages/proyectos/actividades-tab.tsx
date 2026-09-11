@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,7 @@ import { ListChecks } from 'lucide-react';
 import { errorToMessage } from '@/lib/api';
 import type { ServiceView, TaskView } from '@/types/operations';
 import type { TaskDataSpec } from '@gmt-platform/contracts';
+import { PlanActividades } from './plan-actividades';
 
 interface ActividadesTabProps {
   projectId: string;
@@ -52,7 +53,7 @@ function newStepRow(): StepForm {
 }
 
 export function ActividadesTab({ projectId, services, canCreate }: ActividadesTabProps): ReactNode {
-  const { tasks, loading, create, update, remove } = useTasks({ projectId });
+  const { tasks, loading, create, update, remove, refetch } = useTasks({ projectId });
   const { items: users } = useUsers({ limit: 100 });
 
   const [creatorOpen, setCreatorOpen] = useState(false);
@@ -241,16 +242,14 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
     }
   };
 
-  // Actividades principales (parentId = null) y sus pasos correspondientes
-  const rootTasks = tasks.filter((t) => !t.parentId);
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold leading-none tracking-tight">Plan de Actividades</h2>
-          <p className="text-sm text-muted-foreground mt-1.5">
-            Genera actividades y diseña su cascada de pasos con fechas independientes.
+          <h2 className="text-lg font-semibold leading-none tracking-tight">Plan de actividades</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Cada etapa es una actividad propia: se le pone cuadrilla y jefe, y se sigue por
+            separado.
           </p>
         </div>
         {canCreate && (
@@ -262,105 +261,24 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
       </div>
 
       {loading ? (
-        <div className="text-center py-8 text-sm text-muted-foreground">
-          Cargando actividades...
-        </div>
-      ) : rootTasks.length === 0 ? (
-        <div className="border rounded-md p-8 bg-muted/20 flex flex-col items-center justify-center text-center">
+        <div className="py-8 text-center text-sm text-muted-foreground">Cargando actividades…</div>
+      ) : tasks.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-md border bg-muted/20 p-8 text-center">
           <EmptyState
             icon={ListChecks}
-            title="Creador de Actividades"
-            message="Utiliza el botón superior para crear una nueva actividad en cascada para este proyecto."
+            title="Creador de actividades"
+            message="Usa el botón de arriba para crear la primera actividad de este proyecto."
           />
         </div>
       ) : (
-        <div className="space-y-4">
-          {rootTasks.map((activity) => {
-            const childSteps = tasks.filter((t) => t.parentId === activity.id);
-            return (
-              <div key={activity.id} className="border rounded-lg p-4 bg-card shadow-sm space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base text-foreground">{activity.name}</h3>
-                      <span className="text-xs px-2 py-0.5 rounded bg-muted font-medium text-muted-foreground">
-                        {activity.status}
-                      </span>
-                      {activity.priority && (
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                          activity.priority === 'URGENTE' ? 'bg-red-100 text-red-700' :
-                          activity.priority === 'ALTA' ? 'bg-orange-100 text-orange-700' :
-                          activity.priority === 'MEDIA' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {activity.priority}
-                        </span>
-                      )}
-                    </div>
-                    {activity.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{activity.description}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {canCreate && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() => openEdit(activity)}
-                          aria-label={`Editar ${activity.name}`}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleting(activity)}
-                          aria-label={`Borrar ${activity.name}`}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground text-right space-y-1">
-                      {activity.startDate && <div>Inicio: {activity.startDate.slice(0, 10)}</div>}
-                      {activity.reviewDate && <div>Revisión: {activity.reviewDate.slice(0, 10)}</div>}
-                      {activity.dueDate && <div>Entrega: {activity.dueDate.slice(0, 10)}</div>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Subpasos / Hijos */}
-                {childSteps.length > 0 && (
-                  <div className="mt-3 pl-4 border-l-2 border-muted space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pasos:</h4>
-                    {childSteps.map((step) => (
-                      <div key={step.id} className="flex items-center justify-between text-sm py-1.5 border-b last:border-0 border-muted/50">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{step.name}</span>
-                          <span className="text-xs text-muted-foreground">({step.status})</span>
-                          {step.assignedTo && (
-                            <span className="text-xs text-muted-foreground">
-                              Assigned: {step.assignedTo.firstName} {step.assignedTo.lastName}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          {step.priority && <span className="font-semibold">{step.priority}</span>}
-                          {step.dueDate && <span>Vence: {step.dueDate.slice(0, 10)}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PlanActividades
+          projectId={projectId}
+          tasks={tasks}
+          canManage={canCreate}
+          onRefetch={refetch}
+          onEditar={openEdit}
+          onBorrar={setDeleting}
+        />
       )}
 
       <Modal open={creatorOpen} onOpenChange={setCreatorOpen}>

@@ -89,6 +89,7 @@ import { openProjectDocumentFileInNewTab } from '@/components/documents/project-
 import { ActividadesTab } from './actividades-tab';
 import { DashboardTab } from './dashboard-tab';
 import { ObraDashboardTab } from './obra-dashboard-tab';
+import { ListaTrabajadores } from './cuadrilla';
 import type {
   ProjectType,
   ServiceFrequency,
@@ -526,6 +527,28 @@ const STATUS_LABELS: Record<ProjectWorkerStatus, string> = {
 };
 
 function TrabajadoresTab({ projectId }: { projectId: string }): ReactNode {
+  return (
+    <div className="flex flex-col gap-6">
+      <EquipoDelProyecto projectId={projectId} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Trabajadores de faena</CardTitle>
+          <CardDescription>
+            La gente que va a terreno. No se les crea cuenta ni se les envía nada: la ficha existe
+            para armar las cuadrillas de cada etapa. El listado es de la empresa y sirve para
+            cualquier obra.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ListaTrabajadores />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/** El equipo CON cuenta: quién tiene qué rol dentro del proyecto. */
+function EquipoDelProyecto({ projectId }: { projectId: string }): ReactNode {
   const { assignments, loading, error, create, update, remove } = useAssignments(projectId);
 
   const [users, setUsers] = useState<UserListItem[]>([]);
