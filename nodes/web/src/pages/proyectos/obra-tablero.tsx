@@ -232,7 +232,7 @@ export function ObraTablero({
         </Arrastrable>
 
         <div className="flex flex-col gap-2 sm:gap-3 lg:min-h-0 lg:flex-1 lg:flex-row">
-          <div className="order-2 flex flex-col gap-2 sm:gap-3 lg:order-1 lg:w-[264px] lg:shrink-0 lg:justify-between">
+          <div className="order-2 flex flex-col gap-2 sm:gap-3 lg:order-1 lg:w-[264px] lg:shrink-0 lg:justify-between lg:overflow-y-auto lg:pr-1">
             {data.weather && (
               <Arrastrable id="clima" posiciones={posiciones} onMover={mover}>
                 <PanelClima weather={data.weather} />
@@ -288,7 +288,7 @@ function TarjetaPanel({
   return (
     <section className="vidrio flex h-[230px] flex-col overflow-hidden rounded-xl lg:pointer-events-auto lg:h-auto lg:min-h-[200px] lg:flex-1">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold lg:text-base">
           <panel.Icon className="size-4 shrink-0 opacity-80" aria-hidden />
           <span className="truncate">{panel.titulo}</span>
         </h2>
@@ -360,11 +360,11 @@ function Indicadores({ data, quieto }: { data: ObraDashboard; quieto: boolean })
   const est = ESTADO[data.status];
   return (
     <div className="pointer-events-auto grid shrink-0 grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-      <div className="vidrio flex items-center gap-3 rounded-xl px-3 py-2.5">
+      <div className="vidrio col-span-2 flex items-center gap-3 rounded-xl px-3 py-2.5 lg:col-span-1">
         <Gauge real={data.realProgress} planned={data.plannedProgress} quieto={quieto} />
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wide text-white/60">Avance real</p>
-          <p className="text-xs text-white/80">
+          <p className="text-[10px] uppercase tracking-wide text-white/60 lg:text-xs">Avance real</p>
+          <p className="text-xs text-white/80 lg:text-sm">
             Programa {data.plannedProgress.toLocaleString('es-CL')}%
           </p>
         </div>
@@ -388,8 +388,8 @@ function Indicadores({ data, quieto }: { data: ObraDashboard; quieto: boolean })
       />
 
       <div className="vidrio flex flex-col justify-center rounded-xl px-3 py-2.5">
-        <span className="text-[10px] uppercase tracking-wide text-white/60">Estado</span>
-        <span className={`mt-0.5 flex items-center gap-2 text-xl font-bold ${est.clase}`}>
+        <span className="text-[10px] uppercase tracking-wide text-white/60 lg:text-xs">Estado</span>
+        <span className={`mt-0.5 flex items-center gap-2 text-xl font-bold lg:text-3xl ${est.clase}`}>
           <span className="relative flex size-2.5" aria-hidden>
             {!quieto && (
               <span
@@ -400,7 +400,7 @@ function Indicadores({ data, quieto }: { data: ObraDashboard; quieto: boolean })
           </span>
           {est.label}
         </span>
-        <span className="mt-0.5 truncate text-[11px] text-white/70">
+        <span className="mt-0.5 truncate text-[11px] text-white/70 lg:text-xs">
           {fechaLarga(data.programStart)} al {fechaLarga(data.programEnd)}
         </span>
       </div>
@@ -432,9 +432,9 @@ function Indicador({
   })}${sufijo}`;
   return (
     <div className="vidrio flex flex-col justify-center rounded-xl px-3 py-2.5">
-      <span className="text-[10px] uppercase tracking-wide text-white/60">{etiqueta}</span>
-      <span className={`mt-0.5 text-2xl font-bold tabular-nums lg:text-3xl ${clase}`}>{texto}</span>
-      <span className="mt-0.5 truncate text-[11px] text-white/70">{pie}</span>
+      <span className="text-[10px] uppercase tracking-wide text-white/60 lg:text-xs">{etiqueta}</span>
+      <span className={`mt-0.5 text-2xl font-bold tabular-nums lg:text-4xl xl:text-5xl ${clase}`}>{texto}</span>
+      <span className="mt-0.5 truncate text-[11px] text-white/70 lg:text-xs">{pie}</span>
     </div>
   );
 }
@@ -462,7 +462,7 @@ function Gauge({
     <div className="relative shrink-0">
       <svg
         viewBox="0 0 120 120"
-        className="size-[76px] -rotate-[135deg]"
+        className="size-[76px] -rotate-[135deg] lg:size-[96px]"
         role="img"
         aria-label={`Avance real ${real}% contra ${planned}% planificado`}
       >
@@ -498,7 +498,7 @@ function Gauge({
           strokeDashoffset={-(ARCO * marca) / 100}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-base font-bold tabular-nums">
+      <span className="absolute inset-0 flex items-center justify-center text-base font-bold tabular-nums lg:text-xl">
         {mostrado.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
       </span>
     </div>
@@ -534,13 +534,13 @@ function LeyendaFiltros({
   }
 
   return (
-    <div className="vidrio flex flex-col gap-2 rounded-xl px-3 py-2.5">
+    <div className="vidrio flex flex-col gap-1.5 rounded-xl px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide lg:text-sm">
           <MapPin className="size-3.5 opacity-80" aria-hidden />
           Cercos en faena
         </h3>
-        <span className="text-xs tabular-nums text-white/70">
+        <span className="text-xs tabular-nums text-white/70 lg:text-sm">
           {visibles} de {puntos.length}
         </span>
       </div>
@@ -554,7 +554,7 @@ function LeyendaFiltros({
                 type="button"
                 onClick={() => onFiltro({ ...filtro, estados: alternar(filtro.estados, estado) })}
                 aria-pressed={activo}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors ${
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-0.5 text-xs transition-colors lg:text-sm ${
                   activo ? 'vidrio-activo' : 'hover:bg-white/10'
                 }`}
               >
@@ -571,9 +571,9 @@ function LeyendaFiltros({
         })}
       </ul>
 
-      <div className="flex flex-col gap-1.5 border-t border-white/10 pt-2">
-        <span className="text-[10px] uppercase tracking-wide text-white/55">
-          Tipo de cerco (la letra del punto)
+      <div className="flex flex-col gap-1 border-t border-white/10 pt-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-white/55 lg:text-xs">
+          Tipo, la letra del punto
         </span>
         <div className="flex flex-wrap gap-1.5">
           {tipos.map((tipo) => {
@@ -584,7 +584,7 @@ function LeyendaFiltros({
                 type="button"
                 onClick={() => onFiltro({ ...filtro, tipos: alternar(filtro.tipos, tipo) })}
                 aria-pressed={activo}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors lg:text-sm ${
                   activo ? 'vidrio-activo' : 'vidrio-sutil hover:bg-white/20'
                 }`}
               >
@@ -599,14 +599,14 @@ function LeyendaFiltros({
       </div>
 
       <div className="flex items-center gap-2">
-        <label htmlFor="filtro-sector" className="text-[10px] uppercase tracking-wide text-white/55">
+        <label htmlFor="filtro-sector" className="text-[10px] uppercase tracking-wide text-white/55 lg:text-xs">
           Sector
         </label>
         <select
           id="filtro-sector"
           value={filtro.sector ?? ''}
           onChange={(e) => onFiltro({ ...filtro, sector: e.target.value || null })}
-          className="vidrio-sutil flex-1 rounded-md px-2 py-1 text-xs text-white outline-none [&>option]:bg-slate-800 [&>option]:text-white"
+          className="vidrio-sutil flex-1 rounded-md px-2 py-1 text-xs text-white outline-none lg:text-sm [&>option]:bg-slate-800 [&>option]:text-white"
         >
           <option value="">Todos</option>
           {sectores.map((s) => (
@@ -629,8 +629,8 @@ function LeyendaFiltros({
       )}
 
       {sinUbicar > 0 && (
-        <p className="text-[11px] leading-tight text-white/55">
-          {sinUbicar} cercos sin ubicación confirmada: existen, pero no se pueden dibujar.
+        <p className="text-[11px] leading-tight text-white/55 lg:text-xs">
+          {sinUbicar} cercos aún sin ubicación confirmada.
         </p>
       )}
     </div>
@@ -861,7 +861,7 @@ function CurvaS({ curves }: { curves: ObraDashboard['curves'] }): ReactNode {
         ))}
       </svg>
 
-      <div className="mt-1 flex shrink-0 flex-wrap justify-center gap-x-4 gap-y-0.5 text-[11px] text-white/70">
+      <div className="mt-1 flex shrink-0 flex-wrap justify-center gap-x-4 gap-y-0.5 text-[11px] text-white/70 lg:text-xs">
         <Leyenda color="#38bdf8" texto="Real ejecutado" />
         <Leyenda punteado="#fbbf24" texto="Programa vigente" />
         <Leyenda bloque="rgb(56 189 248 / 0.3)" texto="Margen temprano-tardío" />
@@ -908,15 +908,15 @@ function Barras({ lineas, detalle }: { lineas: ObraLine[]; detalle?: string[] })
       {lineas.map((l, i) => (
         <li key={l.id} className="min-w-0">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-xs font-medium">{l.name}</span>
-            <span className="shrink-0 text-[11px] tabular-nums text-white/60">
+            <span className="truncate text-xs font-medium lg:text-sm">{l.name}</span>
+            <span className="shrink-0 text-[11px] tabular-nums text-white/60 lg:text-xs">
               {detalle?.[i] ??
                 l.detail ??
                 `${cantidad(l.quantityDone)} / ${cantidad(l.quantityTotal)}${
                   l.unit ? ` ${l.unit}` : ''
                 }`}
             </span>
-            <span className="w-11 shrink-0 text-right text-xs font-bold tabular-nums">
+            <span className="w-11 shrink-0 text-right text-xs font-bold tabular-nums lg:w-14 lg:text-sm">
               {l.percent.toLocaleString('es-CL')}%
             </span>
           </div>
@@ -956,10 +956,10 @@ function Hitos({ items }: { items: ObraMilestone[] }): ReactNode {
           >
             {h.done && <Flag className="size-2.5" />}
           </span>
-          <span className={`min-w-0 flex-1 truncate text-xs ${h.done ? '' : 'text-white/70'}`}>
+          <span className={`min-w-0 flex-1 truncate text-xs lg:text-sm ${h.done ? '' : 'text-white/70'}`}>
             {h.name}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-white/60">
+          <span className="shrink-0 text-[11px] tabular-nums text-white/60 lg:text-xs">
             {fechaLarga(h.date)}
           </span>
         </li>
@@ -976,10 +976,10 @@ function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
       {items.slice(0, 8).map((r, i) => (
         <li
           key={r.id}
-          className="flex animate-entrada items-center gap-2 text-xs"
+          className="flex animate-entrada items-center gap-2 text-xs lg:text-sm"
           style={{ animationDelay: `${i * 50}ms` } as React.CSSProperties}
         >
-          <span className="w-20 shrink-0 tabular-nums text-white/60">{fechaLarga(r.date)}</span>
+          <span className="w-20 shrink-0 tabular-nums text-white/60 lg:w-24">{fechaLarga(r.date)}</span>
           <span className="min-w-0 flex-1 truncate">{r.activityName}</span>
           <span className="shrink-0 font-semibold tabular-nums text-sky-300">
             +{cantidad(r.quantity)}
@@ -993,7 +993,7 @@ function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
 
 function Vacio({ mensaje }: { mensaje: string }): ReactNode {
   return (
-    <p className="flex h-full items-center justify-center text-center text-xs text-white/60">
+    <p className="flex h-full items-center justify-center text-center text-xs text-white/60 lg:text-sm">
       {mensaje}
     </p>
   );

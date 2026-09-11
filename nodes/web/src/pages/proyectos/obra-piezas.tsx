@@ -158,11 +158,11 @@ export function PanelClima({ weather }: { weather: ObraWeather }): ReactNode {
   return (
     <div className="vidrio flex flex-col gap-2 rounded-xl px-3 py-2.5 lg:pointer-events-auto">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide lg:text-sm">
           <Thermometer className="size-3.5 opacity-80" aria-hidden />
           Condiciones en faena
         </h3>
-        <span className="text-[11px] tabular-nums text-white/60">
+        <span className="text-[11px] tabular-nums text-white/60 lg:text-xs">
           {weather.observedAt.slice(11, 16)} h
         </span>
       </div>
@@ -187,7 +187,7 @@ export function PanelClima({ weather }: { weather: ObraWeather }): ReactNode {
       </div>
 
       {ordenadas.length === 0 ? (
-        <p className="text-[11px] leading-tight text-emerald-300/90">
+        <p className="text-[11px] leading-tight text-emerald-300/90 lg:text-xs">
           Sin alertas: viento, UV y temperatura dentro de rango.
         </p>
       ) : (
@@ -195,7 +195,7 @@ export function PanelClima({ weather }: { weather: ObraWeather }): ReactNode {
           {ordenadas.map((a) => (
             <li
               key={a.key}
-              className={`flex items-start gap-1.5 rounded-md px-2 py-1 text-[11px] leading-tight ${
+              className={`flex items-start gap-1.5 rounded-md px-2 py-1 text-[11px] leading-tight lg:text-xs ${
                 a.level === 'CRITICO'
                   ? 'bg-red-500/25 text-red-100 ring-1 ring-red-400/40'
                   : 'bg-amber-500/20 text-amber-100'
@@ -224,9 +224,9 @@ function Dato({
 }): ReactNode {
   return (
     <div className="min-w-0">
-      <p className={`text-lg font-bold leading-none tabular-nums ${clase}`}>{valor}</p>
-      <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-white/55">{etiqueta}</p>
-      <p className="truncate text-[10px] text-white/70">{pie}</p>
+      <p className={`text-lg font-bold leading-none tabular-nums lg:text-2xl ${clase}`}>{valor}</p>
+      <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-white/55 lg:text-xs">{etiqueta}</p>
+      <p className="truncate text-[10px] text-white/70 lg:text-xs">{pie}</p>
     </div>
   );
 }
