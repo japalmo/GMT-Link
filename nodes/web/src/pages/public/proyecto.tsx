@@ -102,20 +102,20 @@ export default function PublicObraDashboardPage(): ReactNode {
               sin el recuadro blanco que antes hacía falta para que se leyera. */}
           <img src={gmtLogo} alt="GMT" className="h-8 w-auto shrink-0 sm:h-12 2xl:h-16" />
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold leading-tight sm:text-xl 2xl:text-2xl">
+            <h1 className="truncate text-base font-bold leading-tight sm:text-lg 2xl:text-xl">
               {data?.projectName ?? 'Avance de obra'}
             </h1>
-            <p className="truncate text-xs text-white/60 sm:text-sm 2xl:text-base">
+            <p className="truncate text-xs text-white/60 sm:text-sm">
               {data?.clientName ? `${data.clientName} · ` : ''}Avance de obra
             </p>
           </div>
         </div>
 
         <div className="hidden shrink-0 text-right sm:block">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 lg:text-xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 2xl:text-xs">
             {data?.control ? 'Corte del informe' : 'Datos al'}
           </p>
-          <p className="text-sm font-bold tabular-nums sm:text-base 2xl:text-xl">
+          <p className="text-sm font-bold tabular-nums sm:text-base 2xl:text-lg">
             {fechaLarga(data?.control?.cutoff ?? data?.asOf ?? null)}
           </p>
         </div>
@@ -146,7 +146,7 @@ export default function PublicObraDashboardPage(): ReactNode {
       </main>
 
       <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-white/10 bg-slate-950 px-4 py-2 text-white sm:px-6">
-        <div className="min-w-0 text-[11px] text-white/60 lg:text-xs">
+        <div className="min-w-0 text-[11px] text-white/60 2xl:text-xs">
           <p className="truncate">GMT Link · avance físico informado por el equipo de obra.</p>
           <p className="truncate tabular-nums">
             {hora ? `Pantalla actualizada a las ${hora} · ` : ''}se actualiza sola cada 5 minutos.

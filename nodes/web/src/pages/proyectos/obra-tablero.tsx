@@ -420,7 +420,7 @@ export function ObraTablero({
             alto="h-[230px] sm:h-[250px] lg:h-[28vh] lg:max-h-[300px] lg:min-h-[176px]"
             extra={
               control ? (
-                <span className="hidden shrink-0 items-center gap-1.5 text-[11px] text-white/60 lg:flex lg:text-xs">
+                <span className="hidden shrink-0 items-center gap-1.5 text-[11px] text-white/60 lg:flex 2xl:text-xs">
                   <Table2 className="size-3.5 opacity-70" aria-hidden />
                   {cantidad(control.totalHh)} HH · corte {fechaLarga(control.cutoff)}
                 </span>
@@ -460,7 +460,7 @@ function BarraCorte({
 }): ReactNode {
   return (
     <div className="vidrio pointer-events-auto flex items-center justify-between gap-3 rounded-xl px-3 py-1">
-      <span className="flex min-w-0 items-center gap-1.5 truncate text-[11px] uppercase tracking-wide text-white/60 lg:text-xs">
+      <span className="flex min-w-0 items-center gap-1.5 truncate text-[11px] uppercase tracking-wide text-white/60 2xl:text-xs">
         <CalendarClock className="size-3.5 shrink-0 opacity-75" aria-hidden />
         {corte.etiqueta}
       </span>
@@ -489,7 +489,7 @@ function PanelFijo({
       className={`vidrio flex shrink-0 flex-col overflow-hidden rounded-xl lg:pointer-events-auto ${alto}`}
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-1.5">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold lg:text-base">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold 2xl:text-base">
           <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
           <span className="truncate">{titulo}</span>
         </h2>
@@ -521,7 +521,7 @@ function TarjetaPanel({
   return (
     <section className="vidrio flex h-[210px] flex-col overflow-hidden rounded-xl lg:pointer-events-auto lg:h-auto lg:min-h-[124px] lg:flex-1">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-1.5">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold lg:text-base">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold 2xl:text-base">
           <panel.Icon className="size-4 shrink-0 opacity-80" aria-hidden />
           <span className="truncate">{panel.titulo}</span>
           {panel.aHoy && (
@@ -634,20 +634,20 @@ function Indicadores({
         {/* La tarjeta del medidor NO repite el porcentaje de al lado: pone las
             HH, que es el otro dato de cabecera del informe. */}
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wide text-white/60 lg:text-xs">
+          <p className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">
             {proyectado ? 'Programa a la fecha' : 'Real contra programa'}
           </p>
           {hh ? (
             <>
-              <p className="text-sm font-bold tabular-nums lg:text-xl">
+              <p className="text-sm font-bold tabular-nums 2xl:text-xl">
                 {cantidad(hh.hechas)} <span className="text-white/60">HH</span>
               </p>
-              <p className="truncate text-[11px] text-white/70 lg:text-xs">
+              <p className="truncate text-[11px] text-white/70 2xl:text-xs">
                 de {cantidad(hh.totales)} del contrato
               </p>
             </>
           ) : (
-            <p className="text-xs text-white/80 lg:text-sm">Programa {porcentaje(plan)}%</p>
+            <p className="text-xs text-white/80 2xl:text-sm">Programa {porcentaje(plan)}%</p>
           )}
         </div>
       </div>
@@ -679,8 +679,8 @@ function Indicadores({
       />
 
       <div className="vidrio flex flex-col justify-center rounded-xl px-3 py-2">
-        <span className="text-[10px] uppercase tracking-wide text-white/60 lg:text-xs">Estado</span>
-        <span className={`mt-0.5 flex items-center gap-2 text-xl font-bold lg:text-2xl 2xl:text-3xl ${est.clase}`}>
+        <span className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">Estado</span>
+        <span className={`mt-0.5 flex items-center gap-2 text-base font-bold 2xl:text-lg 2xl:text-xl ${est.clase}`}>
           <span className="relative flex size-2.5" aria-hidden>
             {!quieto && (
               <span
@@ -691,7 +691,7 @@ function Indicadores({
           </span>
           {desviacion === null ? 'Sin informe' : est.label}
         </span>
-        <span className="mt-0.5 truncate text-[11px] text-white/70 lg:text-xs">
+        <span className="mt-0.5 truncate text-[11px] text-white/70 2xl:text-xs">
           {fechaLarga(data.programStart)} al {fechaLarga(data.programEnd)}
         </span>
       </div>
@@ -724,15 +724,15 @@ function Indicador({
       : `${signo && mostrado > 0 ? '+' : ''}${porcentaje(mostrado)}${sufijo}`;
   return (
     <div className="vidrio flex flex-col justify-center rounded-xl px-3 py-2">
-      <span className="text-[10px] uppercase tracking-wide text-white/60 lg:text-xs">{etiqueta}</span>
+      <span className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">{etiqueta}</span>
       <span
-        className={`mt-0.5 text-2xl font-bold tabular-nums lg:text-3xl 2xl:text-5xl ${
+        className={`mt-0.5 text-xl font-bold tabular-nums 2xl:text-2xl 2xl:text-3xl ${
           valor === null ? 'text-white/40' : clase
         }`}
       >
         {texto}
       </span>
-      <span className="mt-0.5 truncate text-[11px] text-white/70 lg:text-xs" title={pie}>
+      <span className="mt-0.5 truncate text-[11px] text-white/70 2xl:text-xs" title={pie}>
         {pie}
       </span>
     </div>
@@ -768,7 +768,7 @@ function Gauge({
     <div className="relative shrink-0">
       <svg
         viewBox="0 0 120 120"
-        className="size-[76px] -rotate-[135deg] 2xl:size-[96px]"
+        className="size-[68px] -rotate-[135deg] 2xl:size-[80px]"
         role="img"
         aria-label={`${proyectado ? 'Avance programado' : 'Avance real'} ${porcentaje(valor)}%, programa ${porcentaje(planned)}%`}
       >
@@ -811,7 +811,7 @@ function Gauge({
           />
         )}
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-base font-bold tabular-nums 2xl:text-xl">
+      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold tabular-nums 2xl:text-base">
         {porcentaje(mostrado)}%
       </span>
     </div>
@@ -857,7 +857,7 @@ function LeyendaFiltros({
 
   return (
     <div className="vidrio flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1.5 rounded-xl px-3 py-1.5">
-      <h3 className="flex shrink-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wide lg:text-sm">
+      <h3 className="flex shrink-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-wide 2xl:text-sm">
         <MapPin className="size-3.5 opacity-80" aria-hidden />
         Cercos
         <span className="font-normal tabular-nums text-white/70">
@@ -876,7 +876,7 @@ function LeyendaFiltros({
                 onClick={() => onFiltro({ ...filtro, estados: alternar(filtro.estados, estado) })}
                 aria-pressed={activo}
                 title={`${NOMBRE_ESTADO[estado]}: ${cuenta((p) => p.status === estado)} cercos`}
-                className={`flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs transition-colors lg:text-sm ${
+                className={`flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs transition-colors 2xl:text-sm ${
                   activo ? 'vidrio-activo' : 'vidrio-sutil hover:bg-white/20'
                 }`}
               >
@@ -896,7 +896,7 @@ function LeyendaFiltros({
       </ul>
 
       <div className="flex shrink-0 items-center gap-1">
-        <span className="text-[10px] uppercase tracking-wide text-white/55 lg:text-xs">Tipo</span>
+        <span className="text-[10px] uppercase tracking-wide text-white/55 2xl:text-xs">Tipo</span>
         {tipos.map((tipo) => {
           const activo = filtro.tipos.includes(tipo);
           return (
@@ -906,7 +906,7 @@ function LeyendaFiltros({
               onClick={() => onFiltro({ ...filtro, tipos: alternar(filtro.tipos, tipo) })}
               aria-pressed={activo}
               title={`Cercos tipo ${tipo}`}
-              className={`rounded-md px-2 py-0.5 text-xs font-semibold transition-colors lg:text-sm ${
+              className={`rounded-md px-2 py-0.5 text-xs font-semibold transition-colors 2xl:text-sm ${
                 activo ? 'vidrio-activo' : 'vidrio-sutil hover:bg-white/20'
               }`}
             >
@@ -922,7 +922,7 @@ function LeyendaFiltros({
       <div className="flex min-w-0 shrink items-center gap-1.5">
         <label
           htmlFor="filtro-sector"
-          className="text-[10px] uppercase tracking-wide text-white/55 lg:text-xs"
+          className="text-[10px] uppercase tracking-wide text-white/55 2xl:text-xs"
         >
           Sector
         </label>
@@ -930,7 +930,7 @@ function LeyendaFiltros({
           id="filtro-sector"
           value={filtro.sector ?? ''}
           onChange={(e) => onFiltro({ ...filtro, sector: e.target.value || null })}
-          className="vidrio-sutil min-w-0 rounded-md px-2 py-0.5 text-xs text-white outline-none lg:text-sm [&>option]:bg-slate-800 [&>option]:text-white"
+          className="vidrio-sutil min-w-0 rounded-md px-2 py-0.5 text-xs text-white outline-none 2xl:text-sm [&>option]:bg-slate-800 [&>option]:text-white"
         >
           <option value="">Todos</option>
           {sectores.map((s) => (
@@ -953,7 +953,7 @@ function LeyendaFiltros({
       )}
 
       {proyectado && (
-        <span className="shrink-0 rounded-md bg-amber-400/20 px-2 py-0.5 text-[10px] leading-tight text-amber-100 lg:text-xs">
+        <span className="shrink-0 rounded-md bg-amber-400/20 px-2 py-0.5 text-[10px] leading-tight text-amber-100 2xl:text-xs">
           Colores del programa, no de lo ejecutado
         </span>
       )}
@@ -1279,14 +1279,14 @@ function CurvaS({ curves }: { curves: ObraDashboard['curves'] }): ReactNode {
           className="pointer-events-none absolute top-0 z-30"
           style={{ left: `calc(${(x(sobre.date) / W) * 100}% + 8px)` }}
         >
-          <div className="vidrio rounded-lg px-2 py-1 text-[11px] shadow-lg shadow-slate-950/40 lg:text-xs">
+          <div className="vidrio rounded-lg px-2 py-1 text-[11px] shadow-lg shadow-slate-950/40 2xl:text-xs">
             <p className="font-semibold">{fechaCorta(sobre.date)}</p>
             <p className="text-white/70">Programa {porcentaje(sobre.value)}%</p>
           </div>
         </div>
       )}
 
-      <div className="mt-1 flex shrink-0 flex-wrap justify-center gap-x-4 gap-y-0.5 text-[11px] text-white/70 lg:text-xs">
+      <div className="mt-1 flex shrink-0 flex-wrap justify-center gap-x-4 gap-y-0.5 text-[11px] text-white/70 2xl:text-xs">
         <Leyenda color={COLOR_REAL} texto="Real ejecutado" />
         <Leyenda punteado={COLOR_PLAN} texto="Programa vigente" />
         <Leyenda bloque="rgb(56 189 248 / 0.3)" texto="Margen temprano-tardío" />
@@ -1333,15 +1333,15 @@ function Barras({ lineas, detalle }: { lineas: ObraLine[]; detalle?: string[] })
       {lineas.map((l, i) => (
         <li key={l.id} className="min-w-0">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-xs font-medium lg:text-sm">{l.name}</span>
-            <span className="shrink-0 text-[11px] tabular-nums text-white/60 lg:text-xs">
+            <span className="truncate text-xs font-medium 2xl:text-sm">{l.name}</span>
+            <span className="shrink-0 text-[11px] tabular-nums text-white/60 2xl:text-xs">
               {detalle?.[i] ??
                 l.detail ??
                 `${cantidad(l.quantityDone)} / ${cantidad(l.quantityTotal)}${
                   l.unit ? ` ${l.unit}` : ''
                 }`}
             </span>
-            <span className="w-11 shrink-0 text-right text-xs font-bold tabular-nums lg:w-14 lg:text-sm">
+            <span className="w-11 shrink-0 text-right text-xs font-bold tabular-nums lg:w-14 2xl:text-sm">
               {l.percent.toLocaleString('es-CL')}%
             </span>
           </div>
@@ -1394,11 +1394,11 @@ function Hitos({ items, hasta }: { items: ObraMilestone[]; hasta: string | null 
               {listo && <Flag className="size-2.5" />}
             </span>
             <span
-              className={`min-w-0 flex-1 truncate text-xs lg:text-sm ${listo ? '' : 'text-white/70'}`}
+              className={`min-w-0 flex-1 truncate text-xs 2xl:text-sm ${listo ? '' : 'text-white/70'}`}
             >
               {h.name}
             </span>
-            <span className="shrink-0 text-[11px] tabular-nums text-white/60 lg:text-xs">
+            <span className="shrink-0 text-[11px] tabular-nums text-white/60 2xl:text-xs">
               {fechaLarga(h.date)}
             </span>
           </li>
@@ -1419,7 +1419,7 @@ function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
       {items.slice(0, 8).map((r, i) => (
         <li
           key={r.id}
-          className="flex animate-entrada items-center gap-2 text-xs lg:text-sm"
+          className="flex animate-entrada items-center gap-2 text-xs 2xl:text-sm"
           style={{ animationDelay: `${i * 50}ms` } as React.CSSProperties}
         >
           <span className="w-20 shrink-0 tabular-nums text-white/60 lg:w-24">{fechaLarga(r.date)}</span>
@@ -1436,7 +1436,7 @@ function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
 
 function Vacio({ mensaje }: { mensaje: string }): ReactNode {
   return (
-    <p className="flex h-full items-center justify-center text-center text-xs text-white/60 lg:text-sm">
+    <p className="flex h-full items-center justify-center text-center text-xs text-white/60 2xl:text-sm">
       {mensaje}
     </p>
   );

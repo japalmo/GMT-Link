@@ -78,11 +78,11 @@ export function NavegadorSemana({
         title="Volver al último corte informado"
         className="min-w-[122px] rounded-md px-2 py-0.5 text-center transition-colors hover:bg-white/10"
       >
-        <span className="block text-sm font-bold tabular-nums leading-tight lg:text-base">
+        <span className="block text-sm font-bold tabular-nums leading-tight">
           {actual.code} · {diaMes(actual.closeDate)}
         </span>
         <span
-          className={`block text-[10px] uppercase tracking-wide lg:text-xs ${
+          className={`block text-[10px] uppercase tracking-wide 2xl:text-xs ${
             informada ? 'text-emerald-300' : 'text-amber-300'
           }`}
         >
@@ -335,7 +335,7 @@ export function CurvaControl({
         />
       )}
 
-      <div className="mt-1 flex shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-0.5 text-[11px] text-white/70 lg:text-xs">
+      <div className="mt-1 flex shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-0.5 text-[11px] text-white/70 2xl:text-xs">
         <LeyendaCurva caja={`${COLOR_PLAN}4d`} borde={COLOR_PLAN} texto="Semanal programa" />
         <LeyendaCurva caja={COLOR_REAL} texto="Semanal real" />
         <LeyendaCurva punteado={COLOR_PLAN} texto="Acumulado programa" />
@@ -368,13 +368,13 @@ function FichaSemana({
       }
     >
       <div className="vidrio rounded-lg px-2.5 py-2 shadow-lg shadow-slate-950/40">
-        <p className="flex items-baseline justify-between gap-2 text-xs font-bold lg:text-sm">
+        <p className="flex items-baseline justify-between gap-2 text-xs font-bold 2xl:text-sm">
           {semana.code}
-          <span className="text-[10px] font-normal text-white/60 lg:text-xs">
+          <span className="text-[10px] font-normal text-white/60 2xl:text-xs">
             {diaMes(semana.closeDate)}
           </span>
         </p>
-        <dl className="mt-1 flex flex-col gap-0.5 text-[11px] lg:text-xs">
+        <dl className="mt-1 flex flex-col gap-0.5 text-[11px] 2xl:text-xs">
           <Dupla rotulo="Semanal prog." valor={`${numero(semana.parPlan)}%`} color={COLOR_PLAN} />
           <Dupla
             rotulo="Semanal real"
@@ -391,7 +391,7 @@ function FichaSemana({
         </dl>
         {semana.deviation !== null ? (
           <p
-            className={`mt-1 border-t border-white/10 pt-1 text-[11px] font-semibold lg:text-xs ${
+            className={`mt-1 border-t border-white/10 pt-1 text-[11px] font-semibold 2xl:text-xs ${
               semana.deviation >= 0 ? 'text-emerald-300' : 'text-rose-300'
             }`}
           >
@@ -399,7 +399,7 @@ function FichaSemana({
             {numero(semana.deviation)} pp vs programa
           </p>
         ) : (
-          <p className="mt-1 border-t border-white/10 pt-1 text-[11px] text-white/55 lg:text-xs">
+          <p className="mt-1 border-t border-white/10 pt-1 text-[11px] text-white/55 2xl:text-xs">
             {informada ? 'Semana sin cierre' : 'Semana futura'}
           </p>
         )}
@@ -483,7 +483,7 @@ export function TablaControl({
 }): ReactNode {
   return (
     <div className="h-full min-h-0 overflow-auto">
-      <table className="w-full border-collapse text-[11px] tabular-nums lg:text-xs">
+      <table className="w-full border-collapse text-[11px] tabular-nums 2xl:text-xs">
         <thead className="sticky top-0 bg-slate-900/80 backdrop-blur">
           <tr className="text-left text-white/60">
             <th className="py-1 pr-2 font-medium">Semana</th>
@@ -563,14 +563,14 @@ export function FasesControl({
             style={{ animationDelay: `${i * 70}ms` }}
           >
             <div className="flex items-baseline justify-between gap-2">
-              <span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-medium lg:text-sm">
+              <span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-medium 2xl:text-sm">
                 <Icono className="size-3.5 shrink-0 opacity-75" aria-hidden />
                 {f.name}
               </span>
-              <span className="shrink-0 text-[11px] tabular-nums text-white/55 lg:text-xs">
+              <span className="shrink-0 text-[11px] tabular-nums text-white/55 2xl:text-xs">
                 {numero(f.hh, 0)} HH · {f.activities} act.
               </span>
-              <span className="w-14 shrink-0 text-right text-xs font-bold tabular-nums lg:text-sm">
+              <span className="w-14 shrink-0 text-right text-xs font-bold tabular-nums 2xl:text-sm">
                 {real === null ? (
                   <span className="text-amber-300">{numero(plan)}%</span>
                 ) : (
