@@ -8,6 +8,7 @@ import type { AuthedUser } from '@/types/auth';
 import type {
   CreateFieldWorkerInput,
   FieldWorker,
+  SetTaskCrewBulkInput,
   SetTaskCrewInput,
 } from '@gmt-platform/contracts';
 import type {
@@ -2020,6 +2021,17 @@ export function getCrewOptions(
 /** Reemplaza la cuadrilla completa de una tarea. */
 export function setTaskCrew(id: string, input: SetTaskCrewInput): Promise<TaskView> {
   return request<TaskView>(`/tasks/${encodeURIComponent(id)}/crew`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * La misma cuadrilla para varias etapas. Va en una transacción: o quedan todas
+ * o ninguna, que es lo que corresponde cuando el gesto del usuario fue uno.
+ */
+export function setTaskCrewBulk(input: SetTaskCrewBulkInput): Promise<TaskView[]> {
+  return request<TaskView[]>('/tasks/crew/bulk', {
     method: 'PUT',
     body: JSON.stringify(input),
   });

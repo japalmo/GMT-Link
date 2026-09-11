@@ -112,6 +112,14 @@ export interface UseTasksResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  /**
+   * Reemplaza en memoria las tareas que ya volvieron del servidor.
+   *
+   * Evita recargar el listado completo por un cambio puntual: en una obra con
+   * 63 cercos por 7 etapas, refrescar todo tras asignar una cuadrilla es medio
+   * megabyte de JSON para pintar cuatro iniciales.
+   */
+  patch: (actualizadas: TaskView[]) => void;
   create: (dto: CreateTaskInput) => Promise<TaskView>;
   update: (id: string, dto: UpdateTaskInput) => Promise<TaskView>;
   updateStatus: (id: string, status: TaskStatus, actualPoints?: number, rejectionReason?: string) => Promise<TaskView>;
@@ -158,6 +166,12 @@ export function useTasks(filters: {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const patch = useCallback((actualizadas: TaskView[]) => {
+    if (actualizadas.length === 0) return;
+    const porId = new Map(actualizadas.map((t) => [t.id, t]));
+    setTasks((prev) => prev.map((t) => porId.get(t.id) ?? t));
+  }, []);
 
   const create = useCallback(
     async (dto: CreateTaskInput) => {
@@ -222,6 +236,7 @@ export function useTasks(filters: {
     loading,
     error,
     refetch: load,
+    patch,
     create,
     update,
     updateStatus,

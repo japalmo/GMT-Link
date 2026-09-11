@@ -1208,6 +1208,19 @@ export interface TaskCrewMember {
   fieldWorker: boolean;
 }
 
+/**
+ * La misma cuadrilla para VARIAS etapas de una vez.
+ *
+ * Un cerco tiene siete etapas y casi siempre va la misma gente: hacerlo etapa
+ * por etapa son siete diálogos para un solo gesto. Va en una transacción, así
+ * que o queda el cerco entero o no queda ninguna.
+ */
+export interface SetTaskCrewBulkInput {
+  taskIds: string[];
+  userIds: string[];
+  leadUserId: string | null;
+}
+
 /** Cuadrilla completa de una tarea, tal como se guarda. */
 export interface SetTaskCrewInput {
   /** Ids de los integrantes. Reemplaza la cuadrilla entera. */

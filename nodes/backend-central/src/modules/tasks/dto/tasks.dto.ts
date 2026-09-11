@@ -239,3 +239,18 @@ export class SetTaskCrewDto {
   @IsOptional()
   leadUserId?: string | null;
 }
+
+/** La misma cuadrilla para varias tareas del mismo proyecto. */
+export class SetTaskCrewBulkDto {
+  @IsArray()
+  @IsString({ each: true })
+  taskIds!: string[];
+
+  @IsArray()
+  @IsString({ each: true })
+  userIds!: string[];
+
+  @IsString()
+  @IsOptional()
+  leadUserId?: string | null;
+}

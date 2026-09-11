@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Filter,
   Pencil,
   Search,
@@ -14,7 +16,13 @@ import { Select } from '@/components/ui/select';
 import { errorToMessage, getCrewOptions } from '@/lib/api';
 import type { FieldWorker } from '@gmt-platform/contracts';
 import type { CrewUser, TaskView } from '@/types/operations';
-import { AsignarCuadrilla, Cuadrilla, NuevoTrabajador, nombreCorto } from './cuadrilla';
+import {
+  AsignarCuadrilla,
+  Cuadrilla,
+  NuevoTrabajador,
+  nombreCorto,
+  type ObjetivoCuadrilla,
+} from './cuadrilla';
 
 /**
  * Plan de actividades de la obra.
@@ -68,27 +76,31 @@ export function PlanActividades({
   projectId,
   tasks,
   canManage,
-  onRefetch,
+  onPatch,
   onEditar,
   onBorrar,
 }: {
   projectId: string;
   tasks: TaskView[];
   canManage: boolean;
-  onRefetch: () => Promise<void>;
+  /** Reemplaza en memoria las tareas que ya volvieron del servidor. */
+  onPatch: (actualizadas: TaskView[]) => void;
   onEditar: (t: TaskView) => void;
   onBorrar: (t: TaskView) => void;
 }): ReactNode {
   const [busqueda, setBusqueda] = useState('');
   const [estado, setEstado] = useState<string>('all');
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
-  const [asignando, setAsignando] = useState<TaskView | null>(null);
+  const [asignando, setAsignando] = useState<ObjetivoCuadrilla | null>(null);
   const [nuevoAbierto, setNuevoAbierto] = useState(false);
+  const [preseleccion, setPreseleccion] = useState<string | null>(null);
   const [trabajadores, setTrabajadores] = useState<FieldWorker[]>([]);
   const [errorTrabajadores, setErrorTrabajadores] = useState<string | null>(null);
 
-  // Las fichas para el selector se piden una vez y se reusan en cada etapa: son
-  // las mismas para toda la obra y pedirlas al abrir cada diálogo se nota.
+  // Las fichas para el selector se piden al montar y se reusan en cada etapa:
+  // son las mismas para toda la obra y pedirlas al abrir cada diálogo se nota.
+  // No hace falta refrescarlas a mano: la pestaña se desmonta al cambiar de
+  // solapa, así que volver desde Trabajadores ya trae la lista al día.
   useEffect(() => {
     let vivo = true;
     getCrewOptions(projectId)
@@ -153,8 +165,11 @@ export function PlanActividades({
   }, [grupos, q, estado]);
 
   // Buscar abre los grupos: si hay que hacer clic para ver el resultado, el
-  // buscador no está resolviendo nada.
-  const expandidoPorBusqueda = q.length > 0 || estado !== 'all';
+  // buscador no está resolviendo nada. Filtrar por estado NO los abre: con 63
+  // cercos, elegir "Pendiente" pintaría 441 filas de una vez. Para eso está el
+  // botón de desplegar, que es una decisión del usuario y no un efecto lateral.
+  const [todoAbierto, setTodoAbierto] = useState(false);
+  const expandidoPorBusqueda = q.length > 0 || todoAbierto;
 
   function alternar(id: string): void {
     setAbiertos((prev) => {
@@ -165,12 +180,13 @@ export function PlanActividades({
     });
   }
 
-  const totalEtapas = filtrados.reduce((s, g) => s + Math.max(g.etapas.length, 1), 0);
+  // Solo etapas de verdad: una partida del programa sin hijas no es una etapa.
+  const totalEtapas = filtrados.reduce((s, g) => s + g.etapas.length, 0);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[240px] flex-1">
+        <div className="relative min-w-[220px] flex-1">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -198,9 +214,25 @@ export function PlanActividades({
             ))}
           </Select>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setTodoAbierto((v) => !v)}
+          disabled={q.length > 0}
+          title={q.length > 0 ? 'La búsqueda ya abre los resultados' : undefined}
+        >
+          {todoAbierto ? (
+            <ChevronsDownUp className="mr-1 size-4" aria-hidden />
+          ) : (
+            <ChevronsUpDown className="mr-1 size-4" aria-hidden />
+          )}
+          {todoAbierto ? 'Plegar todo' : 'Desplegar todo'}
+        </Button>
+
         <span className="text-sm text-muted-foreground">
-          {filtrados.length} {filtrados.length === 1 ? 'actividad' : 'actividades'} · {totalEtapas}{' '}
-          {totalEtapas === 1 ? 'etapa' : 'etapas'}
+          {filtrados.length} {filtrados.length === 1 ? 'actividad' : 'actividades'}
+          {totalEtapas > 0 && ` · ${totalEtapas} ${totalEtapas === 1 ? 'etapa' : 'etapas'}`}
         </span>
       </div>
 
@@ -236,15 +268,20 @@ export function PlanActividades({
             return (
               <li key={raiz.id} className="overflow-hidden rounded-lg border border-border bg-card">
                 <div className="flex flex-wrap items-center gap-3 p-3">
+                  {/* Una partida sin etapas no se pliega: abrirla no mostraba
+                      nada y el chevron prometía contenido que no existe. */}
                   <button
                     type="button"
-                    onClick={() => alternar(raiz.id)}
-                    aria-expanded={abierto}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() => etapas.length > 0 && alternar(raiz.id)}
+                    aria-expanded={etapas.length > 0 ? abierto : undefined}
+                    disabled={etapas.length === 0}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
                   >
                     <ChevronRight
-                      className={`size-4 shrink-0 text-muted-foreground transition-transform ${
-                        abierto ? 'rotate-90' : ''
+                      className={`size-4 shrink-0 transition-transform ${
+                        etapas.length === 0
+                          ? 'invisible'
+                          : `text-muted-foreground ${abierto ? 'rotate-90' : ''}`
                       }`}
                       aria-hidden
                     />
@@ -264,17 +301,25 @@ export function PlanActividades({
 
                   {canManage && (
                     <div className="flex items-center gap-1">
-                      {etapas.length === 0 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setAsignando(raiz)}
-                        >
-                          <Users className="mr-1 size-3.5" aria-hidden />
-                          Cuadrilla
-                        </Button>
-                      )}
+                      {/* Un cerco son siete etapas con la misma gente: el gesto
+                          natural es asignar el cerco entero, no etapa por etapa. */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setAsignando({
+                            tareas: etapas.length > 0 ? etapas : [raiz],
+                            titulo:
+                              etapas.length > 0
+                                ? `${raiz.name} · todas las etapas`
+                                : raiz.name,
+                          })
+                        }
+                      >
+                        <Users className="mr-1 size-3.5" aria-hidden />
+                        {etapas.length > 0 ? 'Cuadrilla del cerco' : 'Cuadrilla'}
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"
@@ -339,7 +384,9 @@ export function PlanActividades({
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => setAsignando(etapa)}
+                            onClick={() =>
+                              setAsignando({ tareas: [etapa], titulo: `${raiz.name} · ${etapa.name}` })
+                            }
                           >
                             <Users className="mr-1 size-3.5" aria-hidden />
                             Cuadrilla
@@ -356,17 +403,24 @@ export function PlanActividades({
       )}
 
       <AsignarCuadrilla
-        tarea={asignando}
+        objetivo={asignando}
         opciones={trabajadores}
+        agregar={preseleccion}
+        onAgregado={() => setPreseleccion(null)}
         onCerrar={() => setAsignando(null)}
-        onGuardado={() => void onRefetch()}
+        onGuardado={onPatch}
         onNuevoTrabajador={() => setNuevoAbierto(true)}
       />
 
       <NuevoTrabajador
         abierto={nuevoAbierto}
         onAbierto={setNuevoAbierto}
-        onCreado={(w) => setTrabajadores((prev) => [...prev, w])}
+        onCreado={(w) => {
+          setTrabajadores((prev) => [...prev, w]);
+          // Se creó DESDE el diálogo de cuadrilla porque falta en esa etapa:
+          // dejarlo fuera de la selección obligaría a buscarlo y marcarlo.
+          setPreseleccion(w.id);
+        }}
       />
     </div>
   );

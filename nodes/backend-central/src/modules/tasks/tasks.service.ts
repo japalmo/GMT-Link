@@ -692,10 +692,38 @@ export class TasksService {
     userId: string,
     input: { userIds: string[]; leadUserId: string | null },
   ) {
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
+    const [actualizada] = await this.setCrewBulk([taskId], userId, input);
+    return actualizada;
+  }
+
+  /**
+   * La misma cuadrilla para varias tareas, en UNA transacción.
+   *
+   * Un cerco son siete etapas con la misma gente: hacerlo de a una son siete
+   * viajes y, si uno falla, el cerco queda a medias. Acá o quedan todas o
+   * ninguna.
+   */
+  async setCrewBulk(
+    taskIds: string[],
+    userId: string,
+    input: { userIds: string[]; leadUserId: string | null },
+  ) {
+    const ids = [...new Set(taskIds)];
+    if (ids.length === 0) throw new BadRequestException('No se indicó ninguna tarea.');
+
+    const tasks = await this.prisma.task.findMany({
+      where: { id: { in: ids } },
       select: { id: true, projectId: true },
     });
+    if (tasks.length !== ids.length) throw new NotFoundException('Alguna tarea ya no existe.');
+
+    // Todas tienen que ser del MISMO proyecto: con un permiso por proyecto, un
+    // lote mezclado dejaría pasar tareas de una obra donde no hay acceso.
+    const proyectos = new Set(tasks.map((t) => t.projectId));
+    if (proyectos.size > 1) {
+      throw new BadRequestException('Las tareas deben ser del mismo proyecto.');
+    }
+    const task = tasks[0];
     if (!task) throw new NotFoundException('La tarea no existe.');
 
     // `task:assign` es el permiso que ya existe para poner gente en una tarea.
@@ -707,31 +735,45 @@ export class TasksService {
       throw new BadRequestException('No tienes permisos para asignar la cuadrilla.');
     }
 
-    const ids = [...new Set(input.userIds)];
-    if (input.leadUserId && !ids.includes(input.leadUserId)) {
+    const personas = [...new Set(input.userIds)];
+    if (input.leadUserId && !personas.includes(input.leadUserId)) {
       throw new BadRequestException('El jefe de cuadrilla debe ser parte de la cuadrilla.');
     }
 
     // Que existan de verdad: un id inventado dejaría una fila apuntando a nadie.
-    if (ids.length > 0) {
-      const encontrados = await this.prisma.user.count({ where: { id: { in: ids } } });
-      if (encontrados !== ids.length) {
+    if (personas.length > 0) {
+      const encontrados = await this.prisma.user.count({ where: { id: { in: personas } } });
+      if (encontrados !== personas.length) {
         throw new BadRequestException('Alguno de los trabajadores ya no existe.');
       }
     }
 
     await this.prisma.$transaction([
-      this.prisma.taskWorker.deleteMany({ where: { taskId } }),
-      ...(ids.length > 0
+      this.prisma.taskWorker.deleteMany({ where: { taskId: { in: ids } } }),
+      ...(personas.length > 0
         ? [
             this.prisma.taskWorker.createMany({
-              data: ids.map((id) => ({ taskId, userId: id, lead: id === input.leadUserId })),
+              data: ids.flatMap((taskId) =>
+                personas.map((id) => ({
+                  taskId,
+                  userId: id,
+                  lead: id === input.leadUserId,
+                })),
+              ),
             }),
           ]
         : []),
     ]);
 
-    return this.prisma.task.findUnique({ where: { id: taskId }, include: TASK_INCLUDE });
+    const actualizadas = await this.prisma.task.findMany({
+      where: { id: { in: ids } },
+      include: TASK_INCLUDE,
+    });
+    // Se devuelven en el orden en que llegaron, para que el cliente pueda
+    // aparearlas con lo que mandó sin volver a buscarlas.
+    return ids
+      .map((id) => actualizadas.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => t !== undefined);
   }
 
   async getAssignees(projectId: string, userId: string) {

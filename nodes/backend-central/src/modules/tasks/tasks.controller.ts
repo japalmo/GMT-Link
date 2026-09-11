@@ -18,6 +18,7 @@ import type { AuthUser } from '../../authz/auth-user.types';
 import { TasksService } from './tasks.service';
 import {
   CreateTaskDto,
+  SetTaskCrewBulkDto,
   SetTaskCrewDto,
   TaskTimeNoteDto,
   UpdateTaskDto,
@@ -115,6 +116,22 @@ export class TasksController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.tasks.update(id, userId, dto);
+  }
+
+  /**
+   * DEBE ir antes de `@Put(':id')`: aunque 'crew/bulk' son dos segmentos y no
+   * colisiona, el orden deja explícito que las rutas estáticas mandan.
+   */
+  @Put('crew/bulk')
+  setCrewBulk(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Body() dto: SetTaskCrewBulkDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.tasks.setCrewBulk(dto.taskIds, userId, {
+      userIds: dto.userIds,
+      leadUserId: dto.leadUserId ?? null,
+    });
   }
 
   @Put(':id/crew')

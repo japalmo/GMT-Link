@@ -18,7 +18,7 @@ import {
   deleteFieldWorker,
   errorToMessage,
   listFieldWorkers,
-  setTaskCrew,
+  setTaskCrewBulk,
 } from '@/lib/api';
 import type { FieldWorker } from '@gmt-platform/contracts';
 import type { CrewUser, TaskView } from '@/types/operations';
@@ -350,25 +350,46 @@ export function ListaTrabajadores(): ReactNode {
   );
 }
 
-// ── Asignar cuadrilla a una etapa ───────────────────────────────────────────
+// ── Asignar cuadrilla ───────────────────────────────────────────────────────
+
+/** Qué etapas va a tocar el diálogo y cómo se llama lo que se está editando. */
+export interface ObjetivoCuadrilla {
+  /** Una etapa, o todas las de un cerco. */
+  tareas: TaskView[];
+  /** Rótulo de lo que se edita: el nombre de la etapa o el del cerco. */
+  titulo: string;
+}
 
 /**
- * Diálogo para decir quiénes van a una etapa y quién manda.
+ * Diálogo para decir quiénes van y quién manda.
+ *
+ * Acepta VARIAS etapas porque el gesto real es uno: un cerco tiene siete etapas
+ * y casi siempre va la misma cuadrilla. Hacerlo de a una eran siete diálogos
+ * para una sola decisión.
  *
  * La cuadrilla se manda completa y no como altas y bajas sueltas: así lo que se
  * guarda es exactamente lo que muestra la pantalla.
  */
 export function AsignarCuadrilla({
-  tarea,
+  objetivo,
   opciones,
+  agregar,
+  onAgregado,
   onCerrar,
   onGuardado,
   onNuevoTrabajador,
 }: {
-  tarea: TaskView | null;
+  objetivo: ObjetivoCuadrilla | null;
   opciones: FieldWorker[];
+  /**
+   * Id de un trabajador recién creado desde este mismo diálogo. Entra a la
+   * selección solo: se creó porque falta en ESTA etapa, y obligar a buscarlo
+   * después de escribir su nombre sería pedir el dato dos veces.
+   */
+  agregar?: string | null;
+  onAgregado?: () => void;
   onCerrar: () => void;
-  onGuardado: (t: TaskView) => void;
+  onGuardado: (actualizadas: TaskView[]) => void;
   onNuevoTrabajador: () => void;
 }): ReactNode {
   const [seleccion, setSeleccion] = useState<string[]>([]);
@@ -377,13 +398,47 @@ export function AsignarCuadrilla({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Al abrir con otra tarea, el diálogo parte de la cuadrilla que ya tiene.
+  const tareas = objetivo?.tareas ?? [];
+
+  // Al abrir, el diálogo parte de la cuadrilla que ya hay. Con varias etapas se
+  // precarga solo si TODAS tienen la misma: si difieren, arranca vacío en vez
+  // de elegir una en silencio y pisar las otras sin avisar.
   useEffect(() => {
-    setSeleccion((tarea?.crew ?? []).map((m) => m.userId));
-    setJefe((tarea?.crew ?? []).find((m) => m.lead)?.userId ?? null);
+    if (!objetivo || tareas.length === 0) {
+      setSeleccion([]);
+      setJefe(null);
+      setBusqueda('');
+      setError(null);
+      return;
+    }
+    const firmas = tareas.map((t) =>
+      (t.crew ?? [])
+        .map((m) => `${m.userId}:${m.lead ? 1 : 0}`)
+        .sort()
+        .join('|'),
+    );
+    const iguales = firmas.every((f) => f === firmas[0]);
+    const base = iguales ? (tareas[0]?.crew ?? []) : [];
+    setSeleccion(base.map((m) => m.userId));
+    setJefe(base.find((m) => m.lead)?.userId ?? null);
     setBusqueda('');
     setError(null);
-  }, [tarea]);
+    // `objetivo` cambia de identidad al abrir otro: es la señal correcta.
+  }, [objetivo]);
+
+  useEffect(() => {
+    if (!agregar) return;
+    setSeleccion((prev) => (prev.includes(agregar) ? prev : [...prev, agregar]));
+    onAgregado?.();
+  }, [agregar, onAgregado]);
+
+  const mezcladas = useMemo(() => {
+    if (tareas.length < 2) return false;
+    const firmas = tareas.map((t) =>
+      (t.crew ?? []).map((m) => m.userId).sort().join('|'),
+    );
+    return !firmas.every((f) => f === firmas[0]);
+  }, [tareas]);
 
   const porId = useMemo(() => new Map(opciones.map((o) => [o.id, o])), [opciones]);
   const visibles = useMemo(() => {
@@ -407,16 +462,22 @@ export function AsignarCuadrilla({
   }
 
   async function guardar(): Promise<void> {
-    if (!tarea || guardando) return;
+    if (tareas.length === 0 || guardando) return;
     setGuardando(true);
     setError(null);
     try {
-      const actualizada = await setTaskCrew(tarea.id, { userIds: seleccion, leadUserId: jefe });
-      onGuardado(actualizada);
+      const actualizadas = await setTaskCrewBulk({
+        taskIds: tareas.map((t) => t.id),
+        userIds: seleccion,
+        leadUserId: jefe,
+      });
+      onGuardado(actualizadas);
+      const donde =
+        tareas.length === 1 ? 'la etapa' : `las ${tareas.length} etapas`;
       toast.success(
         seleccion.length === 0
-          ? 'La etapa quedó sin cuadrilla.'
-          : `Cuadrilla de ${seleccion.length} asignada.`,
+          ? `Quitaste la cuadrilla de ${donde}.`
+          : `Cuadrilla de ${seleccion.length} en ${donde}.`,
       );
       onCerrar();
     } catch (err) {
@@ -427,20 +488,27 @@ export function AsignarCuadrilla({
   }
 
   return (
-    <Modal open={tarea !== null} onOpenChange={(v) => !v && onCerrar()}>
+    <Modal open={objetivo !== null} onOpenChange={(v) => !v && onCerrar()}>
       <ModalContent className="sm:max-w-lg">
         <div className="flex min-h-0 flex-col gap-4">
           <ModalHeader>
             <ModalTitle className="flex items-center gap-2">
               <UserRound className="size-4" aria-hidden />
-              Cuadrilla de la etapa
+              {tareas.length > 1 ? `Cuadrilla · ${tareas.length} etapas` : 'Cuadrilla de la etapa'}
             </ModalTitle>
-            <ModalDescription>{tarea?.name}</ModalDescription>
+            <ModalDescription>{objetivo?.titulo}</ModalDescription>
           </ModalHeader>
 
           {error && (
             <Alert variant="destructive" live>
               {error}
+            </Alert>
+          )}
+
+          {mezcladas && (
+            <Alert>
+              Estas etapas hoy tienen cuadrillas distintas. Lo que guardes acá reemplaza la de
+              todas.
             </Alert>
           )}
 

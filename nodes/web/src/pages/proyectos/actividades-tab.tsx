@@ -53,7 +53,7 @@ function newStepRow(): StepForm {
 }
 
 export function ActividadesTab({ projectId, services, canCreate }: ActividadesTabProps): ReactNode {
-  const { tasks, loading, create, update, remove, refetch } = useTasks({ projectId });
+  const { tasks, loading, create, update, remove, patch } = useTasks({ projectId });
   const { items: users } = useUsers({ limit: 100 });
 
   const [creatorOpen, setCreatorOpen] = useState(false);
@@ -275,7 +275,7 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
           projectId={projectId}
           tasks={tasks}
           canManage={canCreate}
-          onRefetch={refetch}
+          onPatch={patch}
           onEditar={openEdit}
           onBorrar={setDeleting}
         />
