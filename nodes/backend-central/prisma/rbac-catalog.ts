@@ -32,8 +32,14 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'user:update', label: 'Editar usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'role:assign', label: 'Asignar roles a usuarios', module: 'sistema', kind: 'FUNCTIONAL', scopeable: true },
   { key: 'system:beta:full', label: 'Acceso completo con alerta de beta', module: 'sistema', kind: 'FUNCTIONAL', scopeable: false },
-  // ── directorio ──
-  { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'directorio', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
+  // ── RRHH (antes "directorio") ──
+  // `hr:read` / `hr:manage` son FUNCTIONAL y no scopeables: RRHH es de toda la
+  // empresa, no de un proyecto, así que no hay nada que preguntarle a OpenFGA.
+  // Gestionan ANTECEDENTES LABORALES. Los roles y permisos de acceso a la
+  // plataforma NO se tocan desde acá: eso sigue en Usuarios, con `role:assign`.
+  { key: 'hr:read', label: 'Ver RRHH (trabajadores y antecedentes)', module: 'rrhh', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'hr:manage', label: 'Gestionar antecedentes laborales', module: 'rrhh', kind: 'FUNCTIONAL', scopeable: false },
+  { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'rrhh', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
   // ── clientes ──
   { key: 'client:create', label: 'Crear cliente', module: 'clientes', kind: 'FUNCTIONAL', scopeable: false },
   // ── proyectos ──
@@ -248,6 +254,8 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:overtime:view:all', 'GLOBAL'),
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:worker', 'GLOBAL'),
+      g('hr:read', 'GLOBAL'),
+      g('hr:manage', 'GLOBAL'),
     ],
   },
   {
@@ -285,10 +293,10 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('asset:checklist:run:any', 'GLOBAL'),
     ],
   },
-  { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('system:beta:full', 'GLOBAL')] },
+  { key: 'gerencia_rh', label: 'Gerencia de RH', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('hr:read', 'GLOBAL'), g('hr:manage', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
   // Gerencia General ve TODOS los tickets (visibilidad de la cola de Informática),
   // pero NO hace triage: clasificar y mover es de admin_ti / org_admin.
-  { key: 'gerencia_general', label: 'Gerencia General', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('ticket:read:all', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
+  { key: 'gerencia_general', label: 'Gerencia General', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('ticket:read:all', 'GLOBAL'), g('hr:read', 'GLOBAL'), g('hr:manage', 'GLOBAL'), g('system:beta:full', 'GLOBAL')] },
   { key: 'admin_ti', label: 'Administrador TI', grants: ALL_GLOBAL_EXCEPT_BETA() },
   // ── Rol de sistema Conductor (flota de vehículos): reporta uso (tomar/liberar
   //    la disputa "en uso") y ejecuta el checklist de cualquier activo. Es un rol

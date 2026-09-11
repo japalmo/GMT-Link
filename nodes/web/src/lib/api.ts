@@ -8,6 +8,12 @@ import type { AuthedUser } from '@/types/auth';
 import type {
   CreateFieldWorkerInput,
   FieldWorker,
+  HrAccreditation,
+  HrExam,
+  HrHours,
+  HrInduction,
+  HrWorkerRow,
+  HrWorkerSummary,
   SetTaskCrewBulkInput,
   SetTaskCrewInput,
 } from '@gmt-platform/contracts';
@@ -1968,6 +1974,80 @@ export function finishTaskTime(id: string, note?: string): Promise<TaskTimeLogVi
 
 export function getTaskAssignees(projectId: string): Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>> {
   return request<Array<{ id: string; firstName: string; lastName: string; email: string }>>(`/tasks/assignees?projectId=${encodeURIComponent(projectId)}`);
+}
+
+/* --- RRHH --- */
+
+/** Directorio de RRHH con la síntesis de requisitos de cada trabajador. */
+export function listHrWorkers(search?: string): Promise<HrWorkerRow[]> {
+  const q = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<HrWorkerRow[]>(`/hr/workers${q}`);
+}
+
+export function getHrSummary(userId: string): Promise<HrWorkerSummary> {
+  return request<HrWorkerSummary>(`/hr/workers/${encodeURIComponent(userId)}/summary`);
+}
+
+/** HH del trabajador en un período, calculadas sobre los registros de Operaciones. */
+export function getHrHours(userId: string, from: string, to: string): Promise<HrHours> {
+  return request<HrHours>(
+    `/hr/workers/${encodeURIComponent(userId)}/hours?from=${from}&to=${to}`,
+  );
+}
+
+export function listHrExams(userId: string): Promise<HrExam[]> {
+  return request<HrExam[]>(`/hr/workers/${encodeURIComponent(userId)}/exams`);
+}
+
+export function saveHrExam(input: Record<string, unknown>, id?: string): Promise<HrExam> {
+  return request<HrExam>(id ? `/hr/exams/${encodeURIComponent(id)}` : '/hr/exams', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteHrExam(id: string): Promise<{ removed: true }> {
+  return request<{ removed: true }>(`/hr/exams/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function listHrInductions(userId: string): Promise<HrInduction[]> {
+  return request<HrInduction[]>(`/hr/workers/${encodeURIComponent(userId)}/inductions`);
+}
+
+export function saveHrInduction(
+  input: Record<string, unknown>,
+  id?: string,
+): Promise<HrInduction> {
+  return request<HrInduction>(
+    id ? `/hr/inductions/${encodeURIComponent(id)}` : '/hr/inductions',
+    { method: id ? 'PUT' : 'POST', body: JSON.stringify(input) },
+  );
+}
+
+export function deleteHrInduction(id: string): Promise<{ removed: true }> {
+  return request<{ removed: true }>(`/hr/inductions/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listHrAccreditations(userId: string): Promise<HrAccreditation[]> {
+  return request<HrAccreditation[]>(`/hr/workers/${encodeURIComponent(userId)}/accreditations`);
+}
+
+export function saveHrAccreditation(
+  input: Record<string, unknown>,
+  id?: string,
+): Promise<HrAccreditation> {
+  return request<HrAccreditation>(
+    id ? `/hr/accreditations/${encodeURIComponent(id)}` : '/hr/accreditations',
+    { method: id ? 'PUT' : 'POST', body: JSON.stringify(input) },
+  );
+}
+
+export function deleteHrAccreditation(id: string): Promise<{ removed: true }> {
+  return request<{ removed: true }>(`/hr/accreditations/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 /* --- Cuadrilla de faena --- */

@@ -51,7 +51,7 @@ export function roleLabel(role: string): string {
  */
 export const MODULE_LABELS: Record<string, string> = {
   sistema: 'Sistema',
-  directorio: 'Directorio',
+  rrhh: 'RRHH',
   clientes: 'Clientes',
   proyectos: 'Proyectos',
   tareas: 'Tareas',

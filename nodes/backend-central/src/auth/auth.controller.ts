@@ -58,7 +58,7 @@ interface MeResponse {
 const ALL_MODULES = [
   'dashboard',
   'usuarios',
-  'directorio',
+  'rrhh',
   'finanzas',
   'operaciones',
   'proyectos',
@@ -78,7 +78,12 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   'user:read': 'usuarios',
   'user:create': 'usuarios',
   'user:update': 'usuarios',
-  'directory:view:extended': 'directorio',
+  // RRHH (antes "Directorio"). Lo enciende cualquiera de los tres: consultar
+  // RRHH, gestionar antecedentes, o el permiso viejo del directorio extendido,
+  // que se conserva para no apagarle la sección a quien ya la tenía.
+  'hr:read': 'rrhh',
+  'hr:manage': 'rrhh',
+  'directory:view:extended': 'rrhh',
   'task:read': 'operaciones',
   'task:create': 'operaciones',
   'asset:manage': 'recursos',

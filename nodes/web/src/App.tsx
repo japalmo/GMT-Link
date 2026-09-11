@@ -25,7 +25,7 @@ const RolesPage = lazy(() => import('@/pages/roles'));
 const PerfilPage = lazy(() => import('@/pages/perfil'));
 const CvPage = lazy(() => import('@/pages/perfil/cv'));
 const DocumentsPage = lazy(() => import('@/pages/documentos'));
-const DirectorioPage = lazy(() => import('@/pages/directorio'));
+const RrhhPage = lazy(() => import('@/pages/rrhh'));
 const FinanzasPage = lazy(() => import('@/pages/finanzas'));
 const NotificacionesPage = lazy(() => import('@/pages/notificaciones'));
 const ConfiguracionPage = lazy(() => import('@/pages/configuracion'));
@@ -118,7 +118,11 @@ const router = createBrowserRouter([
           { path: '/perfil', element: lazyRoute(<PerfilPage />) },
           { path: '/perfil/cv', element: lazyRoute(<CvPage />) },
           { path: '/perfil/documentos', element: lazyRoute(<DocumentsPage />) },
-          { path: '/directorio', element: <RequireModule module="directorio">{lazyRoute(<DirectorioPage />)}</RequireModule> },
+          { path: '/rrhh', element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule> },
+          { path: '/rrhh/:tab', element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule> },
+          // La sección se llamaba Directorio. El enlace viejo sigue sirviendo:
+          // hay marcadores y correos apuntando ahí.
+          { path: '/directorio', element: <Navigate to="/rrhh" replace /> },
           { path: '/notificaciones', element: lazyRoute(<NotificacionesPage />) },
           { path: '/configuracion', element: lazyRoute(<ConfiguracionPage />) },
           { path: '/finanzas', element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule> },

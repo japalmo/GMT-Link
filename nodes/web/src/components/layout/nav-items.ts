@@ -36,7 +36,7 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   // Usuarios (gateada por `canManageRoles` en esa página). Se mantiene la ruta
   // `/roles` accesible directamente (ver App.tsx).
   { label: 'Usuarios', to: '/usuarios', icon: Users, module: 'usuarios' },
-  { label: 'Directorio', to: '/directorio', icon: Contact, module: 'directorio' },
+  { label: 'RRHH', to: '/rrhh', icon: Contact, module: 'rrhh' },
   { label: 'Proyectos', to: '/proyectos', icon: FolderKanban, module: 'proyectos' },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },

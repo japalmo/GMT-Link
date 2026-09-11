@@ -1166,6 +1166,167 @@ export interface ObraBreakdown {
   lines: ObraLine[];
 }
 
+// ============ RRHH — habilitación del trabajador ============
+
+/**
+ * En qué situación está un requisito respecto de su vencimiento.
+ *
+ * `SIN_VENCIMIENTO` y `SIN_FECHA` se distinguen a propósito: el primero es un
+ * documento que no caduca (una cédula de identidad perpetua, un título), y el
+ * segundo es uno al que todavía NO le cargaron la fecha. Juntarlos haría pasar
+ * un dato faltante por un dato tranquilizador.
+ */
+export type HrVigencia =
+  | 'VIGENTE'
+  | 'POR_VENCER'
+  | 'VENCIDO'
+  | 'SIN_VENCIMIENTO'
+  | 'SIN_FECHA';
+
+/** Qué clase de requisito es. Ordena el tablero y los filtros. */
+export type HrRequisitoTipo = 'DOCUMENTO' | 'EXAMEN' | 'INDUCCION' | 'ACREDITACION';
+
+export type HrAccreditationStatus = 'EN_TRAMITE' | 'VIGENTE' | 'SUSPENDIDA' | 'RECHAZADA';
+
+export type HrExamResult = 'APTO' | 'APTO_CON_RESTRICCIONES' | 'NO_APTO' | 'PENDIENTE';
+
+/** Estado de vigencia calculado, común a documentos, exámenes e inducciones. */
+export interface HrEstado {
+  vigencia: HrVigencia;
+  /** Días hasta el vencimiento; negativo si ya pasó. `null` sin fecha. */
+  diasRestantes: number | null;
+}
+
+/** Faena donde vale una inducción o acreditación. */
+export interface HrFaenaRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface HrExam extends HrEstado {
+  id: string;
+  userId: string;
+  type: string;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  center: string | null;
+  result: HrExamResult | null;
+  fileUrl: string | null;
+  notes: string | null;
+}
+
+export interface HrInduction extends HrEstado {
+  id: string;
+  userId: string;
+  clientId: string;
+  clientName: string;
+  name: string;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  fileUrl: string | null;
+  notes: string | null;
+  /** Faenas del MISMO cliente donde vale. */
+  faenas: HrFaenaRef[];
+}
+
+export interface HrAccreditation extends HrEstado {
+  id: string;
+  userId: string;
+  clientId: string;
+  clientName: string;
+  /** `null` = acreditado ante el cliente, sin faena específica. */
+  faenaId: string | null;
+  faenaName: string | null;
+  status: HrAccreditationStatus;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  fileUrl: string | null;
+  notes: string | null;
+}
+
+/** Un punto del gráfico de horas hombre: un día y las HH registradas. */
+export interface HrHoursPoint {
+  /** aaaa-mm-dd. */
+  date: string;
+  hours: number;
+}
+
+/**
+ * Horas hombre del trabajador en un período, calculadas sobre los registros de
+ * tiempo de Operaciones. No hay una fuente manual paralela: si no hay registros
+ * es porque nadie marcó actividad, y eso se dice, no se muestra como cero.
+ */
+export interface HrHours {
+  from: string;
+  to: string;
+  points: HrHoursPoint[];
+  /** Suma del período, en horas. */
+  totalHours: number;
+  /** Registros considerados. 0 con `points` vacío = período sin actividad. */
+  entries: number;
+  /** Hay un registro abierto (empezó y no ha terminado): el total va a crecer. */
+  openEntries: number;
+}
+
+/** Alerta de un requisito vencido o por vencer, para el resumen y el tablero. */
+export interface HrAlerta extends HrEstado {
+  tipo: HrRequisitoTipo;
+  /** Id del registro afectado, para abrirlo en su pestaña. */
+  id: string;
+  /** Nombre del documento, examen, inducción o acreditación. */
+  nombre: string;
+  expiresAt: string | null;
+  /** Cliente y faena cuando el requisito los tiene. */
+  clientName: string | null;
+  faenaName: string | null;
+}
+
+/** Ficha de resumen del trabajador. Solo lectura. */
+export interface HrWorkerSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl: string | null;
+  /** Cargo laboral. NO es el rol de acceso a la plataforma. */
+  cargo: string | null;
+  status: UserStatus;
+  isFieldWorker: boolean;
+  /** Turno vigente, si tiene horario cargado. */
+  turno: {
+    shiftPattern: string;
+    dayNight: string;
+    workDays: number | null;
+    restDays: number | null;
+    startTime: string | null;
+    endTime: string | null;
+  } | null;
+  accreditations: HrAccreditation[];
+  alertas: HrAlerta[];
+  /** Cuántos requisitos hay de cada clase, para la cabecera. */
+  conteos: { documentos: number; examenes: number; inducciones: number };
+}
+
+/** Fila del directorio de RRHH. */
+export interface HrWorkerRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl: string | null;
+  cargo: string | null;
+  status: UserStatus;
+  isFieldWorker: boolean;
+  /** Turno resumido: "7x7 día", "Administrativo". `null` sin horario cargado. */
+  turno: string | null;
+  /** Cuántos requisitos vencidos y por vencer tiene, para la síntesis. */
+  vencidos: number;
+  porVencer: number;
+  /** Clientes donde tiene acreditación vigente. */
+  acreditadoEn: string[];
+}
+
 // ============ Cuadrilla de faena ============
 
 /**

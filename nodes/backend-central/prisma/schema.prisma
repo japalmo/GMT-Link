@@ -96,6 +96,9 @@ model User {
   ticketEvents               TicketEvent[]               @relation("TicketEventActor")
   taskProgressReports        TaskProgress[]              @relation("TaskProgressReporter")
   crewMemberships            TaskWorker[]                @relation("CrewMember")
+  accreditations             WorkerAccreditation[]       @relation("WorkerAccreditations")
+  medicalExams               MedicalExam[]               @relation("WorkerExams")
+  inductions                 Induction[]                 @relation("WorkerInductions")
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 }
@@ -200,13 +203,15 @@ enum EmailKind {
 
 // ============ ORGANIZACIÓN ============
 model Client {
-  id       String    @id @default(cuid())
-  code     String    @unique // máx 4 chars — obligatorio en codificación (§7)
-  name     String
-  rut      String?
-  users    User[]
-  projects Project[]
-  faenas   Faena[]
+  id             String                @id @default(cuid())
+  code           String                @unique // máx 4 chars — obligatorio en codificación (§7)
+  name           String
+  rut            String?
+  users          User[]
+  projects       Project[]
+  faenas         Faena[]
+  accreditations WorkerAccreditation[] @relation("ClientAccreditations")
+  inductions     Induction[]           @relation("ClientInductions")
 }
 
 // ============ FAENA (agrupador de proyectos por cliente) ============
@@ -225,11 +230,13 @@ model Faena {
   latitude     Float?
   longitude    Float?
   address      String?
-  projects     Project[]
-  areas        Area[]
-  tickets      Ticket[]    @relation("TicketFaena")
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  projects       Project[]
+  areas          Area[]
+  tickets        Ticket[]              @relation("TicketFaena")
+  accreditations WorkerAccreditation[] @relation("FaenaAccreditations")
+  inductions     InductionFaena[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   @@unique([clientId, code])
 }
@@ -1703,4 +1710,124 @@ model TaskProgress {
 
   @@index([taskId, date])
   @@map("task_progress")
+}
+
+
+// ============ RRHH — Habilitación del trabajador para ir a faena ============
+//
+// Tres registros distintos que la gente de obra suele confundir, y que acá se
+// modelan aparte a propósito:
+//
+//  - ACREDITACIÓN: el permiso que da el CLIENTE para entrar a su faena. Es un
+//    trámite propio del mandante, con su estado y su vigencia, y NO se deduce de
+//    tener los papeles al día: un trabajador con todo vigente puede seguir sin
+//    acreditar, y uno acreditado puede tener un documento vencido.
+//  - EXAMEN OCUPACIONAL: la aptitud médica.
+//  - INDUCCIÓN: la charla de ingreso, válida para una o varias faenas del mismo
+//    cliente.
+//
+// Ninguno de los tres es obligatorio todavía: no existe una regla que diga qué
+// exige cada faena, así que el tablero informa lo VENCIDO y lo POR VENCER de lo
+// que esté cargado, y nunca inventa un "falta". Definir esa regla es trabajo
+// pendiente de negocio.
+
+/// Permiso del cliente para que el trabajador entre a su faena.
+model WorkerAccreditation {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation("WorkerAccreditations", fields: [userId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client              @relation("ClientAccreditations", fields: [clientId], references: [id], onDelete: Cascade)
+  /// Faena concreta, o `null` cuando el cliente acredita para toda su operación.
+  faenaId   String?
+  faena     Faena?              @relation("FaenaAccreditations", fields: [faenaId], references: [id], onDelete: Cascade)
+  status    AccreditationStatus @default(EN_TRAMITE)
+  issuedAt  DateTime?
+  /// `null` = sin vencimiento declarado. NO significa vigente para siempre:
+  /// la pantalla lo dice así de explícito para no confundirlo con "al día".
+  expiresAt DateTime?
+  fileUrl   String?
+  notes     String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([clientId, faenaId])
+  @@map("worker_accreditations")
+}
+
+enum AccreditationStatus {
+  EN_TRAMITE
+  VIGENTE
+  SUSPENDIDA
+  RECHAZADA
+}
+
+/// Examen ocupacional. El historial son las filas del mismo `type`: renovar es
+/// crear una nueva, y la vigente es la de emisión más reciente. No hay cadena de
+/// reemplazos porque una cadena rota deja registros huérfanos y acá el orden por
+/// fecha ya dice todo lo que hay que saber.
+model MedicalExam {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation("WorkerExams", fields: [userId], references: [id], onDelete: Cascade)
+  /// Tipo o nombre: "Altura física", "Preocupacional", "Psicosensotécnico".
+  type      String
+  issuedAt  DateTime?
+  expiresAt DateTime?
+  /// Centro médico donde se tomó.
+  center    String?
+  result    ExamResult?
+  fileUrl   String?
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([userId, type])
+  @@map("medical_exams")
+}
+
+enum ExamResult {
+  APTO
+  APTO_CON_RESTRICCIONES
+  NO_APTO
+  PENDIENTE
+}
+
+/// Charla de ingreso. Cuelga de UN cliente y vale para una o varias de sus
+/// faenas: la misma inducción no se carga dos veces por dos faenas.
+model Induction {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation("WorkerInductions", fields: [userId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client           @relation("ClientInductions", fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  issuedAt  DateTime?
+  expiresAt DateTime?
+  fileUrl   String?
+  notes     String?
+  /// Faenas donde vale. Vacío = ninguna todavía; elegir el cliente NO la hace
+  /// válida en todas sus faenas, hay que decir en cuáles.
+  faenas    InductionFaena[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([clientId])
+  @@map("inductions")
+}
+
+/// Faena donde vale una inducción. La FK a `Faena` es la que impide mezclar
+/// faenas de clientes distintos: el servicio valida que todas sean del cliente
+/// de la inducción antes de escribir.
+model InductionFaena {
+  inductionId String
+  induction   Induction @relation(fields: [inductionId], references: [id], onDelete: Cascade)
+  faenaId     String
+  faena       Faena     @relation(fields: [faenaId], references: [id], onDelete: Cascade)
+
+  @@id([inductionId, faenaId])
+  @@index([faenaId])
+  @@map("induction_faenas")
 }
