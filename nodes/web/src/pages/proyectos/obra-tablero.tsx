@@ -42,7 +42,12 @@ import {
   TablaControl,
 } from './obra-curva';
 import { useDisposicion } from './usar-arrastre';
-import { Arrastrable, ControlesTablero, PanelClima } from './obra-piezas';
+import {
+  Arrastrable,
+  ControlesTablero,
+  PanelClima,
+  useDesplazadoAuto,
+} from './obra-piezas';
 
 /**
  * Tablero de avance de obra: el mapa satelital de la faena es el FONDO y todo
@@ -369,7 +374,7 @@ export function ObraTablero({
         </Arrastrable>
 
         <div className="flex flex-col gap-2 sm:gap-3 lg:min-h-0 lg:flex-1 lg:flex-row">
-          <div className="order-2 flex flex-col gap-2 sm:gap-3 lg:order-1 lg:w-[260px] lg:shrink-0 lg:justify-start lg:overflow-y-auto lg:pr-1">
+          <div className="order-2 flex flex-col gap-2 sm:gap-3 lg:order-1 lg:w-[260px] lg:shrink-0 lg:justify-start lg:overflow-y-auto lg:pr-1 desplazable">
             {data.weather && (
               <Arrastrable id="clima" posiciones={posiciones} onMover={mover}>
                 <PanelClima weather={data.weather} />
@@ -1031,15 +1036,6 @@ function construirPaneles(
       Icon: Table2,
       contenido: <TablaControl control={control} semana={semana} onSemana={onSemana} />,
     });
-    // Con control por HH, la curva del avance FÍSICO deja de ser la principal
-    // y pasa a la rotación: sigue aportando la banda temprana-tardía del CPM.
-    paneles.push({
-      id: 'curva-fisica',
-      titulo: 'Cercos: avance físico en el tiempo',
-      Icon: Activity,
-      aHoy: true,
-      contenido: <CurvaS curves={data.curves} />,
-    });
   }
 
   if (puntos.length > 0) {
@@ -1125,7 +1121,6 @@ function emparejar(paneles: Panel[], porGrupo: number): Panel[][] {
     ['tabla', ''],
     ['corte-tipo', 'corte-sector'],
     ['corte-etapa', 'avances'],
-    ['curva-fisica', ''],
   ];
 
   const duplas: Panel[][] = [];
@@ -1327,9 +1322,13 @@ function Leyenda({
 // ── Panel: barras ────────────────────────────────────────────────────────────
 
 function Barras({ lineas, detalle }: { lineas: ObraLine[]; detalle?: string[] }): ReactNode {
+  const auto = useDesplazadoAuto<HTMLUListElement>();
   if (lineas.length === 0) return <Vacio mensaje="Sin datos para este corte." />;
   return (
-    <ul className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto">
+    <ul
+      ref={auto}
+      className="desplazable flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto"
+    >
       {lineas.map((l, i) => (
         <li key={l.id} className="min-w-0">
           <div className="flex items-baseline justify-between gap-2">
@@ -1368,8 +1367,12 @@ function Barras({ lineas, detalle }: { lineas: ObraLine[]; detalle?: string[] })
 // ── Panel: hitos ─────────────────────────────────────────────────────────────
 
 function Hitos({ items, hasta }: { items: ObraMilestone[]; hasta: string | null }): ReactNode {
+  const auto = useDesplazadoAuto<HTMLOListElement>();
   return (
-    <ol className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto">
+    <ol
+      ref={auto}
+      className="desplazable flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto"
+    >
       {items.map((h, i) => {
         // Un hito comprometido para una fecha anterior al corte que se mira ya
         // debería estar cumplido: se marca aunque nadie lo haya cerrado aún.
@@ -1411,11 +1414,15 @@ function Hitos({ items, hasta }: { items: ObraMilestone[]; hasta: string | null 
 // ── Panel: últimos avances ───────────────────────────────────────────────────
 
 function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
+  const auto = useDesplazadoAuto<HTMLUListElement>();
   if (items.length === 0) {
     return <Vacio mensaje="Sin avances reportados hasta esta fecha." />;
   }
   return (
-    <ul className="flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto">
+    <ul
+      ref={auto}
+      className="desplazable flex h-full min-h-0 flex-col justify-around gap-1 overflow-y-auto"
+    >
       {items.slice(0, 8).map((r, i) => (
         <li
           key={r.id}

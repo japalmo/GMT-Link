@@ -158,7 +158,7 @@ export default function PublicObraDashboardPage(): ReactNode {
         <img
           src={isoLogo}
           alt="Certificación ISO 9001 otorgada por Bureau Veritas"
-          className="h-10 w-auto shrink-0 sm:h-16 lg:h-20 2xl:h-28"
+          className="h-5 w-auto shrink-0 sm:h-8 lg:h-10 2xl:h-14"
         />
       </footer>
     </div>

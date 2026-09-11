@@ -240,3 +240,94 @@ function Dato({
     </div>
   );
 }
+
+// ── Desplazamiento automático de los paneles ────────────────────────────────
+
+/**
+ * Recorre solo el contenido que no cabe en el panel.
+ *
+ * En la TV de faena nadie va a tomar el mouse: si una lista tiene doce filas y
+ * se ven seis, las otras seis no existen. El panel baja solo, despacio, y
+ * vuelve a subir. Se detiene mientras alguien tiene el cursor encima o mueve la
+ * rueda, que es cuando el desplazamiento automático estorba en vez de ayudar, y
+ * no arranca si el visor pidió menos movimiento.
+ *
+ * El reloj es un temporizador y no `requestAnimationFrame`: hay navegadores que
+ * dejan de entregar cuadros cuando creen que la página no se está pintando
+ * —paneles embebidos, modo kiosco— aunque `document.hidden` siga en `false`, y
+ * ahí la pantalla se quedaría congelada justo donde más se la mira.
+ *
+ * Devuelve una ref de callback: los paneles se remontan en cada turno de la
+ * rotación y hay que reenganchar el nodo nuevo, no el viejo.
+ */
+export function useDesplazadoAuto<T extends HTMLElement>(): (nodo: T | null) => void {
+  const [nodo, setNodo] = useState<T | null>(null);
+
+  useEffect(() => {
+    if (!nodo) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    // Antes de arrancar se deja leer lo que está a la vista; en cada extremo se
+    // hace una pausa para que la última fila no pase de largo.
+    const ESPERA_INICIAL = 2_000;
+    const ESPERA_EXTREMO = 1_800;
+    const ESPERA_USUARIO = 2_500;
+    // El recorrido completo dura esto, así que una lista corta baja más lento
+    // que una larga y las dos alcanzan a mostrarse dentro de un turno.
+    const RECORRIDO_MS = 9_000;
+    const TIC_MS = 40;
+
+    let sentido = 1;
+    let pos = nodo.scrollTop;
+    let reanudarEn = performance.now() + ESPERA_INICIAL;
+
+    const tic = (): void => {
+      const ahora = performance.now();
+      const margen = nodo.scrollHeight - nodo.clientHeight;
+      // Nada que recorrer: el panel entra completo y no hay que moverlo.
+      if (margen <= 2) {
+        pos = 0;
+        return;
+      }
+      // Preguntar por `:hover` en cada tic y no llevar una bandera: si el panel
+      // desaparece bajo el cursor, el `pointerleave` no llega y una bandera
+      // dejaría el desplazamiento detenido para siempre.
+      if (nodo.matches(':hover')) {
+        pos = nodo.scrollTop;
+        reanudarEn = ahora + ESPERA_USUARIO;
+        return;
+      }
+      if (ahora < reanudarEn) {
+        pos = nodo.scrollTop;
+        return;
+      }
+      pos += sentido * (margen / RECORRIDO_MS) * TIC_MS;
+      if (pos >= margen) {
+        pos = margen;
+        sentido = -1;
+        reanudarEn = ahora + ESPERA_EXTREMO;
+      } else if (pos <= 0) {
+        pos = 0;
+        sentido = 1;
+        reanudarEn = ahora + ESPERA_EXTREMO;
+      }
+      nodo.scrollTop = pos;
+    };
+
+    const aparta = (): void => {
+      reanudarEn = performance.now() + ESPERA_USUARIO;
+    };
+
+    nodo.addEventListener('wheel', aparta, { passive: true });
+    nodo.addEventListener('touchstart', aparta, { passive: true });
+    const reloj = window.setInterval(tic, TIC_MS);
+
+    return () => {
+      window.clearInterval(reloj);
+      nodo.removeEventListener('wheel', aparta);
+      nodo.removeEventListener('touchstart', aparta);
+    };
+  }, [nodo]);
+
+  return setNodo;
+}

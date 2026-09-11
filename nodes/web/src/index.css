@@ -259,6 +259,41 @@
   border-color: rgb(255 255 255 / 0.9);
 }
 
+/*
+ * Desplazamiento de los paneles del tablero. La barra del sistema es gris y
+ * opaca: sobre el vidrio se ve como un parche. Acá queda invisible pero el
+ * carril SIGUE reservado, así que mostrarla al pasar el cursor no recorre el
+ * contenido; solo cambia de color.
+ */
+.desplazable {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 160ms ease;
+}
+.desplazable::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.desplazable::-webkit-scrollbar-track {
+  background: transparent;
+}
+.desplazable::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 160ms ease;
+}
+.desplazable:hover,
+.desplazable:focus-within {
+  scrollbar-color: rgb(255 255 255 / 0.32) transparent;
+}
+.desplazable:hover::-webkit-scrollbar-thumb,
+.desplazable:focus-within::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.32);
+}
+.desplazable::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.55);
+}
+
 .marcador-cerco {
   background: transparent;
   border: 0;

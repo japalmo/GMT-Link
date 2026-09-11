@@ -10,6 +10,7 @@ import {
   Truck,
 } from 'lucide-react';
 import type { ObraControl, ObraWeek } from '@gmt-platform/contracts';
+import { useDesplazadoAuto } from './obra-piezas';
 
 /**
  * Curva S del control de avance por HH, con el mismo lenguaje del informe que
@@ -471,7 +472,17 @@ function LeyendaCurva({
 
 // ── Panel: la tabla del informe ──────────────────────────────────────────────
 
-/** Las mismas filas del PDF del control, para leer los números exactos. */
+/**
+ * Las mismas filas del informe, para leer los números exactos.
+ *
+ * Las cuatro columnas de porcentaje se agrupan bajo "Semanal" y "Acumulado":
+ * repetir "Sem. prog. / Sem. real / Acum. prog. / Acum. real" en el encabezado
+ * era la mitad del ruido de la tabla. El color hace el resto del trabajo, el
+ * mismo del gráfico: ámbar es programa y celeste es real.
+ *
+ * Una semana sin informe deja la celda VACÍA en vez de poner una raya. Doce
+ * rayas seguidas se leen como un dato, y no hay ninguno.
+ */
 export function TablaControl({
   control,
   semana,
@@ -481,59 +492,133 @@ export function TablaControl({
   semana: number;
   onSemana: (i: number) => void;
 }): ReactNode {
+  const auto = useDesplazadoAuto<HTMLDivElement>();
+  const celda = 'py-1 pl-2 text-right tabular-nums';
+
   return (
-    <div className="h-full min-h-0 overflow-auto">
-      <table className="w-full border-collapse text-[11px] tabular-nums 2xl:text-xs">
-        <thead className="sticky top-0 bg-slate-900/80 backdrop-blur">
-          <tr className="text-left text-white/60">
-            <th className="py-1 pr-2 font-medium">Semana</th>
-            <th className="py-1 pr-2 text-right font-medium">HH</th>
-            <th className="py-1 pr-2 text-right font-medium">Sem. prog.</th>
-            <th className="py-1 pr-2 text-right font-medium">Sem. real</th>
-            <th className="py-1 pr-2 text-right font-medium">Acum. prog.</th>
-            <th className="py-1 pr-2 text-right font-medium">Acum. real</th>
-            <th className="py-1 text-right font-medium">pp</th>
+    <div ref={auto} className="desplazable h-full min-h-0 overflow-auto">
+      <table className="w-full border-separate border-spacing-0 text-[11px] 2xl:text-xs">
+        <thead className="sticky top-0 z-10">
+          <tr>
+            <th
+              rowSpan={2}
+              className="border-b border-white/15 bg-slate-950/95 py-1 pr-2 text-left align-bottom text-[10px] font-medium uppercase tracking-wide text-white/45 backdrop-blur"
+            >
+              Semana
+            </th>
+            <th
+              rowSpan={2}
+              className="border-b border-white/15 bg-slate-950/95 py-1 pl-2 text-right align-bottom text-[10px] font-medium uppercase tracking-wide text-white/45 backdrop-blur"
+            >
+              HH
+            </th>
+            <th
+              colSpan={2}
+              className="border-b border-white/10 bg-slate-950/95 pb-0.5 pl-2 text-right text-[10px] font-medium uppercase tracking-wide text-white/45 backdrop-blur"
+            >
+              Semanal
+            </th>
+            <th
+              colSpan={2}
+              className="border-b border-white/10 bg-slate-950/95 pb-0.5 pl-3 text-right text-[10px] font-medium uppercase tracking-wide text-white/45 backdrop-blur"
+            >
+              Acumulado
+            </th>
+            <th
+              rowSpan={2}
+              className="border-b border-white/15 bg-slate-950/95 py-1 pl-2 text-right align-bottom text-[10px] font-medium uppercase tracking-wide text-white/45 backdrop-blur"
+            >
+              pp
+            </th>
+          </tr>
+          <tr>
+            <RotuloSerie color={COLOR_PLAN} texto="prog." />
+            <RotuloSerie color={COLOR_REAL} texto="real" />
+            <RotuloSerie color={COLOR_PLAN} texto="prog." separa />
+            <RotuloSerie color={COLOR_REAL} texto="real" />
           </tr>
         </thead>
         <tbody>
-          {control.weeks.map((w) => (
-            <tr
-              key={w.code}
-              onClick={() => onSemana(w.index)}
-              className={`cursor-pointer border-t border-white/10 transition-colors hover:bg-white/10 ${
-                w.index === semana ? 'bg-white/15 font-semibold' : ''
-              }`}
-            >
-              <td className="whitespace-nowrap py-0.5 pr-2">
-                {w.code} <span className="text-white/50">{diaMes(w.closeDate)}</span>
-              </td>
-              <td className="py-0.5 pr-2 text-right text-white/70">{numero(w.hhPlan, 0)}</td>
-              <td className="py-0.5 pr-2 text-right">{numero(w.parPlan)}%</td>
-              <td className="py-0.5 pr-2 text-right text-sky-300">
-                {w.parReal === null ? '—' : `${numero(w.parReal)}%`}
-              </td>
-              <td className="py-0.5 pr-2 text-right">{numero(w.acmPlan)}%</td>
-              <td className="py-0.5 pr-2 text-right text-sky-300">
-                {w.acmReal === null ? '—' : `${numero(w.acmReal)}%`}
-              </td>
-              <td
-                className={`py-0.5 text-right font-semibold ${
-                  w.deviation === null
-                    ? 'text-white/40'
-                    : w.deviation >= 0
-                      ? 'text-emerald-300'
-                      : 'text-rose-300'
-                }`}
+          {control.weeks.map((w) => {
+            const elegida = w.index === semana;
+            const informada = w.index <= control.lastClosed;
+            return (
+              <tr
+                key={w.code}
+                onClick={() => onSemana(w.index)}
+                aria-current={elegida}
+                className={`cursor-pointer transition-colors ${
+                  elegida ? 'bg-white/12' : 'hover:bg-white/[0.06]'
+                } ${informada ? '' : 'text-white/45'}`}
               >
-                {w.deviation === null
-                  ? '—'
-                  : `${w.deviation >= 0 ? '+' : ''}${numero(w.deviation)}`}
-              </td>
-            </tr>
-          ))}
+                <td className="whitespace-nowrap py-1 pr-2">
+                  {/* La barra de la izquierda marca la semana elegida sin teñir
+                      la fila entera, que es lo que hacía parpadear la tabla. */}
+                  <span
+                    className={`mr-1.5 inline-block h-3 w-0.5 translate-y-0.5 rounded-full ${
+                      elegida ? 'bg-sky-400' : 'bg-transparent'
+                    }`}
+                    aria-hidden
+                  />
+                  <span className={elegida ? 'font-semibold' : ''}>{w.code}</span>{' '}
+                  <span className="text-white/40">{diaMes(w.closeDate)}</span>
+                </td>
+                <td className={`${celda} text-white/55`}>{numero(w.hhPlan, 0)}</td>
+                <td className={celda}>{numero(w.parPlan)}</td>
+                <td className={`${celda} text-sky-300`}>
+                  {w.parReal === null ? '' : numero(w.parReal)}
+                </td>
+                <td className={`${celda} pl-3`}>{numero(w.acmPlan)}</td>
+                <td className={`${celda} text-sky-300`}>
+                  {w.acmReal === null ? '' : numero(w.acmReal)}
+                </td>
+                <td
+                  className={`${celda} font-semibold ${
+                    w.deviation === null
+                      ? ''
+                      : w.deviation >= 0
+                        ? 'text-emerald-300'
+                        : 'text-rose-300'
+                  }`}
+                >
+                  {w.deviation === null
+                    ? ''
+                    : `${w.deviation >= 0 ? '+' : ''}${numero(w.deviation)}`}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Rótulo de una serie en el encabezado: el punto de color dice cuál es. */
+function RotuloSerie({
+  color,
+  texto,
+  separa = false,
+}: {
+  color: string;
+  texto: string;
+  separa?: boolean;
+}): ReactNode {
+  return (
+    <th
+      className={`border-b border-white/15 bg-slate-950/95 py-0.5 text-right text-[10px] font-medium text-white/50 backdrop-blur ${
+        separa ? 'pl-3' : 'pl-2'
+      }`}
+    >
+      <span className="inline-flex items-center gap-1">
+        <span
+          className="size-1.5 rounded-full"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
+        {texto}
+      </span>
+    </th>
   );
 }
 
@@ -550,8 +635,9 @@ export function FasesControl({
   control: ObraControl;
   semana: number;
 }): ReactNode {
+  const auto = useDesplazadoAuto<HTMLUListElement>();
   return (
-    <ul className="flex h-full min-h-0 flex-col justify-around gap-2 overflow-y-auto">
+    <ul ref={auto} className="desplazable flex h-full min-h-0 flex-col justify-around gap-2 overflow-y-auto">
       {control.phases.map((f, i) => {
         const plan = f.plan[semana] ?? f.plan.at(-1) ?? 0;
         const real = f.real[semana] ?? null;
