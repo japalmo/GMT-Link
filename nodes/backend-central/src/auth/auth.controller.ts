@@ -354,12 +354,18 @@ export class AuthController {
         emailInstitucionalVerified: true,
         emailPersonalVerified: true,
         lastRecoveryAt: true,
+        isFieldWorker: true,
       },
     });
     // Cuenta inexistente O suspendida -> misma respuesta neutra. No se filtra el
     // estado SUSPENDED a un no autenticado (alinea con la anti-enumeración A1 del
     // login, donde "suspendida" solo se revela tras validar la clave correcta).
-    if (!user || user.status === 'SUSPENDED') {
+    //
+    // Una ficha de trabajador de faena entra por la misma puerta: NO es una
+    // cuenta. Sin este corte, la recuperación le generaría una clave provisoria
+    // y la dejaría en PENDING_FIRST_LOGIN, es decir, convertiría una ficha sin
+    // acceso en una cuenta usable por quien adivinara el nombre de usuario.
+    if (!user || user.status === 'SUSPENDED' || user.isFieldWorker) {
       throw new UnauthorizedException('No existe una cuenta con ese usuario.');
     }
 

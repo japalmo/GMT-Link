@@ -20,6 +20,7 @@ import type {
   ObraMap,
   ObraMapPoint,
   ObraPointPhoto,
+  TaskCrewMember,
   ObraPointStatus,
   ObraCurvePoint,
   ObraDashboard,
@@ -358,6 +359,8 @@ export function computeObraDashboard(
     informadas?: number;
     /** Fotos de avance por cerco, indexadas por el id de la actividad padre. */
     fotos?: Map<string, ObraPointPhoto[]>;
+    /** Cuadrilla por TAREA. Un cerco hereda la de todas sus etapas. */
+    cuadrillas?: Map<string, TaskCrewMember[]>;
   } = {},
 ): ObraDashboard {
   // Una actividad con hijas es un AGRUPADOR (un cerco), no algo que se mida:
@@ -540,6 +543,22 @@ export function computeObraDashboard(
       planByWeek.push(planificadoAl(grupo, cierre));
     }
 
+    // La cuadrilla del cerco es la unión de las de sus etapas, sin repetir a
+    // nadie: quien está en tres etapas del mismo cerco es una sola persona ahí.
+    const porPersona = new Map<string, TaskCrewMember>();
+    for (const a of [...grupo, { id: clave }]) {
+      for (const m of control.cuadrillas?.get(a.id) ?? []) {
+        const previo = porPersona.get(m.userId);
+        // Si es jefe en alguna etapa, se muestra como jefe del cerco.
+        if (!previo || (m.lead && !previo.lead)) porPersona.set(m.userId, m);
+      }
+    }
+    const cuadrilla = [...porPersona.values()].sort(
+      (x, y) =>
+        Number(y.lead) - Number(x.lead) ||
+        x.lastName.localeCompare(y.lastName, 'es'),
+    );
+
     puntos.push({
       id: clave,
       code: codigo,
@@ -555,6 +574,8 @@ export function computeObraDashboard(
       realByWeek,
       planByWeek,
       photos: control.fotos?.get(clave) ?? [],
+      crewCount: cuadrilla.length,
+      crew: cuadrilla,
     });
   }
   const map: ObraMap = {

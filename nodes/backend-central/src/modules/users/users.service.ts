@@ -503,7 +503,10 @@ export class UsersService {
 
     // Cada condición viaja en su propio `AND` para no pisar el `OR` de la otra
     // (búsqueda vs. keyset).
-    const conditions: Prisma.UserWhereInput[] = [];
+    // Los trabajadores de faena NO son usuarios: no tienen cuenta, ni rol, ni
+    // correo que sirva. Este listado alimenta el directorio y los selectores de
+    // permisos, así que ahí solo va gente con acceso.
+    const conditions: Prisma.UserWhereInput[] = [{ isFieldWorker: false }];
 
     const trimmedSearch = search?.trim();
     if (trimmedSearch && trimmedSearch.length > 0) {
@@ -576,7 +579,9 @@ export class UsersService {
     ]);
 
     const filters = req.filters ?? {};
-    const filterParts: Prisma.UserWhereInput[] = [];
+    // La tabla del directorio lista CUENTAS. Las fichas de faena se gestionan
+    // en la obra, no acá, y mostrarlas con su correo `.invalid` sería confuso.
+    const filterParts: Prisma.UserWhereInput[] = [{ isFieldWorker: false }];
     // Los valores de `filters` llegan crudos del query string (qs puede anidarlos):
     // se coaccionan a string y el `status` se valida contra el enum, para degradar a
     // "filtro ignorado" en vez de reventar la consulta de Prisma con un 500.

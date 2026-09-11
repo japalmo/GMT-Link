@@ -41,6 +41,12 @@ model User {
   lastRecoveryAt             DateTime? // #66 cooldown: última recuperación de clave iniciada; limita reenvío/rotación por cuenta (anti email-bombing/DoS)
   points                     Int                         @default(0) // gamificación
   isClientUser               Boolean                     @default(false)
+  /// Trabajador de faena: existe para armar cuadrillas y aparecer en el kanban,
+  /// NO para entrar al sistema. Se crea sin clave (`passwordHash` null), sin rol
+  /// y sin tupla en OpenFGA, así que no tiene acceso a nada; el login ya rechaza
+  /// una cuenta sin hash. Se excluye por defecto de los listados de usuarios:
+  /// donde se elige "un usuario" se está eligiendo a alguien con cuenta.
+  isFieldWorker              Boolean                     @default(false)
   clientId                   String?
   client                     Client?                     @relation(fields: [clientId], references: [id])
   memberships                Membership[]
@@ -89,6 +95,7 @@ model User {
   ticketsAssigned            Ticket[]                    @relation("TicketAssignee")
   ticketEvents               TicketEvent[]               @relation("TicketEventActor")
   taskProgressReports        TaskProgress[]              @relation("TaskProgressReporter")
+  crewMemberships            TaskWorker[]                @relation("CrewMember")
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 }
@@ -847,6 +854,10 @@ model Task {
   latitude        Float?
   longitude       Float?
   progress        TaskProgress[]    @relation("TaskProgressEntries")
+  // Cuadrilla que va a terreno. Distinta de `assignedTo`, que es el responsable
+  // con cuenta: en una etapa de cerco el responsable puede ser el jefe de
+  // terreno y la cuadrilla, cuatro trabajadores sin acceso al sistema.
+  crew            TaskWorker[]      @relation("TaskCrew")
   // Fechas TEMPRANAS y TARDÍAS del programa (CPM del MS Project). Sin ellas la
   // curva S solo puede mostrar programada y real; con ellas se dibuja la banda
   // temprana-tardía, que es lo que permite ver si el atraso consume holgura o
@@ -1659,6 +1670,23 @@ model TicketCounter {
 /// vez de recalcular el total, y de esa serie sale la curva S real y la
 /// trazabilidad de quién reportó qué. La cantidad ejecutada de una tarea es la
 /// SUMA de sus filas; no se denormaliza para que no pueda quedar desfasada.
+/// Un trabajador asignado a una tarea. La cuadrilla de esa etapa.
+model TaskWorker {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation("TaskCrew", fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("CrewMember", fields: [userId], references: [id], onDelete: Cascade)
+  /// Jefe de cuadrilla. Uno solo por tarea; lo garantiza el índice parcial de
+  /// la migración, no solo el servicio.
+  lead      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@map("task_workers")
+}
+
 model TaskProgress {
   id           String   @id @default(cuid())
   taskId       String

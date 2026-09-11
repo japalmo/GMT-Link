@@ -23,6 +23,22 @@ const TASK_INCLUDE = {
   createdBy: true,
   clientUser: true,
   timeLogs: { orderBy: { startedAt: 'asc' as const } },
+  // La cuadrilla viaja con la tarea: el kanban, el calendario y el plan de
+  // actividades la muestran, y pedirla aparte por tarjeta serían N consultas.
+  crew: {
+    orderBy: [{ lead: 'desc' as const }, { createdAt: 'asc' as const }],
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          cargo: true,
+          isFieldWorker: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.TaskInclude;
 
 /** Estados válidos de tarea (whitelist del filtro de estado de la tabla). */
@@ -671,6 +687,76 @@ export class TasksService {
    * Devuelve los usuarios asignables (que pueden ver/ejecutar tareas) en un proyecto.
    * Requiere que el solicitante pueda ver el proyecto (can_view / task:read).
    */
+  /**
+   * Trabajadores disponibles para armar cuadrilla en este proyecto.
+   *
+   * Es la lista COMPLETA de fichas de faena, no los usuarios del proyecto: el
+   * trabajador no tiene cuenta ni permisos, así que no hay nada que consultarle
+   * a OpenFGA sobre él. Lo que sí se verifica es que quien pregunta pueda ver
+   * las tareas de la obra.
+   */
+  async getCrewOptions(projectId: string, userId: string) {
+    const decision = await this.permissions.can(userId, 'task:read', { projectId });
+    if (decision.effect !== 'allow') {
+      throw new BadRequestException('No tienes acceso a este proyecto.');
+    }
+    return this.prisma.user.findMany({
+      where: { isFieldWorker: true },
+      select: { id: true, firstName: true, lastName: true, cargo: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+  }
+
+  /**
+   * Reemplaza la cuadrilla de una tarea. Llega la lista completa y no un alta o
+   * baja suelta: así el cliente manda el estado que quiere y no hay que
+   * reconciliar diferencias ni preocuparse del orden de dos ediciones.
+   */
+  async setCrew(
+    taskId: string,
+    userId: string,
+    input: { userIds: string[]; leadUserId: string | null },
+  ) {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, projectId: true },
+    });
+    if (!task) throw new NotFoundException('La tarea no existe.');
+
+    const decision = await this.permissions.can(userId, 'task:manage', {
+      projectId: task.projectId ?? undefined,
+    });
+    if (decision.effect !== 'allow') {
+      throw new BadRequestException('No tienes permisos para asignar la cuadrilla.');
+    }
+
+    const ids = [...new Set(input.userIds)];
+    if (input.leadUserId && !ids.includes(input.leadUserId)) {
+      throw new BadRequestException('El jefe de cuadrilla debe ser parte de la cuadrilla.');
+    }
+
+    // Que existan de verdad: un id inventado dejaría una fila apuntando a nadie.
+    if (ids.length > 0) {
+      const encontrados = await this.prisma.user.count({ where: { id: { in: ids } } });
+      if (encontrados !== ids.length) {
+        throw new BadRequestException('Alguno de los trabajadores ya no existe.');
+      }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.taskWorker.deleteMany({ where: { taskId } }),
+      ...(ids.length > 0
+        ? [
+            this.prisma.taskWorker.createMany({
+              data: ids.map((id) => ({ taskId, userId: id, lead: id === input.leadUserId })),
+            }),
+          ]
+        : []),
+    ]);
+
+    return this.prisma.task.findUnique({ where: { id: taskId }, include: TASK_INCLUDE });
+  }
+
   async getAssignees(projectId: string, userId: string) {
     const decision = await this.permissions.can(userId, 'task:read', { projectId });
     if (decision.effect !== 'allow') {

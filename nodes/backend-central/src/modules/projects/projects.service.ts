@@ -29,6 +29,25 @@ import {
   type ObraDashboard,
 } from './obra-dashboard.util';
 import { computeControlSemanal } from './control-semanal.util';
+import type { ObraDashboard as ObraDashboardView, TaskCrewMember } from '@gmt-platform/contracts';
+
+/**
+ * Saca los NOMBRES de la cuadrilla del tablero público, dejando la cuenta.
+ *
+ * El enlace público se comparte con el cliente y hoy los proyectos están sin
+ * clave: quién trabaja en cada cerco es dato personal de un trabajador y no
+ * tiene por qué viajar ahí. "Cuadrilla de 4" informa lo mismo para lo que el
+ * tablero sirve —dónde está la gente— sin publicar a nadie.
+ */
+function anonimizarCuadrilla(dashboard: ObraDashboardView): ObraDashboardView {
+  return {
+    ...dashboard,
+    map: {
+      ...dashboard.map,
+      points: dashboard.map.points.map((p) => ({ ...p, crew: [] })),
+    },
+  };
+}
 
 @Injectable()
 export class ProjectsService {
@@ -330,7 +349,12 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException('El dashboard no existe o el enlace ya no es válido.');
     }
-    return this.buildObraDashboard(project.id, project.name, project.client?.name ?? null);
+    const dashboard = await this.buildObraDashboard(
+      project.id,
+      project.name,
+      project.client?.name ?? null,
+    );
+    return anonimizarCuadrilla(dashboard);
   }
 
   /**
@@ -403,13 +427,31 @@ export class ProjectsService {
   ): Promise<ObraDashboard> {
     // El control por HH y el avance físico se leen en paralelo: son fuentes
     // distintas de la misma obra y el tablero las muestra juntas.
-    const [control, semanas, actividades, fotos] = await Promise.all([
+    const [control, semanas, actividades, cuadrilla, fotos] = await Promise.all([
       this.prisma.project.findUnique({
         where: { id },
         select: { totalHh: true, cutoffDate: true, planAtCutoff: true },
       }),
       this.prisma.projectWeek.findMany({ where: { projectId: id }, orderBy: { index: 'asc' } }),
       this.prisma.projectActivity.findMany({ where: { projectId: id }, orderBy: { wbsId: 'asc' } }),
+      // Cuadrilla asignada a cada tarea de la obra. El jefe va primero.
+      this.prisma.taskWorker.findMany({
+        where: { task: { projectId: id } },
+        select: {
+          taskId: true,
+          lead: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              cargo: true,
+              isFieldWorker: true,
+            },
+          },
+        },
+        orderBy: [{ lead: 'desc' }, { createdAt: 'asc' }],
+      }),
       // Foto de avance del área: el documento de imagen más nuevo colgado de
       // la tarea. Mientras nadie suba una, el mapa muestra la vista satelital.
       this.prisma.projectDocument.findMany({
@@ -492,11 +534,26 @@ export class ProjectsService {
       porTarea.set(d.taskId, lista);
     }
 
+    const porTareaCuadrilla = new Map<string, TaskCrewMember[]>();
+    for (const m of cuadrilla) {
+      const lista = porTareaCuadrilla.get(m.taskId) ?? [];
+      lista.push({
+        userId: m.user.id,
+        firstName: m.user.firstName,
+        lastName: m.user.lastName,
+        cargo: m.user.cargo,
+        lead: m.lead,
+        fieldWorker: m.user.isFieldWorker,
+      });
+      porTareaCuadrilla.set(m.taskId, lista);
+    }
+
     const dashboard = computeObraDashboard(id, name, activities, new Date(), {
       semanas: semanas.map((w) => w.closeDate),
       // `lastClosed` es un índice; como cantidad de semanas informadas es +1.
       informadas: (controlSemanal?.lastClosed ?? -1) + 1,
       fotos: porTarea,
+      cuadrillas: porTareaCuadrilla,
     });
 
     // El clima se pide en el centro de los cercos ubicados: es donde está la

@@ -5,6 +5,7 @@ import { CvModule } from '../cv/cv.module';
 import { OvertimeModule } from '../overtime/overtime.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { FieldWorkersService } from './field-workers.service';
 
 /**
  * Módulo de provisión de usuarios (§1.1).
@@ -17,7 +18,7 @@ import { UsersService } from './users.service';
 @Module({
   imports: [PrismaModule, RolesModule, CvModule, OvertimeModule],
   controllers: [UsersController],
-  providers: [UsersService],
+  providers: [FieldWorkersService, UsersService],
   exports: [UsersService],
 })
 export class UsersModule {}

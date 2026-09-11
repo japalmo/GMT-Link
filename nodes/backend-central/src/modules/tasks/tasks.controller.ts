@@ -18,6 +18,7 @@ import type { AuthUser } from '../../authz/auth-user.types';
 import { TasksService } from './tasks.service';
 import {
   CreateTaskDto,
+  SetTaskCrewDto,
   TaskTimeNoteDto,
   UpdateTaskDto,
   UpdateTaskStatusDto,
@@ -79,6 +80,15 @@ export class TasksController {
     return this.tasks.listTable(userId, req);
   }
 
+  @Get('crew-options')
+  getCrewOptions(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('projectId') projectId: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.tasks.getCrewOptions(projectId, userId);
+  }
+
   @Get('assignees')
   getAssignees(
     @CurrentUser() authUser: AuthUser | undefined,
@@ -105,6 +115,16 @@ export class TasksController {
   ) {
     const userId = this.requireUserId(authUser);
     return this.tasks.update(id, userId, dto);
+  }
+
+  @Put(':id/crew')
+  setCrew(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: SetTaskCrewDto,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.tasks.setCrew(id, userId, { userIds: dto.userIds, leadUserId: dto.leadUserId ?? null });
   }
 
   @Put(':id/status')

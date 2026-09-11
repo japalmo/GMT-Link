@@ -28,11 +28,14 @@ import { ImportUsersDto } from './dto/import-users.dto';
 import { ResendInviteDto } from './dto/resend-invite.dto';
 import { UpdateUserAdminDto } from './dto/update-user-admin.dto';
 import { UpsertWorkScheduleDto } from './dto/upsert-work-schedule.dto';
+import { CreateFieldWorkerDto, UpdateFieldWorkerDto } from './dto/field-worker.dto';
+import { FieldWorkersService } from './field-workers.service';
 import { UsersService } from './users.service';
 import { CvService } from '../cv/cv.service';
 import type { CvView } from '../cv/cv.types';
 import type {
   AssignRoleInput,
+  FieldWorker,
   ProjectAdminOption,
   ResendInvitePreview,
   ResendInviteResult,
@@ -63,7 +66,72 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly permissions: PermissionService,
     private readonly cvService: CvService,
+    private readonly fieldWorkers: FieldWorkersService,
   ) {}
+
+  /*
+   * ── Trabajadores de faena ──
+   *
+   * Fichas de la gente que va a terreno: sin clave, sin rol y sin acceso.
+   * Se gestionan con `project:manage` y NO con `can_manage_users`: quien
+   * arma la cuadrilla de una obra es el jefe de proyecto, y acá no se
+   * reparte ningún permiso que justifique pedirle ser admin de usuarios.
+   *
+   * Todas las rutas van ANTES de `@Get(':id')` para que el segmento
+   * estático no lo capture el parámetro.
+   */
+
+  @Get('field-workers')
+  async listFieldWorkers(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('search') search?: string,
+  ): Promise<FieldWorker[]> {
+    await this.assertPuedeGestionarCuadrilla(authUser);
+    return this.fieldWorkers.list(search);
+  }
+
+  @Post('field-workers')
+  async createFieldWorker(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Body() dto: CreateFieldWorkerDto,
+  ): Promise<FieldWorker> {
+    await this.assertPuedeGestionarCuadrilla(authUser);
+    return this.fieldWorkers.create(dto);
+  }
+
+  @Patch('field-workers/:id')
+  async updateFieldWorker(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateFieldWorkerDto,
+  ): Promise<FieldWorker> {
+    await this.assertPuedeGestionarCuadrilla(authUser);
+    return this.fieldWorkers.update(id, dto);
+  }
+
+  @Delete('field-workers/:id')
+  async removeFieldWorker(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Query('force') force?: string,
+  ): Promise<{ removed: true; assignments: number }> {
+    await this.assertPuedeGestionarCuadrilla(authUser);
+    return this.fieldWorkers.remove(id, force === 'true');
+  }
+
+  /** Gate de la cuadrilla: administrar proyectos, o administrar usuarios. */
+  private async assertPuedeGestionarCuadrilla(authUser: AuthUser | undefined): Promise<void> {
+    if (!authUser) {
+      throw new UnauthorizedException('Se requiere un usuario autenticado.');
+    }
+    const [proyectos, usuarios] = await Promise.all([
+      this.permissions.can(authUser.id, 'project:manage'),
+      this.permissions.can(authUser.id, 'user:manage'),
+    ]);
+    if (proyectos.effect !== 'allow' && usuarios.effect !== 'allow') {
+      throw new ForbiddenException('No tienes permisos para gestionar la cuadrilla.');
+    }
+  }
 
   /** Crea un usuario aprovisionado. Retorna la vista pública + la clave provisoria. */
   @Post()

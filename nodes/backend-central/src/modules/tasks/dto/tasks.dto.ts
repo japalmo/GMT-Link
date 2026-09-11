@@ -224,3 +224,18 @@ export class TaskTimeNoteDto {
   @IsOptional()
   note?: string;
 }
+
+/**
+ * Cuadrilla completa de una tarea. Llega la lista entera y no altas o bajas
+ * sueltas: el cliente manda el estado que quiere y no hay que reconciliar.
+ */
+export class SetTaskCrewDto {
+  @IsArray()
+  @IsString({ each: true })
+  userIds!: string[];
+
+  /** Jefe de cuadrilla. Debe venir dentro de `userIds`; `null` la deja sin jefe. */
+  @IsString()
+  @IsOptional()
+  leadUserId?: string | null;
+}

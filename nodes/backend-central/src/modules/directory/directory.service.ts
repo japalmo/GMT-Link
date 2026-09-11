@@ -160,7 +160,10 @@ export class DirectoryService {
     search?: string,
     tipo?: string,
   ): Prisma.UserWhereInput | undefined {
-    const conditions: Prisma.UserWhereInput[] = [];
+    // El directorio es la guía de contactos de GMT Link: quién es quién y cómo
+    // escribirle. Un trabajador de faena no tiene correo ni cuenta, así que no
+    // va acá; su ficha se administra en la obra donde arma cuadrilla.
+    const conditions: Prisma.UserWhereInput[] = [{ isFieldWorker: false }];
 
     // Aislamiento: el cliente solo ve colaboradores.
     if (requesterIsClient) {

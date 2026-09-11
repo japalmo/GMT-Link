@@ -1166,6 +1166,56 @@ export interface ObraBreakdown {
   lines: ObraLine[];
 }
 
+// ============ Cuadrilla de faena ============
+
+/**
+ * Un trabajador de faena: la persona que va a terreno.
+ *
+ * Vive en la misma tabla que los usuarios pero SIN acceso: se crea sin clave,
+ * sin rol y sin relación en OpenFGA, así que no puede entrar al sistema. Existe
+ * para armar cuadrillas, aparecer en el kanban y en el calendario, y contarse en
+ * el tablero de obra. Si algún día necesita entrar, se le da clave y rol y deja
+ * de ser solo una ficha.
+ */
+export interface FieldWorker {
+  id: string;
+  firstName: string;
+  lastName: string;
+  /** Cargo en faena: "Maestro cerrajero", "Ayudante", "Topógrafo". */
+  cargo: string | null;
+  /** Tareas en las que está hoy en la cuadrilla. */
+  assignments: number;
+}
+
+/** Alta de un trabajador de faena. No pide correo ni clave: no va a entrar. */
+export interface CreateFieldWorkerInput {
+  firstName: string;
+  lastName: string;
+  cargo?: string | null;
+}
+
+/**
+ * Un integrante de la cuadrilla de una tarea. `lead` marca al jefe de cuadrilla,
+ * que es uno de ellos y no un cargo aparte.
+ */
+export interface TaskCrewMember {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  cargo: string | null;
+  lead: boolean;
+  /** `false` si es alguien con cuenta (un supervisor sumado a la cuadrilla). */
+  fieldWorker: boolean;
+}
+
+/** Cuadrilla completa de una tarea, tal como se guarda. */
+export interface SetTaskCrewInput {
+  /** Ids de los integrantes. Reemplaza la cuadrilla entera. */
+  userIds: string[];
+  /** Quién es el jefe. Debe estar en `userIds`; `null` deja la cuadrilla sin jefe. */
+  leadUserId: string | null;
+}
+
 /** Una foto de avance de un cerco, con la fecha en que se tomó el registro. */
 export interface ObraPointPhoto {
   url: string;
@@ -1212,6 +1262,13 @@ export interface ObraMapPoint {
    * en el tiempo muestra la foto que correspondía. Vacío mientras nadie suba una.
    */
   photos: ObraPointPhoto[];
+  /** Cuántas personas hay asignadas hoy a las etapas de este cerco. */
+  crewCount: number;
+  /**
+   * Quiénes son. VACÍO en el tablero público: el enlace se comparte con el
+   * cliente y los nombres de los trabajadores no se publican, solo se cuentan.
+   */
+  crew: TaskCrewMember[];
 }
 
 /** Umbral superado por una condición climática en faena. */
