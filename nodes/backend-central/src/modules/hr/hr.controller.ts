@@ -5,29 +5,44 @@ import {
   ForbiddenException,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
   UnauthorizedException,
+  UploadedFile,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { PermissionService } from '../../authz/permission.service';
+import {
+  MAX_DOCUMENT_BYTES,
+  validarArchivoDocumento,
+} from '../documents/document-file.util';
 import { HrService } from './hr.service';
 import {
+  CreateHrDocumentDto,
+  UpdateHrDocumentDto,
   UpsertAccreditationDto,
   UpsertExamDto,
   UpsertInductionDto,
 } from './dto/hr.dto';
 import type {
   HrAccreditation,
+  HrDashboard,
+  HrDocument,
   HrExam,
   HrHours,
   HrInduction,
+  HrPersonPage,
+  HrRequirementPage,
   HrWorkerRow,
   HrWorkerSummary,
+  TableRequest,
 } from '@gmt-platform/contracts';
 
 /**
@@ -47,6 +62,44 @@ export class HrController {
     private readonly hr: HrService,
     private readonly permissions: PermissionService,
   ) {}
+
+  // ── Tablero y consulta ────────────────────────────────────────────────────
+
+  @Get('dashboard')
+  async dashboard(@CurrentUser() authUser: AuthUser | undefined): Promise<HrDashboard> {
+    await this.assertPuede(authUser, 'hr:read');
+    return this.hr.dashboard();
+  }
+
+  /** Tabla de consulta: una fila por requisito. */
+  @Get('requirements')
+  async requirements(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<HrRequirementPage> {
+    await this.assertPuede(authUser, 'hr:read');
+    return this.hr.requirementsTable(tabla(page, pageSize, search, sortBy, sortDir, filters));
+  }
+
+  /** La misma consulta, agrupada por persona. */
+  @Get('people')
+  async people(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+    @Query('filters') filters?: Record<string, string>,
+  ): Promise<HrPersonPage> {
+    await this.assertPuede(authUser, 'hr:read');
+    return this.hr.peopleTable(tabla(page, pageSize, search, sortBy, sortDir, filters));
+  }
 
   // ── Directorio y ficha ────────────────────────────────────────────────────
 
@@ -77,6 +130,81 @@ export class HrController {
   ): Promise<HrHours> {
     await this.assertPuede(authUser, 'hr:read');
     return this.hr.hours(userId, from, to);
+  }
+
+  // ── Documentos ────────────────────────────────────────────────────────────
+
+  @Get('workers/:userId/documents')
+  async listDocuments(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('userId') userId: string,
+  ): Promise<HrDocument[]> {
+    await this.assertPuede(authUser, 'hr:read');
+    return this.hr.listDocuments(userId);
+  }
+
+  /** Sube un documento en nombre del trabajador (multipart, campo `file`). */
+  @Post('workers/:userId/documents')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES } }))
+  async createDocument(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('userId') userId: string,
+    @Body() dto: CreateHrDocumentDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<HrDocument> {
+    await this.assertPuede(authUser, 'hr:manage');
+    return this.hr.createDocument(
+      userId,
+      {
+        type: dto.type,
+        name: dto.name,
+        issuedAt: dto.issuedAt || null,
+        expiresAt: dto.expiresAt || null,
+        noExpiry: dto.noExpiry === 'true',
+      },
+      validarArchivoDocumento(file),
+    );
+  }
+
+  @Patch('documents/:id')
+  async updateDocument(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: UpdateHrDocumentDto,
+  ): Promise<HrDocument> {
+    await this.assertPuede(authUser, 'hr:manage');
+    return this.hr.updateDocument(id, dto);
+  }
+
+  /** Sustituye el archivo conservando la versión anterior. */
+  @Post('documents/:id/version')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES } }))
+  async replaceDocumentFile(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ): Promise<HrDocument> {
+    await this.assertPuede(authUser, 'hr:manage');
+    return this.hr.replaceDocumentFile(id, validarArchivoDocumento(file));
+  }
+
+  @Delete('documents/:id')
+  async removeDocument(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<{ removed: true }> {
+    await this.assertPuede(authUser, 'hr:manage');
+    return this.hr.removeDocument(id);
+  }
+
+  @Get('documents/:id/file-url')
+  async documentFileUrl(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Query('previous') previous?: string,
+  ): Promise<{ url: string }> {
+    await this.assertPuede(authUser, 'hr:read');
+    return this.hr.documentFileUrl(id, previous === 'true');
   }
 
   // ── Exámenes ──────────────────────────────────────────────────────────────
@@ -221,4 +349,23 @@ export class HrController {
       );
     }
   }
+}
+
+/** Query del motor de tablas a `TableRequest`, igual que el resto de la API. */
+function tabla(
+  page: string | undefined,
+  pageSize: string | undefined,
+  search: string | undefined,
+  sortBy: string | undefined,
+  sortDir: string | undefined,
+  filters: Record<string, string> | undefined,
+): TableRequest {
+  return {
+    page: page !== undefined ? Number(page) : 1,
+    pageSize: pageSize !== undefined ? Number(pageSize) : 20,
+    search,
+    sortBy,
+    sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+    filters: filters && typeof filters === 'object' ? filters : undefined,
+  };
 }

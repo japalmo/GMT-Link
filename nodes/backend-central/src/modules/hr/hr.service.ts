@@ -1,17 +1,39 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import type { PersonalDocument, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type {
   HrAccreditation,
   HrAlerta,
+  HrDashboard,
+  HrDocument,
   HrExam,
   HrHours,
   HrHoursPoint,
   HrInduction,
+  HrPersonPage,
+  HrRequirementPage,
+  HrRequisitoTipo,
+  HrTurnoKey,
+  HrVigencia,
   HrWorkerRow,
   HrWorkerSummary,
+  TableRequest,
 } from '@gmt-platform/contracts';
+import { tablePage, tableSkipTake } from '../../common/table-pagination.util';
+import { DocumentsService, type DatosDocumentoRrhh } from '../documents/documents.service';
+import type { ArchivoDocumento } from '../documents/document-file.util';
 import { esAlerta, estadoDe, horasEntre, porUrgencia } from './vigencia.util';
+import {
+  acreditacionHabilita,
+  construirTablero,
+  consultaPersonas,
+  consultaRequisitos,
+  requisitosDe,
+  TURNO_LABEL,
+  turnoLabel,
+  type FiltrosRrhh,
+  type FuentePersona,
+} from './requisitos.util';
 import type {
   UpsertAccreditationDto,
   UpsertExamDto,
@@ -33,12 +55,281 @@ import type {
 
 const FAENA_SELECT = { id: true, code: true, name: true } as const;
 
+const TIPOS_VALIDOS: readonly HrRequisitoTipo[] = ['DOCUMENTO', 'EXAMEN', 'INDUCCION', 'ACREDITACION'];
+const VIGENCIAS_VALIDAS: readonly HrVigencia[] = [
+  'VIGENTE',
+  'POR_VENCER',
+  'VENCIDO',
+  'SIN_VENCIMIENTO',
+  'SIN_FECHA',
+];
+const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
 @Injectable()
 export class HrService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly documents: DocumentsService,
+  ) {}
 
   private fecha(d: Date | null | undefined): string | null {
     return d ? d.toISOString().slice(0, 10) : null;
+  }
+
+  // ── Personas con todos sus requisitos ─────────────────────────────────────
+
+  /**
+   * Una sola consulta con todo lo que decide la situación de cada persona. Los
+   * cálculos viven en `requisitos.util`, puros; acá solo se trae el dato.
+   */
+  private async fuentes(
+    where: Prisma.UserWhereInput,
+    soloTrabajadores = true,
+  ): Promise<FuentePersona[]> {
+    const users = await this.prisma.user.findMany({
+      where: soloTrabajadores ? { isClientUser: false, ...where } : where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        cargo: true,
+        isFieldWorker: true,
+        workSchedule: {
+          select: { shiftPattern: true, dayNight: true, workDays: true, restDays: true },
+        },
+        documents: {
+          select: {
+            id: true,
+            type: true,
+            name: true,
+            issuedAt: true,
+            expiresAt: true,
+            noExpiry: true,
+            status: true,
+          },
+        },
+        medicalExams: {
+          select: { id: true, type: true, issuedAt: true, expiresAt: true, noExpiry: true },
+        },
+        inductions: {
+          select: {
+            id: true,
+            name: true,
+            clientId: true,
+            issuedAt: true,
+            expiresAt: true,
+            noExpiry: true,
+            client: { select: { name: true } },
+            faenas: { select: { faena: { select: { id: true, name: true } } } },
+          },
+        },
+        accreditations: {
+          select: {
+            id: true,
+            clientId: true,
+            faenaId: true,
+            status: true,
+            issuedAt: true,
+            expiresAt: true,
+            noExpiry: true,
+            client: { select: { name: true } },
+            faena: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    return users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      cargo: u.cargo,
+      isFieldWorker: u.isFieldWorker,
+      turno: u.workSchedule,
+      documentos: u.documents,
+      examenes: u.medicalExams,
+      inducciones: u.inductions.map((i) => ({
+        id: i.id,
+        name: i.name,
+        clientId: i.clientId,
+        clientName: i.client.name,
+        faenas: i.faenas.map((f) => f.faena),
+        issuedAt: i.issuedAt,
+        expiresAt: i.expiresAt,
+        noExpiry: i.noExpiry,
+      })),
+      acreditaciones: u.accreditations.map((a) => ({
+        id: a.id,
+        clientId: a.clientId,
+        clientName: a.client.name,
+        faenaId: a.faenaId,
+        faenaName: a.faena?.name ?? null,
+        status: a.status,
+        issuedAt: a.issuedAt,
+        expiresAt: a.expiresAt,
+        noExpiry: a.noExpiry,
+      })),
+    }));
+  }
+
+  // ── Tablero y consulta ────────────────────────────────────────────────────
+
+  async dashboard(hoy = new Date()): Promise<HrDashboard> {
+    const [personas, faenas, clientes] = await Promise.all([
+      this.fuentes({}),
+      this.prisma.faena.findMany({
+        select: { id: true, name: true, clientId: true, client: { select: { name: true } } },
+      }),
+      this.prisma.client.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    ]);
+    return construirTablero(
+      personas,
+      faenas.map((f) => ({ id: f.id, name: f.name, clientId: f.clientId, clientName: f.client.name })),
+      clientes,
+      hoy,
+    );
+  }
+
+  async requirementsTable(req: TableRequest): Promise<HrRequirementPage> {
+    const filtros = await this.parseFiltros(req.filters, req.search);
+    const personas = await this.fuentes({});
+    const { filas, personas: people } = consultaRequisitos(
+      personas,
+      filtros,
+      req.sortBy,
+      req.sortDir === 'desc' ? 'desc' : 'asc',
+      new Date(),
+    );
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    return { ...tablePage(filas.slice(skip, skip + take), filas.length, page, pageSize), people };
+  }
+
+  async peopleTable(req: TableRequest): Promise<HrPersonPage> {
+    const filtros = await this.parseFiltros(req.filters, req.search);
+    const personas = await this.fuentes({});
+    const { filas, requisitos } = consultaPersonas(
+      personas,
+      filtros,
+      req.sortBy,
+      req.sortDir === 'desc' ? 'desc' : 'asc',
+      new Date(),
+    );
+    const { page, pageSize, skip, take } = tableSkipTake(req);
+    return {
+      ...tablePage(filas.slice(skip, skip + take), filas.length, page, pageSize),
+      requirements: requisitos,
+    };
+  }
+
+  /**
+   * Filtros del query a filtros del cálculo. Lo que no se reconoce se ignora en
+   * vez de reventar: el query string lo arma el navegador y un valor viejo en un
+   * enlace compartido no debería dejar la tabla en error.
+   */
+  private async parseFiltros(
+    filters: Record<string, string> | undefined,
+    search: string | undefined,
+  ): Promise<FiltrosRrhh> {
+    const f = filters ?? {};
+    const texto = (k: string): string | undefined => {
+      const v = f[k];
+      return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+    };
+    const lista = <T extends string>(k: string, validos: readonly T[]): T[] | undefined => {
+      const v = texto(k);
+      if (!v) return undefined;
+      const elegidos = v
+        .split(',')
+        .map((x) => x.trim())
+        .filter((x): x is T => (validos as readonly string[]).includes(x));
+      return elegidos.length > 0 ? elegidos : undefined;
+    };
+    const fecha = (k: string): string | undefined => {
+      const v = texto(k);
+      return v && FECHA_ISO.test(v) ? v : undefined;
+    };
+
+    const turno = texto('turno');
+    const faenaId = texto('faena');
+    let faenaClientId: string | undefined;
+    if (faenaId) {
+      const faena = await this.prisma.faena.findUnique({
+        where: { id: faenaId },
+        select: { clientId: true },
+      });
+      faenaClientId = faena?.clientId;
+    }
+
+    return {
+      search: search?.trim() || undefined,
+      turno: turno && turno in TURNO_LABEL ? (turno as HrTurnoKey) : undefined,
+      sinCargo: texto('sinCargo') === '1',
+      clientId: texto('cliente'),
+      faenaId,
+      faenaClientId,
+      tipos: lista('tipo', TIPOS_VALIDOS),
+      vigencias: lista('vigencia', VIGENCIAS_VALIDAS),
+      habilitante: texto('habilitante') === '1',
+      desde: fecha('desde'),
+      hasta: fecha('hasta'),
+    };
+  }
+
+  // ── Documentos, cargados por RRHH ─────────────────────────────────────────
+
+  private docView(d: PersonalDocument, hoy = new Date()): HrDocument {
+    return {
+      id: d.id,
+      userId: d.userId,
+      type: d.type,
+      name: d.name,
+      issuedAt: this.fecha(d.issuedAt),
+      expiresAt: this.fecha(d.expiresAt),
+      noExpiry: d.noExpiry,
+      status: d.status,
+      hasPrevious: d.previousFileUrl !== null,
+      updatedAt: d.updatedAt.toISOString(),
+      ...estadoDe(d.expiresAt, hoy, !d.noExpiry),
+    };
+  }
+
+  async listDocuments(userId: string): Promise<HrDocument[]> {
+    await this.assertUsuario(userId);
+    const filas = await this.prisma.personalDocument.findMany({
+      where: { userId },
+      orderBy: [{ expiresAt: 'asc' }, { name: 'asc' }],
+    });
+    const hoy = new Date();
+    return filas.map((d) => this.docView(d, hoy));
+  }
+
+  async createDocument(
+    userId: string,
+    fields: DatosDocumentoRrhh,
+    file: ArchivoDocumento,
+  ): Promise<HrDocument> {
+    await this.assertUsuario(userId);
+    return this.docView(await this.documents.createForWorker(userId, fields, file));
+  }
+
+  async updateDocument(id: string, fields: Partial<DatosDocumentoRrhh>): Promise<HrDocument> {
+    return this.docView(await this.documents.updateForWorker(id, fields));
+  }
+
+  async replaceDocumentFile(id: string, file: ArchivoDocumento): Promise<HrDocument> {
+    return this.docView(await this.documents.replaceFileForWorker(id, file));
+  }
+
+  async removeDocument(id: string): Promise<{ removed: true }> {
+    await this.documents.removeForWorker(id);
+    return { removed: true };
+  }
+
+  documentFileUrl(id: string, previous: boolean): Promise<{ url: string }> {
+    return this.documents.fileUrlForWorker(id, previous);
   }
 
   // ── Exámenes ──────────────────────────────────────────────────────────────
@@ -56,19 +347,22 @@ export class HrService {
       expiresAt: this.fecha(e.expiresAt),
       center: e.center,
       result: e.result,
+      noExpiry: e.noExpiry,
       fileUrl: e.fileUrl,
       notes: e.notes,
-      ...estadoDe(e.expiresAt, hoy),
+      ...estadoDe(e.expiresAt, hoy, !e.noExpiry),
     }));
   }
 
   async upsertExam(dto: UpsertExamDto, id?: string): Promise<HrExam> {
     await this.assertUsuario(dto.userId);
+    const noExpiry = dto.noExpiry ?? false;
     const data = {
       userId: dto.userId,
       type: dto.type.trim(),
       issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
-      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      expiresAt: !noExpiry && dto.expiresAt ? new Date(dto.expiresAt) : null,
+      noExpiry,
       center: dto.center?.trim() || null,
       result: dto.result ?? null,
       fileUrl: dto.fileUrl?.trim() || null,
@@ -111,10 +405,11 @@ export class HrService {
       name: i.name,
       issuedAt: this.fecha(i.issuedAt),
       expiresAt: this.fecha(i.expiresAt),
+      noExpiry: i.noExpiry,
       fileUrl: i.fileUrl,
       notes: i.notes,
       faenas: i.faenas.map((f) => f.faena),
-      ...estadoDe(i.expiresAt, hoy),
+      ...estadoDe(i.expiresAt, hoy, !i.noExpiry),
     }));
   }
 
@@ -143,12 +438,14 @@ export class HrService {
       }
     }
 
+    const noExpiry = dto.noExpiry ?? false;
     const data = {
       userId: dto.userId,
       clientId: dto.clientId,
       name: dto.name.trim(),
       issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
-      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      expiresAt: !noExpiry && dto.expiresAt ? new Date(dto.expiresAt) : null,
+      noExpiry,
       fileUrl: dto.fileUrl?.trim() || null,
       notes: dto.notes?.trim() || null,
     };
@@ -201,9 +498,10 @@ export class HrService {
       status: a.status,
       issuedAt: this.fecha(a.issuedAt),
       expiresAt: this.fecha(a.expiresAt),
+      noExpiry: a.noExpiry,
       fileUrl: a.fileUrl,
       notes: a.notes,
-      ...estadoDe(a.expiresAt, hoy),
+      ...estadoDe(a.expiresAt, hoy, !a.noExpiry),
     }));
   }
 
@@ -222,13 +520,15 @@ export class HrService {
         throw new BadRequestException(`La faena ${faena.name} no es de ese cliente.`);
       }
     }
+    const noExpiry = dto.noExpiry ?? false;
     const data = {
       userId: dto.userId,
       clientId: dto.clientId,
       faenaId: dto.faenaId ?? null,
       status: dto.status ?? 'EN_TRAMITE',
       issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
-      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      expiresAt: !noExpiry && dto.expiresAt ? new Date(dto.expiresAt) : null,
+      noExpiry,
       fileUrl: dto.fileUrl?.trim() || null,
       notes: dto.notes?.trim() || null,
     };
@@ -326,73 +626,25 @@ export class HrService {
     });
     if (!user) throw new NotFoundException('El trabajador no existe.');
 
-    const [documentos, examenes, inducciones, acreditaciones] = await Promise.all([
-      this.prisma.personalDocument.findMany({
-        where: { userId },
-        select: { id: true, name: true, expiresAt: true },
-      }),
-      this.listExams(userId, hoy),
-      this.listInductions(userId, hoy),
-      this.listAccreditations(userId, hoy),
-    ]);
+    const [fuente] = await this.fuentes({ id: userId }, false);
+    const [acreditaciones] = await Promise.all([this.listAccreditations(userId, hoy)]);
 
-    const alertas: HrAlerta[] = [];
-    for (const d of documentos) {
-      const estado = estadoDe(d.expiresAt, hoy);
-      if (esAlerta(estado)) {
-        alertas.push({
-          tipo: 'DOCUMENTO',
-          id: d.id,
-          nombre: d.name,
-          expiresAt: this.fecha(d.expiresAt),
-          clientName: null,
-          faenaName: null,
-          ...estado,
-        });
-      }
-    }
-    for (const e of examenes) {
-      if (esAlerta(e)) {
-        alertas.push({
-          tipo: 'EXAMEN',
-          id: e.id,
-          nombre: e.type,
-          expiresAt: e.expiresAt,
-          clientName: null,
-          faenaName: null,
-          vigencia: e.vigencia,
-          diasRestantes: e.diasRestantes,
-        });
-      }
-    }
-    for (const i of inducciones) {
-      if (esAlerta(i)) {
-        alertas.push({
-          tipo: 'INDUCCION',
-          id: i.id,
-          nombre: i.name,
-          expiresAt: i.expiresAt,
-          clientName: i.clientName,
-          faenaName: i.faenas.map((f) => f.name).join(', ') || null,
-          vigencia: i.vigencia,
-          diasRestantes: i.diasRestantes,
-        });
-      }
-    }
-    for (const a of acreditaciones) {
-      if (esAlerta(a)) {
-        alertas.push({
-          tipo: 'ACREDITACION',
-          id: a.id,
-          nombre: `Acreditación ${a.clientName}`,
-          expiresAt: a.expiresAt,
-          clientName: a.clientName,
-          faenaName: a.faenaName,
-          vigencia: a.vigencia,
-          diasRestantes: a.diasRestantes,
-        });
-      }
-    }
+    // Las alertas salen del MISMO aplanado que la tabla del tablero: si cada
+    // vista decidiera por su cuenta qué está vencido, el resumen y el tablero
+    // podrían contradecirse sobre la misma persona.
+    const alertas: HrAlerta[] = (fuente ? requisitosDe(fuente, hoy) : [])
+      .filter(esAlerta)
+      .map((r) => ({
+        tipo: r.tipo,
+        id: r.id,
+        nombre: r.nombre,
+        expiresAt: r.expiresAt,
+        clientName: r.clientName,
+        faenaName: r.faenas,
+        vigencia: r.vigencia,
+        diasRestantes: r.diasRestantes,
+      }))
+      .sort(porUrgencia);
 
     return {
       id: user.id,
@@ -405,11 +657,11 @@ export class HrService {
       isFieldWorker: user.isFieldWorker,
       turno: user.workSchedule,
       accreditations: acreditaciones,
-      alertas: alertas.sort(porUrgencia),
+      alertas,
       conteos: {
-        documentos: documentos.length,
-        examenes: examenes.length,
-        inducciones: inducciones.length,
+        documentos: fuente?.documentos.length ?? 0,
+        examenes: fuente?.examenes.length ?? 0,
+        inducciones: fuente?.inducciones.length ?? 0,
       },
     };
   }
@@ -423,9 +675,8 @@ export class HrService {
    */
   async listWorkers(search: string | undefined, hoy = new Date()): Promise<HrWorkerRow[]> {
     const termino = search?.trim();
-    const where: Prisma.UserWhereInput = {
-      isClientUser: false,
-      ...(termino
+    const personas = await this.fuentes(
+      termino
         ? {
             OR: [
               { firstName: { contains: termino, mode: 'insensitive' } },
@@ -434,61 +685,36 @@ export class HrService {
               { email: { contains: termino, mode: 'insensitive' } },
             ],
           }
-        : {}),
-    };
-
-    const users = await this.prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        avatarUrl: true,
-        cargo: true,
-        status: true,
-        isFieldWorker: true,
-        workSchedule: { select: { shiftPattern: true, dayNight: true, workDays: true, restDays: true } },
-        documents: { select: { expiresAt: true } },
-        medicalExams: { select: { expiresAt: true } },
-        inductions: { select: { expiresAt: true } },
-        accreditations: {
-          select: { expiresAt: true, status: true, client: { select: { name: true } } },
-        },
-      },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        : {},
+    );
+    const extras = await this.prisma.user.findMany({
+      where: { id: { in: personas.map((p) => p.id) } },
+      select: { id: true, avatarUrl: true, status: true },
     });
+    const porId = new Map(extras.map((e) => [e.id, e]));
 
-    return users.map((u) => {
-      let vencidos = 0;
-      let porVencer = 0;
-      const contar = (expiresAt: Date | null) => {
-        const e = estadoDe(expiresAt, hoy);
-        if (e.vigencia === 'VENCIDO') vencidos += 1;
-        else if (e.vigencia === 'POR_VENCER') porVencer += 1;
-      };
-      u.documents.forEach((d) => contar(d.expiresAt));
-      u.medicalExams.forEach((e) => contar(e.expiresAt));
-      u.inductions.forEach((i) => contar(i.expiresAt));
-      u.accreditations.forEach((a) => contar(a.expiresAt));
-
+    return personas.map((p) => {
+      const filas = requisitosDe(p, hoy);
       return {
-        id: u.id,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        email: u.email,
-        avatarUrl: u.avatarUrl,
-        cargo: u.cargo,
-        status: u.status,
-        isFieldWorker: u.isFieldWorker,
-        turno: resumenTurno(u.workSchedule),
-        vencidos,
-        porVencer,
-        // Solo las VIGENTES: una acreditación en trámite o suspendida no
-        // habilita a nadie, y listarla como si habilitara sería el error caro.
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        email: p.email,
+        avatarUrl: porId.get(p.id)?.avatarUrl ?? null,
+        cargo: p.cargo,
+        status: porId.get(p.id)?.status ?? 'ACTIVE',
+        isFieldWorker: p.isFieldWorker,
+        turno: turnoLabel(p.turno),
+        vencidos: filas.filter((r) => r.vigencia === 'VENCIDO').length,
+        porVencer: filas.filter((r) => r.vigencia === 'POR_VENCER').length,
+        // Solo las que habilitan HOY: vigentes para el cliente y no vencidas.
         acreditadoEn: [
           ...new Set(
-            u.accreditations.filter((a) => a.status === 'VIGENTE').map((a) => a.client.name),
+            p.acreditaciones
+              .filter((a) =>
+                acreditacionHabilita(a.status, estadoDe(a.expiresAt, hoy, !a.noExpiry).vigencia),
+              )
+              .map((a) => a.clientName),
           ),
         ].sort((a, b) => a.localeCompare(b, 'es')),
       };
@@ -502,20 +728,4 @@ export class HrService {
     });
     if (!existe) throw new NotFoundException('El trabajador no existe.');
   }
-}
-
-/** Turno en una línea: "7x7 día", "Administrativo". `null` sin horario cargado. */
-function resumenTurno(
-  ws: {
-    shiftPattern: string;
-    dayNight: string;
-    workDays: number | null;
-    restDays: number | null;
-  } | null,
-): string | null {
-  if (!ws) return null;
-  const jornada = ws.dayNight === 'NOCHE' ? 'noche' : 'día';
-  if (ws.shiftPattern === 'ADMINISTRATIVO') return 'Administrativo';
-  if (ws.workDays && ws.restDays) return `${ws.workDays}x${ws.restDays} ${jornada}`;
-  return `Turno ${jornada}`;
 }

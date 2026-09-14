@@ -9,9 +9,13 @@ import type {
   CreateFieldWorkerInput,
   FieldWorker,
   HrAccreditation,
+  HrDashboard,
+  HrDocument,
   HrExam,
   HrHours,
   HrInduction,
+  HrPersonPage,
+  HrRequirementPage,
   HrWorkerRow,
   HrWorkerSummary,
   SetTaskCrewBulkInput,
@@ -2048,6 +2052,80 @@ export function deleteHrAccreditation(id: string): Promise<{ removed: true }> {
   return request<{ removed: true }>(`/hr/accreditations/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+/** Query del motor de tablas para las consultas de RRHH. */
+function hrTableQuery(req: TableRequest): string {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  if (req.filters) {
+    for (const [key, value] of Object.entries(req.filters)) {
+      if (value !== undefined && value !== '') query.set(`filters[${key}]`, value);
+    }
+  }
+  return query.toString();
+}
+
+/** Tablero de RRHH: indicadores, lo más urgente y la habilitación por faena. */
+export function getHrDashboard(): Promise<HrDashboard> {
+  return request<HrDashboard>('/hr/dashboard');
+}
+
+/** Consulta de RRHH, una fila por requisito. */
+export function fetchHrRequirements(req: TableRequest): Promise<HrRequirementPage> {
+  return request<HrRequirementPage>(`/hr/requirements?${hrTableQuery(req)}`);
+}
+
+/** Consulta de RRHH agrupada por persona. */
+export function fetchHrPeople(req: TableRequest): Promise<HrPersonPage> {
+  return request<HrPersonPage>(`/hr/people?${hrTableQuery(req)}`);
+}
+
+export function listHrDocuments(userId: string): Promise<HrDocument[]> {
+  return request<HrDocument[]>(`/hr/workers/${encodeURIComponent(userId)}/documents`);
+}
+
+/** Sube un documento en nombre del trabajador. `data` lleva `file` y los datos. */
+export function createHrDocument(userId: string, data: FormData): Promise<HrDocument> {
+  return uploadRequest<HrDocument>(`/hr/workers/${encodeURIComponent(userId)}/documents`, data);
+}
+
+export function updateHrDocument(
+  id: string,
+  input: {
+    type?: string;
+    name?: string;
+    issuedAt?: string | null;
+    expiresAt?: string | null;
+    noExpiry?: boolean;
+  },
+): Promise<HrDocument> {
+  return request<HrDocument>(`/hr/documents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Sustituye el archivo; el anterior queda como versión previa. */
+export function replaceHrDocumentFile(id: string, file: File): Promise<HrDocument> {
+  const data = new FormData();
+  data.append('file', file);
+  return uploadRequest<HrDocument>(`/hr/documents/${encodeURIComponent(id)}/version`, data);
+}
+
+export function deleteHrDocument(id: string): Promise<{ removed: true }> {
+  return request<{ removed: true }>(`/hr/documents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getHrDocumentFileUrl(id: string, previous = false): Promise<{ url: string }> {
+  const suffix = previous ? '?previous=true' : '';
+  return request<{ url: string }>(`/hr/documents/${encodeURIComponent(id)}/file-url${suffix}`);
 }
 
 /* --- Cuadrilla de faena --- */

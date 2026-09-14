@@ -111,6 +111,33 @@ function Archivo({ url }: { url: string | null }): ReactNode {
   );
 }
 
+/**
+ * "No vence" es un dato y "no sé cuándo vence" es su ausencia. Por eso es una
+ * marca explícita: dejar la fecha vacía NO equivale a que no venza.
+ */
+export function NoVence({
+  id,
+  checked,
+  onChange,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}): ReactNode {
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        id={id}
+        type="checkbox"
+        className="size-4"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      No vence
+    </label>
+  );
+}
+
 /** Marca de vigencia + el plazo legible, para no depender del color. */
 function Vigencia({ v, dias }: { v: HrVigencia; dias: number | null }): ReactNode {
   return (
@@ -161,7 +188,8 @@ export function ExamenesTab({
           userId,
           type: editando.type,
           issuedAt: editando.issuedAt || null,
-          expiresAt: editando.expiresAt || null,
+          expiresAt: editando.noExpiry ? null : editando.expiresAt || null,
+          noExpiry: editando.noExpiry ?? false,
           center: editando.center || null,
           result: editando.result || null,
           fileUrl: editando.fileUrl || null,
@@ -289,8 +317,16 @@ export function ExamenesTab({
                 <Input
                   id="ex-vence"
                   type="date"
+                  disabled={editando?.noExpiry ?? false}
                   value={editando?.expiresAt ?? ''}
                   onChange={(e) => setEditando((p) => ({ ...p, expiresAt: e.target.value }))}
+                />
+                <NoVence
+                  id="ex-vence-no"
+                  checked={editando?.noExpiry ?? false}
+                  onChange={(v) =>
+                    setEditando((p) => ({ ...p, noExpiry: v, expiresAt: v ? null : p?.expiresAt ?? null }))
+                  }
                 />
                 <span className="text-xs text-muted-foreground">
                   Déjala vacía si todavía no la conoces: se marcará como sin fecha, no como vigente.
@@ -433,7 +469,8 @@ export function InduccionesTab({
           name: editando.name,
           faenaIds,
           issuedAt: editando.issuedAt || null,
-          expiresAt: editando.expiresAt || null,
+          expiresAt: editando.noExpiry ? null : editando.expiresAt || null,
+          noExpiry: editando.noExpiry ?? false,
           fileUrl: editando.fileUrl || null,
           notes: editando.notes || null,
         },
@@ -618,8 +655,16 @@ export function InduccionesTab({
                 <Input
                   id="in-vence"
                   type="date"
+                  disabled={editando?.noExpiry ?? false}
                   value={editando?.expiresAt ?? ''}
                   onChange={(e) => setEditando((p) => ({ ...p, expiresAt: e.target.value }))}
+                />
+                <NoVence
+                  id="in-vence-no"
+                  checked={editando?.noExpiry ?? false}
+                  onChange={(v) =>
+                    setEditando((p) => ({ ...p, noExpiry: v, expiresAt: v ? null : p?.expiresAt ?? null }))
+                  }
                 />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -726,7 +771,8 @@ export function AcreditacionesSeccion({
           faenaId: editando.faenaId || null,
           status: editando.status ?? 'EN_TRAMITE',
           issuedAt: editando.issuedAt || null,
-          expiresAt: editando.expiresAt || null,
+          expiresAt: editando.noExpiry ? null : editando.expiresAt || null,
+          noExpiry: editando.noExpiry ?? false,
           fileUrl: editando.fileUrl || null,
           notes: editando.notes || null,
         },
@@ -867,8 +913,16 @@ export function AcreditacionesSeccion({
                 <Input
                   id="ac-vence"
                   type="date"
+                  disabled={editando?.noExpiry ?? false}
                   value={editando?.expiresAt ?? ''}
                   onChange={(e) => setEditando((p) => ({ ...p, expiresAt: e.target.value }))}
+                />
+                <NoVence
+                  id="ac-vence-no"
+                  checked={editando?.noExpiry ?? false}
+                  onChange={(v) =>
+                    setEditando((p) => ({ ...p, noExpiry: v, expiresAt: v ? null : p?.expiresAt ?? null }))
+                  }
                 />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">

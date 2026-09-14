@@ -1288,7 +1288,8 @@ describe('UsersService.list — paginación keyset (createdAt desc, desempate id
     expect(page.nextCursor).toBeNull();
     expect(userFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {},
+        // Los trabajadores de faena no tienen cuenta: no son usuarios del listado.
+        where: { AND: [{ isFieldWorker: false }] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 31,
       }),
@@ -1335,6 +1336,7 @@ describe('UsersService.list — paginación keyset (createdAt desc, desempate id
     const call = userFindMany.mock.calls[0]?.[0] as { where: unknown };
     expect(call.where).toEqual({
       AND: [
+        { isFieldWorker: false },
         {
           OR: [
             { firstName: { contains: 'ana', mode: 'insensitive' } },
@@ -1360,6 +1362,7 @@ describe('UsersService.list — paginación keyset (createdAt desc, desempate id
     const call = userFindMany.mock.calls[0]?.[0] as { where: unknown };
     expect(call.where).toEqual({
       AND: [
+        { isFieldWorker: false },
         {
           OR: [
             { createdAt: { lt: new Date('2026-06-13T00:00:02.000Z') } },
@@ -1379,7 +1382,7 @@ describe('UsersService.list — paginación keyset (createdAt desc, desempate id
     await service.list({ cursor: 'no-es-un-cursor-valido' });
 
     const call = userFindMany.mock.calls[0]?.[0] as { where: unknown };
-    expect(call.where).toEqual({});
+    expect(call.where).toEqual({ AND: [{ isFieldWorker: false }] });
   });
 });
 

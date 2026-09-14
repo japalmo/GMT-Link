@@ -359,11 +359,12 @@ describe('TasksService', () => {
 
       expect(res.status).toBe(TaskStatus.COMPLETADO);
       expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: {
+        data: expect.objectContaining({
           status: TaskStatus.COMPLETADO,
           actualPoints: 12,
           rejectionReason: null,
-        },
+          completedAt: expect.any(Date),
+        }),
       }));
       expect(gamificationMock.awardPoints).toHaveBeenCalledWith('u2', 'COMPLETE_TASK');
     });
@@ -381,7 +382,10 @@ describe('TasksService', () => {
       });
 
       expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: { status: TaskStatus.EN_PROGRESO, rejectionReason: 'Falta el informe firmado' },
+        data: expect.objectContaining({
+          status: TaskStatus.EN_PROGRESO,
+          rejectionReason: 'Falta el informe firmado',
+        }),
       }));
     });
 
@@ -426,7 +430,7 @@ describe('TasksService', () => {
       await service.updateStatus('t1', 'u2', { status: TaskStatus.REVISADO });
 
       expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: { status: TaskStatus.REVISADO, rejectionReason: null },
+        data: expect.objectContaining({ status: TaskStatus.REVISADO, rejectionReason: null }),
       }));
     });
 

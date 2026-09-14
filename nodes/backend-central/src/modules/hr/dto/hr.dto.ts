@@ -1,13 +1,21 @@
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
+  IsIn,
   IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
+  MinLength,
+  ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { AccreditationStatus, ExamResult } from '@prisma/client';
+
+const recortar = (): PropertyDecorator =>
+  Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value));
 
 /** Examen ocupacional. Renovar es crear otro del mismo `type`: el historial son las filas. */
 export class UpsertExamDto {
@@ -27,6 +35,11 @@ export class UpsertExamDto {
   @IsOptional()
   @IsISO8601()
   expiresAt?: string | null;
+
+  /** `true` = no vence. Si viene, la fecha de vencimiento se descarta. */
+  @IsOptional()
+  @IsBoolean()
+  noExpiry?: boolean;
 
   @IsOptional()
   @IsString()
@@ -77,6 +90,10 @@ export class UpsertInductionDto {
   expiresAt?: string | null;
 
   @IsOptional()
+  @IsBoolean()
+  noExpiry?: boolean;
+
+  @IsOptional()
   @IsString()
   fileUrl?: string | null;
 
@@ -114,6 +131,10 @@ export class UpsertAccreditationDto {
   expiresAt?: string | null;
 
   @IsOptional()
+  @IsBoolean()
+  noExpiry?: boolean;
+
+  @IsOptional()
   @IsString()
   fileUrl?: string | null;
 
@@ -121,4 +142,67 @@ export class UpsertAccreditationDto {
   @IsString()
   @MaxLength(2000)
   notes?: string | null;
+}
+
+/**
+ * Datos de un documento subido por RRHH. Llega en multipart junto con el archivo,
+ * así que todo es texto: `noExpiry` viaja como "true" o "false".
+ */
+export class CreateHrDocumentDto {
+  @recortar()
+  @IsString()
+  @MinLength(1, { message: 'Indica el tipo de documento.' })
+  @MaxLength(80)
+  type!: string;
+
+  @recortar()
+  @IsString()
+  @MinLength(1, { message: 'Indica el nombre del documento.' })
+  @MaxLength(160)
+  name!: string;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== '' && v !== null)
+  @IsISO8601({ strict: true }, { message: 'La fecha de emisión no es válida.' })
+  issuedAt?: string;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== '' && v !== null)
+  @IsISO8601({ strict: true }, { message: 'La fecha de vencimiento no es válida.' })
+  expiresAt?: string;
+
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  noExpiry?: string;
+}
+
+/** Corrección de los datos de un documento, sin tocar el archivo. JSON. */
+export class UpdateHrDocumentDto {
+  @IsOptional()
+  @recortar()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  type?: string;
+
+  @IsOptional()
+  @recortar()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  name?: string;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== '' && v !== null)
+  @IsISO8601({ strict: true })
+  issuedAt?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== '' && v !== null)
+  @IsISO8601({ strict: true })
+  expiresAt?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  noExpiry?: boolean;
 }

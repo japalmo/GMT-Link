@@ -39,6 +39,15 @@ export interface UploadedDocumentFile {
   mimetype: string;
 }
 
+/** Datos de un documento cargado por RRHH. */
+export interface DatosDocumentoRrhh {
+  type: string;
+  name: string;
+  issuedAt?: string | null;
+  expiresAt?: string | null;
+  noExpiry?: boolean;
+}
+
 /** Filtros de listado (ya parseados desde el query). */
 export interface ListDocumentsFilters {
   status?: DocumentStatus;
@@ -282,6 +291,90 @@ export class DocumentsService {
       throw new NotFoundException('El documento no tiene versión anterior.');
     }
     return { url: await resolveFreshFileUrl(this.storage, stored) };
+  }
+
+  // ============ Carga por RRHH, en nombre del trabajador ============
+  //
+  // Estos métodos NO verifican dueño ni OpenFGA: el gate vive en `HrController`,
+  // con los permisos de RRHH (`hr:read` / `hr:manage`). Existen porque RRHH carga
+  // documentos de gente que no los sube (los trabajadores de faena ni siquiera
+  // tienen cuenta), y sus roles no tienen las relaciones FGA de revisión.
+  //
+  // El documento queda EN_REVISION igual que uno propio: cargarlo desde RRHH no
+  // se salta el flujo de aprobación que ya existe.
+
+  /** Sube un documento para el trabajador `ownerId`. Sin puntos de gamificación: no lo subió él. */
+  async createForWorker(
+    ownerId: string,
+    fields: DatosDocumentoRrhh,
+    file: UploadedDocumentFile,
+  ): Promise<PersonalDocument> {
+    const saved = await this.storage.save({
+      buffer: file.buffer,
+      filename: file.originalname,
+      contentType: file.mimetype,
+      folder: DOCUMENTS_FOLDER,
+    });
+    const noExpiry = fields.noExpiry ?? false;
+    return this.prisma.personalDocument.create({
+      data: {
+        userId: ownerId,
+        type: fields.type,
+        name: fields.name,
+        fileUrl: saved.key,
+        issuedAt: parseOptionalDate(fields.issuedAt),
+        // Un documento que no vence no puede tener fecha de vencimiento: si la
+        // trae, sería contradictorio y se descarta.
+        expiresAt: noExpiry ? null : parseOptionalDate(fields.expiresAt),
+        noExpiry,
+        status: DocumentStatus.EN_REVISION,
+      },
+    });
+  }
+
+  /** Corrige los datos del documento, sin tocar el archivo ni su estado de revisión. */
+  async updateForWorker(
+    id: string,
+    fields: Partial<DatosDocumentoRrhh>,
+  ): Promise<PersonalDocument> {
+    const actual = await this.findAny(id);
+    const data: Prisma.PersonalDocumentUpdateInput = {};
+    if (fields.type !== undefined) data.type = fields.type;
+    if (fields.name !== undefined) data.name = fields.name;
+    if (fields.issuedAt !== undefined) data.issuedAt = parseOptionalDate(fields.issuedAt);
+    if (fields.expiresAt !== undefined) data.expiresAt = parseOptionalDate(fields.expiresAt);
+    if (fields.noExpiry !== undefined) data.noExpiry = fields.noExpiry;
+    if (fields.noExpiry ?? actual.noExpiry) data.expiresAt = null;
+    return this.prisma.personalDocument.update({ where: { id }, data });
+  }
+
+  /** Sustituye el archivo conservando la versión anterior (mismo versionado que el dueño). */
+  async replaceFileForWorker(id: string, file: UploadedDocumentFile): Promise<PersonalDocument> {
+    const actual = await this.findAny(id);
+    await this.addVersion(actual.userId, id, file);
+    return this.findAny(id);
+  }
+
+  /** Borra el documento y, best-effort, sus archivos. */
+  async removeForWorker(id: string): Promise<void> {
+    const actual = await this.findAny(id);
+    await this.remove(actual.userId, id);
+  }
+
+  /** URL fresca del archivo (o de la versión anterior). */
+  async fileUrlForWorker(id: string, previous: boolean): Promise<{ url: string }> {
+    const doc = await this.findAny(id);
+    const stored = previous ? doc.previousFileUrl : doc.fileUrl;
+    if (stored === null) {
+      throw new NotFoundException('El documento no tiene versión anterior.');
+    }
+    return { url: await resolveFreshFileUrl(this.storage, stored) };
+  }
+
+  private async findAny(id: string): Promise<PersonalDocument> {
+    const doc = await this.prisma.personalDocument.findUnique({ where: { id } });
+    if (!doc) throw new NotFoundException('El documento no existe.');
+    return doc;
   }
 
   // ============ Helpers ============

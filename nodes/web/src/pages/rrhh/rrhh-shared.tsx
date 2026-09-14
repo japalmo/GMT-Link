@@ -1,5 +1,17 @@
 import type { ReactNode } from 'react';
-import type { HrVigencia } from '@gmt-platform/contracts';
+import {
+  FileText,
+  FolderOpen,
+  ShieldCheck,
+  Stethoscope,
+  type LucideIcon,
+} from 'lucide-react';
+import type {
+  HrDocumentStatus,
+  HrRequisitoTipo,
+  HrTurnoKey,
+  HrVigencia,
+} from '@gmt-platform/contracts';
 
 /**
  * Piezas compartidas de RRHH. Viven aparte para que el listado, la ficha y el
@@ -11,6 +23,52 @@ import type { HrVigencia } from '@gmt-platform/contracts';
 export type RrhhTab = 'dashboard' | 'directorio';
 
 export type FichaTab = 'resumen' | 'datos' | 'documentos' | 'examenes' | 'inducciones';
+
+export const FICHA_TABS: readonly FichaTab[] = [
+  'resumen',
+  'datos',
+  'documentos',
+  'examenes',
+  'inducciones',
+];
+
+/**
+ * Cómo se nombra cada clase de requisito y en qué pestaña de la ficha se
+ * gestiona. Las acreditaciones van a Datos personales porque ahí se cargan.
+ */
+export const TIPO_REQUISITO: Record<
+  HrRequisitoTipo,
+  { label: string; plural: string; icon: LucideIcon; tab: FichaTab }
+> = {
+  DOCUMENTO: { label: 'Documento', plural: 'Documentos', icon: FolderOpen, tab: 'documentos' },
+  EXAMEN: { label: 'Examen', plural: 'Exámenes', icon: Stethoscope, tab: 'examenes' },
+  INDUCCION: { label: 'Inducción', plural: 'Inducciones', icon: FileText, tab: 'inducciones' },
+  ACREDITACION: { label: 'Acreditación', plural: 'Acreditaciones', icon: ShieldCheck, tab: 'datos' },
+};
+
+export const TIPOS_REQUISITO: readonly HrRequisitoTipo[] = [
+  'DOCUMENTO',
+  'EXAMEN',
+  'INDUCCION',
+  'ACREDITACION',
+];
+
+/** Los mismos nombres de turno que usa la API al agrupar. */
+export const TURNOS: ReadonlyArray<{ value: HrTurnoKey; label: string }> = [
+  { value: 'ADMINISTRATIVO', label: 'Administrativo' },
+  { value: 'SIETE_POR_SIETE', label: '7x7' },
+  { value: 'CUATRO_POR_TRES', label: '4x3' },
+  { value: 'CATORCE_POR_CATORCE', label: '14x14' },
+  { value: 'PERSONALIZADO', label: 'Personalizado' },
+  { value: 'SIN', label: 'Sin turno cargado' },
+];
+
+export const ESTADO_DOCUMENTO: Record<HrDocumentStatus, string> = {
+  BORRADOR: 'Borrador',
+  EN_REVISION: 'En revisión',
+  APROBADO: 'Aprobado',
+  RECHAZADO: 'Rechazado',
+};
 
 /**
  * Cómo se nombra y se pinta cada vigencia.
@@ -54,6 +112,14 @@ export const VIGENCIA: Record<
     orden: 4,
   },
 };
+
+export const VIGENCIAS: readonly HrVigencia[] = [
+  'VENCIDO',
+  'POR_VENCER',
+  'VIGENTE',
+  'SIN_VENCIMIENTO',
+  'SIN_FECHA',
+];
 
 /** Etiqueta de vigencia. Texto y color juntos, nunca color solo. */
 export function EtiquetaVigencia({
@@ -102,6 +168,20 @@ export function fechaCorta(iso: string | null): string {
   if (!iso) return '—';
   const [a, m, d] = iso.slice(0, 10).split('-');
   return a && m && d ? `${d}-${m}-${a}` : iso;
+}
+
+/** Hoy (más `offsetDias`) en aaaa-mm-dd, en hora local. */
+export function fechaIsoLocal(offsetDias = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDias);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** "1 persona", "3 personas". */
+export function plural(n: number, uno: string, varios: string): string {
+  return `${n} ${n === 1 ? uno : varios}`;
 }
 
 /** Iniciales para el avatar de respaldo. */

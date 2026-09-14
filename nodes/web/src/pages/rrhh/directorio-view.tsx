@@ -35,11 +35,14 @@ export function DirectorioView({
   onAbrir,
   busqueda,
   onBusqueda,
+  version = 0,
 }: {
   onAbrir: (userId: string) => void;
   /** La búsqueda vive en el padre para no perderla al volver de una ficha. */
   busqueda: string;
   onBusqueda: (v: string) => void;
+  /** Cambia al volver de una ficha: lo editado ahí tiene que verse en la lista. */
+  version?: number;
 }): ReactNode {
   const [workers, setWorkers] = useState<HrWorkerRow[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -58,7 +61,7 @@ export function DirectorioView({
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [version]);
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();

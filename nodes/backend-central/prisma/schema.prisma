@@ -622,6 +622,9 @@ model PersonalDocument {
   fileUrl         String
   issuedAt        DateTime?
   expiresAt       DateTime? // para alertas de vencimiento
+  /// `true` = no vence nunca. Distinto de `expiresAt` vacío con esto en false,
+  /// que significa que la fecha todavía no se cargó.
+  noExpiry        Boolean        @default(false)
   status          DocumentStatus @default(EN_REVISION)
   previousFileUrl String? // versión anterior conservada al subir una nueva
   reviewedById    String?
@@ -1746,6 +1749,7 @@ model WorkerAccreditation {
   /// `null` = sin vencimiento declarado. NO significa vigente para siempre:
   /// la pantalla lo dice así de explícito para no confundirlo con "al día".
   expiresAt DateTime?
+  noExpiry  Boolean             @default(false)
   fileUrl   String?
   notes     String?
   createdAt DateTime            @default(now())
@@ -1775,6 +1779,7 @@ model MedicalExam {
   type      String
   issuedAt  DateTime?
   expiresAt DateTime?
+  noExpiry  Boolean     @default(false)
   /// Centro médico donde se tomó.
   center    String?
   result    ExamResult?
@@ -1805,6 +1810,7 @@ model Induction {
   name      String
   issuedAt  DateTime?
   expiresAt DateTime?
+  noExpiry  Boolean          @default(false)
   fileUrl   String?
   notes     String?
   /// Faenas donde vale. Vacío = ninguna todavía; elegir el cliente NO la hace

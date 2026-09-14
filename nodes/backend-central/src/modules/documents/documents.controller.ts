@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,7 +8,6 @@ import {
   Post,
   Query,
   UnauthorizedException,
-  UnsupportedMediaTypeException,
   UploadedFile,
   UseInterceptors,
   UsePipes,
@@ -24,23 +22,17 @@ import type { AuthUser } from '../../authz/auth-user.types';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import { DocumentsService } from './documents.service';
 import {
+  MAX_DOCUMENT_BYTES,
+  validarArchivoDocumento,
+  type ArchivoDocumento,
+} from './document-file.util';
+import {
   CreatePersonalDocumentDto,
   ListDocumentsQueryDto,
   RejectDocumentDto,
 } from './dto/documents.dto';
 import type { PersonalDocumentView } from './documents.types';
 
-/** Tamaño máximo del documento (10 MB) — alineado con el storage. */
-const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
-
-/** MIME types aceptados: PDF e imágenes comunes (§6-1.5). */
-const ALLOWED_MIME_TYPES: ReadonlySet<string> = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/heic',
-]);
 
 /**
  * Documentos personales (§6-1.5 "Mis documentos").
@@ -203,18 +195,8 @@ export class DocumentsController {
   }
 
   /** Valida presencia y MIME del archivo subido; retorna su forma mínima. */
-  private requireValidFile(file: Express.Multer.File | undefined): {
-    buffer: Buffer;
-    originalname: string;
-    mimetype: string;
-  } {
-    if (!file) {
-      throw new BadRequestException('Falta el archivo (campo "file").');
-    }
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      throw new UnsupportedMediaTypeException('El archivo debe ser PDF o imagen (PNG/JPEG/WebP/HEIC).');
-    }
-    return { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype };
+  private requireValidFile(file: Express.Multer.File | undefined): ArchivoDocumento {
+    return validarArchivoDocumento(file);
   }
 
   /** Exige sesión: devuelve el id del usuario autenticado o lanza 401. */

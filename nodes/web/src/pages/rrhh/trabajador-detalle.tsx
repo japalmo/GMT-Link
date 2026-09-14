@@ -10,17 +10,17 @@ import {
   Stethoscope,
   UserRound,
 } from 'lucide-react';
-import type { HrAlerta, HrWorkerSummary } from '@gmt-platform/contracts';
+import type { HrWorkerSummary } from '@gmt-platform/contracts';
 import { Tabs, tabPanelId, tabTriggerId, type TabItem } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { errorToMessage, getHrSummary } from '@/lib/api';
 import { PersonAvatar } from '@/pages/directorio/person-avatar';
-import { UserDocumentsTab } from '@/pages/usuarios/user-documents-tab';
 import { UserScheduleTab } from '@/pages/usuarios/user-schedule-tab';
 import { AcreditacionesSeccion, ExamenesTab, InduccionesTab } from './registros';
+import { DocumentosRrhh } from './documentos-rrhh';
 import { HhGrafico } from './hh-grafico';
-import { EtiquetaVigencia, fechaCorta, type FichaTab } from './rrhh-shared';
+import { EtiquetaVigencia, fechaCorta, TIPO_REQUISITO, type FichaTab } from './rrhh-shared';
 
 /**
  * Ficha del trabajador, con la misma forma que el detalle de un activo en
@@ -40,49 +40,56 @@ const TABS: ReadonlyArray<TabItem<FichaTab>> = [
   { value: 'inducciones', label: 'Inducciones', icon: FileText },
 ];
 
-/** A qué pestaña lleva cada clase de alerta. */
-const TAB_DE_ALERTA: Record<HrAlerta['tipo'], FichaTab> = {
-  DOCUMENTO: 'documentos',
-  EXAMEN: 'examenes',
-  INDUCCION: 'inducciones',
-  ACREDITACION: 'datos',
-};
-
 export function TrabajadorDetalle({
   userId,
   puedeEditar,
   onVolver,
+  initialTab = 'resumen',
+  volverLabel = 'Volver',
 }: {
   userId: string;
   puedeEditar: boolean;
   onVolver: () => void;
+  /** Pestaña de llegada: desde el tablero se abre donde está el requisito. */
+  initialTab?: FichaTab;
+  volverLabel?: string;
 }): ReactNode {
-  const [tab, setTab] = useState<FichaTab>('resumen');
+  const [tab, setTab] = useState<FichaTab>(initialTab);
   const [resumen, setResumen] = useState<HrWorkerSummary | null>(null);
-  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const idBase = useId();
 
+  // Recargar el resumen NO vuelve a mostrar el esqueleto: se llama después de
+  // cada cambio en una pestaña y desmontarla haría perder lo que se estaba viendo.
   const cargar = useCallback(() => {
-    setCargando(true);
     setError(null);
     getHrSummary(userId)
       .then(setResumen)
-      .catch((err) => setError(errorToMessage(err, 'No se pudo cargar la ficha.')))
-      .finally(() => setCargando(false));
+      .catch((err) => setError(errorToMessage(err, 'No se pudo cargar la ficha.')));
   }, [userId]);
 
   useEffect(cargar, [cargar]);
 
-  if (cargando) return <LoadingState rows={6} label="Cargando la ficha…" />;
-  if (error || !resumen) return <ErrorState message={error ?? 'Ficha no disponible.'} />;
+  const botonVolver = (
+    <Button variant="ghost" size="sm" onClick={onVolver} className="self-start">
+      <ArrowLeft className="mr-1 size-4" aria-hidden />
+      {volverLabel}
+    </Button>
+  );
+
+  if (error && !resumen) {
+    return (
+      <div className="flex flex-col gap-4">
+        {botonVolver}
+        <ErrorState message={error} onRetry={cargar} />
+      </div>
+    );
+  }
+  if (!resumen) return <LoadingState rows={6} label="Cargando la ficha…" />;
 
   return (
     <div className="flex flex-col gap-4">
-      <Button variant="ghost" size="sm" onClick={onVolver} className="self-start">
-        <ArrowLeft className="mr-1 size-4" aria-hidden />
-        Volver al directorio
-      </Button>
+      {botonVolver}
 
       <header className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card p-4">
         <PersonAvatar
@@ -166,7 +173,8 @@ export function TrabajadorDetalle({
                         <span className="min-w-0">
                           <span className="block truncate font-medium">{a.clientName}</span>
                           <span className="block truncate text-xs text-muted-foreground">
-                            {a.faenaName ?? 'Todas sus faenas'} · vence {fechaCorta(a.expiresAt)}
+                            {a.faenaName ?? 'Todas sus faenas'} ·{' '}
+                            {a.noExpiry ? 'no vence' : `vence ${fechaCorta(a.expiresAt)}`}
                           </span>
                         </span>
                         <EtiquetaVigencia vigencia={a.vigencia} diasRestantes={a.diasRestantes} />
@@ -188,22 +196,25 @@ export function TrabajadorDetalle({
                 </p>
               ) : (
                 <ul className="mt-3 flex flex-col divide-y divide-border">
-                  {resumen.alertas.map((a) => (
-                    <li key={`${a.tipo}-${a.id}`} className="flex flex-wrap items-center gap-3 py-2">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{a.nombre}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {ETIQUETA_TIPO[a.tipo]}
-                          {a.clientName ? ` · ${a.clientName}` : ''}
-                          {a.faenaName ? ` · ${a.faenaName}` : ''} · vence {fechaCorta(a.expiresAt)}
+                  {resumen.alertas.map((a) => {
+                    const tipo = TIPO_REQUISITO[a.tipo];
+                    return (
+                      <li key={`${a.tipo}-${a.id}`} className="flex flex-wrap items-center gap-3 py-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{a.nombre}</span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {tipo.label}
+                            {a.clientName ? ` · ${a.clientName}` : ''}
+                            {a.faenaName ? ` · ${a.faenaName}` : ''} · vence {fechaCorta(a.expiresAt)}
+                          </span>
                         </span>
-                      </span>
-                      <EtiquetaVigencia vigencia={a.vigencia} diasRestantes={a.diasRestantes} />
-                      <Button size="sm" variant="outline" onClick={() => setTab(TAB_DE_ALERTA[a.tipo])}>
-                        Ir a {ETIQUETA_TIPO[a.tipo].toLowerCase()}
-                      </Button>
-                    </li>
-                  ))}
+                        <EtiquetaVigencia vigencia={a.vigencia} diasRestantes={a.diasRestantes} />
+                        <Button size="sm" variant="outline" onClick={() => setTab(tipo.tab)}>
+                          Ir a {tipo.label.toLowerCase()}
+                        </Button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -231,20 +242,15 @@ export function TrabajadorDetalle({
           </div>
         )}
 
-        {tab === 'documentos' && <UserDocumentsTab userId={userId} />}
+        {tab === 'documentos' && (
+          <DocumentosRrhh userId={userId} puedeEditar={puedeEditar} onCambio={cargar} />
+        )}
         {tab === 'examenes' && <ExamenesTab userId={userId} puedeEditar={puedeEditar} />}
         {tab === 'inducciones' && <InduccionesTab userId={userId} puedeEditar={puedeEditar} />}
       </div>
     </div>
   );
 }
-
-const ETIQUETA_TIPO: Record<HrAlerta['tipo'], string> = {
-  DOCUMENTO: 'Documento',
-  EXAMEN: 'Examen',
-  INDUCCION: 'Inducción',
-  ACREDITACION: 'Acreditación',
-};
 
 function Dato({ rotulo, valor }: { rotulo: string; valor: string }): ReactNode {
   return (

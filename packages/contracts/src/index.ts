@@ -1212,6 +1212,8 @@ export interface HrExam extends HrEstado {
   expiresAt: string | null;
   center: string | null;
   result: HrExamResult | null;
+  /** `true` = no vence. Sin esto, una fecha vacía significa "no cargada". */
+  noExpiry: boolean;
   fileUrl: string | null;
   notes: string | null;
 }
@@ -1224,6 +1226,7 @@ export interface HrInduction extends HrEstado {
   name: string;
   issuedAt: string | null;
   expiresAt: string | null;
+  noExpiry: boolean;
   fileUrl: string | null;
   notes: string | null;
   /** Faenas del MISMO cliente donde vale. */
@@ -1241,8 +1244,148 @@ export interface HrAccreditation extends HrEstado {
   status: HrAccreditationStatus;
   issuedAt: string | null;
   expiresAt: string | null;
+  noExpiry: boolean;
   fileUrl: string | null;
   notes: string | null;
+}
+
+/** Estado de revisión de un documento personal (flujo de aprobación existente). */
+export type HrDocumentStatus = 'BORRADOR' | 'EN_REVISION' | 'APROBADO' | 'RECHAZADO';
+
+/** Documento del trabajador, visto y gestionado desde RRHH. */
+export interface HrDocument extends HrEstado {
+  id: string;
+  userId: string;
+  type: string;
+  name: string;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  noExpiry: boolean;
+  status: HrDocumentStatus;
+  /** Hay una versión anterior del archivo conservada. */
+  hasPrevious: boolean;
+  updatedAt: string;
+}
+
+/** Clave de turno para agrupar y filtrar. `SIN` = sin horario cargado. */
+export type HrTurnoKey =
+  | 'ADMINISTRATIVO'
+  | 'SIETE_POR_SIETE'
+  | 'CUATRO_POR_TRES'
+  | 'CATORCE_POR_CATORCE'
+  | 'PERSONALIZADO'
+  | 'SIN';
+
+/**
+ * Un requisito en la tabla de consulta. Una fila por REGISTRO, no por persona:
+ * un trabajador con tres exámenes vencidos son tres filas, y el tablero cuenta
+ * aparte cuántas personas hay detrás.
+ *
+ * No trae el resultado de los exámenes: es información clínica y esta tabla la
+ * ve cualquiera con acceso a RRHH.
+ */
+export interface HrRequirementRow extends HrEstado {
+  /** `TIPO:id`, único en la tabla. */
+  key: string;
+  tipo: HrRequisitoTipo;
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  cargo: string | null;
+  isFieldWorker: boolean;
+  turno: string | null;
+  /** Nombre del documento, examen, inducción o "Acreditación <cliente>". */
+  nombre: string;
+  /** Tipo de documento, cuando aplica. */
+  detalle: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  faenaIds: string[];
+  /** Faenas legibles. En una acreditación sin faena: "Todas las faenas". */
+  faenas: string | null;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  /** Estado propio del registro: revisión del documento o estado de la acreditación. */
+  estadoRegistro: string | null;
+}
+
+export interface HrRequirementPage extends TablePage<HrRequirementRow> {
+  /** Personas distintas detrás de las filas filtradas. */
+  people: number;
+}
+
+/** Un trabajador en la vista agrupada por persona. */
+export interface HrPersonRow {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  cargo: string | null;
+  isFieldWorker: boolean;
+  turno: string | null;
+  turnoKey: HrTurnoKey;
+  total: number;
+  vencidos: number;
+  porVencer: number;
+  sinFecha: number;
+  vigentes: number;
+  /** Los requisitos que cumplen el filtro, del más urgente al menos. */
+  requisitos: Array<{
+    key: string;
+    tipo: HrRequisitoTipo;
+    nombre: string;
+    vigencia: HrVigencia;
+    diasRestantes: number | null;
+  }>;
+}
+
+export interface HrPersonPage extends TablePage<HrPersonRow> {
+  /** Requisitos que cumplen el filtro, sumando a todas las personas. */
+  requirements: number;
+}
+
+/**
+ * Tablero de RRHH. Todo se calcula sobre lo cargado: no hay faltantes, porque no
+ * existe una regla que diga qué es obligatorio, y lo desconocido nunca se cuenta
+ * como vigente.
+ */
+export interface HrDashboard {
+  generatedAt: string;
+  /** Ventana de "por vencer", la misma de toda la plataforma. */
+  diasPorVencer: number;
+  personas: { total: number; conCuenta: number; deFaena: number };
+  requisitos: {
+    total: number;
+    vencidos: number;
+    porVencer: number;
+    sinFecha: number;
+    personasConVencidos: number;
+    personasConPorVencer: number;
+  };
+  porTipo: Array<{
+    tipo: HrRequisitoTipo;
+    total: number;
+    vencidos: number;
+    porVencer: number;
+    sinFecha: number;
+  }>;
+  /** Personas con acreditación que habilita hoy, por cliente. */
+  acreditacionesPorCliente: Array<{ clientId: string; clientName: string; personas: number }>;
+  turnos: Array<{ key: HrTurnoKey; label: string; personas: number }>;
+  /** Antecedentes sin cargar. No son requisitos: son datos que faltan. */
+  completitud: { sinTurno: number; sinCargo: number };
+  /** Por faena: cuántas personas tienen acreditación e inducción que habilitan. */
+  matriz: Array<{
+    clientId: string;
+    clientName: string;
+    faenaId: string;
+    faenaName: string;
+    acreditados: number;
+    inducidos: number;
+  }>;
+  /** Lo vencido y lo más próximo a vencer, en orden de urgencia. */
+  atender: HrRequirementRow[];
 }
 
 /** Un punto del gráfico de horas hombre: un día y las HH registradas. */
