@@ -31,8 +31,18 @@ function formatDayCl(dateIso: string): string {
   return `${d}-${m}-${y}`;
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+/**
+ * Formato de duración de Excel: horas y minutos, sin volver a 0 pasadas las 24 h.
+ * Se muestra "2:30" y no "2,50", que se presta para leer 2 horas 50 minutos.
+ */
+const FORMATO_DURACION = '[h]:mm';
+
+/**
+ * Horas decimales a duración de Excel (fracción de día), redondeada al minuto.
+ * Sigue siendo un número: la planilla puede sumar y filtrar estas celdas.
+ */
+export function horasADuracion(horas: number): number {
+  return Math.round(horas * 60) / 1440;
 }
 
 /** Estiliza una fila de encabezado (negrita + fondo gris + borde inferior). */
@@ -70,7 +80,7 @@ export async function buildOvertimeReportWorkbook(
   title1.value = `Horas extra aprobadas — ${periodLabel}`;
   title1.font = { bold: true, size: 13 };
   totalSheet.addRow([]);
-  const th1 = totalSheet.addRow(['Trabajador', 'N° solicitudes', 'Total horas extra (hrs)']);
+  const th1 = totalSheet.addRow(['Trabajador', 'N° solicitudes', 'Total horas extra (hh:mm)']);
   styleHeader(th1);
   totalSheet.columns = [
     { key: 'worker', width: 34 },
@@ -83,12 +93,12 @@ export async function buildOvertimeReportWorkbook(
   for (const [name, acc] of workers) {
     grandCount += acc.count;
     grandHours += acc.hours;
-    const row = totalSheet.addRow([name, acc.count, round2(acc.hours)]);
-    row.getCell(3).numFmt = '0.00';
+    const row = totalSheet.addRow([name, acc.count, horasADuracion(acc.hours)]);
+    row.getCell(3).numFmt = FORMATO_DURACION;
   }
-  const totalRow = totalSheet.addRow(['TOTAL', grandCount, round2(grandHours)]);
+  const totalRow = totalSheet.addRow(['TOTAL', grandCount, horasADuracion(grandHours)]);
   totalRow.font = { bold: true };
-  totalRow.getCell(3).numFmt = '0.00';
+  totalRow.getCell(3).numFmt = FORMATO_DURACION;
 
   // ── Hoja 2: Detalle ──
   const detailSheet = wb.addWorksheet('Detalle');
@@ -98,9 +108,9 @@ export async function buildOvertimeReportWorkbook(
     'Proyecto',
     'Inicio',
     'Término',
-    'Total trabajado (hrs)',
-    'Turno normal (hrs)',
-    'Hora extra (hrs)',
+    'Total trabajado (hh:mm)',
+    'Turno normal (hh:mm)',
+    'Hora extra (hh:mm)',
     'Motivo',
     'Autorizado por',
     'Aprobado por',
@@ -132,16 +142,16 @@ export async function buildOvertimeReportWorkbook(
       r.projectName ?? '',
       r.startTime ?? '',
       r.endTime ?? '',
-      r.totalHours ?? '',
-      r.regularHours ?? '',
-      r.overtimeHours ?? '',
+      r.totalHours === null ? '' : horasADuracion(r.totalHours),
+      r.regularHours === null ? '' : horasADuracion(r.regularHours),
+      r.overtimeHours === null ? '' : horasADuracion(r.overtimeHours),
       r.reason ?? '',
       r.authorizedByName ?? '',
       r.approvedByName ?? '',
     ]);
     for (const col of [6, 7, 8]) {
       const cell = row.getCell(col);
-      if (typeof cell.value === 'number') cell.numFmt = '0.00';
+      if (typeof cell.value === 'number') cell.numFmt = FORMATO_DURACION;
     }
   }
 

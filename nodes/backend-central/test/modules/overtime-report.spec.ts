@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
 import {
   buildOvertimeReportWorkbook,
+  horasADuracion,
   type OvertimeReportRow,
 } from '../../src/modules/overtime/overtime-report.util';
 
@@ -21,6 +22,15 @@ function row(overrides: Partial<OvertimeReportRow>): OvertimeReportRow {
     approvedByName: 'Juan Apalmo',
     ...overrides,
   };
+}
+
+/**
+ * Duración de Excel a minutos enteros. Al leer el libro, ExcelJS entrega las
+ * celdas con formato de hora como `Date` (serial 0 = 1899-12-30), no como número.
+ */
+function minutos(valor: unknown): number {
+  const dias = valor instanceof Date ? valor.getTime() / 86_400_000 + 25_569 : Number(valor ?? 0);
+  return Math.round(dias * 1440);
 }
 
 async function load(buffer: Buffer): Promise<ExcelJS.Workbook> {
@@ -52,7 +62,7 @@ describe('buildOvertimeReportWorkbook', () => {
       if (n <= 3) return; // título (1), vacío (2), encabezado (3)
       const name = String(r.getCell(1).value ?? '');
       const count = Number(r.getCell(2).value ?? 0);
-      const hours = Number(r.getCell(3).value ?? 0);
+      const hours = minutos(r.getCell(3).value) / 60;
       byWorker.set(name, { count, hours });
     });
 
@@ -74,6 +84,31 @@ describe('buildOvertimeReportWorkbook', () => {
     const ws = wb.getWorksheet('Totalizado por trabajador')!;
     const last = ws.getRow(ws.rowCount);
     expect(String(last.getCell(1).value)).toBe('TOTAL');
-    expect(Number(last.getCell(3).value)).toBe(0);
+    expect(minutos(last.getCell(3).value)).toBe(0);
+  });
+
+  it('las horas salen en horas y minutos, no en decimales', async () => {
+    const rows: OvertimeReportRow[] = [
+      row({ workerName: 'Ana Perez', totalHours: 10.5, regularHours: 8, overtimeHours: 2.5 }),
+      row({ workerName: 'Ana Perez', overtimeHours: 0.75 }),
+    ];
+    const wb = await load(await buildOvertimeReportWorkbook(rows, 'julio 2026 (cierre 20)'));
+
+    const detalle = wb.getWorksheet('Detalle')!;
+    expect(String(detalle.getRow(1).getCell(8).value)).toBe('Hora extra (hh:mm)');
+    const fila = detalle.getRow(2);
+    for (const col of [6, 7, 8]) expect(fila.getCell(col).numFmt).toBe('[h]:mm');
+    expect(minutos(fila.getCell(6).value)).toBe(630); // 10:30
+    expect(minutos(fila.getCell(8).value)).toBe(150); // 2:30, no "2,50"
+
+    const total = wb.getWorksheet('Totalizado por trabajador')!;
+    const ana = total.getRow(4);
+    expect(ana.getCell(3).numFmt).toBe('[h]:mm');
+    expect(minutos(ana.getCell(3).value)).toBe(195); // 3:15
+  });
+
+  it('redondea al minuto y no vuelve a cero pasadas las 24 horas', () => {
+    expect(Math.round(horasADuracion(1 / 3) * 1440)).toBe(20); // 0:20
+    expect(Math.round(horasADuracion(26.25) * 1440)).toBe(1575); // 26:15
   });
 });
