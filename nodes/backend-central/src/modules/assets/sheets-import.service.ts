@@ -201,13 +201,17 @@ export class SheetsImportService {
 
   /** Siguiente código libre de la serie GMT-VH-XXXX. */
   private async siguienteCodigo(): Promise<string> {
-    const ultimo = await this.prisma.asset.findFirst({
-      where: { type: 'VEHICULO', code: { startsWith: 'GMT-VH-' } },
-      orderBy: { code: 'desc' },
+    // Con códigos escritos a mano puede haber un "GMT-VH-" que no termina en
+    // número; el máximo se toma solo de los que sí, para no volver a 0001.
+    const filas = await this.prisma.asset.findMany({
+      where: { code: { startsWith: 'GMT-VH-' } },
       select: { code: true },
     });
-    const n = ultimo ? Number(ultimo.code.replace('GMT-VH-', '')) : 0;
-    return `GMT-VH-${String((Number.isFinite(n) ? n : 0) + 1).padStart(4, '0')}`;
+    const n = filas.reduce((max, f) => {
+      const m = /^GMT-VH-(\d+)$/.exec(f.code);
+      return m ? Math.max(max, Number(m[1])) : max;
+    }, 0);
+    return `GMT-VH-${String(n + 1).padStart(4, '0')}`;
   }
 
   /**

@@ -58,13 +58,19 @@ function armar(o: Opciones = {}) {
   const vehiculos = o.vehiculos ?? [
     { id: 'a-1', code: 'GMT-VH-0012', identifier: 'SKRF88', templateId: 'tpl-1' },
   ];
-  const findManyAssets = vi.fn().mockResolvedValue(
-    vehiculos.map((v) => ({
-      id: v.id,
-      code: v.code,
-      identifier: v.identifier,
-      checklistTemplate: v.templateId ? { id: v.templateId } : null,
-    })),
+  // Códigos ocupados: los de los vehículos existentes más los que se van creando.
+  const codigos = vehiculos.map((v) => v.code);
+  const findManyAssets = vi.fn((args?: { where?: { code?: unknown } }) =>
+    Promise.resolve(
+      args?.where?.code
+        ? codigos.map((code) => ({ code }))
+        : vehiculos.map((v) => ({
+            id: v.id,
+            code: v.code,
+            identifier: v.identifier,
+            checklistTemplate: v.templateId ? { id: v.templateId } : null,
+          })),
+    ),
   );
   const findManySubs = vi
     .fn()
@@ -73,12 +79,8 @@ function armar(o: Opciones = {}) {
     Promise.resolve({ count: args.data.length }),
   );
 
-  let serie = vehiculos.length;
-  const findFirst = vi.fn(() =>
-    Promise.resolve({ code: `GMT-VH-${String(serie).padStart(4, '0')}` }),
-  );
   const crearAsset = vi.fn((args: { data: { code: string } }) => {
-    serie += 1;
+    codigos.push(args.data.code);
     return Promise.resolve({
       id: `nuevo-${args.data.code}`,
       code: args.data.code,
@@ -87,7 +89,7 @@ function armar(o: Opciones = {}) {
   });
 
   const prisma = {
-    asset: { findMany: findManyAssets, findFirst, create: crearAsset },
+    asset: { findMany: findManyAssets, create: crearAsset },
     checklistSubmission: { findMany: findManySubs, createMany },
   } as unknown as PrismaService;
 
@@ -226,9 +228,9 @@ describe('SheetsImportService: lo que no puede importar lo REPORTA', () => {
 
     expect(r.importadas).toBe(3);
     expect(r.sinVehiculo).toEqual([]);
-    // El código sigue la serie: había un GMT-VH-0001, así que el nuevo es 0002.
+    // El código sigue la serie: el mayor era GMT-VH-0012, así que el nuevo es 0013.
     expect(r.vehiculosCreados).toEqual([
-      { patente: 'PZXP25', code: 'GMT-VH-0002', filas: 2 },
+      { patente: 'PZXP25', code: 'GMT-VH-0013', filas: 2 },
     ]);
     expect(createMany.mock.calls[0]![0].data).toHaveLength(3);
     expect(crearAsset).toHaveBeenCalledTimes(1);
@@ -330,6 +332,20 @@ describe('SheetsImportService: dirección', () => {
 });
 
 describe('SheetsImportService: códigos de los vehículos creados', () => {
+  it('ignora los códigos escritos a mano que no terminan en número', async () => {
+    // "GMT-VH-RESPALDO" ordena después de "GMT-VH-0017": tomar el último por
+    // orden alfabético haría volver la serie a 0001 y chocaría con uno existente.
+    const { servicio, crearAsset } = armar({
+      filas: [fila('F0001', 'PZXP25')],
+      vehiculos: [
+        { id: 'a-1', code: 'GMT-VH-0017', identifier: 'SKRF88', templateId: 'tpl-1' },
+        { id: 'a-2', code: 'GMT-VH-RESPALDO', identifier: 'TRBF43', templateId: 'tpl-2' },
+      ],
+    });
+    await servicio.importar();
+    expect((crearAsset.mock.calls[0]![0] as { data: { code: string } }).data.code).toBe('GMT-VH-0018');
+  });
+
   it('no reusa el código de un vehículo existente', async () => {
     // Reusarlo reventaría contra la unicidad del código y tumbaría la
     // importación entera por una patente desconocida.

@@ -126,6 +126,8 @@ export interface AssetPublicResolved {
 export interface CreateAssetInput {
   type: AssetType;
   name: string;
+  /** Código interno escrito a mano. Sin él, la API genera el correlativo. */
+  code?: string;
   description?: string;
   manufacturer?: string;
   identifier?: string;

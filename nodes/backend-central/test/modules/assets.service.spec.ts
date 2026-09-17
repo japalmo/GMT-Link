@@ -502,6 +502,40 @@ describe('AssetsService', () => {
       expect(result.manufacturer).toBe('Caterpillar');
     });
 
+    it('usa el código escrito a mano y no genera el correlativo', async () => {
+      prismaMock.asset.findFirst.mockResolvedValueOnce(null);
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
+        ...buildAssetRow({ id: 'a-tdf', code: 'GMT-ALB-EQUIP-TDF-004' }),
+        project: null,
+        assignedTo: null,
+        inUseBy: null,
+      });
+
+      const result = await service.create('u-1', {
+        type: AssetType.EQUIPO,
+        name: 'Tablero eléctrico',
+        code: 'GMT-ALB-EQUIP-TDF-004',
+      });
+
+      expect(prismaMock.asset.findFirst).toHaveBeenCalledWith({
+        where: { code: { equals: 'GMT-ALB-EQUIP-TDF-004', mode: 'insensitive' } },
+        select: { id: true },
+      });
+      expect(prismaMock.asset.count).not.toHaveBeenCalled();
+      const createArg = txMock.asset.create.mock.calls[0]?.[0] as { data: { code: string } };
+      expect(createArg.data.code).toBe('GMT-ALB-EQUIP-TDF-004');
+      expect(result.code).toBe('GMT-ALB-EQUIP-TDF-004');
+    });
+
+    it('rechaza (409) un código que ya existe, sin distinguir mayúsculas', async () => {
+      prismaMock.asset.findFirst.mockResolvedValueOnce(buildAssetRow({ id: 'a-existente' }));
+
+      await expect(
+        service.create('u-1', { type: AssetType.EQUIPO, name: 'Otro', code: 'gmt-alb-equip-tdf-004' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(txMock.asset.create).not.toHaveBeenCalled();
+    });
+
     it('rechaza (409) al crear un activo con patente duplicada', async () => {
       // findFirst devuelve un activo existente con el mismo (identifierType, identifier).
       prismaMock.asset.findFirst.mockResolvedValueOnce(

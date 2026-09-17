@@ -93,6 +93,7 @@ export function ActivosCatalogView({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [newType, setNewType] = useState<AssetType>('EQUIPO');
   const [newName, setNewName] = useState('');
+  const [newCode, setNewCode] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newProjId, setNewProjId] = useState('');
   const [newAssignedId, setNewAssignedId] = useState('');
@@ -167,6 +168,7 @@ export function ActivosCatalogView({
   const handleCloseCreateModal = () => {
     setCreateModalOpen(false);
     setNewName('');
+    setNewCode('');
     setNewDesc('');
     setNewProjId('');
     setNewAssignedId('');
@@ -186,6 +188,15 @@ export function ActivosCatalogView({
     setFormError(null);
     if (!newName) {
       setFormError('El nombre es requerido.');
+      return;
+    }
+    const code = newCode.trim();
+    if (!code) {
+      setFormError('Indica el código del activo.');
+      return;
+    }
+    if (/\s/.test(code)) {
+      setFormError('El código no puede tener espacios.');
       return;
     }
     if (isCreating) return;
@@ -219,6 +230,7 @@ export function ActivosCatalogView({
       await createAsset({
         type: newType,
         name: newName,
+        code,
         description: newDesc || undefined,
         manufacturer: newManufacturer || undefined,
         identifier,
@@ -558,6 +570,24 @@ export function ActivosCatalogView({
                       placeholder="Ej. Sismógrafo Geometrics"
                     />
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="asset-code">Código</Label>
+                  <Input
+                    id="asset-code"
+                    required
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value)}
+                    placeholder="Ej. GMT-ALB-EQUIP-TDF-004"
+                    className="font-mono"
+                    autoComplete="off"
+                    aria-describedby="asset-code-ayuda"
+                  />
+                  <span id="asset-code-ayuda" className="text-xs text-muted-foreground">
+                    Escríbelo tal como se usa en terreno. Solo se verifica que no esté ocupado por
+                    otro activo.
+                  </span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

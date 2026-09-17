@@ -16,6 +16,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   ValidateIf,
 } from 'class-validator';
@@ -34,6 +35,18 @@ export class CreateAssetDto {
   @IsString()
   @IsNotEmpty({ message: 'El nombre del activo es requerido' })
   name!: string;
+
+  /**
+   * Código interno indicado a mano. Hoy no hay un estándar fijo de codificación,
+   * así que quien registra el activo lo escribe tal como lo usan en terreno. Si no
+   * viene, se genera el correlativo (GMT-EQ/VH/MQ-XXXX).
+   */
+  @trim()
+  @IsString()
+  @IsOptional()
+  @MaxLength(64, { message: 'El código no puede superar los 64 caracteres.' })
+  @Matches(/^\S+$/, { message: 'El código no puede tener espacios.' })
+  code?: string;
 
   @IsString()
   @IsOptional()

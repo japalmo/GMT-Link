@@ -2328,6 +2328,7 @@ export function createAsset(dto: CreateAssetInput): Promise<AssetView> {
     body: JSON.stringify({
       type: dto.type,
       name: dto.name,
+      code: dto.code,
       description: dto.description,
       manufacturer: dto.manufacturer,
       identifier: dto.identifier,

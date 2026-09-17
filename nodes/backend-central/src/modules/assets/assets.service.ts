@@ -407,7 +407,7 @@ export class AssetsService {
   }
 
   /**
-   * Crea un nuevo activo con código auto-generado, sincroniza FGA y registra historial.
+   * Crea un nuevo activo (código indicado a mano o correlativo), sincroniza FGA y registra historial.
    */
   async create(userId: string, dto: CreateAssetDto): Promise<AssetView> {
     // Unicidad a nivel de aplicación (paridad con el MVP que tenía @unique):
@@ -429,7 +429,19 @@ export class AssetsService {
       }
     }
 
-    const code = await this.generateAssetCode(dto.type);
+    // Código a mano: solo se exige que no esté usado. Se compara sin distinguir
+    // mayúsculas para que "gmt-alb-01" no conviva con "GMT-ALB-01".
+    const codigoManual = dto.code?.trim();
+    if (codigoManual) {
+      const repetido = await this.prisma.asset.findFirst({
+        where: { code: { equals: codigoManual, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (repetido) {
+        throw new ConflictException(`Ya existe un activo con el código ${codigoManual}.`);
+      }
+    }
+    const code = codigoManual || (await this.generateAssetCode(dto.type));
 
     const assetId = await this.prisma.$transaction(async (tx) => {
       const created = await tx.asset.create({
@@ -501,6 +513,13 @@ export class AssetsService {
       }
 
       return created.id;
+    }).catch((err: unknown) => {
+      // Dos altas simultáneas con el mismo código: la restricción única de la
+      // base es la que decide, y se informa igual que la verificación previa.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException(`Ya existe un activo con el código ${code}.`);
+      }
+      throw err;
     });
 
     const row = await this.prisma.asset.findUniqueOrThrow({
