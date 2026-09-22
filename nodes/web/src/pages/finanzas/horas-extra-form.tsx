@@ -23,7 +23,7 @@ import {
 import { useDirectory } from '@/hooks/use-directory';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { useFinanceProjects } from './use-finance-projects';
-import { startOfMonthSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
+import { oneMonthBackSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
 import type {
   CreateOvertimeInput,
   OvertimeView,
@@ -39,6 +39,12 @@ const AUTHORIZER_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /** Valor centinela del select de proyecto para "Otro" (texto libre). */
+/** "AAAA-MM-DD" a "DD-MM-AAAA", sin pasar por Date (que correría el día por zona). */
+function fechaCl(iso: string): string {
+  const [a, m, d] = iso.split('-');
+  return `${d}-${m}-${a}`;
+}
+
 const OTHER_PROJECT = '__OTHER__';
 
 /** Fecha de hoy (día calendario de Chile) en formato YYYY-MM-DD. */
@@ -155,15 +161,18 @@ export function HorasExtraFormDialog({
 
     if (!isEdit && !date) return setError('La fecha es obligatoria.');
     // Ventana de fecha (espejo del backend): solo el trabajador normal queda acotado
-    // al mes en curso. Los gestores con permiso "a nombre de" están exentos y pueden
+    // al último mes. Los gestores con permiso "a nombre de" están exentos y pueden
     // fijar cualquier fecha. El form es noValidate, así que revalidamos en el submit
     // (el min/max del input no frena una fecha tipeada a mano).
     if (!isEdit && !canOnBehalf) {
       if (date > getTodayString()) {
         return setError('La fecha de la hora extra no puede ser futura.');
       }
-      if (date < startOfMonthSantiagoString()) {
-        return setError('Solo puedes reportar horas extra del mes en curso.');
+      const desde = oneMonthBackSantiagoString();
+      if (date < desde) {
+        return setError(
+          `Solo puedes reportar horas extra desde el ${fechaCl(desde)} (un mes hacia atrás).`,
+        );
       }
     }
     if (!startTime) return setError('La hora de inicio es obligatoria.');
@@ -262,14 +271,15 @@ export function HorasExtraFormDialog({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                min={canOnBehalf ? undefined : startOfMonthSantiagoString()}
+                min={canOnBehalf ? undefined : oneMonthBackSantiagoString()}
                 max={canOnBehalf ? undefined : getTodayString()}
                 required
                 disabled={submitting}
               />
               {!canOnBehalf && (
                 <p className="text-xs text-muted-foreground">
-                  Puedes registrar horas extra de cualquier día del mes en curso.
+                  Puedes registrar horas extra de hoy y hasta un mes hacia atrás (desde el{' '}
+                  {fechaCl(oneMonthBackSantiagoString())}).
                 </p>
               )}
             </div>

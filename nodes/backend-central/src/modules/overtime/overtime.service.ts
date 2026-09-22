@@ -15,7 +15,7 @@ import type { FinanceTransition } from '../finance/finance-status.util';
 import { computeOvertimeBreakdown, resolveShiftForDate } from './overtime-hours.util';
 import type { OvertimeBreakdown } from './overtime-hours.util';
 import { monthRange } from '../finance/finance-month.util';
-import { startOfMonthSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
+import { oneMonthBackSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
 import { buildOvertimeSummary } from './overtime-summary.util';
 import type { OvertimeSummary } from './overtime-summary.util';
 import { buildOvertimeReportWorkbook } from './overtime-report.util';
@@ -107,24 +107,29 @@ export class OvertimeService {
   }
 
   /**
-   * Ventana de la fecha de una HE: todo el mes en curso (del día 1 al día de hoy,
-   * en día calendario de Chile). Fuera de la ventana => 400.
+   * Ventana de la fecha de una HE: desde el mismo día del mes anterior hasta hoy
+   * (día calendario de Chile). Es un mes de gracia móvil, y no el mes calendario,
+   * porque lo trabajado a fin de mes se reporta unos días después. Fuera de la
+   * ventana => 400.
    */
   private assertOvertimeDateWithinWindow(date: Date): void {
     const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
     if (day > startOfTodaySantiago().getTime()) {
       throw new BadRequestException('La fecha de la hora extra no puede ser futura.');
     }
-    if (day < startOfMonthSantiago().getTime()) {
-      throw new BadRequestException('Solo puedes reportar horas extra del mes en curso.');
+    const desde = oneMonthBackSantiago();
+    if (day < desde.getTime()) {
+      throw new BadRequestException(
+        `Solo puedes reportar horas extra desde el ${fechaCl(desde)} (un mes hacia atrás).`,
+      );
     }
   }
 
   /**
    * Crea una HE. `canOnBehalf` lo resuelve el controller (permiso
    * `finance:overtime:create:onbehalf`):
-   *  - sin permiso: la fecha debe caer dentro del mes en curso (día 1 al día de hoy,
-   *    hora de Chile) y no puede crear a nombre de otro.
+   *  - sin permiso: la fecha debe caer dentro del último mes (del mismo día del mes
+   *    anterior al día de hoy, hora de Chile) y no puede crear a nombre de otro.
    *  - con permiso: EXENTO de la ventana (puede fijar cualquier fecha, p. ej. corregir
    *    o cargar HE atrasada) y puede fijar `onBehalfOfUserId` (trabajador objetivo).
    * `endTime` ausente => borrador (isDraft=true, hours=null).
@@ -137,10 +142,10 @@ export class OvertimeService {
     const targetWorkerId = canOnBehalf && dto.onBehalfOfUserId ? dto.onBehalfOfUserId : creatorId;
     const filedBy = targetWorkerId !== creatorId ? creatorId : null;
     const date = parseDate(dto.date);
-    // Ventana de fecha: el trabajador normal reporta cualquier día del mes en curso
-    // (antes se forzaba a hoy). Los gestores con permiso "a nombre de" quedan EXENTOS
-    // de la ventana: pueden fijar cualquier fecha para corregir o cargar HE atrasada
-    // de meses anteriores.
+    // Ventana de fecha: el trabajador normal reporta cualquier día del último mes
+    // (antes se forzaba a hoy, después al mes en curso). Los gestores con permiso
+    // "a nombre de" quedan EXENTOS: pueden fijar cualquier fecha para corregir o
+    // cargar HE atrasada de meses anteriores.
     if (!canOnBehalf) {
       this.assertOvertimeDateWithinWindow(date);
     }
@@ -724,6 +729,13 @@ export class OvertimeService {
       link: OVERTIME_LINK,
     });
   }
+}
+
+/** Fecha date-only a "DD-MM-AAAA", para los mensajes que lee el trabajador. */
+function fechaCl(date: Date): string {
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${d}-${m}-${date.getUTCFullYear()}`;
 }
 
 /** "YYYY-MM" → rótulo del período en es-CL, p. ej. "julio 2026 (cierre 20)". */

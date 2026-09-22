@@ -330,17 +330,37 @@ describe('OvertimeService', () => {
     expect(savedDate.toISOString()).not.toBe(startOfTodaySantiago().toISOString());
   });
 
-  it('create sin onBehalf: fecha anterior al mes en curso → 400 y NO inserta', async () => {
-    const create = vi.fn();
+  it('create sin onBehalf: el mes de gracia deja reportar el mes anterior (reloj 15/07 → 30/06 entra)', async () => {
+    // Lo trabajado a fin de mes se reporta unos días después: con la ventana
+    // anterior ("mes en curso") el día 1 lo dejaba fuera de golpe.
+    const create = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
+      Promise.resolve(buildRow({ ...args.data })),
+    );
     const { prisma } = buildPrisma({ create });
     const service = makeService(prisma);
 
-    const promise = service.create(
+    await service.create(
       'u1',
       { date: '2026-06-30T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
       false,
     );
-    await expect(promise).rejects.toThrow('Solo puedes reportar horas extra del mes en curso.');
+
+    const savedDate = (create.mock.calls[0]?.[0]?.data as { date: Date }).date;
+    expect(savedDate.toISOString()).toBe('2026-06-30T00:00:00.000Z');
+  });
+
+  it('create sin onBehalf: más de un mes atrás → 400 y NO inserta', async () => {
+    const create = vi.fn();
+    const { prisma } = buildPrisma({ create });
+    const service = makeService(prisma);
+
+    // Reloj fijo 15/07: la ventana llega hasta el 15/06, así que el 14/06 queda fuera.
+    const promise = service.create(
+      'u1',
+      { date: '2026-06-14T00:00:00.000Z', startTime: '09:00', endTime: '10:00' },
+      false,
+    );
+    await expect(promise).rejects.toThrow('Solo puedes reportar horas extra desde el 15-06-2026');
     expect(create).not.toHaveBeenCalled();
   });
 

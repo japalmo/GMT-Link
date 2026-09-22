@@ -54,3 +54,20 @@ export function startOfMonthSantiago(instant: Date = new Date()): Date {
   const { year, month } = santiagoDateParts(instant);
   return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
 }
+
+/**
+ * Mismo día del mes anterior, en día calendario de Chile: límite inferior de la
+ * ventana de HORAS EXTRA, que deja un mes de gracia (el 22-sep se puede reportar
+ * hasta el 22-ago). Es una ventana MÓVIL, no el mes calendario: así el día 1 no
+ * corta de golpe lo trabajado a fin del mes anterior.
+ *
+ * Cuando el día no existe en el mes anterior (31-mar => febrero) se ancla al
+ * último día de ese mes, que es lo más cercano a "un mes atrás".
+ */
+export function oneMonthBackSantiago(instant: Date = new Date()): Date {
+  const { year, month, day } = santiagoDateParts(instant);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const lastDayPrev = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+  return new Date(Date.UTC(prevYear, prevMonth - 1, Math.min(day, lastDayPrev), 0, 0, 0, 0));
+}

@@ -24,7 +24,7 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
  * Body de `POST /overtime` (spec §5.6). El `userId` NUNCA viene del body: lo
  * deriva el controller de la sesión. Las horas se COMPUTAN de `startTime`/`endTime`
  * (no las envía el cliente). `endTime` ausente => borrador. La fecha debe caer en el
- * mes en curso, salvo que el creador tenga `finance:overtime:create:onbehalf` (que lo
+ * último mes, salvo que el creador tenga `finance:overtime:create:onbehalf` (que lo
  * exime de la ventana y puede fijar cualquier fecha; lo resuelve el service).
  */
 export class CreateOvertimeDto {

@@ -41,6 +41,21 @@ export function startOfMonthSantiagoString(now: Date = new Date()): string {
 }
 
 /**
+ * Mismo día del mes anterior (día de Chile), en formato YYYY-MM-DD. Espejo de
+ * `oneMonthBackSantiago` del backend: límite inferior (inclusive) de la ventana
+ * de horas extra, que deja un mes de gracia. Si el día no existe en el mes
+ * anterior (31-mar), se ancla al último día de ese mes.
+ */
+export function oneMonthBackSantiagoString(now: Date = new Date()): string {
+  const { year, month, day } = santiagoParts(now);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const lastDayPrev = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+  const d = Math.min(day, lastDayPrev);
+  return `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
  * Mes contable en curso "YYYY-MM" (cierre día 20) según el día de Chile.
  * Mismo criterio que `accountingMonth` del backend: día > 20 empuja al mes
  * siguiente.

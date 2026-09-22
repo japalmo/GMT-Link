@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  oneMonthBackSantiago,
   startOfMonthSantiago,
   startOfTodaySantiago,
   santiagoDateParts,
@@ -72,5 +73,27 @@ describe('regresión: la clasificación de fechas date-only NO cambia', () => {
     // Una fecha elegida por el usuario (medianoche UTC) se clasifica igual que siempre.
     expect(accountingMonth(new Date('2026-07-20T00:00:00.000Z'))).toBe('2026-07');
     expect(accountingMonth(new Date('2026-07-21T00:00:00.000Z'))).toBe('2026-08');
+  });
+});
+
+describe('oneMonthBackSantiago (ventana de un mes para las horas extra)', () => {
+  it('el mismo día del mes anterior (22-sep → 22-ago)', () => {
+    const instant = new Date('2026-09-22T15:00:00.000Z');
+    expect(oneMonthBackSantiago(instant).toISOString()).toBe('2026-08-22T00:00:00.000Z');
+  });
+
+  it('cruza el año (10-ene → 10-dic del año anterior)', () => {
+    const instant = new Date('2026-01-10T15:00:00.000Z');
+    expect(oneMonthBackSantiago(instant).toISOString()).toBe('2025-12-10T00:00:00.000Z');
+  });
+
+  it('si el día no existe en el mes anterior, toma el último (31-mar → 28-feb)', () => {
+    const instant = new Date('2026-03-31T15:00:00.000Z');
+    expect(oneMonthBackSantiago(instant).toISOString()).toBe('2026-02-28T00:00:00.000Z');
+  });
+
+  it('usa el día de Chile, no el de UTC (01-ago 02:00Z = 31-jul en Chile → 30-jun)', () => {
+    const instant = new Date('2026-08-01T02:00:00.000Z');
+    expect(oneMonthBackSantiago(instant).toISOString()).toBe('2026-06-30T00:00:00.000Z');
   });
 });
