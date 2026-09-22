@@ -31,19 +31,9 @@ export function todaySantiagoString(now: Date = new Date()): string {
 }
 
 /**
- * Primer día del mes en curso (día de Chile), en formato YYYY-MM-DD. Espejo de
- * `startOfMonthSantiago` del backend: límite inferior (inclusive) de la ventana
- * "todo el mes en curso" para reportar gastos y horas extra.
- */
-export function startOfMonthSantiagoString(now: Date = new Date()): string {
-  const { year, month } = santiagoParts(now);
-  return `${year}-${String(month).padStart(2, '0')}-01`;
-}
-
-/**
  * Mismo día del mes anterior (día de Chile), en formato YYYY-MM-DD. Espejo de
  * `oneMonthBackSantiago` del backend: límite inferior (inclusive) de la ventana
- * de horas extra, que deja un mes de gracia. Si el día no existe en el mes
+ * para reportar gastos y horas extra, que deja un mes de gracia. Si el día no existe en el mes
  * anterior (31-mar), se ancla al último día de ese mes.
  */
 export function oneMonthBackSantiagoString(now: Date = new Date()): string {

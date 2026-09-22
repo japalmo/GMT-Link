@@ -45,17 +45,6 @@ export function startOfTodaySantiago(instant: Date = new Date()): Date {
 }
 
 /**
- * Medianoche UTC ancla del DÍA 1 del mes CALENDARIO de Chile del instante dado
- * (límite inferior de la ventana "todo el mes en curso" para reembolsos y HE). Con
- * esto se puede reportar cualquier día del mes actual, del 1 hasta hoy. Conserva la
- * convención date-only de `startOfTodaySantiago`.
- */
-export function startOfMonthSantiago(instant: Date = new Date()): Date {
-  const { year, month } = santiagoDateParts(instant);
-  return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
-}
-
-/**
  * Mismo día del mes anterior, en día calendario de Chile: límite inferior de la
  * ventana de HORAS EXTRA, que deja un mes de gracia (el 22-sep se puede reportar
  * hasta el 22-ago). Es una ventana MÓVIL, no el mes calendario: así el día 1 no

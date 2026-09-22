@@ -17,7 +17,7 @@ import { callNvidiaChat } from '../../common/nvidia';
 import { nextFinanceStatus } from '../finance/finance-status.util';
 import type { FinanceTransition } from '../finance/finance-status.util';
 import { monthRange } from '../finance/finance-month.util';
-import { startOfMonthSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
+import { oneMonthBackSantiago, startOfTodaySantiago } from '../finance/finance-time.util';
 import type { TablePage, TableRequest } from '@gmt-platform/contracts';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
 import { CreateReimbursementDto, UpdateReimbursementDto } from './dto/reimbursements.dto';
@@ -717,21 +717,31 @@ function parseDate(value: string): Date {
 }
 
 /**
- * Ventana de la fecha del gasto (spec de la dueña): abarca todo el mes en curso,
- * desde el DÍA 1 del mes hasta HOY, medido en día calendario de Chile
- * (`finance-time.util`, ancla DST-safe). No puede ser futura ni anterior al día 1
- * del mes actual. Se compara solo la parte de día (UTC) del valor ya parseado,
- * coherente con la convención date-only del almacenamiento. Fuera de la ventana → 400.
+ * Ventana de la fecha del gasto: un mes de gracia móvil, desde el mismo día del
+ * mes anterior hasta HOY, medido en día calendario de Chile (`finance-time.util`,
+ * ancla DST-safe). Es la misma ventana de las horas extra: antes era el mes
+ * calendario, y el día 1 dejaba fuera de golpe un gasto de fin del mes anterior.
+ * Se compara solo la parte de día (UTC) del valor ya parseado, coherente con la
+ * convención date-only del almacenamiento. Fuera de la ventana → 400.
  */
 function assertExpenseDateWithinWindow(date: Date): void {
   const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
   if (day > startOfTodaySantiago().getTime()) {
     throw new BadRequestException('La fecha del gasto no puede ser futura.');
   }
-  // Todo el mes en curso: desde el día 1 del mes hasta hoy (día calendario de Chile).
-  if (day < startOfMonthSantiago().getTime()) {
-    throw new BadRequestException('Solo puedes reportar gastos del mes en curso.');
+  const desde = oneMonthBackSantiago();
+  if (day < desde.getTime()) {
+    throw new BadRequestException(
+      `Solo puedes reportar gastos desde el ${fechaCl(desde)} (un mes hacia atrás).`,
+    );
   }
+}
+
+/** Fecha date-only a "DD-MM-AAAA", para los mensajes que lee quien reporta. */
+function fechaCl(date: Date): string {
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `${d}-${m}-${date.getUTCFullYear()}`;
 }
 
 /** Formateador de pesos chilenos (sin decimales) para los encabezados del PDF. */

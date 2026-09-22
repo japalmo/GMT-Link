@@ -12,7 +12,7 @@ import type { PrismaService } from '../../src/prisma/prisma.service';
 import type { StorageService } from '../../src/common/storage/storage.service';
 import type { NotificationsService } from '../../src/modules/notifications/notifications.service';
 import {
-  startOfMonthSantiago,
+  oneMonthBackSantiago,
   startOfTodaySantiago,
 } from '../../src/modules/finance/finance-time.util';
 import {
@@ -21,7 +21,7 @@ import {
 } from '../../src/modules/reimbursements/reimbursements.service';
 
 // Reloj fijo para toda la suite (solo `Date`): la ventana de la fecha del gasto
-// ("todo el mes en curso, nada futuro") se calcula con `new Date()` tanto en las
+// ("un mes hacia atrás, nada futuro") se calcula con `new Date()` tanto en las
 // constantes de abajo como dentro del servicio. Sin fijarlo, una corrida que cruce
 // la medianoche de Santiago entre la carga del módulo y la ejecución desincroniza
 // ambos y hace flakear las pruebas de la ventana. Mediodía UTC evita bordes de día.
@@ -39,14 +39,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Fechas RELATIVAS a la ventana de la fecha del gasto (no hardcodeadas: la regla
- * "todo el mes en curso, nada futuro" rompería cualquier fecha fija vieja).
- * `WINDOW_LIMIT_ISO` = primer día del mes en curso (límite inferior inclusive);
- * `TOO_OLD_ISO` = el día anterior (último día del mes pasado, ya fuera de ventana).
+ * "un mes hacia atrás, nada futuro" rompería cualquier fecha fija vieja).
+ * `WINDOW_LIMIT_ISO` = mismo día del mes anterior (límite inferior inclusive);
+ * `TOO_OLD_ISO` = el día anterior, ya fuera de la ventana de un mes.
  */
 const TODAY_ISO = startOfTodaySantiago().toISOString();
-const WINDOW_LIMIT_ISO = startOfMonthSantiago().toISOString();
+const WINDOW_LIMIT_ISO = oneMonthBackSantiago().toISOString();
 const FUTURE_ISO = new Date(startOfTodaySantiago().getTime() + DAY_MS).toISOString();
-const TOO_OLD_ISO = new Date(startOfMonthSantiago().getTime() - DAY_MS).toISOString();
+const TOO_OLD_ISO = new Date(oneMonthBackSantiago().getTime() - DAY_MS).toISOString();
 
 /** Fila Reimbursement (sin solicitante incluido) con overrides. */
 function buildRow(overrides: Partial<Reimbursement> = {}): Reimbursement {
@@ -223,7 +223,7 @@ describe('ReimbursementsService', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('create: anterior al mes en curso → 400 y NO sube boleta ni inserta fila', async () => {
+  it('create: más de un mes atrás → 400 y NO sube boleta ni inserta fila', async () => {
     const create = vi.fn();
     const { prisma } = buildPrisma({ create });
     const service = makeService(prisma);
@@ -234,12 +234,12 @@ describe('ReimbursementsService', () => {
       RECEIPT,
     );
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
-    await expect(promise).rejects.toThrow('Solo puedes reportar gastos del mes en curso.');
+    await expect(promise).rejects.toThrow('Solo puedes reportar gastos desde el');
     expect(storageBits.save).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('create: primer día del mes en curso (límite inferior, inclusive) → OK', async () => {
+  it('create: el mismo día del mes anterior (límite inferior, inclusive) → OK', async () => {
     const create = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data, id: 'r-limit' })),
     );
@@ -650,7 +650,7 @@ describe('ReimbursementsService', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('update: anterior al mes en curso → 400 y NO actualiza', async () => {
+  it('update: más de un mes atrás → 400 y NO actualiza', async () => {
     const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn();
     const { prisma } = buildPrisma({ findUnique, update });
@@ -667,7 +667,7 @@ describe('ReimbursementsService', () => {
       false,
     );
     await expect(promise).rejects.toBeInstanceOf(BadRequestException);
-    await expect(promise).rejects.toThrow('Solo puedes reportar gastos del mes en curso.');
+    await expect(promise).rejects.toThrow('Solo puedes reportar gastos desde el');
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -692,7 +692,7 @@ describe('ReimbursementsService', () => {
     expect(data.amount).toBe(99999);
   });
 
-  it('update: primer día del mes en curso (límite inferior, inclusive) → OK', async () => {
+  it('update: el mismo día del mes anterior (límite inferior, inclusive) → OK', async () => {
     const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE })));
     const update = vi.fn((args: { data: Partial<Reimbursement> }) =>
       Promise.resolve(buildRow({ ...args.data })),
