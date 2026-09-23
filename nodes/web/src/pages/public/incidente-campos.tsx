@@ -372,10 +372,20 @@ async function direccionDe(lat: number, lon: number, signal?: AbortSignal): Prom
   return data.display_name ?? null;
 }
 
-async function buscarDirecciones(texto: string, signal: AbortSignal): Promise<Sugerencia[]> {
+/**
+ * Busca direcciones. `vista` es el recuadro que el mapa está mostrando y se
+ * manda como sesgo (no como filtro): sin él, "Avenida Brasil" trae la de
+ * cualquier ciudad del país antes que la que se tiene en pantalla.
+ */
+async function buscarDirecciones(
+  texto: string,
+  signal: AbortSignal,
+  vista?: string,
+): Promise<Sugerencia[]> {
   const url =
     'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=cl' +
-    `&accept-language=es&q=${encodeURIComponent(texto)}`;
+    `&accept-language=es&q=${encodeURIComponent(texto)}` +
+    (vista ? `&viewbox=${vista}&bounded=0` : '');
   const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
   if (!res.ok) return [];
   const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
@@ -499,7 +509,7 @@ export function MapaArea({
     }
     const control = new AbortController();
     const t = setTimeout(() => {
-      void buscarDirecciones(area.trim(), control.signal)
+      void buscarDirecciones(area.trim(), control.signal, recuadroVisible())
         .then((r) => setSugerencias(r))
         .catch(() => undefined);
     }, 400);
@@ -508,6 +518,15 @@ export function MapaArea({
       control.abort();
     };
   }, [area, escribiendo]);
+
+  /** El recuadro que muestra el mapa, en el orden que pide Nominatim. */
+  function recuadroVisible(): string | undefined {
+    const b = mapa.current?.getBounds();
+    if (!b) return undefined;
+    return [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()]
+      .map((v) => v.toFixed(5))
+      .join(',');
+  }
 
   function elegirSugerencia(s: Sugerencia): void {
     direccionFijada.current = true;
