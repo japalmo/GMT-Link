@@ -1,8 +1,10 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEmail,
   IsIn,
   IsISO8601,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -22,19 +24,31 @@ import {
 const recortar = (): PropertyDecorator =>
   Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value));
 
-/** "true"/"1"/"on" => true. Cualquier otra cosa (o ausencia) => false. */
-const casilla = (): PropertyDecorator =>
+/**
+ * "true"/"1"/"on" => true. Cualquier otra cosa (o ausencia) => false.
+ *
+ * Lleva `@IsBoolean` además del `@Transform` porque el ValidationPipe corre con
+ * `forbidNonWhitelisted`: una propiedad SIN regla de validación no entra en la
+ * lista blanca y el envío completo se rechaza.
+ */
+const casilla = (): PropertyDecorator => (target, clave) => {
   Transform(({ value }: { value: unknown }) =>
     value === true || value === 'true' || value === '1' || value === 'on',
-  );
+  )(target, clave);
+  IsOptional()(target, clave);
+  IsBoolean()(target, clave);
+};
 
-/** Texto numérico a número; vacío o no numérico => null. */
-const numero = (): PropertyDecorator =>
+/** Texto numérico a número; vacío o no numérico => null. Con regla, igual que `casilla`. */
+const numero = (): PropertyDecorator => (target, clave) => {
   Transform(({ value }: { value: unknown }) => {
     if (value === undefined || value === null || value === '') return null;
     const n = Number(String(value).replace(',', '.'));
     return Number.isFinite(n) ? n : null;
-  });
+  })(target, clave);
+  IsOptional()(target, clave);
+  IsNumber()(target, clave);
+};
 
 export class CreateIncidentDto {
   @recortar()
