@@ -348,15 +348,14 @@ function Columna({
 const CENTRO: [number, number] = [-23.6509, -70.3975];
 
 /**
- * Mosaicos claros y oscuros de CARTO: gris tranquilo, sin el verde y el naranjo
- * del mapa estándar de OpenStreetMap. Acompañan la interfaz de GMT Link y dejan
- * que el pin sea lo único con color.
+ * Mosaicos de OpenStreetMap, teñidos de gris por CSS (clase `mapa-sobrio`).
+ *
+ * Se hace con un filtro y no con un proveedor de mapas "claro" porque los
+ * gratuitos de ese estilo hoy piden llave y estampan una marca de agua sobre el
+ * mapa. Así el estilo acompaña a GMT Link sin depender de nadie más.
  */
-const MOSAICOS = {
-  claro: 'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png',
-  oscuro: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
-} as const;
-const ATRIBUCION = '&copy; OpenStreetMap &copy; CARTO';
+const MOSAICOS = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const ATRIBUCION = '&copy; OpenStreetMap';
 
 /** Una sugerencia del buscador de direcciones. */
 interface Sugerencia {
@@ -443,11 +442,7 @@ export function MapaArea({
       });
       mapa.current = mapaLocal;
 
-      const oscuro = document.documentElement.classList.contains('dark');
-      Lmod.tileLayer(oscuro ? MOSAICOS.oscuro : MOSAICOS.claro, {
-        attribution: ATRIBUCION,
-        maxZoom: 20,
-      }).addTo(mapaLocal);
+      Lmod.tileLayer(MOSAICOS, { attribution: ATRIBUCION, maxZoom: 19 }).addTo(mapaLocal);
 
       mapaLocal.on('movestart', () => setMoviendo(true));
       mapaLocal.on('moveend', () => {
@@ -544,7 +539,7 @@ export function MapaArea({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative overflow-hidden rounded-2xl border border-border">
+      <div className="mapa-sobrio relative overflow-hidden rounded-2xl border border-border">
         <div
           ref={contenedor}
           role="application"

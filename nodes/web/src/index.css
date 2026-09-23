@@ -340,3 +340,17 @@
     text-rendering: optimizeLegibility;
   }
 }
+
+/* ── Mapa del reporte de incidente ─────────────────────────────────────────
+   Los mosaicos de OpenStreetMap vienen con verdes y naranjos que compiten con
+   la interfaz. El filtro los deja en gris para que el pin sea lo único con
+   color, y en modo oscuro los invierte en vez de pedir otro juego de mosaicos.
+   Se aplica solo al panel de mosaicos: los marcadores y controles conservan su
+   color. */
+.mapa-sobrio .leaflet-tile-pane {
+  filter: grayscale(1) contrast(0.9) brightness(1.05);
+}
+
+.dark .mapa-sobrio .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) grayscale(1) brightness(0.92) contrast(0.88);
+}
