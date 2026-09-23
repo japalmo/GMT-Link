@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Crosshair, Loader2 } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Crosshair,
+  Loader2,
+  MapPin,
+} from 'lucide-react';
 
 /**
  * Campos del reporte de incidente que el control nativo resuelve mal en terreno.
@@ -9,7 +17,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Clock, Crosshair, Loader2 } fr
  * El `input type="date"` y el `type="time"` del sistema abren un diálogo distinto
  * en cada teléfono, con letra chica y objetivos de toque de pocos milímetros.
  * Acá van tres piezas propias, pensadas para el pulgar: un calendario con atajos,
- * una rueda de hora y un mapa donde se arrastra el pin.
+ * una rueda de hora y un mapa con el pin fijo al centro.
  */
 
 // ── Fechas, siempre como texto aaaa-mm-dd ───────────────────────────────────
@@ -338,22 +346,53 @@ function Columna({
 
 /** Centro por defecto: Antofagasta, donde está la casa matriz. */
 const CENTRO: [number, number] = [-23.6509, -70.3975];
-const PIN_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Z"/><circle cx="12" cy="9" r="2.6" fill="white"/></svg>';
 
-async function direccionDe(lat: number, lon: number): Promise<string | null> {
+/**
+ * Mosaicos claros y oscuros de CARTO: gris tranquilo, sin el verde y el naranjo
+ * del mapa estándar de OpenStreetMap. Acompañan la interfaz de GMT Link y dejan
+ * que el pin sea lo único con color.
+ */
+const MOSAICOS = {
+  claro: 'https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png',
+  oscuro: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
+} as const;
+const ATRIBUCION = '&copy; OpenStreetMap &copy; CARTO';
+
+/** Una sugerencia del buscador de direcciones. */
+interface Sugerencia {
+  nombre: string;
+  lat: number;
+  lng: number;
+}
+
+async function direccionDe(lat: number, lon: number, signal?: AbortSignal): Promise<string | null> {
   const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=es`;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
   if (!res.ok) return null;
   const data = (await res.json()) as { display_name?: string };
   return data.display_name ?? null;
 }
 
+async function buscarDirecciones(texto: string, signal: AbortSignal): Promise<Sugerencia[]> {
+  const url =
+    'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=cl' +
+    `&accept-language=es&q=${encodeURIComponent(texto)}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+  if (!res.ok) return [];
+  const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+  return data.map((d) => ({ nombre: d.display_name, lat: Number(d.lat), lng: Number(d.lon) }));
+}
+
 /**
- * Mapa para ubicar el incidente: se arrastra el pin o se toca el mapa, y la
- * dirección se completa sola. La dirección se consulta SOLO al soltar el pin,
- * nunca mientras se arrastra, que es lo que pide la política de uso de
- * OpenStreetMap y además evita parpadeos en el campo.
+ * Mapa para ubicar el incidente.
+ *
+ * El pin va FIJO en el centro y lo que se mueve es el mapa, como en las apps de
+ * mapas del teléfono: con una mano, arrastrar el fondo es mucho más fácil que
+ * acertarle a un marcador de pocos milímetros.
+ *
+ * La dirección se consulta al TERMINAR el movimiento, nunca durante: es lo que
+ * pide la política de uso de OpenStreetMap y además evita que el campo parpadee
+ * mientras se arrastra.
  */
 export function MapaArea({
   area,
@@ -368,14 +407,24 @@ export function MapaArea({
 }): ReactNode {
   const contenedor = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
-  const pin = useRef<L.Marker | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [ubicando, setUbicando] = useState(false);
   const [nota, setNota] = useState<string | null>(null);
+  const [moviendo, setMoviendo] = useState(false);
+  const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
+  const [escribiendo, setEscribiendo] = useState(false);
+
   // Los callbacks se leen desde un ref: el mapa se arma una sola vez y no debe
   // rearmarse porque el formulario haya cambiado de estado.
   const acciones = useRef({ onArea, onCoords });
   acciones.current = { onArea, onCoords };
+  /**
+   * Cuando el mapa se mueve porque se eligió una sugerencia, la dirección ya la
+   * sabemos: sin esta marca, la consulta inversa la pisaría con el nombre que
+   * OpenStreetMap le da al punto, casi siempre más largo y menos reconocible.
+   */
+  const direccionFijada = useRef(false);
+  const abortar = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -388,48 +437,49 @@ export function MapaArea({
       const inicio: [number, number] = coords ? [coords.lat, coords.lng] : CENTRO;
       mapaLocal = Lmod.map(contenedor.current, {
         center: inicio,
-        zoom: coords ? 16 : 12,
+        zoom: coords ? 17 : 13,
         zoomControl: false,
         attributionControl: true,
       });
       mapa.current = mapaLocal;
-      Lmod.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap',
-        maxZoom: 19,
+
+      const oscuro = document.documentElement.classList.contains('dark');
+      Lmod.tileLayer(oscuro ? MOSAICOS.oscuro : MOSAICOS.claro, {
+        attribution: ATRIBUCION,
+        maxZoom: 20,
       }).addTo(mapaLocal);
 
-      const marcador = Lmod.marker(inicio, {
-        draggable: true,
-        icon: Lmod.divIcon({
-          className: 'hse-pin',
-          html: `<div class="text-primary drop-shadow">${PIN_SVG}</div>`,
-          iconSize: [34, 34],
-          iconAnchor: [17, 32],
-        }),
-      }).addTo(mapaLocal);
-      pin.current = marcador;
-
-      async function mover(lat: number, lng: number): Promise<void> {
-        marcador.setLatLng([lat, lng]);
-        acciones.current.onCoords({ lat, lng });
+      mapaLocal.on('movestart', () => setMoviendo(true));
+      mapaLocal.on('moveend', () => {
+        setMoviendo(false);
+        const c = mapaLocal?.getCenter();
+        if (!c) return;
+        acciones.current.onCoords({ lat: c.lat, lng: c.lng });
+        if (direccionFijada.current) {
+          direccionFijada.current = false;
+          return;
+        }
+        abortar.current?.abort();
+        const control = new AbortController();
+        abortar.current = control;
         setBuscando(true);
         setNota(null);
-        try {
-          const direccion = await direccionDe(lat, lng);
-          if (direccion) acciones.current.onArea(direccion);
-          else setNota('No encontramos una dirección para ese punto. Escríbela a mano.');
-        } catch {
-          setNota('No se pudo consultar la dirección. Escríbela a mano.');
-        } finally {
-          setBuscando(false);
-        }
-      }
-
-      marcador.on('dragend', () => {
-        const ll = marcador.getLatLng();
-        void mover(ll.lat, ll.lng);
+        void direccionDe(c.lat, c.lng, control.signal)
+          .then((direccion) => {
+            if (control.signal.aborted) return;
+            if (direccion) acciones.current.onArea(direccion);
+            else setNota('No encontramos una dirección para ese punto. Escríbela a mano.');
+          })
+          .catch(() => {
+            if (!control.signal.aborted) {
+              setNota('No se pudo consultar la dirección. Escríbela a mano.');
+            }
+          })
+          .finally(() => {
+            if (!control.signal.aborted) setBuscando(false);
+          });
       });
-      mapaLocal.on('click', (e: L.LeafletMouseEvent) => void mover(e.latlng.lat, e.latlng.lng));
+
       // El contenedor nace dentro de un paso oculto: sin esto, los mosaicos
       // quedan a medio dibujar hasta que alguien toca el mapa.
       setTimeout(() => mapaLocal?.invalidateSize(), 60);
@@ -437,13 +487,41 @@ export function MapaArea({
 
     return () => {
       vivo = false;
+      abortar.current?.abort();
       mapaLocal?.remove();
       mapa.current = null;
-      pin.current = null;
     };
     // Se arma una sola vez: las coordenadas iniciales se leen al montar y los
     // callbacks viven en `acciones`, así que no hay nada más que observar.
   }, []);
+
+  // Sugerencias mientras se escribe, con demora y desde 3 letras: una consulta
+  // por tecla contra un servicio gratuito termina bloqueada.
+  useEffect(() => {
+    if (!escribiendo || area.trim().length < 3) {
+      setSugerencias([]);
+      return;
+    }
+    const control = new AbortController();
+    const t = setTimeout(() => {
+      void buscarDirecciones(area.trim(), control.signal)
+        .then((r) => setSugerencias(r))
+        .catch(() => undefined);
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      control.abort();
+    };
+  }, [area, escribiendo]);
+
+  function elegirSugerencia(s: Sugerencia): void {
+    direccionFijada.current = true;
+    onArea(s.nombre);
+    setSugerencias([]);
+    setEscribiendo(false);
+    onCoords({ lat: s.lat, lng: s.lng });
+    mapa.current?.setView([s.lat, s.lng], 17);
+  }
 
   function miUbicacion(): void {
     if (!navigator.geolocation) {
@@ -454,15 +532,11 @@ export function MapaArea({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setUbicando(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        mapa.current?.setView([lat, lng], 17);
-        pin.current?.setLatLng([lat, lng]);
-        pin.current?.fire('dragend');
+        mapa.current?.setView([pos.coords.latitude, pos.coords.longitude], 17);
       },
       () => {
         setUbicando(false);
-        setNota('No pudimos obtener tu ubicación. Mueve el pin a mano.');
+        setNota('No pudimos obtener tu ubicación. Mueve el mapa a mano.');
       },
       { enableHighAccuracy: true, timeout: 8000 },
     );
@@ -474,14 +548,34 @@ export function MapaArea({
         <div
           ref={contenedor}
           role="application"
-          aria-label="Mapa para ubicar el incidente"
-          className="h-56 w-full [&_.leaflet-control-attribution]:text-[9px]"
+          aria-label="Mapa para ubicar el incidente: mueve el mapa y el pin del centro marca el lugar"
+          className="h-56 w-full [&_.leaflet-container]:bg-muted [&_.leaflet-control-attribution]:bg-background/70 [&_.leaflet-control-attribution]:text-[9px]"
         />
+
+        {/* Pin fijo al centro: el mapa se mueve por debajo. */}
+        <div
+          className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center"
+          aria-hidden
+        >
+          <div
+            className={`-mt-5 flex flex-col items-center gap-0.5 transition-transform duration-200 ${
+              moviendo ? '-translate-y-1.5' : ''
+            }`}
+          >
+            <MapPin className="size-9 fill-primary text-primary drop-shadow-md" strokeWidth={1.5} />
+            <span
+              className={`size-2 rounded-full bg-primary/30 transition-transform ${
+                moviendo ? 'scale-150' : ''
+              }`}
+            />
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={miUbicacion}
           disabled={ubicando}
-          className="absolute right-3 top-3 z-[500] flex size-11 items-center justify-center rounded-full bg-background/90 shadow-md backdrop-blur transition active:scale-[0.95]"
+          className="absolute right-3 top-3 z-[500] flex size-11 items-center justify-center rounded-full border border-border bg-background/90 shadow-sm backdrop-blur transition active:scale-[0.95]"
           aria-label="Centrar en mi ubicación"
         >
           {ubicando ? (
@@ -492,14 +586,38 @@ export function MapaArea({
         </button>
       </div>
 
-      <input
-        className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[16px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
-        value={area}
-        onChange={(e) => onArea(e.target.value)}
-        placeholder="Arrastra el pin o escribe el lugar"
-        autoComplete="off"
-        aria-label="Área o lugar exacto"
-      />
+      <div className="relative">
+        <input
+          className="h-12 w-full rounded-2xl border border-border bg-card px-4 text-[16px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
+          value={area}
+          onChange={(e) => {
+            setEscribiendo(true);
+            onArea(e.target.value);
+          }}
+          onFocus={() => setEscribiendo(true)}
+          placeholder="Escribe la dirección o mueve el mapa"
+          autoComplete="off"
+          aria-label="Área o lugar exacto"
+          aria-expanded={sugerencias.length > 0}
+        />
+        {sugerencias.length > 0 && (
+          <ul className="absolute inset-x-0 top-full z-[600] mt-1 overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+            {sugerencias.map((s) => (
+              <li key={`${s.lat},${s.lng}`}>
+                <button
+                  type="button"
+                  onClick={() => elegirSugerencia(s)}
+                  className="flex w-full items-start gap-2 px-4 py-3 text-left text-[14px] leading-snug transition hover:bg-muted active:bg-muted"
+                >
+                  <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="line-clamp-2">{s.nombre}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
         {buscando && <Loader2 className="size-3 animate-spin" aria-hidden />}
         {nota ??
@@ -507,7 +625,7 @@ export function MapaArea({
             ? 'Buscando la dirección…'
             : coords
               ? `Pin en ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`
-              : 'Arrastra el pin hasta donde ocurrió, o toca el mapa.')}
+              : 'Mueve el mapa hasta que el pin quede donde ocurrió.')}
       </p>
     </div>
   );
