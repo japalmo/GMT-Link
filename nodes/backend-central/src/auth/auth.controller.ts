@@ -87,6 +87,7 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   'directory:view:extended': 'rrhh',
   // HSE: el historial de reportes de incidente.
   'hse:read': 'hse',
+  'hse:manage': 'hse',
   'task:read': 'operaciones',
   'task:create': 'operaciones',
   'asset:manage': 'recursos',

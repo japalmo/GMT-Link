@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { HseService, MAX_FOTOS } from '../../src/modules/hse/hse.service';
 import { buildIncidentePdf } from '../../src/modules/hse/incidente-pdf.util';
 import type { PrismaService } from '../../src/prisma/prisma.service';
@@ -35,6 +35,7 @@ function armar(opciones: { codes?: string[] } = {}) {
       create,
       findUnique: vi.fn(() => Promise.resolve(null)),
       update: vi.fn(() => Promise.resolve({})),
+      delete: vi.fn(() => Promise.resolve({})),
       count: vi.fn(() => Promise.resolve(0)),
     },
   } as unknown as PrismaService;
@@ -116,7 +117,53 @@ describe('HseService: retención del PDF', () => {
       where: { id: 'a' },
       data: { pdfKey: null, pdfGeneratedAt: null },
     });
-    expect(prisma.hseIncident.delete).toBeUndefined();
+    expect(prisma.hseIncident.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('HseService: borrar un reporte', () => {
+  it('borra las fotos, el PDF y la fila', async () => {
+    const { servicio, prisma, storage } = armar();
+    const findUnique = prisma.hseIncident.findUnique as unknown as ReturnType<typeof vi.fn>;
+    findUnique.mockResolvedValueOnce({
+      id: 'inc-1',
+      code: 'GMT-SG-RG-10',
+      pdfKey: 'hse/pdf/a.pdf',
+      photos: [{ fileKey: 'hse/fotos/a.jpg', position: 0 }],
+    });
+
+    const r = await servicio.remove('inc-1');
+
+    expect(r).toEqual({ removed: true, code: 'GMT-SG-RG-10' });
+    expect(storage.delete).toHaveBeenCalledWith('hse/fotos/a.jpg');
+    expect(storage.delete).toHaveBeenCalledWith('hse/pdf/a.pdf');
+    expect(prisma.hseIncident.delete).toHaveBeenCalledWith({ where: { id: 'inc-1' } });
+  });
+
+  it('si el archivo ya no está en el storage, igual borra el reporte', async () => {
+    const { servicio, prisma, storage } = armar();
+    const findUnique = prisma.hseIncident.findUnique as unknown as ReturnType<typeof vi.fn>;
+    findUnique.mockResolvedValueOnce({
+      id: 'inc-2',
+      code: 'GMT-SG-RG-11',
+      pdfKey: null,
+      photos: [{ fileKey: 'hse/fotos/perdida.jpg', position: 0 }],
+    });
+    (storage.delete as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('no existe'),
+    );
+
+    await expect(servicio.remove('inc-2')).resolves.toEqual({
+      removed: true,
+      code: 'GMT-SG-RG-11',
+    });
+    expect(prisma.hseIncident.delete).toHaveBeenCalled();
+  });
+
+  it('un id que no existe responde 404 y no borra nada', async () => {
+    const { servicio, prisma } = armar();
+    await expect(servicio.remove('fantasma')).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.hseIncident.delete).not.toHaveBeenCalled();
   });
 });
 

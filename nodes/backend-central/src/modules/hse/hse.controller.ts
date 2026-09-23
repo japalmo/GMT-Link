@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
@@ -117,11 +118,32 @@ export class HseController {
     enviarPdf(res, bytes, code);
   }
 
+  /** Borra un reporte del historial. Definitivo: se lleva fotos y PDF. */
+  @Delete('incidents/:id')
+  async remove(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ): Promise<{ removed: true; code: string }> {
+    await this.assertPuede(authUser, 'hse:manage');
+    return this.hse.remove(id);
+  }
+
   private async assertPuedeVer(authUser: AuthUser | undefined): Promise<void> {
+    return this.assertPuede(authUser, 'hse:read');
+  }
+
+  private async assertPuede(
+    authUser: AuthUser | undefined,
+    clave: 'hse:read' | 'hse:manage',
+  ): Promise<void> {
     if (!authUser) throw new UnauthorizedException('Se requiere un usuario autenticado.');
-    const decision = await this.permissions.can(authUser.id, 'hse:read');
+    const decision = await this.permissions.can(authUser.id, clave);
     if (decision.effect !== 'allow') {
-      throw new ForbiddenException('No tienes permisos para ver los reportes de HSE.');
+      throw new ForbiddenException(
+        clave === 'hse:manage'
+          ? 'No tienes permisos para borrar reportes de HSE.'
+          : 'No tienes permisos para ver los reportes de HSE.',
+      );
     }
   }
 }

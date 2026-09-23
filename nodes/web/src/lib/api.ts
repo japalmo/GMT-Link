@@ -2184,6 +2184,14 @@ export function getHseIncident(id: string): Promise<HseIncidentDetail> {
   return request<HseIncidentDetail>(`/hse/incidents/${encodeURIComponent(id)}`);
 }
 
+/** Borra el reporte, sus fotos y su PDF. Exige `hse:manage`. */
+export function deleteHseIncident(id: string): Promise<{ removed: true; code: string }> {
+  return request<{ removed: true; code: string }>(
+    `/hse/incidents/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
+}
+
 /* --- Cuadrilla de faena --- */
 
 /**

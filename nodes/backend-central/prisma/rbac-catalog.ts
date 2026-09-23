@@ -44,6 +44,9 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   // El formulario de incidentes es PÚBLICO (cualquiera con el enlace reporta);
   // este permiso solo abre el historial, que sí trae nombres y fotos.
   { key: 'hse:read', label: 'Ver reportes de incidente (HSE)', module: 'hse', kind: 'FUNCTIONAL', scopeable: false },
+  // Borrar un reporte es definitivo y se lleva sus fotos: va en un permiso
+  // aparte para que consultar el historial no implique poder vaciarlo.
+  { key: 'hse:manage', label: 'Borrar reportes de incidente (HSE)', module: 'hse', kind: 'FUNCTIONAL', scopeable: false },
   // ── clientes ──
   { key: 'client:create', label: 'Crear cliente', module: 'clientes', kind: 'FUNCTIONAL', scopeable: false },
   // ── proyectos ──
@@ -275,7 +278,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
   },
   // Rol propio para quien lleva los reportes de incidente. Se asigna a mano,
   // sin tocar los roles existentes: hoy solo abre la sección HSE.
-  { key: 'hse', label: 'HSE', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('hse:read', 'GLOBAL')] },
+  { key: 'hse', label: 'HSE', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('hse:read', 'GLOBAL'), g('hse:manage', 'GLOBAL')] },
   {
     key: 'asesor_hse',
     label: 'Asesor HSE',

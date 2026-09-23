@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Copy, Download, ExternalLink, HardHat, Loader2, MapPin, ShieldAlert } from 'lucide-react';
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  HardHat,
+  Loader2,
+  MapPin,
+  ShieldAlert,
+  Trash2,
+} from 'lucide-react';
 import type { HseIncidentDetail, HseIncidentRow } from '@gmt-platform/contracts';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -8,9 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ErrorState, LoadingState } from '@/components/ui/states';
 import { Modal, ModalContent, ModalHeader, ModalTitle } from '@/components/ui/modal';
+import { ConfirmDialog } from '@/pages/perfil/confirm-dialog';
+import { useHasPermission } from '@/hooks/use-has-permission';
 import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
 import { useDataTable } from '@/hooks/use-data-table';
 import {
+  deleteHseIncident,
   errorToMessage,
   fetchHseIncidentPdf,
   fetchHseIncidents,
@@ -36,6 +48,10 @@ function fechaCorta(iso: string): string {
 export default function HsePage(): ReactNode {
   const [abierto, setAbierto] = useState<string | null>(null);
   const [descargando, setDescargando] = useState<string | null>(null);
+  const [borrando, setBorrando] = useState<HseIncidentRow | null>(null);
+  // Consultar el historial y vaciarlo son cosas distintas: el botón de borrar
+  // solo existe para quien tiene el permiso de gestión.
+  const puedeBorrar = useHasPermission('hse:manage');
 
   const tabla = useDataTable<HseIncidentRow>(
     (req) => fetchHseIncidents(req),
@@ -58,6 +74,18 @@ export default function HsePage(): ReactNode {
       toast.error(errorToMessage(err, 'No se pudo descargar el reporte.'));
     } finally {
       setDescargando(null);
+    }
+  }
+
+  async function borrar(fila: HseIncidentRow): Promise<void> {
+    try {
+      await deleteHseIncident(fila.id);
+      toast.success(`Reporte ${fila.code} borrado.`);
+      tabla.refetch();
+    } catch (err) {
+      toast.error(errorToMessage(err, 'No se pudo borrar el reporte.'));
+    } finally {
+      setBorrando(null);
     }
   }
 
@@ -174,24 +202,55 @@ export default function HsePage(): ReactNode {
         caption="Reportes de incidente"
         emptyMessage="Todavía no hay reportes de incidente."
         rowActions={(r) => (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-xs"
-            disabled={descargando === r.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              void descargar(r);
-            }}
-          >
-            {descargando === r.id ? (
-              <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Download className="mr-1 size-3.5" aria-hidden />
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs"
+              disabled={descargando === r.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                void descargar(r);
+              }}
+            >
+              {descargando === r.id ? (
+                <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Download className="mr-1 size-3.5" aria-hidden />
+              )}
+              PDF
+            </Button>
+            {puedeBorrar && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                aria-label={`Borrar el reporte ${r.code}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBorrando(r);
+                }}
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+              </Button>
             )}
-            PDF
-          </Button>
+          </>
         )}
+      />
+
+      <ConfirmDialog
+        open={borrando !== null}
+        onOpenChange={(v) => !v && setBorrando(null)}
+        title="Borrar el reporte"
+        description={
+          borrando
+            ? `Se borra ${borrando.code} con sus ${borrando.fotos === 1 ? 'foto' : `${borrando.fotos} fotos`} y su PDF. No se puede deshacer, y el número queda libre para el próximo reporte.`
+            : ''
+        }
+        confirmLabel="Borrar"
+        onConfirm={async () => {
+          if (borrando) await borrar(borrando);
+        }}
       />
 
       <DetalleIncidente id={abierto} onCerrar={() => setAbierto(null)} />

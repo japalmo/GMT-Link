@@ -317,6 +317,33 @@ export class HseService {
     return borrados;
   }
 
+  /**
+   * Borra un reporte y sus archivos. Es definitivo: se va la fila, las fotos y
+   * el PDF guardado. Existe porque un reporte de prueba o uno duplicado no se
+   * puede "corregir" desde el formulario público, y dejarlo ensucia el historial
+   * que HSE muestra hacia afuera.
+   *
+   * Los archivos se borran ANTES que la fila: si falla el borrado en el storage
+   * no queda un archivo sin dueño, porque todavía se sabe a qué reporte pertenece.
+   */
+  async remove(id: string): Promise<{ removed: true; code: string }> {
+    const incidente = await this.buscar({ id });
+    const claves = [...incidente.photos.map((p) => p.fileKey), incidente.pdfKey].filter(
+      (k): k is string => typeof k === 'string' && k.length > 0,
+    );
+    for (const clave of claves) {
+      try {
+        await this.storage.delete(clave);
+      } catch (error) {
+        this.logger.warn(`No se pudo borrar ${clave} de ${incidente.code}: ${String(error)}`);
+      }
+    }
+    // Las fotos caen por la relación en cascada.
+    await this.prisma.hseIncident.delete({ where: { id } });
+    this.logger.log(`Reporte ${incidente.code} borrado con ${claves.length} archivo(s).`);
+    return { removed: true, code: incidente.code };
+  }
+
   // ── Consulta desde la sección HSE ─────────────────────────────────────────
 
   async table(req: TableRequest): Promise<TablePage<HseIncidentRow>> {
