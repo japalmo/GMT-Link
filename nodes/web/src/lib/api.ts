@@ -10,6 +10,9 @@ import type {
   FieldWorker,
   HrAccreditation,
   HrDashboard,
+  HseIncidentCreated,
+  HseIncidentDetail,
+  HseIncidentRow,
   HrDocument,
   HrExam,
   HrHours,
@@ -2126,6 +2129,59 @@ export function deleteHrDocument(id: string): Promise<{ removed: true }> {
 export function getHrDocumentFileUrl(id: string, previous = false): Promise<{ url: string }> {
   const suffix = previous ? '?previous=true' : '';
   return request<{ url: string }>(`/hr/documents/${encodeURIComponent(id)}/file-url${suffix}`);
+}
+
+/* --- HSE: reportes de incidente --- */
+
+/**
+ * Envía el reporte desde el formulario PÚBLICO (sin sesión). `data` lleva los
+ * campos del formato y las fotos bajo la clave `fotos`.
+ */
+export function createHseIncident(data: FormData): Promise<HseIncidentCreated> {
+  return uploadRequest<HseIncidentCreated>('/hse/public/incidents', data);
+}
+
+/**
+ * Descarga el PDF del reporte. Con `publicToken` va sin sesión (el que acaba de
+ * enviarlo); con `id` exige permiso de HSE. Devuelve el archivo como blob para
+ * que la página lo baje con el número de registro por nombre.
+ */
+export async function fetchHseIncidentPdf(
+  ref: { id: string } | { publicToken: string },
+): Promise<Blob> {
+  const ruta =
+    'publicToken' in ref
+      ? `/hse/public/incidents/${encodeURIComponent(ref.publicToken)}/pdf`
+      : `/hse/incidents/${encodeURIComponent(ref.id)}/pdf`;
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${ruta}`, { headers });
+  } catch {
+    throw new ApiError('No se pudo conectar con el servidor.', 0);
+  }
+  if (!res.ok) {
+    throw new ApiError('No se pudo generar el PDF del reporte.', res.status);
+  }
+  return res.blob();
+}
+
+/** Historial de incidentes de la sección HSE. */
+export function fetchHseIncidents(req: TableRequest): Promise<TablePage<HseIncidentRow>> {
+  const query = new URLSearchParams();
+  query.set('page', String(req.page));
+  query.set('pageSize', String(req.pageSize));
+  if (req.search && req.search.trim().length > 0) query.set('search', req.search.trim());
+  if (req.sortBy) query.set('sortBy', req.sortBy);
+  if (req.sortDir) query.set('sortDir', req.sortDir);
+  return request<TablePage<HseIncidentRow>>(`/hse/incidents?${query.toString()}`);
+}
+
+export function getHseIncident(id: string): Promise<HseIncidentDetail> {
+  return request<HseIncidentDetail>(`/hse/incidents/${encodeURIComponent(id)}`);
 }
 
 /* --- Cuadrilla de faena --- */

@@ -63,6 +63,7 @@ const ALL_MODULES = [
   'operaciones',
   'proyectos',
   'recursos',
+  'hse',
   'herramientas',
   'soporte',
   'v-metric',
@@ -84,6 +85,8 @@ const PERMISSION_MODULE: Readonly<Record<string, string>> = {
   'hr:read': 'rrhh',
   'hr:manage': 'rrhh',
   'directory:view:extended': 'rrhh',
+  // HSE: el historial de reportes de incidente.
+  'hse:read': 'hse',
   'task:read': 'operaciones',
   'task:create': 'operaciones',
   'asset:manage': 'recursos',

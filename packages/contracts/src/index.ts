@@ -1960,3 +1960,80 @@ export interface TicketQueueStats {
   slaVencido: number;
   enCurso: number;
 }
+
+// ============ HSE — Reporte de incidente ============
+
+/**
+ * Las casillas de "Consecuencias" del formato GMT-SGC-SG-INC-FR-01. Son
+ * independientes entre sí: un choque puede dañar un equipo Y lesionar a alguien.
+ */
+export interface HseConsequences {
+  lesionPersonas: boolean;
+  cargoLesionado: string | null;
+  danoInfraestructura: boolean;
+  danoDetalle: string | null;
+  fugaDerrame: boolean;
+  fugaSustancia: string | null;
+  fugaDuracionMin: number | null;
+  fugaVolumenM3: number | null;
+  fugaPh: number | null;
+  fugaSuperficieM2: number | null;
+  emisionesAire: boolean;
+  emisionGases: string | null;
+  emisionDuracionMin: number | null;
+  instalaciones: boolean;
+  instalacionesLugar: string | null;
+  cuasiAccidente: boolean;
+  procesoAfectado: boolean;
+  /** Marca del formato: con o sin tiempo perdido. `null` si no se marcó. */
+  tiempoPerdido: 'CON' | 'SIN' | null;
+}
+
+/** Una fila del historial de incidentes de HSE. */
+export interface HseIncidentRow {
+  id: string;
+  /** Registro correlativo del formato: GMT-SG-RG-NN. */
+  code: string;
+  /** Día del incidente, aaaa-mm-dd. */
+  occurredOn: string;
+  /** Hora del incidente, HH:mm. */
+  occurredAt: string;
+  sitio: string | null;
+  area: string | null;
+  /** Consecuencias marcadas, ya legibles: "Daño a infraestructura / equipo". */
+  consecuencias: string[];
+  /** Primeras palabras de la descripción, para leer la fila de un vistazo. */
+  resumen: string;
+  preparaNombre: string;
+  fotos: number;
+  createdAt: string;
+}
+
+/** El reporte completo, como se ve en la ficha de HSE. */
+export interface HseIncidentDetail extends HseConsequences {
+  id: string;
+  code: string;
+  empresa: string;
+  sitio: string | null;
+  area: string | null;
+  turno: string | null;
+  occurredOn: string;
+  occurredAt: string;
+  descripcion: string;
+  accionesInmediatas: string;
+  preparaNombre: string;
+  preparaCargo: string | null;
+  preparedOn: string;
+  reporterEmail: string | null;
+  /** Urls frescas de las fotos, en el orden en que se cargaron. */
+  fotos: string[];
+  createdAt: string;
+}
+
+/** Lo que devuelve el formulario público al enviarse. */
+export interface HseIncidentCreated {
+  id: string;
+  code: string;
+  /** Token para descargar el PDF recién generado, sin sesión. */
+  publicToken: string;
+}

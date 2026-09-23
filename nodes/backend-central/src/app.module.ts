@@ -16,6 +16,7 @@ import { CvModule } from './modules/cv/cv.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { HrModule } from './modules/hr/hr.module';
+import { HseModule } from './modules/hse/hse.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OvertimeModule } from './modules/overtime/overtime.module';
@@ -61,6 +62,7 @@ import { SignaturesModule } from './modules/signatures/signatures.module';
     ProfileModule,
     DirectoryModule,
     HrModule,
+    HseModule,
     CvModule,
     DocumentsModule,
     NotificationsModule,

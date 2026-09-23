@@ -14,6 +14,7 @@ import FirstLoginPage from '@/pages/first-login';
 import DashboardPage from '@/pages/dashboard';
 import SuspendedPage from '@/pages/suspended';
 import PublicAssetPage from '@/pages/public/activo';
+import PublicIncidentePage from '@/pages/public/incidente';
 import PublicObraDashboardPage from '@/pages/public/proyecto';
 
 // Páginas secundarias y pesadas (lazy): se cargan al navegar. Esto saca del
@@ -26,6 +27,7 @@ const PerfilPage = lazy(() => import('@/pages/perfil'));
 const CvPage = lazy(() => import('@/pages/perfil/cv'));
 const DocumentsPage = lazy(() => import('@/pages/documentos'));
 const RrhhPage = lazy(() => import('@/pages/rrhh'));
+const HsePage = lazy(() => import('@/pages/hse'));
 const FinanzasPage = lazy(() => import('@/pages/finanzas'));
 const NotificacionesPage = lazy(() => import('@/pages/notificaciones'));
 const ConfiguracionPage = lazy(() => import('@/pages/configuracion'));
@@ -92,6 +94,8 @@ const router = createBrowserRouter([
   // `PublicRoute` a propósito: ese wrapper rebota a quien ya tiene sesión, y la
   // ficha tiene que abrir igual para cualquiera, con sesión o sin ella.
   { path: '/public/activos/:token', element: <PublicAssetPage /> },
+  // Formulario de incidentes: enlace público, sin sesión.
+  { path: '/public/incidente', element: <PublicIncidentePage /> },
   // Dashboard público de avance de obra: mismo criterio que la ficha del activo
   // (token opaco como credencial, sin sesión). Se proyecta en la TV de faena.
   { path: '/public/proyecto/:token', element: <PublicObraDashboardPage /> },
@@ -119,6 +123,7 @@ const router = createBrowserRouter([
           { path: '/perfil/cv', element: lazyRoute(<CvPage />) },
           { path: '/perfil/documentos', element: lazyRoute(<DocumentsPage />) },
           { path: '/rrhh', element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule> },
+          { path: '/hse', element: <RequireModule module="hse">{lazyRoute(<HsePage />)}</RequireModule> },
           { path: '/rrhh/:tab', element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule> },
           // La sección se llamaba Directorio. El enlace viejo sigue sirviendo:
           // hay marcadores y correos apuntando ahí.

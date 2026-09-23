@@ -1837,3 +1837,84 @@ model InductionFaena {
   @@index([faenaId])
   @@map("induction_faenas")
 }
+
+// ============================================================================
+// HSE — Reporte de incidente (formato GMT-SGC-SG-INC-FR-01)
+// ============================================================================
+
+/**
+ * Un reporte de incidente, con los mismos campos del formulario impreso que usa
+ * HSE. El PDF se arma a partir de estas columnas, así que el registro es la
+ * fuente: el archivo es una copia que se puede regenerar y que se borra al mes.
+ *
+ * `code` es el correlativo del "Registro" del formato (GMT-SG-RG-NN) y arranca
+ * en 10 por acuerdo con HSE: del 01 al 09 son reportes anteriores a la
+ * plataforma, que viven en papel.
+ */
+model HseIncident {
+  id          String @id @default(cuid())
+  code        String @unique // GMT-SG-RG-NN
+  publicToken String @unique @default(uuid()) // credencial de descarga del PDF recién enviado
+
+  // Antecedentes generales
+  empresa    String   @default("GMT Ingenieria SPA")
+  sitio      String?
+  area       String?
+  turno      String?
+  occurredOn DateTime // día del incidente (date-only, medianoche UTC)
+  occurredAt String // hora del incidente, "HH:mm"
+
+  // Consecuencias: cada casilla del formato con su detalle
+  lesionPersonas      Boolean @default(false)
+  cargoLesionado      String?
+  danoInfraestructura Boolean @default(false)
+  danoDetalle         String?
+  fugaDerrame         Boolean @default(false)
+  fugaSustancia       String?
+  fugaDuracionMin     Int?
+  fugaVolumenM3       Float?
+  fugaPh              Float?
+  fugaSuperficieM2    Float?
+  emisionesAire       Boolean @default(false)
+  emisionGases        String?
+  emisionDuracionMin  Int?
+  instalaciones       Boolean @default(false)
+  instalacionesLugar  String?
+  cuasiAccidente      Boolean @default(false)
+  procesoAfectado     Boolean @default(false)
+  /// "CON" o "SIN" tiempo perdido; null cuando el reporte no lo marca.
+  tiempoPerdido       String?
+
+  descripcion        String @db.Text
+  accionesInmediatas String @db.Text
+
+  preparaNombre String
+  preparaCargo  String?
+  preparedOn    DateTime // fecha que firma quien prepara (date-only)
+
+  photos HseIncidentPhoto[]
+
+  /// Clave del PDF en el storage. Se borra al mes; null = hay que regenerarlo.
+  pdfKey         String?
+  pdfGeneratedAt DateTime?
+
+  reporterEmail String? // contacto opcional de quien reporta, para repreguntar
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([occurredOn])
+  @@map("hse_incidents")
+}
+
+/// Fotos del incidente. La primera es la que va en el recuadro del formato.
+model HseIncidentPhoto {
+  id         String      @id @default(cuid())
+  incidentId String
+  incident   HseIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  fileKey    String
+  position   Int         @default(0)
+  createdAt  DateTime    @default(now())
+
+  @@index([incidentId, position])
+  @@map("hse_incident_photos")
+}

@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Users,
   Contact,
+  ShieldAlert,
   Wallet,
   Boxes,
   Package,
@@ -40,6 +41,7 @@ export const PRIMARY_NAV: ReadonlyArray<NavItem> = [
   { label: 'Proyectos', to: '/proyectos', icon: FolderKanban, module: 'proyectos' },
   { label: 'Finanzas', to: '/finanzas', icon: Wallet, module: 'finanzas' },
   { label: 'Operaciones', to: '/operaciones', icon: Boxes, module: 'operaciones' },
+  { label: 'HSE', to: '/hse', icon: ShieldAlert, module: 'hse' },
   { label: 'Recursos', to: '/recursos', icon: Package, module: 'recursos' },
   // Soporte TI (PR-TI-01): SOLO el panel de control de Informática y Gerencia.
   // Levantar una solicitud NO vive acá: es una pestaña de Operaciones, que es

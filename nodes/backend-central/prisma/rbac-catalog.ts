@@ -40,6 +40,10 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'hr:read', label: 'Ver RRHH (trabajadores y antecedentes)', module: 'rrhh', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'hr:manage', label: 'Gestionar antecedentes laborales', module: 'rrhh', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'directory:view:extended', label: 'Ver datos extendidos de directorio', module: 'rrhh', kind: 'STRUCTURAL', fgaRelation: 'can_view_directory_extended', scopeable: true },
+  // ── HSE ──
+  // El formulario de incidentes es PÚBLICO (cualquiera con el enlace reporta);
+  // este permiso solo abre el historial, que sí trae nombres y fotos.
+  { key: 'hse:read', label: 'Ver reportes de incidente (HSE)', module: 'hse', kind: 'FUNCTIONAL', scopeable: false },
   // ── clientes ──
   { key: 'client:create', label: 'Crear cliente', module: 'clientes', kind: 'FUNCTIONAL', scopeable: false },
   // ── proyectos ──
@@ -269,6 +273,9 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       g('finance:print:batch', 'GLOBAL'),
     ],
   },
+  // Rol propio para quien lleva los reportes de incidente. Se asigna a mano,
+  // sin tocar los roles existentes: hoy solo abre la sección HSE.
+  { key: 'hse', label: 'HSE', grants: [g('finance:request:create', 'GLOBAL'), ...TICKET_BASE, g('hse:read', 'GLOBAL')] },
   {
     key: 'asesor_hse',
     label: 'Asesor HSE',
@@ -277,6 +284,7 @@ export const ROLES: ReadonlyArray<RoleDef> = [
       ...TICKET_BASE,
       g('project:view:all', 'GLOBAL'),
       g('project:doc:upload:hse', 'GLOBAL'),
+      g('hse:read', 'GLOBAL'),
     ],
   },
   {
