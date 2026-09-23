@@ -2019,6 +2019,9 @@ export interface HseIncidentDetail extends HseConsequences {
   turno: string | null;
   occurredOn: string;
   occurredAt: string;
+  /** Dónde quedó el pin del mapa. `null` si quien reportó no lo movió. */
+  latitude: number | null;
+  longitude: number | null;
   descripcion: string;
   accionesInmediatas: string;
   preparaNombre: string;

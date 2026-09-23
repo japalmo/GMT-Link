@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Copy, Download, ExternalLink, HardHat, Loader2, ShieldAlert } from 'lucide-react';
+import { Copy, Download, ExternalLink, HardHat, Loader2, MapPin, ShieldAlert } from 'lucide-react';
 import type { HseIncidentDetail, HseIncidentRow } from '@gmt-platform/contracts';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -239,6 +239,20 @@ function DetalleIncidente({
                 <Dato rotulo="Turno" valor={detalle.turno ?? 'Sin registrar'} />
                 <Dato rotulo="Sitio" valor={detalle.sitio ?? 'Sin registrar'} />
                 <Dato rotulo="Área" valor={detalle.area ?? 'Sin registrar'} />
+                {detalle.latitude !== null && detalle.longitude !== null && (
+                  <div className="flex flex-col">
+                    <span className="text-xs text-muted-foreground">Punto en el mapa</span>
+                    <a
+                      href={`https://www.google.com/maps?q=${detalle.latitude},${detalle.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      <MapPin className="size-3.5" aria-hidden />
+                      {detalle.latitude.toFixed(5)}, {detalle.longitude.toFixed(5)}
+                    </a>
+                  </div>
+                )}
                 <Dato rotulo="Empresa" valor={detalle.empresa} />
                 <Dato
                   rotulo="Tiempo perdido"

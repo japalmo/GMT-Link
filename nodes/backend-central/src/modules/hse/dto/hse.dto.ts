@@ -83,6 +83,10 @@ export class CreateIncidentDto {
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'La hora debe tener el formato HH:MM.' })
   hora!: string;
 
+  /** Coordenadas del pin, si quien reporta lo movió en el mapa. */
+  @numero() latitude?: number | null;
+  @numero() longitude?: number | null;
+
   @casilla() lesionPersonas?: boolean;
   @recortar() @IsOptional() @IsString() @MaxLength(160) cargoLesionado?: string;
 

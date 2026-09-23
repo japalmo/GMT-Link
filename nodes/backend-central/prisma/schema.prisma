@@ -1863,6 +1863,10 @@ model HseIncident {
   turno      String?
   occurredOn DateTime // día del incidente (date-only, medianoche UTC)
   occurredAt String // hora del incidente, "HH:mm"
+  /// Dónde quedó el pin del mapa. El formato impreso no lleva coordenadas: esto
+  /// es para que HSE pueda ubicar el punto exacto desde la plataforma.
+  latitude   Float?
+  longitude  Float?
 
   // Consecuencias: cada casilla del formato con su detalle
   lesionPersonas      Boolean @default(false)

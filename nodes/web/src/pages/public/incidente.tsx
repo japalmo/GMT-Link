@@ -8,12 +8,12 @@ import {
   CheckCircle2,
   Download,
   Loader2,
-  MapPin,
   Plus,
   Trash2,
   X,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/branding/brand-logo';
+import { MapaArea, SelectorFecha, SelectorHora } from './incidente-campos';
 import { createHseIncident, errorToMessage, fetchHseIncidentPdf } from '@/lib/api';
 
 /**
@@ -56,6 +56,8 @@ const TURNOS = [
 interface Formulario {
   sitio: string;
   area: string;
+  /** Dónde quedó el pin del mapa. `null` mientras no se mueva. */
+  coords: { lat: number; lng: number } | null;
   fecha: string;
   hora: string;
   turno: string;
@@ -92,6 +94,7 @@ function ahoraLocal(): string {
 const VACIO: Formulario = {
   sitio: '',
   area: '',
+  coords: null,
   fecha: hoyLocal(),
   hora: ahoraLocal(),
   turno: '',
@@ -244,6 +247,10 @@ export default function PublicIncidentePage(): ReactNode {
       datos.append('hora', form.hora);
       if (form.sitio.trim()) datos.append('sitio', form.sitio.trim());
       if (form.area.trim()) datos.append('area', form.area.trim());
+      if (form.coords) {
+        datos.append('latitude', String(form.coords.lat));
+        datos.append('longitude', String(form.coords.lng));
+      }
       if (form.turno) datos.append('turno', form.turno);
       for (const c of CONSECUENCIAS) {
         datos.append(c.key, form.marcadas[c.key] ? 'true' : 'false');
@@ -518,36 +525,19 @@ function PasoLugar({
         />
       </Campo>
       <Campo etiqueta="Área o lugar exacto">
-        <div className="relative">
-          <MapPin className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <input
-            className={`${ENTRADA} pl-11`}
-            value={form.area}
-            onChange={(e) => set('area', e.target.value)}
-            placeholder="Calle O'Higgins, taller, cerco A-II…"
-            autoComplete="off"
-          />
-        </div>
+        <MapaArea
+          area={form.area}
+          onArea={(v) => set('area', v)}
+          coords={form.coords}
+          onCoords={(c) => set('coords', c)}
+        />
       </Campo>
-      <div className="grid grid-cols-2 gap-3">
-        <Campo etiqueta="Fecha">
-          <input
-            type="date"
-            className={ENTRADA}
-            value={form.fecha}
-            max={hoyLocal()}
-            onChange={(e) => set('fecha', e.target.value)}
-          />
-        </Campo>
-        <Campo etiqueta="Hora">
-          <input
-            type="time"
-            className={ENTRADA}
-            value={form.hora}
-            onChange={(e) => set('hora', e.target.value)}
-          />
-        </Campo>
-      </div>
+      <Campo etiqueta="Fecha">
+        <SelectorFecha valor={form.fecha} onChange={(v) => set('fecha', v)} />
+      </Campo>
+      <Campo etiqueta="Hora">
+        <SelectorHora valor={form.hora} onChange={(v) => set('hora', v)} />
+      </Campo>
       <Campo etiqueta="Turno">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Turno">
           {TURNOS.map((t) => (
