@@ -43,6 +43,16 @@ const CONSECUENCIAS = [
 
 type ClaveConsecuencia = (typeof CONSECUENCIAS)[number]['key'];
 
+/** Los turnos que se trabajan en GMT. El último deja el campo vacío en el reporte. */
+const TURNOS = [
+  { valor: '7x7', label: '7x7' },
+  { valor: '5x2', label: '5x2' },
+  { valor: '4x3', label: '4x3' },
+  { valor: '8x6', label: '8x6' },
+  { valor: '14x14', label: '14x14' },
+  { valor: '', label: 'Sin turno' },
+] as const;
+
 interface Formulario {
   sitio: string;
   area: string;
@@ -350,7 +360,7 @@ export default function PublicIncidentePage(): ReactNode {
       <div ref={inicioRef} />
       <header className="flex flex-col gap-4 pt-2">
         <div className="flex items-center justify-between">
-          <BrandLogo className="h-7 w-auto" />
+          <BrandLogo className="h-12 w-auto" />
           <span className="text-[13px] font-medium text-muted-foreground">
             Paso {paso + 1} de {PASOS.length}
           </span>
@@ -539,15 +549,23 @@ function PasoLugar({
         </Campo>
       </div>
       <Campo etiqueta="Turno">
-        <Segmentado
-          valor={form.turno}
-          onChange={(v) => set('turno', v)}
-          opciones={[
-            { valor: 'DÍA', label: 'Día' },
-            { valor: 'NOCHE', label: 'Noche' },
-            { valor: '', label: 'Sin turno' },
-          ]}
-        />
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Turno">
+          {TURNOS.map((t) => (
+            <button
+              key={t.valor || 'sin'}
+              type="button"
+              aria-pressed={form.turno === t.valor}
+              onClick={() => set('turno', t.valor)}
+              className={`h-11 min-w-[72px] flex-1 rounded-2xl border px-3 text-[15px] font-medium transition active:scale-[0.97] ${
+                form.turno === t.valor
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'border-border bg-card text-muted-foreground'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </Campo>
     </div>
   );
