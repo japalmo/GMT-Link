@@ -88,7 +88,10 @@ function hoyLocal(): string {
 
 function ahoraLocal(): string {
   const d = new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  // Al múltiplo de 5 más cercano hacia abajo, que es el paso de la rueda de
+  // minutos: así la hora prellenada siempre coincide con una fila.
+  const minuto = Math.floor(d.getMinutes() / 5) * 5;
+  return `${String(d.getHours()).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
 }
 
 const VACIO: Formulario = {
@@ -367,7 +370,7 @@ export default function PublicIncidentePage(): ReactNode {
       <div ref={inicioRef} />
       <header className="flex flex-col gap-4 pt-2">
         <div className="flex items-center justify-between">
-          <BrandLogo className="h-12 w-auto" />
+          <BrandLogo className="h-16 w-auto" />
           <span className="text-[13px] font-medium text-muted-foreground">
             Paso {paso + 1} de {PASOS.length}
           </span>
