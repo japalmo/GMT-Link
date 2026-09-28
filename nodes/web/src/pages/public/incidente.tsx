@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Camera,
@@ -13,6 +12,14 @@ import {
   X,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/branding/brand-logo';
+import {
+  Aviso,
+  BarraPasos,
+  Campo,
+  ENTRADA,
+  Pantalla,
+  Segmentado,
+} from '@/components/form-wizard';
 import { MapaArea, SelectorFecha, SelectorHora } from './incidente-campos';
 import { createHseIncident, errorToMessage, fetchHseIncidentPdf } from '@/lib/api';
 
@@ -375,16 +382,7 @@ export default function PublicIncidentePage(): ReactNode {
             Paso {paso + 1} de {PASOS.length}
           </span>
         </div>
-        <div className="flex gap-1.5" role="progressbar" aria-valuenow={paso + 1} aria-valuemin={1} aria-valuemax={PASOS.length} aria-label="Avance del formulario">
-          {PASOS.map((p, i) => (
-            <span
-              key={p}
-              className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
-                i <= paso ? 'bg-primary' : 'bg-muted'
-              }`}
-            />
-          ))}
-        </div>
+        <BarraPasos paso={paso} total={PASOS.length} />
       </header>
 
       <main className="flex flex-1 flex-col gap-6 pb-32 pt-7">
@@ -466,48 +464,11 @@ export default function PublicIncidentePage(): ReactNode {
   );
 }
 
-// ── Piezas ─────────────────────────────────────────────────────────────────
-
-function Pantalla({ children }: { children: ReactNode }): ReactNode {
-  return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-5">{children}</div>
-    </div>
-  );
-}
-
-function Aviso({ mensaje }: { mensaje: string }): ReactNode {
-  return (
-    <p
-      role="alert"
-      className="flex items-start gap-2 rounded-2xl bg-destructive/10 px-4 py-3 text-[14px] text-destructive"
-    >
-      <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-      {mensaje}
-    </p>
-  );
-}
-
-function Campo({
-  etiqueta,
-  children,
-  hint,
-}: {
-  etiqueta: string;
-  children: ReactNode;
-  hint?: string;
-}): ReactNode {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[13px] font-medium text-muted-foreground">{etiqueta}</span>
-      {children}
-      {hint && <span className="text-[12px] text-muted-foreground">{hint}</span>}
-    </label>
-  );
-}
-
-const ENTRADA =
-  'h-12 w-full rounded-2xl border border-border bg-card px-4 text-[16px] outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15';
+// ── Pasos ──────────────────────────────────────────────────────────────────
+//
+// Las piezas compartidas (Pantalla, Aviso, Campo, Segmentado, ENTRADA y la
+// barra de avance) viven en `@/components/form-wizard`: las usa también el
+// checklist de vehículos.
 
 function PasoLugar({
   form,
@@ -560,36 +521,6 @@ function PasoLugar({
           ))}
         </div>
       </Campo>
-    </div>
-  );
-}
-
-function Segmentado({
-  valor,
-  onChange,
-  opciones,
-}: {
-  valor: string;
-  onChange: (v: string) => void;
-  opciones: ReadonlyArray<{ valor: string; label: string }>;
-}): ReactNode {
-  return (
-    <div className="flex rounded-2xl bg-muted p-1" role="group">
-      {opciones.map((o) => (
-        <button
-          key={o.label}
-          type="button"
-          aria-pressed={valor === o.valor}
-          onClick={() => onChange(o.valor)}
-          className={`h-10 flex-1 rounded-xl text-[15px] font-medium transition ${
-            valor === o.valor
-              ? 'bg-card text-foreground shadow-sm'
-              : 'text-muted-foreground active:scale-[0.97]'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
     </div>
   );
 }
