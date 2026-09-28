@@ -167,6 +167,7 @@ import type {
   UpdateChecklistTemplateInput,
   ReviewChecklistTemplateInput,
   SubmitChecklistInput,
+  SubmitPublicChecklistInput,
   ChecklistSignatureInput,
   UsageCycleView,
   UsageCycleResult,
@@ -2619,6 +2620,27 @@ export function submitChecklist(id: string, dto: SubmitChecklistInput): Promise<
     method: 'POST',
     body: JSON.stringify(dto),
   });
+}
+
+/**
+ * `POST /assets/public/:token/checklist` — envía el checklist SIN sesión.
+ *
+ * La credencial es el token opaco de la ficha, el mismo del QR de la plaquita.
+ * Se usa `request` igual que el resto: si el navegador tiene sesión abierta
+ * mandará el bearer, y el endpoint simplemente no lo mira.
+ *
+ * La respuesta trae `correoEnviado`. Si viene `false` el checklist SÍ quedó
+ * guardado: la pantalla tiene que ofrecer la descarga del PDF, no dar el envío
+ * por perdido ni afirmar un correo que no salió.
+ */
+export function submitPublicChecklist(
+  token: string,
+  dto: SubmitPublicChecklistInput,
+): Promise<ChecklistSubmissionView> {
+  return request<ChecklistSubmissionView>(
+    `/assets/public/${encodeURIComponent(token)}/checklist`,
+    { method: 'POST', body: JSON.stringify(dto) },
+  );
 }
 
 /** `POST /assets/:id/checklist/sign-options` — arranca la firma (biometría u OTP). */

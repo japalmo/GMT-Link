@@ -2349,6 +2349,9 @@ export class AssetsService {
         : null,
       externalSource: row.externalSource,
       externalAuthor: row.externalAuthor,
+      // Nombre declarado por quien lo llenó sin cuenta. Lo necesita el
+      // historial para poder nombrarlo y marcarlo como no verificado.
+      declaredName: row.declaredName,
     };
   }
 

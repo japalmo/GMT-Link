@@ -108,6 +108,8 @@ export interface ChecklistSubmissionView {
    * envío que no ocurrió.
    */
   correoEnviado?: boolean;
+  /** Nombre que declaró quien lo llenó desde el enlace público, sin cuenta. */
+  declaredName?: string | null;
   assetId: string;
   templateId: string;
   /** `null` en los checklists importados de la planilla: no tienen usuario. */

@@ -200,10 +200,48 @@ export interface ChecklistSubmissionView {
   id: string;
   assetId: string;
   templateId: string;
-  userId: string;
+  /**
+   * `null` cuando nadie con cuenta lo llenó: los importados de la planilla y
+   * los enviados desde el enlace público. Decía `string` a secas y era falso
+   * sobre la mayoría de los registros.
+   */
+  userId: string | null;
   answers: ChecklistAnswer[];
   createdAt: string; // ISO-8601
   user?: { firstName: string; lastName: string } | null;
+  /** `'SHEETS'` si vino de la planilla de AppScript; ausente si se hizo acá. */
+  externalSource?: string | null;
+  /** Quién lo llenó según la planilla, cuando no hay usuario. */
+  externalAuthor?: string | null;
+  /** Nombre que declaró quien lo llenó desde el enlace público, sin cuenta. */
+  declaredName?: string | null;
+  /**
+   * ¿Salió el correo con el PDF adjunto? Solo lo informa el envío público.
+   *
+   * `false` NO significa que el checklist se haya perdido: quedó guardado
+   * igual. La pantalla debe decirlo así y ofrecer la descarga, en vez de
+   * afirmar un envío que no ocurrió.
+   */
+  correoEnviado?: boolean;
+}
+
+/**
+ * Envío del checklist SIN sesión, desde el QR de la plaquita.
+ *
+ * No lleva firma verificada: esa liga el contenido a una identidad de la
+ * plataforma y acá no hay ninguna. El trazo a mano alzada viaja como una
+ * respuesta más, en el ítem de tipo FIRMA.
+ */
+export interface SubmitPublicChecklistInput {
+  templateId: string;
+  answers: ChecklistAnswer[];
+  declaredName: string;
+  declaredEmail: string;
+  declaredLicenseClass?: string;
+  /** aaaa-mm-dd */
+  declaredLicenseExpiry?: string;
+  /** aaaa-mm-dd */
+  declaredInternalExpiry?: string;
 }
 
 export interface CreateAccessoryInput {
