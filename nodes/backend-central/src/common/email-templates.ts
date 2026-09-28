@@ -322,3 +322,47 @@ Por seguridad, cambia tu contraseña en tu primer ingreso.`,
     html,
   };
 }
+
+/**
+ * Correo con el checklist de vehículo recién enviado, que lleva el PDF adjunto.
+ *
+ * Se manda a quien llenó el formulario: es su copia del documento que firmó.
+ * El texto no promete nada que el adjunto no cumpla, y si el vehículo quedó con
+ * una falla reportada lo dice, porque esa persona tiene que saber que el activo
+ * sale de circulación.
+ */
+export function checklistEnviadoEmail(params: {
+  vehiculo: string;
+  fecha: string;
+  conductor: string;
+  conFalla: boolean;
+}): EmailContent {
+  const { vehiculo, fecha, conductor, conFalla } = params;
+
+  const avisoFalla = conFalla
+    ? 'Reportaste una falla, así que el vehículo quedó marcado en mantenimiento hasta que alguien lo revise.'
+    : '';
+
+  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Checklist registrado</p>
+              <p style="margin:0;color:#475569;">Queda una copia en PDF adjunta a este correo.</p>
+              <table role="presentation" style="margin:18px 0 0;font-size:14px;color:#475569;">
+                <tr><td style="padding:2px 14px 2px 0;color:#94a3b8;">Vehículo</td><td>${escapeHtml(vehiculo)}</td></tr>
+                <tr><td style="padding:2px 14px 2px 0;color:#94a3b8;">Fecha</td><td>${escapeHtml(fecha)}</td></tr>
+                <tr><td style="padding:2px 14px 2px 0;color:#94a3b8;">Conductor</td><td>${escapeHtml(conductor)}</td></tr>
+              </table>
+              ${
+                avisoFalla
+                  ? `<p style="margin:18px 0 0;padding:12px 14px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:14px;">${escapeHtml(avisoFalla)}</p>`
+                  : ''
+              }`);
+
+  return {
+    subject: `Checklist de ${vehiculo} · ${fecha}`,
+    body:
+      `Tu checklist quedó registrado.\n\n` +
+      `Vehículo: ${vehiculo}\nFecha: ${fecha}\nConductor: ${conductor}\n\n` +
+      (avisoFalla ? `${avisoFalla}\n\n` : '') +
+      `Adjuntamos el PDF.`,
+    html,
+  };
+}

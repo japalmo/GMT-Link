@@ -9,6 +9,8 @@ import { FgaService } from '../../fga/fga.service';
 import { PermissionService } from '../../authz/permission.service';
 import { ORG_ID } from '../../common/org.constant';
 import { StorageService } from '../../common/storage/storage.service';
+import { EmailService } from '../../common/email.service';
+import { checklistEnviadoEmail } from '../../common/email-templates';
 import { freshFileUrl } from '../../common/storage/fresh-file-url';
 import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
 import { GamificationService } from '../gamification/gamification.service';
@@ -108,6 +110,7 @@ export class AssetsService {
     private readonly gamification: GamificationService,
     private readonly permissions: PermissionService,
     private readonly signatures: SignatureService,
+    private readonly email: EmailService,
   ) {}
 
   /**
@@ -2878,7 +2881,67 @@ export class AssetsService {
       return row;
     });
 
-    return this.toSubmissionView(submission);
+    const correoEnviado = await this.enviarChecklistPorCorreo({
+      assetId: asset.id,
+      submissionId: submission.id,
+      destinatario: dto.declaredEmail,
+      vehiculo: asset.identifier ?? asset.code,
+      conductor: dto.declaredName,
+      fecha: submission.createdAt,
+      conFalla: hasFailure,
+    });
+
+    return { ...this.toSubmissionView(submission), correoEnviado };
+  }
+
+
+  /**
+   * Manda el PDF del checklist a quien lo llenó. Devuelve si salió.
+   *
+   * BEST-EFFORT y siempre DESPUÉS de persistir: el checklist ya quedó
+   * registrado, y perderlo porque el proveedor de correo estaba caído sería un
+   * error mucho peor que un correo no entregado. Por eso nada de lo que pase
+   * acá propaga: se registra en el log y la respuesta dice la verdad, para que
+   * la pantalla pueda ofrecer la descarga en vez de afirmar un envío que no
+   * ocurrió.
+   */
+  private async enviarChecklistPorCorreo(params: {
+    assetId: string;
+    submissionId: string;
+    destinatario: string;
+    vehiculo: string;
+    conductor: string;
+    fecha: Date;
+    conFalla: boolean;
+  }): Promise<boolean> {
+    try {
+      const pdf = await this.construirPdfDeEnvio(params.assetId, params.submissionId);
+      const p = (n: number): string => String(n).padStart(2, '0');
+      const f = params.fecha;
+      const fecha = `${p(f.getDate())}-${p(f.getMonth() + 1)}-${f.getFullYear()}`;
+
+      await this.email.send({
+        to: params.destinatario,
+        ...checklistEnviadoEmail({
+          vehiculo: params.vehiculo,
+          fecha,
+          conductor: params.conductor,
+          conFalla: params.conFalla,
+        }),
+        attachments: [
+          {
+            name: `checklist-${params.vehiculo}-${fecha}.pdf`.replace(/\s+/g, '-'),
+            contentBase64: Buffer.from(pdf).toString('base64'),
+          },
+        ],
+      });
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar por correo el checklist ${params.submissionId}: ${String(error)}`,
+      );
+      return false;
+    }
   }
 
   // Gamificación hook — se llama después de submitChecklist exitoso
@@ -2903,6 +2966,18 @@ export class AssetsService {
    */
   async generateChecklistSubmissionPdf(assetId: string, submissionId: string, userId: string): Promise<Uint8Array> {
     await this.assertCanViewAsset(assetId, userId);
+    return this.construirPdfDeEnvio(assetId, submissionId);
+  }
+
+  /**
+   * El PDF de un checklist enviado, SIN control de acceso.
+   *
+   * Privado a propósito: el permiso lo verifica quien llama. Existe porque el
+   * correo con el PDF adjunto se manda en un envío sin sesión, donde no hay
+   * usuario contra quien comprobar nada, y la alternativa era duplicar todo el
+   * armado del documento.
+   */
+  private async construirPdfDeEnvio(assetId: string, submissionId: string): Promise<Uint8Array> {
     const submission = await this.prisma.checklistSubmission.findUnique({
       where: { id: submissionId },
       include: { user: true, template: true, asset: true },

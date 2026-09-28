@@ -99,6 +99,15 @@ export interface ChecklistTemplateView {
 
 export interface ChecklistSubmissionView {
   id: string;
+  /**
+   * ¿Salió el correo con el PDF adjunto?
+   *
+   * Opcional porque solo lo informa el envío que manda correo. Que sea `false`
+   * NO significa que el checklist se haya perdido: quedó guardado igual. La
+   * pantalla tiene que decirlo así y ofrecer la descarga, en vez de afirmar un
+   * envío que no ocurrió.
+   */
+  correoEnviado?: boolean;
   assetId: string;
   templateId: string;
   /** `null` en los checklists importados de la planilla: no tienen usuario. */

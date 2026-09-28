@@ -305,6 +305,7 @@ interface MockPermissions {
 }
 
 describe('AssetsService', () => {
+  let emailMock: { send: MockFunction };
   let prismaMock: MockPrisma;
   let txMock: MockTx;
   let fgaMock: MockFga;
@@ -435,6 +436,8 @@ describe('AssetsService', () => {
       can: vi.fn(() => Promise.resolve({ effect: 'deny' })),
     };
 
+    emailMock = { send: vi.fn(() => Promise.resolve()) };
+
     service = new AssetsService(
       prismaMock as unknown as PrismaService,
       fgaMock as unknown as FgaService,
@@ -449,6 +452,10 @@ describe('AssetsService', () => {
         startOtpSignature: vi.fn(),
         hasBiometric: vi.fn(() => Promise.resolve(false)),
       } as unknown as import('../../src/modules/signatures/signature.service').SignatureService,
+      // Correo: el envío público manda el PDF adjunto. Se espía para poder
+      // afirmar que se intentó; si faltara, el try/catch del servicio se
+      // tragaría el error y la prueba pasaría fingiendo que se envió.
+      emailMock as unknown as import('../../src/common/email.service').EmailService,
     );
   });
 
@@ -2684,6 +2691,52 @@ describe('AssetsService', () => {
       expect(creado.data.declaredInternalExpiry).toBeNull();
       // Y NO se marca como importado de la planilla: es otra procedencia.
       expect(creado.data.externalSource).toBeUndefined();
+    });
+
+    it('manda el PDF por correo a quien lo llenó, y lo dice en la respuesta', async () => {
+      prismaMock.asset.findUnique
+        .mockResolvedValueOnce(buildAssetRow({ id: 'a-1', identifier: 'SDTJ89' }))
+        // La lee de nuevo `construirPdfDeEnvio` para el proyecto.
+        .mockResolvedValue({ project: null });
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ assetId: 'a-1', status: DocumentStatus.APROBADO, items: [] }),
+      );
+      prismaMock.checklistSubmission.findUnique.mockResolvedValueOnce({
+        ...buildSubmissionRow({ answers: [] }),
+        user: null,
+        asset: buildAssetRow({ id: 'a-1', identifier: 'SDTJ89' }),
+        template: buildTemplateRow({ assetId: 'a-1', items: [] }),
+      });
+      prismaMock.assetDocument.findMany.mockResolvedValueOnce([]);
+
+      const vista = await service.submitPublicChecklist('tok-a-1', dtoBase);
+
+      expect(emailMock.send).toHaveBeenCalledTimes(1);
+      const enviado = emailMock.send.mock.calls[0]?.[0] as {
+        to: string;
+        attachments?: Array<{ name: string; contentBase64: string }>;
+      };
+      expect(enviado.to).toBe('yerko@ejemplo.cl');
+      expect(enviado.attachments).toHaveLength(1);
+      // El adjunto tiene que ser un PDF de verdad, no una cadena vacía.
+      const bytes = Buffer.from(enviado.attachments?.[0]?.contentBase64 ?? '', 'base64');
+      expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(vista.correoEnviado).toBe(true);
+    });
+
+    it('si el correo falla, el checklist NO se pierde y la respuesta lo admite', async () => {
+      // Perder un checklist porque el proveedor de correo estaba caído sería
+      // mucho peor que un correo no entregado.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-1' }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ assetId: 'a-1', status: DocumentStatus.APROBADO, items: [] }),
+      );
+      emailMock.send.mockRejectedValueOnce(new Error('Brevo caído'));
+
+      const vista = await service.submitPublicChecklist('tok-a-1', dtoBase);
+
+      expect(txMock.checklistSubmission.create).toHaveBeenCalled();
+      expect(vista.correoEnviado).toBe(false);
     });
 
     it('aplica las mismas reglas de negocio que el envío con sesión', async () => {

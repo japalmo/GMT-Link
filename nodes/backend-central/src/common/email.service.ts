@@ -12,6 +12,16 @@ export interface EmailMessage {
   subject: string;
   body: string;
   html?: string;
+  /**
+   * Archivos adjuntos. `contentBase64` es el contenido ya codificado.
+   *
+   * Van en base64 y no como Buffer porque es lo que pide la API de Brevo, que
+   * es el proveedor real; el transporte SMTP lo decodifica de vuelta.
+   *
+   * Ojo con el tamaño: Brevo rechaza mensajes sobre ~10 MB contando el base64,
+   * que abulta un tercio. El caller es quien debe cuidar que quepa.
+   */
+  attachments?: Array<{ name: string; contentBase64: string }>;
 }
 
 /**
@@ -110,6 +120,16 @@ export class BrevoEmailService extends EmailService {
           subject: message.subject,
           htmlContent: message.html ?? textToHtml(message.body),
           textContent: message.body,
+          // La clave se omite si no hay adjuntos: mandarla vacía hace que Brevo
+          // conteste 400 en vez de ignorarla.
+          ...(message.attachments?.length
+            ? {
+                attachment: message.attachments.map((a) => ({
+                  name: a.name,
+                  content: a.contentBase64,
+                })),
+              }
+            : {}),
         }),
         signal: controller.signal,
       });
@@ -172,6 +192,13 @@ export class SmtpEmailService extends EmailService {
         subject: message.subject,
         text: message.body,
         html: message.html,
+        // El contrato lleva el contenido en base64 (es lo que pide Brevo);
+        // nodemailer lo acepta declarando la codificación.
+        attachments: message.attachments?.map((a) => ({
+          filename: a.name,
+          content: a.contentBase64,
+          encoding: 'base64',
+        })),
       });
       this.logger.log(`Email enviado con éxito a ${message.to}`);
     } catch (error) {
