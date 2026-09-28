@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { FirmaCanvas } from '@/components/form-wizard';
 import { SvgChecklistInput } from './svg-checklist-input';
 import type {
   ChecklistTemplateView,
@@ -290,6 +291,15 @@ export function ChecklistFillBody({
             config={item.config}
             value={answers[item.id] as string | undefined}
             onChange={(v) => setAnswer(item.id, v)}
+          />
+        );
+
+      case 'FIRMA':
+        return (
+          <FirmaCanvas
+            valor={(answers[item.id] as string | undefined) ?? null}
+            onChange={(dataUrl) => setAnswer(item.id, dataUrl ?? '')}
+            etiqueta={item.label}
           />
         );
 

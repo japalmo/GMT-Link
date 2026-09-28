@@ -82,6 +82,23 @@ export interface ChecklistFormatoData {
   /** Una línea por parte marcada del diagrama. */
   carroceria: readonly string[];
   observaciones: string;
+  /**
+   * Firma a mano alzada de quien llenó el checklist, en PNG.
+   *
+   * Llega como bytes y no como clave del storage porque este módulo es PURO:
+   * quien arma el PDF ya leyó el archivo. Ausente = el checklist no se firmó, y
+   * el documento lo dice en vez de dejar el recuadro vacío, que se leería como
+   * si la firma se hubiera perdido.
+   */
+  firmaPng?: Uint8Array;
+  /**
+   * Qué decir cuando no hay imagen que dibujar.
+   *
+   * No es lo mismo "nadie firmó" que "firmó, pero la firma vive en la planilla
+   * de origen y no se puede incrustar". El documento tiene que distinguirlos:
+   * poner "sin firma" en un checklist que sí se firmó es afirmar algo falso.
+   */
+  firmaNota?: string;
 }
 
 /** Estado de dibujo: página actual y cursor vertical. */
@@ -407,5 +424,102 @@ export async function composeChecklistFormatoPdf(
   seccion(l, 'OBSERVACIONES GENERALES');
   bloqueTexto(l, data.observaciones);
 
+  // ── Firma ──
+  seccion(l, 'FIRMA');
+  await bloqueFirma(l, data.firmaPng, data.conductor, data.firmaNota);
+
   return doc.save();
+}
+
+/**
+ * Alto del recuadro de firma, en puntos (~3 cm).
+ *
+ * Generoso a propósito: la firma se escala para caber, así que un recuadro
+ * apretado la deja diminuta e ilegible en el papel.
+ */
+const ALTO_FIRMA = 90;
+
+/**
+ * Recuadro de firma: la imagen sobre la línea, y el nombre debajo.
+ *
+ * La imagen se escala para caber sin deformarse y se centra. Si el checklist no
+ * trae firma, el recuadro lo DICE: dejarlo en blanco se leería como que la
+ * firma existió y se perdió, que es lo contrario de lo que pasó.
+ */
+async function bloqueFirma(
+  l: Lienzo,
+  png: Uint8Array | undefined,
+  nombre: string,
+  nota?: string,
+): Promise<void> {
+  asegurarEspacio(l, ALTO_FIRMA + ALTO_FILA);
+  const arriba = l.y;
+  const abajo = arriba - ALTO_FIRMA;
+
+  l.pagina.drawRectangle({
+    x: MARGEN,
+    y: abajo,
+    width: ANCHO,
+    height: ALTO_FIRMA,
+    borderColor: BORDE,
+    borderWidth: 0.5,
+  });
+
+  // Línea sobre la que se firma, como en el papel.
+  const yLinea = abajo + 22;
+  const anchoLinea = ANCHO * 0.5;
+  const xLinea = MARGEN + (ANCHO - anchoLinea) / 2;
+  l.pagina.drawLine({
+    start: { x: xLinea, y: yLinea },
+    end: { x: xLinea + anchoLinea, y: yLinea },
+    thickness: 0.5,
+    color: BORDE,
+  });
+
+  if (png && png.length > 0) {
+    // Un PNG corrupto NO puede impedir que se emita el documento: el resto del
+    // checklist es información real que alguien necesita ver.
+    try {
+      const imagen = await l.doc.embedPng(png);
+      const altoMax = ALTO_FIRMA - 30;
+      const anchoMax = anchoLinea;
+      const escala = Math.min(anchoMax / imagen.width, altoMax / imagen.height, 1);
+      const ancho = imagen.width * escala;
+      const alto = imagen.height * escala;
+      l.pagina.drawImage(imagen, {
+        x: MARGEN + (ANCHO - ancho) / 2,
+        y: yLinea + 2,
+        width: ancho,
+        height: alto,
+      });
+    } catch {
+      l.pagina.drawText('No se pudo leer la firma registrada.', {
+        x: xLinea,
+        y: yLinea + 6,
+        size: TAM,
+        font: l.fuente,
+        color: GRIS_CABECERA,
+      });
+    }
+  } else {
+    const aviso = nota ?? 'Sin firma registrada.';
+    l.pagina.drawText(aviso, {
+      x: MARGEN + (ANCHO - l.fuente.widthOfTextAtSize(aviso, TAM)) / 2,
+      y: yLinea + 6,
+      size: TAM,
+      font: l.fuente,
+      color: GRIS_CABECERA,
+    });
+  }
+
+  const pie = nombre || 'Sin registrar';
+  l.pagina.drawText(pie, {
+    x: MARGEN + (ANCHO - l.fuente.widthOfTextAtSize(pie, TAM)) / 2,
+    y: yLinea - 12,
+    size: TAM,
+    font: l.fuente,
+    color: GRIS_CABECERA,
+  });
+
+  l.y = abajo;
 }

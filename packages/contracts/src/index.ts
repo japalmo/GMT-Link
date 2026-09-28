@@ -1759,7 +1759,14 @@ export interface ObraDashboard {
  * web/backend con el union viejo). Legacy al leer: YES_NO→BOOLEAN, NUMBER→ENTERO,
  * TEXT→TEXTO (los históricos NO se migran; se normalizan al parsear).
  */
-export type ChecklistItemType = 'BOOLEAN' | 'ESTADO' | 'ENTERO' | 'FECHA' | 'TEXTO' | 'SVG';
+export type ChecklistItemType =
+  | 'BOOLEAN'
+  | 'ESTADO'
+  | 'ENTERO'
+  | 'FECHA'
+  | 'TEXTO'
+  | 'SVG'
+  | 'FIRMA';
 
 /** Una parte nombrada (`<g>`) de un diagrama SVG interactivo (p. ej. carrocería). */
 export interface ChecklistSvgPart {
@@ -1776,6 +1783,9 @@ export interface ChecklistSvgPart {
  * TEXTO companion (observación exigida cuando el estado cae en falla). Para SVG,
  * `svg` es el marcado del diagrama y `parts` las partes nombradas (`<g>`) que el
  * inspector puede tocar para dejar un comentario.
+ *
+ * FIRMA no lleva configuración: es el trazo a mano alzada de quien llena el
+ * checklist y no hay nada que parametrizar.
  */
 export interface ChecklistItemConfig {
   options?: string[];

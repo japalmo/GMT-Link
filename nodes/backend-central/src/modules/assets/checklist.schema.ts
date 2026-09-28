@@ -140,6 +140,22 @@ const svgItemSchema = z.object({
   }),
 });
 
+/**
+ * FIRMA: trazo a mano alzada de quien llena el checklist.
+ *
+ * Sin `config`: no hay nada que parametrizar. El VALOR de respuesta es la clave
+ * de storage del PNG que dejó el formulario; nunca es falla, igual que el SVG,
+ * porque una firma no es una condición del vehículo.
+ */
+const firmaItemSchema = z.object({
+  id: idSchema,
+  label: labelSchema,
+  type: z.literal('FIRMA'),
+  required: z.boolean(),
+  section: sectionRefSchema,
+  config: z.object({}).optional(),
+});
+
 /** Union discriminado por `type` de un ítem de plantilla ya normalizado. */
 export const templateItemSchema = z.discriminatedUnion('type', [
   booleanItemSchema,
@@ -148,6 +164,7 @@ export const templateItemSchema = z.discriminatedUnion('type', [
   textoItemSchema,
   estadoItemSchema,
   svgItemSchema,
+  firmaItemSchema,
 ]);
 
 /** Opciones cuyo texto normalizado es `'malo'` (default de `failOptions`). */
@@ -317,6 +334,7 @@ export function parseTemplateItems(raw: unknown): ChecklistTemplateItem[] {
  * - ESTADO: el valor coincide (case-insensitive) con alguna `failOptions`
  *   (default `['Malo']`).
  * - SVG: NUNCA es falla (los comentarios de carrocería son observaciones).
+ * - FIRMA: NUNCA es falla (no es una condición del vehículo).
  * - Sin ítem definido (plantilla vacía / respuesta legacy): un booleano `false`
  *   sigue contando como falla.
  * - Resto de tipos: nunca es falla.
@@ -325,6 +343,11 @@ export function isFailure(
   item: ChecklistTemplateItem | undefined,
   value: string | number | boolean | null,
 ): boolean {
+  if (item?.type === 'FIRMA') {
+    // Una firma no es una condición del vehículo: que esté o falte no manda el
+    // activo a mantenimiento.
+    return false;
+  }
   if (item?.type === 'SVG') {
     // Diagrama de carrocería: el valor es un mapa de comentarios (observaciones),
     // nunca una falla que mande el activo a mantenimiento.

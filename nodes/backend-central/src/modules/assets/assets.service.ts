@@ -17,6 +17,11 @@ import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDt
 import { composeTemplatePreviewPdf } from './checklist-pdf.util';
 import { composeChecklistFormatoPdf } from './checklist-formato-pdf.util';
 import { construirFormato } from './checklist-formato.builder';
+import {
+  decodificarFirma,
+  esFirmaNueva,
+  FirmaInvalidaError,
+} from './checklist-firma.util';
 import type { TemplatePreviewSection } from './checklist-pdf.util';
 import { sanitizeSvgMarkup } from './svg-sanitize.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
@@ -79,6 +84,9 @@ function asAssetStatus(value: unknown): AssetStatus | undefined {
     ? (value as AssetStatus)
     : undefined;
 }
+
+/** Carpeta del storage donde viven las firmas a mano alzada de los checklists. */
+const CARPETA_FIRMAS = 'checklist-firmas';
 
 @Injectable()
 export class AssetsService {
@@ -2384,6 +2392,54 @@ export class AssetsService {
   }
 
   /**
+   * Guarda como archivo las firmas a mano alzada y deja la CLAVE en la respuesta.
+   *
+   * El formulario manda la firma como `data:` URL. Guardarla así dentro del Json
+   * de respuestas serían decenas de KB por checklist en una columna que se lee
+   * entera cada vez que alguien abre el historial.
+   *
+   * Muta `parsedAnswers` en el lugar, que es lo que después se persiste.
+   *
+   * Solo toca los ítems declarados FIRMA en la plantilla: si alguien manda un
+   * `data:` URL en un campo de texto, se guarda como el texto que es y no se
+   * convierte en un archivo en el storage.
+   */
+  private async guardarFirmas(
+    templateItems: ChecklistTemplateItem[],
+    parsedAnswers: ChecklistAnswer[],
+  ): Promise<void> {
+    const idsDeFirma = new Set(
+      templateItems.filter((item) => item.type === 'FIRMA').map((item) => item.id),
+    );
+    if (idsDeFirma.size === 0) return;
+
+    for (const answer of parsedAnswers) {
+      if (!idsDeFirma.has(answer.itemId)) continue;
+      // Un valor que no es `data:` ya es una clave guardada (reenvío) o está
+      // vacío: no hay nada que convertir.
+      if (!esFirmaNueva(answer.value)) continue;
+
+      let bytes: Buffer;
+      try {
+        bytes = decodificarFirma(answer.value);
+      } catch (error) {
+        if (error instanceof FirmaInvalidaError) {
+          throw new BadRequestException(error.message);
+        }
+        throw error;
+      }
+
+      const guardado = await this.storage.save({
+        buffer: bytes,
+        filename: `${answer.itemId}.png`,
+        contentType: 'image/png',
+        folder: CARPETA_FIRMAS,
+      });
+      answer.value = guardado.key;
+    }
+  }
+
+  /**
    * Prepara la firma de un checklist (#68 Fase 2): valida acceso + respuestas, calcula
    * el `contentHash` y arranca la vía elegida. WEBAUTHN devuelve las opciones para la
    * ceremonia biométrica; EMAIL_OTP envía un código al correo y devuelve el enmascarado.
@@ -2576,6 +2632,11 @@ export class AssetsService {
       throw new BadRequestException('Debes firmar el checklist para poder enviarlo.');
     }
 
+    // Las firmas a mano alzada llegan como `data:` URL y se guardan como
+    // archivo: en la respuesta queda solo la clave. Va DESPUÉS de todas las
+    // validaciones para no dejar archivos huérfanos de un envío que se rechaza.
+    await this.guardarFirmas(templateItems, parsedAnswers);
+
     const submission = await this.prisma.$transaction(async (tx) => {
       const row = await tx.checklistSubmission.create({
         data: {
@@ -2710,8 +2771,12 @@ export class AssetsService {
       select: { project: { select: { name: true } } },
     });
 
-    return composeChecklistFormatoPdf(
-      construirFormato({
+    // La firma vive en el storage; el builder del formato es puro y no puede
+    // leerla, así que se carga acá y se le pasan los bytes.
+    const firma = await this.leerFirma(templateItems as never, answers as never);
+
+    return composeChecklistFormatoPdf({
+      ...construirFormato({
         proyecto: proyecto?.project?.name ?? null,
         fecha: submission.createdAt,
         conductor: submittedByName,
@@ -2721,7 +2786,49 @@ export class AssetsService {
         answers: answers as never,
         documentos,
       }),
-    );
+      ...firma,
+    });
+  }
+
+  /**
+   * La firma de un checklist, lista para el PDF.
+   *
+   * Nunca lanza: el PDF tiene que poder emitirse igual, porque el resto del
+   * checklist es información que alguien necesita leer.
+   *
+   * Distingue tres situaciones, y el documento dice cuál es cada una. Poner
+   * "sin firma" en un checklist que SÍ se firmó sería afirmar algo falso:
+   *
+   *  - Hay imagen guardada acá → se incrusta.
+   *  - El valor es una URL externa → viene de la planilla de AppScript, donde
+   *    la firma quedó en Drive. No se puede incrustar, pero existió.
+   *  - No hay nada → nadie firmó.
+   */
+  private async leerFirma(
+    templateItems: ChecklistTemplateItem[],
+    answers: ChecklistAnswer[],
+  ): Promise<{ firmaPng?: Uint8Array; firmaNota?: string }> {
+    const item = templateItems.find((i) => i.type === 'FIRMA');
+    // Los checklists importados guardaban la firma en un ítem TEXTO llamado
+    // `firma`; se sigue mirando para no perderla en los registros históricos.
+    const itemId = item?.id ?? 'firma';
+
+    const valor = answers.find((a) => a.itemId === itemId)?.value;
+    if (typeof valor !== 'string' || valor.trim() === '') return {};
+
+    if (/^https?:\/\//i.test(valor)) {
+      return { firmaNota: 'Firmado. La imagen de la firma quedó en la planilla de origen.' };
+    }
+    // Un `data:` acá significa que el envío no pasó por `guardarFirmas`, lo que
+    // sería un error de programación, no un dato del usuario.
+    if (valor.startsWith('data:')) return {};
+
+    try {
+      return { firmaPng: await this.storage.read(valor) };
+    } catch (error) {
+      this.logger.warn(`No se pudo leer la firma "${valor}" del checklist: ${String(error)}`);
+      return { firmaNota: 'La firma quedó registrada pero su archivo no está disponible.' };
+    }
   }
 
   /** Etiqueta legible por tipo de ítem para el PDF de preview del formulario. */
@@ -2732,6 +2839,7 @@ export class AssetsService {
     FECHA: 'Fecha',
     TEXTO: 'Texto',
     SVG: 'Diagrama',
+    FIRMA: 'Firma',
   };
 
   /**
