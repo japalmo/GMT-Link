@@ -9,3 +9,4 @@ export { Pantalla, Aviso, Campo, Segmentado, ENTRADA } from './pantalla';
 export { BarraPasos } from './barra-pasos';
 export { SelectorFecha } from './selector-fecha';
 export { SelectorHora } from './selector-hora';
+export { FirmaCanvas } from './firma-canvas';
