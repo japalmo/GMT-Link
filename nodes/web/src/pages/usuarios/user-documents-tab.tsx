@@ -101,15 +101,24 @@ export function UserDocumentsTab({ userId }: { userId: string }): ReactNode {
               <ExpiryCell document={doc} />
               {/* Fase 1B: la URL fresca se pide al hacer clic; `fileUrl` crudo
                   puede ser una clave de storage no navegable. */}
-              <FreshFileLink
-                getUrl={() => getDocumentFileUrl(doc.id)}
-                aria-label={`Ver archivo de ${doc.name}`}
-                className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
-              >
-                <FileText className="size-4" aria-hidden />
-                Ver archivo
-                <ExternalLink className="size-3.5" aria-hidden />
-              </FreshFileLink>
+              {doc.fileUrl === null ? (
+                // Documento "placeholder": vencimiento cargado, archivo
+                // pendiente. Un enlace acá llevaría a un error.
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <FileText className="size-4" aria-hidden />
+                  Archivo pendiente
+                </span>
+              ) : (
+                <FreshFileLink
+                  getUrl={() => getDocumentFileUrl(doc.id)}
+                  aria-label={`Ver archivo de ${doc.name}`}
+                  className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
+                >
+                  <FileText className="size-4" aria-hidden />
+                  Ver archivo
+                  <ExternalLink className="size-3.5" aria-hidden />
+                </FreshFileLink>
+              )}
               {doc.previousFileUrl && (
                 <FreshFileLink
                   getUrl={() => getDocumentFileUrl(doc.id, { previous: true })}

@@ -15,8 +15,12 @@ export interface PersonalDocumentView {
   /**
    * CLAVE de storage (documentos nuevos, Fase 1B) o URL legada. NO navegar
    * directamente: pedir la URL fresca con `getDocumentFileUrl(id)`.
+   *
+   * `null` = documento "placeholder": el registro existe con su fecha de
+   * vencimiento pero el archivo está pendiente de subir. Ofrecer subirlo, no
+   * un botón de descarga que va a fallar.
    */
-  fileUrl: string;
+  fileUrl: string | null;
   /**
    * Versión anterior tras un versionado, o `null`. Misma naturaleza que
    * `fileUrl`: usar `getDocumentFileUrl(id, { previous: true })`.

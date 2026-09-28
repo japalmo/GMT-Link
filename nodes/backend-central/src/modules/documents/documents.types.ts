@@ -13,8 +13,12 @@ export interface PersonalDocumentView {
   /**
    * CLAVE de storage (documentos nuevos, Fase 1B) o URL absoluta legada. NO es
    * navegable directamente: la URL fresca la entrega `GET /documents/:id/file-url`.
+   *
+   * `null` = documento "placeholder": existe el registro con su fecha de
+   * vencimiento, pero el archivo todavía no se sube. La UI tiene que ofrecer
+   * subirlo en vez de un botón de descarga que no puede funcionar.
    */
-  fileUrl: string;
+  fileUrl: string | null;
   /**
    * Versión anterior conservada al subir una nueva (ApprovalWorkflow); null si
    * nunca se versionó. Misma naturaleza que `fileUrl` (clave o URL legada): la

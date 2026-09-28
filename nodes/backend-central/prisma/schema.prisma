@@ -619,7 +619,16 @@ model PersonalDocument {
   user            User           @relation("UserDocuments", fields: [userId], references: [id], onDelete: Cascade)
   type            String
   name            String
-  fileUrl         String
+  /// OPCIONAL: se admite el documento "placeholder", con la fecha de
+  /// vencimiento cargada y el archivo todavía pendiente. Es el caso del
+  /// conductor que declara su licencia al llenar un checklist: la fecha sirve
+  /// de inmediato para las alertas de vencimiento, y queda el recordatorio de
+  /// subir el PDF o la foto. Sin esto habría que inventar una URL falsa para
+  /// poder guardar la fecha, que es peor.
+  ///
+  /// Un documento sin archivo NO se puede descargar: quien lo consuma tiene
+  /// que tratar ese caso, no asumir que siempre hay algo que servir.
+  fileUrl         String?
   issuedAt        DateTime?
   expiresAt       DateTime? // para alertas de vencimiento
   /// `true` = no vence nunca. Distinto de `expiresAt` vacío con esto en false,
@@ -1206,6 +1215,29 @@ model ChecklistSubmission {
   // Nombre del conductor tal como venía escrito en la planilla. Es informativo,
   // NO una atribución de autoría: por eso va aparte de `userId`.
   externalAuthor String?
+
+  // ── Quien llenó el checklist SIN cuenta en GMT Link ──
+  //
+  // Desde el QR de la plaquita se puede llenar el checklist sin sesión: en
+  // faena hay conductores de terceros y gente que todavía no tiene cuenta, y
+  // exigir login significaba que el checklist no se hiciera.
+  //
+  // Estos datos son DECLARADOS por quien llenó el formulario y nadie los
+  // verificó. Van aparte de `userId` por eso mismo, y NO se reutiliza
+  // `externalAuthor`, que significa otra cosa ("vino importado de la planilla
+  // de AppScript"). Mezclarlos haría imposible distinguir las dos
+  // procedencias.
+  //
+  // Un envío es "sin verificar" cuando `userId` y `externalSource` son ambos
+  // null. No se guarda una columna de estado porque sería redundante con esa
+  // condición y terminaría desincronizándose.
+  guestName           String?
+  guestLicenseClass   String?
+  guestLicenseExpiry  DateTime?
+  guestInternalExpiry DateTime?
+  // Correo al que se envió el PDF. Se guarda para poder reenviarlo y para
+  // saber a quién se le entregó un documento que se firma.
+  guestEmail          String?
 
   @@unique([externalSource, externalId])
   @@index([assetId])

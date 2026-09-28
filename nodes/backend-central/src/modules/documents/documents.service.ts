@@ -288,7 +288,14 @@ export class DocumentsService {
 
     const stored = opts.previous === true ? doc.previousFileUrl : doc.fileUrl;
     if (stored === null) {
-      throw new NotFoundException('El documento no tiene versión anterior.');
+      // Dos motivos distintos para no tener archivo, y conviene distinguirlos:
+      // no haber versionado nunca, o ser un documento "placeholder" al que
+      // todavía no le suben el archivo.
+      throw new NotFoundException(
+        opts.previous === true
+          ? 'El documento no tiene versión anterior.'
+          : 'Este documento todavía no tiene el archivo cargado.',
+      );
     }
     return { url: await resolveFreshFileUrl(this.storage, stored) };
   }
@@ -366,7 +373,11 @@ export class DocumentsService {
     const doc = await this.findAny(id);
     const stored = previous ? doc.previousFileUrl : doc.fileUrl;
     if (stored === null) {
-      throw new NotFoundException('El documento no tiene versión anterior.');
+      throw new NotFoundException(
+        previous
+          ? 'El documento no tiene versión anterior.'
+          : 'Este documento todavía no tiene el archivo cargado.',
+      );
     }
     return { url: await resolveFreshFileUrl(this.storage, stored) };
   }
