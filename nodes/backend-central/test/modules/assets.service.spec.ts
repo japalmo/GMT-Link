@@ -2614,4 +2614,94 @@ describe('AssetsService', () => {
       });
     });
   });
+
+  /**
+   * Envío del checklist SIN sesión, desde el QR de la plaquita.
+   *
+   * Lo que importa comprobar acá es que el camino público NO sea una puerta
+   * trasera: tiene que exigir lo mismo que el autenticado (plantilla del activo,
+   * plantilla aprobada, mismas reglas de negocio) y dejar el registro marcado
+   * como no verificado.
+   */
+  describe('submitPublicChecklist', () => {
+    const dtoBase = {
+      templateId: 't-1',
+      answers: [{ itemId: 'kilometraje', label: 'Kilometraje', value: 120 }],
+      declaredName: 'Yerko Jara',
+      declaredEmail: 'yerko@ejemplo.cl',
+    };
+
+    it('rechaza un token que no corresponde a ningún activo', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(null);
+      await expect(service.submitPublicChecklist('no-existe', dtoBase)).rejects.toThrow(
+        /no existe/i,
+      );
+    });
+
+    it('rechaza una plantilla que es de OTRO activo', async () => {
+      // Sin esto, cualquiera con un token podría escribir en la plantilla de
+      // cualquier vehículo.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-1' }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ assetId: 'otro-activo' }),
+      );
+      await expect(service.submitPublicChecklist('tok-a-1', dtoBase)).rejects.toThrow(
+        /no corresponde/i,
+      );
+    });
+
+    it('rechaza una plantilla que no está aprobada', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-1' }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ assetId: 'a-1', status: DocumentStatus.EN_REVISION }),
+      );
+      await expect(service.submitPublicChecklist('tok-a-1', dtoBase)).rejects.toThrow(
+        /aprobadas/i,
+      );
+    });
+
+    it('guarda con userId null y los datos declarados', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-1' }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ assetId: 'a-1', status: DocumentStatus.APROBADO, items: [] }),
+      );
+
+      await service.submitPublicChecklist('tok-a-1', {
+        ...dtoBase,
+        declaredLicenseClass: 'B',
+        declaredLicenseExpiry: '2028-08-14',
+      });
+
+      const creado = txMock.checklistSubmission.create.mock.calls[0]?.[0] as {
+        data: Record<string, unknown>;
+      };
+      expect(creado.data.userId).toBeNull();
+      expect(creado.data.declaredName).toBe('Yerko Jara');
+      expect(creado.data.declaredEmail).toBe('yerko@ejemplo.cl');
+      expect(creado.data.declaredLicenseClass).toBe('B');
+      expect(creado.data.declaredLicenseExpiry).toBeInstanceOf(Date);
+      // Sin fecha declarada no se inventa una: queda null.
+      expect(creado.data.declaredInternalExpiry).toBeNull();
+      // Y NO se marca como importado de la planilla: es otra procedencia.
+      expect(creado.data.externalSource).toBeUndefined();
+    });
+
+    it('aplica las mismas reglas de negocio que el envío con sesión', async () => {
+      // Un ítem obligatorio sin responder tiene que frenar el envío también acá.
+      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-1' }));
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({
+          assetId: 'a-1',
+          status: DocumentStatus.APROBADO,
+          items: [
+            { id: 'frenos', label: 'Frenos', type: 'ESTADO', required: true, config: { options: ['Bueno', 'Malo'] } },
+          ] as unknown as ChecklistTemplate['items'],
+        }),
+      );
+      await expect(
+        service.submitPublicChecklist('tok-a-1', { ...dtoBase, answers: [] }),
+      ).rejects.toThrow(/obligatorio/i);
+    });
+  });
+
 });

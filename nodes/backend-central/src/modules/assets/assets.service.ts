@@ -13,7 +13,7 @@ import { freshFileUrl } from '../../common/storage/fresh-file-url';
 import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
 import { GamificationService } from '../gamification/gamification.service';
 import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
-import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto } from './dto/assets.dto';
+import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto, SubmitPublicChecklistDto } from './dto/assets.dto';
 import { composeTemplatePreviewPdf } from './checklist-pdf.util';
 import { composeChecklistFormatoPdf } from './checklist-formato-pdf.util';
 import { construirFormato } from './checklist-formato.builder';
@@ -85,6 +85,12 @@ function asAssetStatus(value: unknown): AssetStatus | undefined {
   return typeof value === 'string' && (Object.values(AssetStatus) as string[]).includes(value)
     ? (value as AssetStatus)
     : undefined;
+}
+
+
+/** Fecha ISO opcional del formulario a `Date`, o `null` si no vino. */
+function fechaOpcional(iso: string | undefined): Date | null {
+  return iso ? new Date(iso) : null;
 }
 
 /** Carpeta del storage donde viven las firmas a mano alzada de los checklists. */
@@ -2523,101 +2529,15 @@ export class AssetsService {
     let verifiedSig: VerifiedSignature | null = null;
 
     const templateItems = this.readTemplateItems(template.items);
-    const itemById = new Map(templateItems.map((item) => [item.id, item] as const));
-    const answerByItemId = new Map(parsedAnswers.map((answer) => [answer.itemId, answer] as const));
 
-    // Odómetro: detecta el ítem por (ENTERO && (isOdometer || id==='kilometraje'))
-    // en VEHICULO; conserva la regla monótona y la metadata.odometerKm.
-    let updatedOdometerKm: number | null = null;
-    if (asset.type === AssetType.VEHICULO) {
-      const odometerItem = templateItems.find(
-        (item) =>
-          item.type === 'ENTERO' &&
-          (item.config?.isOdometer === true ||
-            item.id === 'kilometraje' ||
-            /kil[oó]metraje|od[oó]metro/i.test(item.label ?? '')),
-      );
-      const odometerAns = odometerItem ? answerByItemId.get(odometerItem.id) : undefined;
-      if (odometerAns && odometerAns.value !== null && odometerAns.value !== '') {
-        const reportedKm = Number(odometerAns.value);
-        if (Number.isNaN(reportedKm)) {
-          throw new BadRequestException('El valor de kilometraje reportado debe ser un número.');
-        }
-
-        const currentMeta = (asset.metadata as Record<string, unknown> | null) ?? {};
-        const currentKm = Number(currentMeta.odometerKm ?? 0);
-        if (reportedKm < currentKm) {
-          throw new BadRequestException(
-            `El kilometraje reportado (${reportedKm} km) no puede ser menor al kilometraje actual (${currentKm} km).`,
-          );
-        }
-        updatedOdometerKm = reportedKm;
-      }
-    }
-
-    // Detección de falla generalizada (isFailure) + observación companion.
-    let hasFailure = false;
-    let failureDetail = '';
-    for (const item of templateItems) {
-      const answer = answerByItemId.get(item.id);
-      const value = answer ? answer.value : null;
-      const valueMissing = value === null || (typeof value === 'string' && value.trim() === '');
-
-      // Obligatoriedad: un ítem `required` debe venir respondido con un valor no
-      // vacío. Los ítems TEXTO companion son `required:false`, así que no se ven
-      // afectados.
-      if (item.required && valueMissing) {
-        throw new BadRequestException(`Debes responder el ítem obligatorio "${item.label}".`);
-      }
-
-      // El valor de un ESTADO respondido debe pertenecer a `config.options`
-      // (case-insensitive). Se saltan las respuestas vacías (la obligatoriedad ya
-      // se validó arriba).
-      if (item.type === 'ESTADO' && !valueMissing) {
-        const options = item.config?.options ?? [];
-        const valueText = String(value).toLowerCase();
-        const isValidOption = options.some((option) => option.toLowerCase() === valueText);
-        if (!isValidOption) {
-          throw new BadRequestException(
-            `El valor "${value}" no es una opción válida para "${item.label}".`,
-          );
-        }
-      }
-
-      const failed = isFailure(item, value);
-
-      // Observación companion: si un ítem cae en falla o exige observación
-      // (config.requireObs), el answer del obsItemId debe traer un valor no vacío.
-      // Es type-agnóstico: aplica a cualquier ítem que declare `config.obsItemId`.
-      if (item.config?.obsItemId && (failed || item.config?.requireObs === true)) {
-        const obsAnswer = answerByItemId.get(item.config.obsItemId);
-        const obsValue = obsAnswer?.value;
-        const obsEmpty =
-          obsValue === null ||
-          obsValue === undefined ||
-          (typeof obsValue === 'string' && obsValue.trim() === '');
-        if (obsEmpty) {
-          throw new BadRequestException(`Debes registrar una observación para "${item.label}".`);
-        }
-      }
-
-      if (failed && !hasFailure) {
-        hasFailure = true;
-        failureDetail = item.label || item.id;
-      }
-    }
-
-    // Fallback legacy: un booleano `false` de una respuesta sin ítem en la
-    // plantilla (plantilla vacía / respuesta histórica) sigue contando como falla.
-    if (!hasFailure) {
-      for (const answer of parsedAnswers) {
-        if (!itemById.has(answer.itemId) && answer.value === false) {
-          hasFailure = true;
-          failureDetail = answer.label || answer.itemId;
-          break;
-        }
-      }
-    }
+    // Reglas de negocio del checklist (odómetro, obligatorios, opciones válidas,
+    // observación acompañante y detección de falla). Compartidas con el envío
+    // público: son las MISMAS reglas, tenga sesión o no quien lo llene.
+    const { updatedOdometerKm, hasFailure, failureDetail } = this.evaluarChecklist(
+      asset,
+      templateItems,
+      parsedAnswers,
+    );
 
     // Firma verificada (#68 Fase 2), DESPUÉS de todas las validaciones de negocio: así
     // una validación que falla (p. ej. odómetro que retrocede, ítem obligatorio vacío)
@@ -2720,6 +2640,244 @@ export class AssetsService {
     });
 
     this.awardChecklistPoints(userId);
+    return this.toSubmissionView(submission);
+  }
+
+
+  /**
+   * Reglas de negocio de un checklist enviado, iguales para el camino con
+   * sesión y el público: odómetro (monótono), ítems obligatorios, opciones
+   * válidas de un ESTADO, observación acompañante cuando algo falla, y
+   * detección de falla.
+   *
+   * Vive aparte porque son las MISMAS reglas tenga sesión o no quien lo llene.
+   * Duplicarlas para el envío público significaría que dentro de unos meses
+   * una se corrija en un lado y no en el otro, y el checklist de faena
+   * aceptaría cosas que el de la plataforma rechaza.
+   *
+   * Lanza `BadRequestException` con el mensaje de la regla que se incumplió.
+   */
+  private evaluarChecklist(
+    asset: { type: AssetType; metadata: Prisma.JsonValue | null },
+    templateItems: ChecklistTemplateItem[],
+    parsedAnswers: ChecklistAnswer[],
+  ): { updatedOdometerKm: number | null; hasFailure: boolean; failureDetail: string } {
+    const itemById = new Map(templateItems.map((item) => [item.id, item] as const));
+    const answerByItemId = new Map(parsedAnswers.map((a) => [a.itemId, a] as const));
+
+    // Odómetro: detecta el ítem por (ENTERO && (isOdometer || id==='kilometraje'))
+    // en VEHICULO; conserva la regla monótona y la metadata.odometerKm.
+    let updatedOdometerKm: number | null = null;
+    if (asset.type === AssetType.VEHICULO) {
+      const odometerItem = templateItems.find(
+        (item) =>
+          item.type === 'ENTERO' &&
+          (item.config?.isOdometer === true ||
+            item.id === 'kilometraje' ||
+            /kil[oó]metraje|od[oó]metro/i.test(item.label ?? '')),
+      );
+      const odometerAns = odometerItem ? answerByItemId.get(odometerItem.id) : undefined;
+      if (odometerAns && odometerAns.value !== null && odometerAns.value !== '') {
+        const reportedKm = Number(odometerAns.value);
+        if (Number.isNaN(reportedKm)) {
+          throw new BadRequestException('El valor de kilometraje reportado debe ser un número.');
+        }
+
+        const currentMeta = (asset.metadata as Record<string, unknown> | null) ?? {};
+        const currentKm = Number(currentMeta.odometerKm ?? 0);
+        if (reportedKm < currentKm) {
+          throw new BadRequestException(
+            `El kilometraje reportado (${reportedKm} km) no puede ser menor al kilometraje actual (${currentKm} km).`,
+          );
+        }
+        updatedOdometerKm = reportedKm;
+      }
+    }
+
+    // Detección de falla generalizada (isFailure) + observación companion.
+    let hasFailure = false;
+    let failureDetail = '';
+    for (const item of templateItems) {
+      const answer = answerByItemId.get(item.id);
+      const value = answer ? answer.value : null;
+      const valueMissing = value === null || (typeof value === 'string' && value.trim() === '');
+
+      // Obligatoriedad: un ítem `required` debe venir respondido con un valor no
+      // vacío. Los ítems TEXTO companion son `required:false`, así que no se ven
+      // afectados.
+      if (item.required && valueMissing) {
+        throw new BadRequestException(`Debes responder el ítem obligatorio "${item.label}".`);
+      }
+
+      // El valor de un ESTADO respondido debe pertenecer a `config.options`
+      // (case-insensitive). Se saltan las respuestas vacías (la obligatoriedad ya
+      // se validó arriba).
+      if (item.type === 'ESTADO' && !valueMissing) {
+        const options = item.config?.options ?? [];
+        const valueText = String(value).toLowerCase();
+        const isValidOption = options.some((option) => option.toLowerCase() === valueText);
+        if (!isValidOption) {
+          throw new BadRequestException(
+            `El valor "${value}" no es una opción válida para "${item.label}".`,
+          );
+        }
+      }
+
+      const failed = isFailure(item, value);
+
+      // Observación companion: si un ítem cae en falla o exige observación
+      // (config.requireObs), el answer del obsItemId debe traer un valor no vacío.
+      // Es type-agnóstico: aplica a cualquier ítem que declare `config.obsItemId`.
+      if (item.config?.obsItemId && (failed || item.config?.requireObs === true)) {
+        const obsAnswer = answerByItemId.get(item.config.obsItemId);
+        const obsValue = obsAnswer?.value;
+        const obsEmpty =
+          obsValue === null ||
+          obsValue === undefined ||
+          (typeof obsValue === 'string' && obsValue.trim() === '');
+        if (obsEmpty) {
+          throw new BadRequestException(`Debes registrar una observación para "${item.label}".`);
+        }
+      }
+
+      if (failed && !hasFailure) {
+        hasFailure = true;
+        failureDetail = item.label || item.id;
+      }
+    }
+
+    // Fallback legacy: un booleano `false` de una respuesta sin ítem en la
+    // plantilla (plantilla vacía / respuesta histórica) sigue contando como falla.
+    if (!hasFailure) {
+      for (const answer of parsedAnswers) {
+        if (!itemById.has(answer.itemId) && answer.value === false) {
+          hasFailure = true;
+          failureDetail = answer.label || answer.itemId;
+          break;
+        }
+      }
+    }
+
+    return { updatedOdometerKm, hasFailure, failureDetail };
+  }
+
+
+  /**
+   * Envío del checklist SIN sesión, desde el QR de la plaquita.
+   *
+   * La credencial es el token opaco de la ficha, igual que el resto de los
+   * endpoints públicos del activo. Existe porque en faena hay conductores de
+   * terceros y gente que todavía no tiene cuenta, y exigir login significaba
+   * que el checklist simplemente no se hiciera.
+   *
+   * Comparte con el camino autenticado TODO lo que decide si el checklist es
+   * válido: el mismo Zod (`validateAnswers`), las mismas reglas de negocio
+   * (`evaluarChecklist`) y la misma exigencia de plantilla APROBADA. Lo único
+   * que cambia es de dónde viene la identidad.
+   *
+   * Lo que NO hace, y a propósito:
+   *  - No acepta firma verificada: liga el contenido a una identidad de la
+   *    plataforma, y acá no hay ninguna. El trazo a mano alzada sí viaja, como
+   *    una respuesta más.
+   *  - No otorga puntos de gamificación: no hay a quién dárselos.
+   *
+   * El registro queda "sin verificar" (`userId` y `externalSource` en null) y
+   * el historial lo muestra así: se guarda, pero no finge que alguien
+   * identificado lo firmó.
+   */
+  async submitPublicChecklist(
+    token: string,
+    dto: SubmitPublicChecklistDto,
+  ): Promise<ChecklistSubmissionView> {
+    const asset = await this.prisma.asset.findUnique({ where: { publicToken: token } });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+
+    const template = await this.prisma.checklistTemplate.findUnique({
+      where: { id: dto.templateId },
+    });
+    if (!template || template.assetId !== asset.id) {
+      throw new NotFoundException('La plantilla no corresponde a este activo.');
+    }
+    if (template.status !== DocumentStatus.APROBADO) {
+      throw new BadRequestException(
+        'Solo se pueden enviar checklists basados en plantillas aprobadas.',
+      );
+    }
+
+    const parsedAnswers = this.validateAnswers(dto.answers);
+    const templateItems = this.readTemplateItems(template.items);
+    const { updatedOdometerKm, hasFailure, failureDetail } = this.evaluarChecklist(
+      asset,
+      templateItems,
+      parsedAnswers,
+    );
+
+    // Las firmas se guardan como archivo DESPUÉS de validar, para no dejar
+    // huérfanos de un envío que se va a rechazar igual.
+    await this.guardarFirmas(templateItems, parsedAnswers);
+
+    const submission = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.checklistSubmission.create({
+        data: {
+          assetId: asset.id,
+          templateId: template.id,
+          // Sin usuario: es justamente lo que lo marca como "sin verificar".
+          userId: null,
+          answers: parsedAnswers as unknown as Prisma.InputJsonValue,
+          declaredName: dto.declaredName,
+          declaredEmail: dto.declaredEmail,
+          declaredLicenseClass: dto.declaredLicenseClass ?? null,
+          declaredLicenseExpiry: fechaOpcional(dto.declaredLicenseExpiry),
+          declaredInternalExpiry: fechaOpcional(dto.declaredInternalExpiry),
+        },
+        include: { user: true },
+      });
+
+      if (updatedOdometerKm !== null) {
+        const meta = (asset.metadata as Record<string, unknown> | null) ?? {};
+        await tx.asset.update({
+          where: { id: asset.id },
+          data: { metadata: { ...meta, odometerKm: updatedOdometerKm } as Prisma.InputJsonValue },
+        });
+        await this.createHistoryEntry(
+          tx,
+          asset.id,
+          'ESTADO',
+          `Kilometraje (odómetro) actualizado automáticamente a ${updatedOdometerKm} km desde checklist.`,
+        );
+      }
+
+      // El historial nombra a quien declaró haberlo llenado, y dice que no
+      // estaba identificado: atribuirlo sin más sería inventar autoría.
+      const detalleFalla = hasFailure ? ` con reporte de falla en "${failureDetail}"` : '';
+      await this.createHistoryEntry(
+        tx,
+        asset.id,
+        'CHECKLIST',
+        `Checklist enviado desde el enlace público por ${dto.declaredName} (sin sesión iniciada)${detalleFalla}.`,
+      );
+
+      // Una falla manda el vehículo a mantenimiento aunque el checklist no esté
+      // verificado: si el conductor reporta los frenos malos, el activo sale de
+      // circulación. Equivocarse hacia el lado seguro es lo correcto acá.
+      if (hasFailure) {
+        await tx.asset.update({
+          where: { id: asset.id },
+          data: { status: AssetStatus.MANTENIMIENTO },
+        });
+        await this.createHistoryEntry(
+          tx,
+          asset.id,
+          'ESTADO',
+          'Estado cambiado automáticamente a MANTENIMIENTO debido a falla reportada en checklist.',
+        );
+      }
+
+      return row;
+    });
+
     return this.toSubmissionView(submission);
   }
 

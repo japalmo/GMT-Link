@@ -9,7 +9,9 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEmail,
   IsEnum,
+  IsISO8601,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -238,6 +240,56 @@ export class SubmitChecklistDto {
   @IsOptional()
   @IsObject()
   signature?: ChecklistSignatureInput;
+}
+
+/**
+ * Body de `POST /assets/public/:token/checklist`: el envío SIN sesión, desde el
+ * QR de la plaquita.
+ *
+ * Ojo con el `ValidationPipe`: corre con `whitelist` y `forbidNonWhitelisted`,
+ * así que toda propiedad necesita al menos UNA regla de validación además del
+ * `@Transform`. Una que solo lo tenga no entra en la lista blanca y tumba el
+ * envío entero con "property should not exist" (ya pasó en producción con el
+ * formulario de incidentes de HSE).
+ *
+ * NO lleva `signature`: la firma verificada liga el contenido a una identidad
+ * de la plataforma, y acá justamente no hay ninguna. El trazo a mano alzada
+ * viaja como una respuesta más, en el ítem de tipo FIRMA.
+ */
+export class SubmitPublicChecklistDto {
+  @IsString()
+  @IsNotEmpty({ message: 'El ID de la plantilla es requerido' })
+  templateId!: string;
+
+  @IsArray()
+  @IsNotEmpty({ message: 'Las respuestas son requeridas' })
+  answers!: Record<string, unknown>[];
+
+  @trim()
+  @IsString()
+  @IsNotEmpty({ message: 'Necesitamos tu nombre para el registro' })
+  @MaxLength(120)
+  declaredName!: string;
+
+  @trim()
+  @IsEmail({}, { message: 'El correo no parece válido' })
+  @MaxLength(160)
+  declaredEmail!: string;
+
+  /** Clase de la licencia municipal (A1–A5, B, C, D, E, F). */
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(8)
+  declaredLicenseClass?: string;
+
+  @IsOptional()
+  @IsISO8601({}, { message: 'La fecha de vencimiento no es válida' })
+  declaredLicenseExpiry?: string;
+
+  @IsOptional()
+  @IsISO8601({}, { message: 'La fecha de vencimiento no es válida' })
+  declaredInternalExpiry?: string;
 }
 
 /** Body de `POST /assets/:id/checklist/sign-options`: pide la firma del contenido. */

@@ -50,6 +50,7 @@ import {
   UpdateChecklistTemplateDto,
   ReviewChecklistTemplateDto,
   SubmitChecklistDto,
+  SubmitPublicChecklistDto,
   PrepareChecklistSignatureDto,
   SubmitTelemetryDto,
   ConfirmUsageCycleDto,
@@ -579,6 +580,26 @@ export class AssetsController {
   ): Promise<AssetPublicResolved> {
     const userId = this.requireUserId(authUser);
     return this.assets.resolveByToken(token, userId);
+  }
+
+  /**
+   * Envío del checklist SIN sesión, desde el QR de la plaquita.
+   *
+   * La credencial es el token opaco de la ficha, igual que el resto de los
+   * endpoints públicos del activo. Queda registrado como "sin verificar":
+   * se guarda y se ve en el historial, pero el historial no finge que alguien
+   * identificado lo firmó.
+   *
+   * El límite por IP es bajo a propósito: un checklist es un acto deliberado de
+   * varios minutos, nadie manda seis en un minuto de forma legítima.
+   */
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  @Post('public/:token/checklist')
+  submitPublicChecklist(
+    @Param('token') token: string,
+    @Body() dto: SubmitPublicChecklistDto,
+  ): Promise<ChecklistSubmissionView> {
+    return this.assets.submitPublicChecklist(token, dto);
   }
 
   /**
