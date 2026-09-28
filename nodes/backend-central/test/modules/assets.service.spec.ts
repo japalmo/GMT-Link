@@ -279,6 +279,13 @@ interface MockPrisma {
     findMany: MockFunction;
     findUnique: MockFunction;
   };
+  // El PDF del formato lee las licencias del conductor desde RRHH.
+  personalDocument: {
+    findMany: MockFunction;
+  };
+  workerAccreditation: {
+    findMany: MockFunction;
+  };
 }
 
 interface MockFga {
@@ -400,6 +407,10 @@ describe('AssetsService', () => {
         findMany: vi.fn(() => Promise.resolve([])),
         findUnique: vi.fn(),
       },
+      // Sin licencias ni acreditaciones por defecto: el PDF tiene que poder
+      // emitirse igual, y el bloque del conductor dirá "No registrada".
+      personalDocument: { findMany: vi.fn(() => Promise.resolve([])) },
+      workerAccreditation: { findMany: vi.fn(() => Promise.resolve([])) },
     };
 
     fgaMock = {

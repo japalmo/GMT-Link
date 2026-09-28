@@ -50,6 +50,12 @@ export interface EntradaFormato {
   proyecto: string | null;
   fecha: Date;
   conductor: string | null;
+  /**
+   * Licencias del conductor, ya resueltas entre lo declarado y RRHH. El
+   * llamador las arma con `construirDatosConductor`; acá solo se copian al
+   * bloque que el PDF reserva.
+   */
+  datosConductor?: readonly DatoCabecera[];
   /** `'SHEETS'` cuando el checklist vino de la planilla, `null` si se hizo acá. */
   origen: string | null;
   patente: string | null;
@@ -186,7 +192,7 @@ export function construirFormato(entrada: EntradaFormato): ChecklistFormatoData 
             'registro y no una firma hecha en GMT Link.',
         }
       : {}),
-    datosConductor: [],
+    datosConductor: entrada.datosConductor ?? [],
     datosVehiculo,
     estadoGeneral,
     equiposEmergencia,

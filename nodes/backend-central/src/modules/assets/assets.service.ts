@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ZodError } from 'zod';
-import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus, SignatureContextType, SignatureMethod } from '@prisma/client';
+import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus, SignatureContextType, SignatureMethod, AccreditationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SignatureService } from '../signatures/signature.service';
 import type { IncomingSignature, VerifiedSignature } from '../signatures/signature.service';
@@ -22,6 +22,8 @@ import {
   esFirmaNueva,
   FirmaInvalidaError,
 } from './checklist-firma.util';
+import { claseDeLicencia, construirDatosConductor } from './checklist-conductor.util';
+import type { Licencia } from './checklist-conductor.util';
 import type { TemplatePreviewSection } from './checklist-pdf.util';
 import { sanitizeSvgMarkup } from './svg-sanitize.util';
 import { tableOrderBy, tablePage, tableSkipTake } from '../../common/table-pagination.util';
@@ -87,6 +89,7 @@ function asAssetStatus(value: unknown): AssetStatus | undefined {
 
 /** Carpeta del storage donde viven las firmas a mano alzada de los checklists. */
 const CARPETA_FIRMAS = 'checklist-firmas';
+
 
 @Injectable()
 export class AssetsService {
@@ -2753,11 +2756,14 @@ export class AssetsService {
     const templateItems = (submission.template.items as unknown as Record<string, unknown>[]) ?? [];
     const answers = (submission.answers as unknown as Record<string, unknown>[]) ?? [];
 
-    // El nombre sale del usuario cuando el checklist se hizo en la plataforma, y
-    // de `externalAuthor` cuando vino de la planilla. El PDF advierte el origen.
-    const submittedByName = submission.user
-      ? `${submission.user.firstName} ${submission.user.lastName}`.trim()
-      : (submission.externalAuthor ?? 'Sin registrar');
+    // El nombre: primero el que DECLARÓ quien llenó el checklist (es quien
+    // firma y responde por él), luego el del usuario de la plataforma, y de
+    // `externalAuthor` cuando vino de la planilla. El PDF advierte el origen.
+    const submittedByName =
+      submission.declaredName?.trim() ||
+      (submission.user
+        ? `${submission.user.firstName} ${submission.user.lastName}`.trim()
+        : (submission.externalAuthor ?? 'Sin registrar'));
 
     // Los vencimientos del bloque del vehículo salen de sus documentos
     // APROBADOS: son los que la ficha considera vigentes.
@@ -2768,7 +2774,21 @@ export class AssetsService {
 
     const proyecto = await this.prisma.asset.findUnique({
       where: { id: assetId },
-      select: { project: { select: { name: true } } },
+      select: { project: { select: { name: true, faenaId: true } } },
+    });
+
+    // Licencias del conductor: lo declarado al firmar, con RRHH de respaldo.
+    const datosConductor = construirDatosConductor({
+      licenciaPerfil: await this.licenciaDeConducir(submission.userId),
+      acreditacionFaena: await this.acreditacionVigente(
+        submission.userId,
+        proyecto?.project?.faenaId ?? null,
+      ),
+      declarado: {
+        clase: submission.declaredLicenseClass,
+        vence: submission.declaredLicenseExpiry,
+        interna: submission.declaredInternalExpiry,
+      },
     });
 
     // La firma vive en el storage; el builder del formato es puro y no puede
@@ -2785,9 +2805,62 @@ export class AssetsService {
         items: templateItems as never,
         answers: answers as never,
         documentos,
+        datosConductor,
       }),
       ...firma,
     });
+  }
+
+  /**
+   * La licencia de conducir del usuario, desde sus documentos de RRHH.
+   *
+   * El tipo de documento es texto libre (lo escribe quien lo carga), así que se
+   * busca por palabra dentro del tipo y del nombre. Se toma el de vencimiento
+   * más lejano: si alguien renovó, lo que vale es la nueva.
+   *
+   * NO se filtra por estado APROBADO a propósito. El documento puede estar
+   * EN_REVISION y la licencia ser igual de real; lo que el PDF necesita es la
+   * fecha, y si venció lo dice. Exigir revisión de RRHH haría que el bloque
+   * saliera vacío para casi todos.
+   */
+  private async licenciaDeConducir(userId: string | null): Promise<Licencia | null> {
+    if (!userId) return null;
+    const docs = await this.prisma.personalDocument.findMany({
+      where: { userId },
+      select: { type: true, name: true, expiresAt: true },
+    });
+    const licencias = docs.filter((d) => /licencia/i.test(`${d.type} ${d.name}`));
+    if (licencias.length === 0) return null;
+
+    licencias.sort((a, b) => (b.expiresAt?.getTime() ?? 0) - (a.expiresAt?.getTime() ?? 0));
+    const elegida = licencias[0];
+    if (!elegida) return null;
+    return { clase: claseDeLicencia(`${elegida.type} ${elegida.name}`), vence: elegida.expiresAt };
+  }
+
+  /**
+   * La acreditación de faena del usuario: la "licencia interna" del formato.
+   *
+   * Solo VIGENTE: en trámite, suspendida o rechazada no habilitan a nadie (es
+   * la misma regla que aplica el tablero de RRHH). Si el vehículo pertenece a
+   * un proyecto con faena, se prefiere la de esa faena; si no, la de
+   * vencimiento más lejano, que es la que la persona usaría.
+   */
+  private async acreditacionVigente(
+    userId: string | null,
+    faenaId: string | null,
+  ): Promise<{ vence: Date | null } | null> {
+    if (!userId) return null;
+    const acreditaciones = await this.prisma.workerAccreditation.findMany({
+      where: { userId, status: AccreditationStatus.VIGENTE },
+      select: { faenaId: true, expiresAt: true },
+    });
+    if (acreditaciones.length === 0) return null;
+
+    const deLaFaena = faenaId ? acreditaciones.filter((a) => a.faenaId === faenaId) : [];
+    const candidatas = deLaFaena.length > 0 ? deLaFaena : acreditaciones;
+    candidatas.sort((a, b) => (b.expiresAt?.getTime() ?? 0) - (a.expiresAt?.getTime() ?? 0));
+    return { vence: candidatas[0]?.expiresAt ?? null };
   }
 
   /**
