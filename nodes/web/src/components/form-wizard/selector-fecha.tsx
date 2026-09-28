@@ -8,10 +8,14 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
  * con letra chica y objetivos de toque de pocos milímetros. Este está pensado
  * para el pulgar: atajos arriba, días grandes y la semana empezando en lunes.
  *
- * OJO — solo sirve para fechas PASADAS: bloquea el futuro y sus atajos son
- * "Hoy / Ayer / Antes de ayer", porque se escribió para la fecha de un
- * incidente. Un vencimiento de licencia necesita lo contrario; cuando haga
- * falta, hay que darle un rango en vez de asumir que el tope es hoy.
+ * `rango` decide qué fechas admite:
+ *
+ *  - `'pasado'` (por defecto): tope HOY, con atajos "Hoy / Ayer / Antes de
+ *    ayer". Es lo que necesita la fecha de un incidente, que ya ocurrió.
+ *  - `'libre'`: cualquier fecha, con salto por año. Es lo que necesita el
+ *    vencimiento de una licencia. NO se bloquea el pasado a propósito: una
+ *    licencia puede estar vencida, y bloquearlo impediría declararlo, que es
+ *    justo el dato que importa.
  *
  * El valor viaja SIEMPRE como texto `aaaa-mm-dd` y nunca como `Date`: pasar por
  * `Date` corre el día según la zona horaria del teléfono.
@@ -69,13 +73,17 @@ function diasDelMes(anio: number, mes: number): number {
 export function SelectorFecha({
   valor,
   onChange,
+  rango = 'pasado',
 }: {
   valor: string;
   onChange: (v: string) => void;
+  rango?: 'pasado' | 'libre';
 }): ReactNode {
+  const soloPasado = rango === 'pasado';
   const [abierto, setAbierto] = useState(false);
+  const vacio = valor === '';
   const [mesVisible, setMesVisible] = useState(() => {
-    const { anio, mes } = partes(valor);
+    const { anio, mes } = partes(valor || hoyIso());
     return { anio, mes };
   });
   const hoy = hoyIso();
@@ -87,7 +95,7 @@ export function SelectorFecha({
 
   function elegir(dia: number): void {
     const elegido = iso(anio, mes, dia);
-    if (elegido > hoy) return;
+    if (soloPasado && elegido > hoy) return;
     onChange(elegido);
     setAbierto(false);
   }
@@ -102,11 +110,21 @@ export function SelectorFecha({
       >
         <CalendarDays className="size-5 shrink-0 text-muted-foreground" aria-hidden />
         <span className="flex-1">
-          <span className="block text-[17px] font-medium capitalize leading-tight">
-            {valor === hoy ? 'Hoy' : valor === hoyIso(-1) ? 'Ayer' : fechaLarga(valor)}
+          <span className="block text-[17px] font-medium leading-tight first-letter:uppercase">
+            {vacio
+              ? 'Sin definir'
+              : soloPasado && valor === hoy
+                ? 'Hoy'
+                : soloPasado && valor === hoyIso(-1)
+                  ? 'Ayer'
+                  : fechaLarga(valor)}
           </span>
           <span className="block text-[13px] text-muted-foreground">
-            {valor === hoy || valor === hoyIso(-1) ? fechaLarga(valor) : partes(valor).anio}
+            {vacio
+              ? 'Toca para elegir'
+              : soloPasado && (valor === hoy || valor === hoyIso(-1))
+                ? fechaLarga(valor)
+                : partes(valor).anio}
           </span>
         </span>
         <ChevronRight
@@ -117,7 +135,31 @@ export function SelectorFecha({
 
       {abierto && (
         <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 duration-200 animate-in fade-in slide-in-from-top-2 motion-reduce:animate-none">
-          <div className="flex gap-2">
+          {!soloPasado && (
+            // Sin salto por año, llegar a 2028 desde hoy serían dos docenas de
+            // toques en la flecha de mes.
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                aria-label="Año anterior"
+                onClick={() => setMesVisible((v) => ({ anio: v.anio - 1, mes: v.mes }))}
+                className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition active:scale-[0.95] hover:bg-muted"
+              >
+                <ChevronLeft className="size-5" aria-hidden />
+              </button>
+              <span className="text-[15px] font-semibold tabular-nums">{anio}</span>
+              <button
+                type="button"
+                aria-label="Año siguiente"
+                onClick={() => setMesVisible((v) => ({ anio: v.anio + 1, mes: v.mes }))}
+                className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition active:scale-[0.95] hover:bg-muted"
+              >
+                <ChevronRight className="size-5" aria-hidden />
+              </button>
+            </div>
+          )}
+
+          <div className={soloPasado ? 'flex gap-2' : 'hidden'}>
             {[
               { label: 'Hoy', v: hoy },
               { label: 'Ayer', v: hoyIso(-1) },
@@ -145,7 +187,9 @@ export function SelectorFecha({
               type="button"
               aria-label="Mes anterior"
               onClick={() =>
-                setMesVisible(mes === 0 ? { anio: anio - 1, mes: 11 } : { anio, mes: mes - 1 })
+                setMesVisible((v) =>
+                  v.mes === 0 ? { anio: v.anio - 1, mes: 11 } : { anio: v.anio, mes: v.mes - 1 },
+                )
               }
               className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition active:scale-[0.95] hover:bg-muted"
             >
@@ -157,9 +201,11 @@ export function SelectorFecha({
             <button
               type="button"
               aria-label="Mes siguiente"
-              disabled={esMesFuturo || iso(anio, mes, total) >= hoy}
+              disabled={soloPasado && (esMesFuturo || iso(anio, mes, total) >= hoy)}
               onClick={() =>
-                setMesVisible(mes === 11 ? { anio: anio + 1, mes: 0 } : { anio, mes: mes + 1 })
+                setMesVisible((v) =>
+                  v.mes === 11 ? { anio: v.anio + 1, mes: 0 } : { anio: v.anio, mes: v.mes + 1 },
+                )
               }
               className="flex size-10 items-center justify-center rounded-xl text-muted-foreground transition active:scale-[0.95] hover:bg-muted disabled:opacity-30"
             >
@@ -178,8 +224,8 @@ export function SelectorFecha({
             ))}
             {Array.from({ length: total }, (_, i) => i + 1).map((dia) => {
               const fecha = iso(anio, mes, dia);
-              const futuro = fecha > hoy;
-              const elegido = fecha === valor;
+              const futuro = soloPasado && fecha > hoy;
+              const elegido = !vacio && fecha === valor;
               return (
                 <button
                   key={dia}
