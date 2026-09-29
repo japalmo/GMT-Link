@@ -53,6 +53,7 @@ export const PERMISSIONS: ReadonlyArray<PermDef> = [
   { key: 'project:create', label: 'Crear proyectos', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'faena:create', label: 'Crear faena', module: 'proyectos', kind: 'FUNCTIONAL', scopeable: false },
   { key: 'project:team:manage', label: 'Gestionar trabajadores del proyecto', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_manage_team', scopeable: true },
+  { key: 'project:progress:manage', label: 'Gestionar avance de obra', module: 'proyectos', kind: 'STRUCTURAL', fgaRelation: 'can_manage_progress', scopeable: true },
   // ⚠️ Granularidad compartida (review Tasks 2.2 y 2.4): project:read,
   // measurement:read y task:read materializan la MISMA tupla FGA (`can_view`
   // sobre project). Otorgar cualquiera de los tres en un rol custom concede

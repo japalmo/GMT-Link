@@ -422,6 +422,30 @@
             ]
           }
         },
+        "can_manage_progress": {
+          "union": {
+            "child": [
+              {
+                "this": {}
+              },
+              {
+                "computedUserset": {
+                  "relation": "project_creator"
+                }
+              },
+              {
+                "tupleToUserset": {
+                  "computedUserset": {
+                    "relation": "admin"
+                  },
+                  "tupleset": {
+                    "relation": "department"
+                  }
+                }
+              }
+            ]
+          }
+        },
         "can_submit_measurements": {
           "union": {
             "child": [
@@ -548,6 +572,13 @@
             ]
           },
           "can_manage_team": {
+            "directly_related_user_types": [
+              {
+                "type": "user"
+              }
+            ]
+          },
+          "can_manage_progress": {
             "directly_related_user_types": [
               {
                 "type": "user"

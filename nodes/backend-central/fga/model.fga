@@ -66,6 +66,11 @@ type project
     # gestión de trabajadores del proyecto (§8 project:team:manage): componible
     # ([user]) y derivado de project_creator o del admin del departamento.
     define can_manage_team: [user] or project_creator or admin from department
+    # avance de obra (§8 project:progress:manage): quien carga el control por HH
+    # y las fotos de los cercos. Componible ([user]) para podérselo dar al jefe
+    # de terreno sin hacerlo administrador del proyecto, que es justamente el
+    # caso: Felipe actualiza el avance y no debería poder cambiar nada más.
+    define can_manage_progress: [user] or project_creator or admin from department
     define can_submit_measurements: [user] or operator or qa or project_creator
 
 type service
