@@ -2917,6 +2917,13 @@ export class AssetsService {
     fecha: Date;
     conFalla: boolean;
   }): Promise<boolean> {
+    // Sin proveedor real no se envió nada, por mucho que `send` resuelva.
+    if (!this.email.entregaReal) {
+      this.logger.warn(
+        `Sin proveedor de correo: el checklist ${params.submissionId} no se envió a ${params.destinatario}.`,
+      );
+      return false;
+    }
     try {
       const pdf = await this.construirPdfDeEnvio(params.assetId, params.submissionId);
       const p = (n: number): string => String(n).padStart(2, '0');
@@ -2945,6 +2952,70 @@ export class AssetsService {
       );
       return false;
     }
+  }
+
+
+  /**
+   * Plantilla de checklist de un activo, por su token público (sin sesión).
+   *
+   * Es lo que dibuja el formulario del QR: sin esto, quien entra sin cuenta no
+   * tiene preguntas que responder. El token opaco es la credencial, igual que
+   * en el resto de los endpoints públicos del activo.
+   *
+   * Lo que se expone es el CUESTIONARIO —preguntas, opciones y secciones—, que
+   * es justamente lo que la persona va a leer en pantalla. No lleva historial,
+   * ni quién revisó la plantilla, ni la versión anterior.
+   */
+  async getPublicChecklistTemplate(token: string): Promise<ChecklistTemplateView> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { publicToken: token },
+      select: { id: true },
+    });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+
+    const template = await this.prisma.checklistTemplate.findUnique({
+      where: { assetId: asset.id },
+    });
+    if (!template) {
+      throw new NotFoundException('Este activo todavía no tiene un checklist configurado.');
+    }
+    if (template.status !== DocumentStatus.APROBADO) {
+      throw new BadRequestException('El checklist de este activo aún no está aprobado.');
+    }
+
+    return this.toTemplateView(template);
+  }
+
+
+  /**
+   * PDF de un checklist enviado, por el token público del activo.
+   *
+   * Es la copia del documento que la persona acaba de firmar. Sin esto, quien
+   * lo llenó sin cuenta se queda sin nada cuando el correo falla, y la pantalla
+   * no podría ofrecerle la descarga sin mentir.
+   *
+   * Exige que el envío pertenezca AL activo de ese token: el token es la
+   * credencial, y sin esa comprobación serviría para leer el checklist de
+   * cualquier otro vehículo.
+   */
+  async getPublicChecklistPdf(token: string, submissionId: string): Promise<Uint8Array> {
+    const asset = await this.prisma.asset.findUnique({
+      where: { publicToken: token },
+      select: { id: true },
+    });
+    if (!asset) {
+      throw new NotFoundException('El activo no existe.');
+    }
+    const submission = await this.prisma.checklistSubmission.findUnique({
+      where: { id: submissionId },
+      select: { assetId: true },
+    });
+    if (!submission || submission.assetId !== asset.id) {
+      throw new NotFoundException('El checklist no corresponde a este activo.');
+    }
+    return this.construirPdfDeEnvio(asset.id, submissionId);
   }
 
   // Gamificación hook — se llama después de submitChecklist exitoso

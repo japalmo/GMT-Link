@@ -99,15 +99,20 @@ const router = createBrowserRouter([
   // Dashboard público de avance de obra: mismo criterio que la ficha del activo
   // (token opaco como credencial, sin sesión). Se proyecta en la TV de faena.
   { path: '/public/proyecto/:token', element: <PublicObraDashboardPage /> },
+  // Checklist del activo: SIN sesión. Llega desde el QR de la plaquita, donde
+  // el token del vehículo es la credencial. Deja de exigir login porque en
+  // faena hay conductores de terceros y gente sin cuenta, y exigirlo
+  // significaba que el checklist no se hiciera; el formulario detecta la sesión
+  // y, si la hay, prellena los datos y firma a nombre de esa persona.
+  //
+  // Va FUERA del shell y sin RequireModule: el conductor puede no tener el
+  // módulo Recursos.
+  { path: '/checklist/:token', element: lazyRoute(<LlenarChecklistPage />) },
   {
     element: <ProtectedRoute />,
     children: [
       // Cambio de clave forzado: protegido pero fuera del shell.
       { path: '/first-login', element: <FirstLoginPage /> },
-      // Checklist independiente: protegido (exige sesión) pero FUERA del shell y
-      // sin RequireModule, porque el conductor puede no tener el módulo Recursos.
-      // Llega desde el QR de la ficha pública con el token del vehículo.
-      { path: '/checklist/:token', element: lazyRoute(<LlenarChecklistPage />) },
       // App con shell (sidebar + topbar).
       {
         element: <AppShell />,

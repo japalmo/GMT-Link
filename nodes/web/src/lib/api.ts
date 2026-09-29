@@ -2623,6 +2623,36 @@ export function submitChecklist(id: string, dto: SubmitChecklistInput): Promise<
 }
 
 /**
+ * `GET /assets/public/:token/checklist/:submissionId/pdf` — descarga sin sesión.
+ *
+ * Es la copia del documento que la persona acaba de firmar. Existe para que la
+ * pantalla de éxito pueda ofrecer la descarga cuando el correo no salió.
+ */
+export async function downloadPublicChecklistPdf(
+  token: string,
+  submissionId: string,
+): Promise<Blob> {
+  const res = await fetch(
+    `${API_URL}/assets/public/${encodeURIComponent(token)}/checklist/${encodeURIComponent(submissionId)}/pdf`,
+  );
+  if (!res.ok) throw new ApiError('No se pudo descargar el PDF.', res.status);
+  return res.blob();
+}
+
+/**
+ * `GET /assets/public/:token/checklist/template` — la plantilla sin sesión.
+ *
+ * Es el cuestionario que dibuja el formulario del QR. La ficha pública trae
+ * `canFillChecklist` pero no los ítems, así que sin esto no habría preguntas
+ * que mostrar a quien entra sin cuenta.
+ */
+export function getPublicChecklistTemplate(token: string): Promise<ChecklistTemplateView> {
+  return request<ChecklistTemplateView>(
+    `/assets/public/${encodeURIComponent(token)}/checklist/template`,
+  );
+}
+
+/**
  * `POST /assets/public/:token/checklist` — envía el checklist SIN sesión.
  *
  * La credencial es el token opaco de la ficha, el mismo del QR de la plaquita.

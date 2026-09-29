@@ -35,6 +35,16 @@ export interface EmailMessage {
  * se retorna igual en la respuesta como respaldo para el admin.
  */
 export abstract class EmailService {
+  /**
+   * ¿Hay un proveedor de verdad detrás?
+   *
+   * `false` en el no-op, que resuelve con éxito sin enviar nada. Sin esto, una
+   * pantalla que informa "te lo enviamos" lo diría igual cuando no se envió
+   * nada, que es peor que decir que falló: la persona se queda esperando un
+   * correo que no existe.
+   */
+  abstract readonly entregaReal: boolean;
+
   abstract send(message: EmailMessage): Promise<void>;
 }
 
@@ -64,6 +74,7 @@ export function textToHtml(text: string): string {
  */
 @Injectable()
 export class NoopEmailService extends EmailService {
+  readonly entregaReal = false;
   private readonly logger = new Logger(NoopEmailService.name);
 
   send(message: EmailMessage): Promise<void> {
@@ -85,6 +96,7 @@ export class NoopEmailService extends EmailService {
  */
 @Injectable()
 export class BrevoEmailService extends EmailService {
+  readonly entregaReal = true;
   private readonly logger = new Logger(BrevoEmailService.name);
   private readonly apiKey: string;
   private readonly from: string;
@@ -160,6 +172,7 @@ export class BrevoEmailService extends EmailService {
  */
 @Injectable()
 export class SmtpEmailService extends EmailService {
+  readonly entregaReal = true;
   private readonly logger = new Logger(SmtpEmailService.name);
   private readonly transporter: Transporter;
 

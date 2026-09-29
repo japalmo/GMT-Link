@@ -36,6 +36,13 @@ interface ChecklistFillBodyProps {
   answers: Record<string, unknown>;
   setAnswer: (key: string, value: unknown) => void;
   submitting: boolean;
+  /**
+   * Id de la sección a dibujar, cuando el contenedor maneja los pasos por su
+   * cuenta (el asistente del formulario público). En ese modo se dibujan SOLO
+   * los ítems de esa sección: sin cabecera, sin barra de avance y sin botones,
+   * porque tener dos navegaciones en la misma pantalla confunde a cualquiera.
+   */
+  seccionExterna?: string;
 }
 
 /** Una página del formulario: una sección (o la "General" de ítems sin sección). */
@@ -92,11 +99,29 @@ function describeIssue(issue: ItemIssue, verb: 'continuar' | 'enviar'): string {
     : `Completa "${issue.item.label}" antes de ${verb}.`;
 }
 
+/**
+ * Primer problema que impide continuar en un conjunto de ítems, como texto, o
+ * `null` si está todo bien.
+ *
+ * Se exporta para que el asistente del formulario público aplique EXACTAMENTE
+ * la misma validación por paso que el formulario de la plataforma. Duplicarla
+ * significaría que una de las dos se quede atrás.
+ */
+export function problemaDeSeccion(
+  items: ChecklistTemplateItem[],
+  answers: Record<string, unknown>,
+  verbo: 'continuar' | 'enviar' = 'continuar',
+): string | null {
+  const issue = findItemIssue(items, answers);
+  return issue ? describeIssue(issue, verbo) : null;
+}
+
 export function ChecklistFillBody({
   template,
   answers,
   setAnswer,
   submitting,
+  seccionExterna,
 }: ChecklistFillBodyProps) {
   // Ítems TEXTO companion (referidos por el `obsItemId` de un ESTADO): no se
   // muestran sueltos, su valor se captura en el textarea de observación del ESTADO.
@@ -331,6 +356,12 @@ export function ChecklistFillBody({
       ))}
     </div>
   );
+
+  // ---- Una sola sección, sin controles: los pasos los lleva el contenedor. ----
+  if (seccionExterna !== undefined) {
+    const deLaSeccion = visibleItems.filter((it) => it.section === seccionExterna);
+    return <>{renderItems(deLaSeccion)}</>;
+  }
 
   // ---- Layout de una sola página (sin secciones): idéntico al clásico. ----
   if (!isPaginated) {

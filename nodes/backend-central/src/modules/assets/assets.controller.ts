@@ -593,6 +593,33 @@ export class AssetsController {
    * El límite por IP es bajo a propósito: un checklist es un acto deliberado de
    * varios minutos, nadie manda seis en un minuto de forma legítima.
    */
+  /**
+   * Plantilla del checklist por token público (sin sesión): las preguntas que
+   * va a ver quien llegó desde el QR de la plaquita.
+   */
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Get('public/:token/checklist/template')
+  getPublicChecklistTemplate(@Param('token') token: string): Promise<ChecklistTemplateView> {
+    return this.assets.getPublicChecklistTemplate(token);
+  }
+
+  /**
+   * PDF del checklist recién enviado, sin sesión. Es la copia de quien lo
+   * firmó: sin esto se queda sin nada cuando el correo falla.
+   */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Get('public/:token/checklist/:submissionId/pdf')
+  async getPublicChecklistPdf(
+    @Param('token') token: string,
+    @Param('submissionId') submissionId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const pdf = await this.assets.getPublicChecklistPdf(token, submissionId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="checklist-${submissionId}.pdf"`);
+    res.send(Buffer.from(pdf));
+  }
+
   @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @Post('public/:token/checklist')
   submitPublicChecklist(

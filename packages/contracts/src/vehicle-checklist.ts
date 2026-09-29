@@ -75,7 +75,15 @@ function estado(
       section: seccion,
       config: {
         options: [...opciones],
-        failOptions: [...ESTADO_FALLA],
+        // Solo las fallas que EXISTEN entre las opciones de este ítem. El
+        // esquema Zod exige que `failOptions` sea subconjunto de `options`, y
+        // poner "Malo" fijo invalidaba la plantilla ENTERA por culpa del ítem
+        // de AdBlue, que se mide por nivel (Lleno / Medio / 1/4 / N/A) y no
+        // tiene ningún "Malo". Una plantilla inválida no da error: el servicio
+        // la atrapa y devuelve CERO ítems, así que el formulario sale en
+        // blanco. Un nivel de AdBlue queda entonces sin falla asociada, que es
+        // lo que ya ocurría en producción.
+        failOptions: ESTADO_FALLA.filter((f) => opciones.includes(f)),
         requireObs: false,
         obsItemId: obsId,
       },
