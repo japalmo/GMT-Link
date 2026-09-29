@@ -1,5 +1,13 @@
 @import 'tailwindcss';
 
+/*
+ * `dark:` sigue a la clase `.dark` en <html>, igual que los tokens del tema.
+ * Sin esto Tailwind v4 lo ata al modo oscuro del SISTEMA: con Windows en oscuro
+ * la app seguía clara pero los textos `dark:` salían claros sobre fondo claro
+ * (los avisos ámbar quedaban ilegibles).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Tipografía base — Inter Variable (self-hosted vía @fontsource-variable). */
 @import '@fontsource-variable/inter';
 

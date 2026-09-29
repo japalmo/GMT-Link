@@ -269,8 +269,8 @@ function CeldaReal({
               sin detalle por actividad
             </span>
           ) : (
-            <span className="tabular-nums" title="Lo que sale de las actividades">
-              calc. {formatoPct(aPorcentaje(calculado))} · {formatoDelta((override - calculado) * 100)}
+            <span className="whitespace-nowrap tabular-nums" title="Lo que sale de las actividades">
+              calc. {formatoPct(aPorcentaje(calculado))} ({formatoDelta((override - calculado) * 100)})
             </span>
           )}
           {/* Sin calculado no hay a qué volver: quitarla dejaría la semana vacía y
@@ -363,7 +363,10 @@ function Corte({
 }): ReactNode {
   const [fecha, setFecha] = useState(datos.cutoffDate ?? '');
   const [plan, setPlan] = useState(
-    datos.planAtCutoff === null ? '' : String(Math.round(datos.planAtCutoff * 10000) / 100),
+    // Con coma decimal, como el resto de la pantalla; al guardar se acepta ambas.
+    datos.planAtCutoff === null
+      ? ''
+      : String(Math.round(datos.planAtCutoff * 10000) / 100).replace('.', ','),
   );
   const [guardando, setGuardando] = useState(false);
 

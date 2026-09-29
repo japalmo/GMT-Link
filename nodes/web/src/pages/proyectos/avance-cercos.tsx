@@ -29,7 +29,7 @@ export function AvanceCercos({
   const cargar = useCallback(async () => {
     try {
       const d = await getObraDashboard(projectId);
-      setCercos(d.map.points);
+      setCercos([...d.map.points].sort(porCodigo));
       setSinUbicar(d.map.unlocated);
       setError(null);
     } catch (e) {
@@ -208,4 +208,25 @@ function FilaCerco({
       )}
     </tr>
   );
+}
+
+/**
+ * Orden de cerco: por tipo y luego por NÚMERO romano. Ordenado como texto
+ * quedaba A-IV, A-IX, A-V, que no es como se recorre la obra.
+ */
+function porCodigo(x: ObraMapPoint, y: ObraMapPoint): number {
+  const [tx = '', rx = ''] = x.code.split('-');
+  const [ty = '', ry = ''] = y.code.split('-');
+  return tx.localeCompare(ty, 'es') || romano(rx) - romano(ry) || x.code.localeCompare(y.code, 'es');
+}
+
+function romano(texto: string): number {
+  const valor: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100 };
+  let total = 0;
+  for (let i = 0; i < texto.length; i += 1) {
+    const actual = valor[texto[i] ?? ''] ?? 0;
+    const siguiente = valor[texto[i + 1] ?? ''] ?? 0;
+    total += actual < siguiente ? -actual : actual;
+  }
+  return total;
 }
