@@ -1,3 +1,4 @@
+import type { OrigenChecklist } from './checklist-origen.util';
 import { DocumentStatus } from '@prisma/client';
 import type { AssetType as AssetTypeValue } from '@gmt-platform/contracts';
 
@@ -125,4 +126,11 @@ export interface ChecklistSubmissionView {
    * plataforma y la pantalla no debe presentarlo como si lo fuera.
    */
   externalAuthor?: string | null;
+  /**
+   * Derivado de `userId` y `externalSource`: GMT_LINK (con sesión), PLANILLA
+   * (importado) o SIN_VERIFICAR (desde el QR sin cuenta).
+   */
+  origen: OrigenChecklist;
+  /** Nombre a mostrar; `null` si no hay ninguno. */
+  autor: string | null;
 }

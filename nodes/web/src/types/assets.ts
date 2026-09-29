@@ -223,6 +223,13 @@ export interface ChecklistSubmissionView {
    * afirmar un envío que no ocurrió.
    */
   correoEnviado?: boolean;
+  /**
+   * De dónde viene: GMT_LINK (con sesión), PLANILLA (importado) o
+   * SIN_VERIFICAR (desde el QR sin cuenta: el nombre es el que escribió).
+   */
+  origen: 'GMT_LINK' | 'PLANILLA' | 'SIN_VERIFICAR';
+  /** Nombre a mostrar; `null` si no hay ninguno. */
+  autor: string | null;
 }
 
 /**

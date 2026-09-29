@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { autorDelEnvio, origenDelEnvio } from './checklist-origen.util';
 import { ZodError } from 'zod';
 import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus, SignatureContextType, SignatureMethod, AccreditationStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -2352,6 +2353,12 @@ export class AssetsService {
       // Nombre declarado por quien lo llenó sin cuenta. Lo necesita el
       // historial para poder nombrarlo y marcarlo como no verificado.
       declaredName: row.declaredName,
+      origen: origenDelEnvio(row),
+      autor: autorDelEnvio({
+        user: row.user,
+        declaredName: row.declaredName,
+        externalAuthor: row.externalAuthor,
+      }),
     };
   }
 

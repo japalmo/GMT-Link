@@ -122,8 +122,10 @@ function FilaChecklist({
         )}
 
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-          {sub.user ? `${sub.user.firstName} ${sub.user.lastName}` : 'Conductor desconocido'}
+          {sub.autor ?? 'Conductor desconocido'}
         </span>
+
+        <MarcaOrigen origen={sub.origen} />
 
         <span className="shrink-0 [font-variant-numeric:tabular-nums] text-muted-foreground">
           {km !== null ? `${fmt.format(km)} km` : 'sin km'}
@@ -182,6 +184,11 @@ function DetalleChecklist({
 
   return (
     <div className="border-t border-border/40 px-3 pb-3 pt-2">
+      {/* En el celular el `title` de la insignia no se ve: el significado se
+          repite acá, al abrir el registro. */}
+      {sub.origen !== 'GMT_LINK' && (
+        <p className="mb-2 text-[11px] text-muted-foreground">{ORIGENES[sub.origen].ayuda}</p>
+      )}
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         {sub.answers.map((ans, idx) => {
           if (obsRedundantes.has(ans.itemId)) return null;
@@ -264,3 +271,35 @@ function DetalleChecklist({
     </div>
   );
 }
+
+/**
+ * Cuánto vale el nombre del historial. Un checklist llenado desde el QR sin
+ * cuenta lleva el nombre que la persona escribió; uno importado, el que decía
+ * la planilla. Ninguno es una identidad verificada, y el historial es la
+ * evidencia de que el vehículo se revisó: no pueden verse igual que uno con
+ * sesión.
+ */
+const ORIGENES: Record<Exclude<ChecklistSubmissionView['origen'], 'GMT_LINK'>, { texto: string; ayuda: string; clase: string }> = {
+  SIN_VERIFICAR: {
+    texto: 'Sin verificar',
+    ayuda: 'Lo llenó alguien sin cuenta en GMT Link. El nombre es el que escribió.',
+    clase: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  },
+  PLANILLA: {
+    texto: 'Planilla',
+    ayuda: 'Importado de la planilla anterior. El nombre es el que registraba la planilla.',
+    clase: 'border-border bg-muted text-muted-foreground',
+  },
+};
+
+function MarcaOrigen({ origen }: { origen: ChecklistSubmissionView['origen'] }): ReactNode {
+  if (origen === 'GMT_LINK') return null;
+  const o = ORIGENES[origen];
+  return (
+    <Badge title={o.ayuda} className={`shrink-0 py-0 text-[10px] ${o.clase}`}>
+      {o.texto}
+      <span className="sr-only">: {o.ayuda}</span>
+    </Badge>
+  );
+}
+
