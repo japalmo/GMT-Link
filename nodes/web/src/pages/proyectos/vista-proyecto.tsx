@@ -12,6 +12,7 @@ import {
   Layers,
   ListChecks,
   LayoutDashboard,
+  Table2,
   Pencil,
   Plus,
   Trash2,
@@ -89,6 +90,7 @@ import { openProjectDocumentFileInNewTab } from '@/components/documents/project-
 import { ActividadesTab } from './actividades-tab';
 import { DashboardTab } from './dashboard-tab';
 import { ObraDashboardTab } from './obra-dashboard-tab';
+import { AvanceTab } from './avance-tab';
 import { ListaTrabajadores } from './cuadrilla';
 import type {
   ProjectType,
@@ -191,7 +193,7 @@ function newVariableRow(): VariableRow {
    Página Capa 4 — Vista de proyecto
    ========================================================================== */
 
-type TabKey = 'dashboard' | 'trabajadores' | 'documentacion' | 'fases' | 'actividades';
+type TabKey = 'dashboard' | 'avance' | 'trabajadores' | 'documentacion' | 'fases' | 'actividades';
 
 export default function VistaProyectoPage(): ReactNode {
   const { projectId } = useParams<{ projectId: string }>();
@@ -304,6 +306,7 @@ export default function VistaProyectoPage(): ReactNode {
 
   const allTabItems: TabItem<TabKey>[] = [
     { value: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { value: 'avance', label: 'Avance', icon: Table2 },
     { value: 'trabajadores', label: 'Trabajadores', icon: Users },
     { value: 'documentacion', label: 'Documentación', icon: FileText },
     {
@@ -314,7 +317,10 @@ export default function VistaProyectoPage(): ReactNode {
     { value: 'actividades', label: 'Actividades', icon: ListChecks },
   ];
   const tabItems = allTabItems.filter(
-    (t) => t.value !== 'trabajadores' || canManageTeam,
+    (t) =>
+      (t.value !== 'trabajadores' || canManageTeam) &&
+      // El control por HH existe solo en obras civiles.
+      (t.value !== 'avance' || projectType === 'OBRAS_CIVILES'),
   );
 
   return (
@@ -431,6 +437,9 @@ export default function VistaProyectoPage(): ReactNode {
           ) : (
             <DashboardTab projectId={project.id} />
           ))}
+        {tab === 'avance' && projectType === 'OBRAS_CIVILES' && (
+          <AvanceTab projectId={project.id} />
+        )}
         {tab === 'trabajadores' && canManageTeam && (
           <TrabajadoresTab projectId={project.id} />
         )}

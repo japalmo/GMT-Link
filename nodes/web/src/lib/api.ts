@@ -39,7 +39,7 @@ import type {
   UploadDocumentFields,
 } from '@/types/documents';
 import type { DashboardLayoutItem, DashboardView } from '@/types/dashboard';
-import type { ObraDashboard, ProjectDashboard } from '@gmt-platform/contracts';
+import type { AvanceObraEditable, ObraDashboard, ProjectDashboard } from '@gmt-platform/contracts';
 import type {
   CreateOvertimeInput,
   CreateReimbursementInput,
@@ -3213,6 +3213,78 @@ export function getProjectDashboard(id: string): Promise<ProjectDashboard> {
  */
 export function getObraDashboard(id: string): Promise<ObraDashboard> {
   return request<ObraDashboard>(`/projects/${encodeURIComponent(id)}/obra-dashboard`);
+}
+
+// ── Control de avance editable (pestaña "Avance") ──
+//
+// Los porcentajes viajan en FRACCIÓN 0-1, como en la base. La pantalla muestra
+// 0-100 y convierte en un solo lugar: mezclar escalas en el transporte es la
+// forma más fácil de multiplicar por cien un informe firmado.
+
+/** `GET /projects/:id/avance` — datos crudos del control, y si se pueden editar. */
+export function getAvanceObra(id: string): Promise<AvanceObraEditable> {
+  return request<AvanceObraEditable>(`/projects/${encodeURIComponent(id)}/avance`);
+}
+
+/** Acumulado de UNA actividad en UNA semana. `semana` 0 = S-1. */
+export function editarAvanceActividad(
+  id: string,
+  body: { wbsId: number; semana: number; valor: number },
+): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/projects/${encodeURIComponent(id)}/avance/actividad`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Plan o sobreescritura del real de UNA semana. Mandar `null` en una
+ * sobreescritura la quita y vuelve al calculado.
+ */
+export function editarSemanaAvance(
+  id: string,
+  body: {
+    code: string;
+    hhPlan?: number;
+    parPlan?: number;
+    acmPlan?: number;
+    parRealOverride?: number | null;
+    acmRealOverride?: number | null;
+  },
+): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/projects/${encodeURIComponent(id)}/avance/semana`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Fecha de corte del informe vigente y el plan a esa fecha (0-1). */
+export function editarCorteAvance(
+  id: string,
+  body: { cutoffDate: string; planAtCutoff?: number | null },
+): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/projects/${encodeURIComponent(id)}/avance/corte`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Foto de terreno de un cerco. Reemplaza la vista satelital en el tablero. */
+export function subirFotoCerco(id: string, taskId: string, foto: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('foto', foto);
+  return uploadRequest<{ url: string }>(
+    `/projects/${encodeURIComponent(id)}/cercos/${encodeURIComponent(taskId)}/foto`,
+    formData,
+  );
+}
+
+/** Quita la foto más nueva del cerco. Sin fotos, el tablero vuelve a la satelital. */
+export function quitarFotoCerco(id: string, taskId: string): Promise<{ quedan: number }> {
+  return request<{ quedan: number }>(
+    `/projects/${encodeURIComponent(id)}/cercos/${encodeURIComponent(taskId)}/foto`,
+    { method: 'DELETE' },
+  );
 }
 
 /**

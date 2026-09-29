@@ -42,6 +42,11 @@ export interface CeldaEditableProps {
   /** Coordenadas en la tabla, para moverse con el teclado. */
   fila: number;
   columna: number;
+  /**
+   * Tabla a la que pertenece. Con dos tablas en la misma pantalla, sin esto
+   * Enter en una podía saltar a la celda de igual coordenada de la otra.
+   */
+  grupo?: string;
   /** Pegado de varias filas: el contenedor decide a qué celda va cada valor. */
   onPegarColumna?: (desdeFila: number, columna: number, valores: number[]) => void;
   soloLectura?: boolean;
@@ -58,6 +63,7 @@ export function CeldaEditable({
   onGuardar,
   fila,
   columna,
+  grupo = 'celdas',
   onPegarColumna,
   soloLectura = false,
   marcador = '—',
@@ -97,7 +103,7 @@ export function CeldaEditable({
    */
   function mover(dFila: number, dColumna: number): void {
     const destino = document.querySelector<HTMLInputElement>(
-      `[data-fila="${fila + dFila}"][data-columna="${columna + dColumna}"]`,
+      `[data-grupo="${grupo}"][data-fila="${fila + dFila}"][data-columna="${columna + dColumna}"]`,
     );
     if (destino) {
       destino.focus();
@@ -226,6 +232,7 @@ export function CeldaEditable({
     <span className="relative block">
       <input
         ref={ref}
+        data-grupo={grupo}
         data-fila={fila}
         data-columna={columna}
         aria-label={etiqueta}
@@ -277,8 +284,11 @@ export function CeldaEditable({
   );
 }
 
-/** Número a texto para el campo. Un decimal, que es como se informa. */
-function aTexto(valor: number | null): string {
+/**
+ * Número a texto para el campo. Un decimal y coma decimal, que es como se
+ * informa; al guardar se acepta tanto coma como punto.
+ */
+export function aTexto(valor: number | null): string {
   if (valor === null) return '';
-  return String(Math.round(valor * 10) / 10);
+  return String(Math.round(valor * 10) / 10).replace('.', ',');
 }
