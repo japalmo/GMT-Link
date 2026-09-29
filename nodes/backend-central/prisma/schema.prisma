@@ -885,13 +885,6 @@ model Task {
   // porque la mayoría de las actividades no son un punto en el terreno.
   latitude        Float?
   longitude       Float?
-  // Foto del sitio, clave del storage. `null` = el tablero dibuja la vista
-  // satelital, que es lo que hace hoy para todos. Va en el CERCO (la tarea
-  // padre) y no en sus etapas: retrata el lugar, no un montaje puntual.
-  //
-  // Existe porque sobre el desierto de Mantos Blancos la satelital tiene poca
-  // resolución y una foto del terreno dice mucho más de cómo va el trabajo.
-  photoKey        String?
   progress        TaskProgress[]    @relation("TaskProgressEntries")
   // Cuadrilla que va a terreno. Distinta de `assignedTo`, que es el responsable
   // con cuenta: en una etapa de cerco el responsable puede ser el jefe de

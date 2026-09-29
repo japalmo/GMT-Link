@@ -148,31 +148,30 @@ Ver el avance sigue con `project:read`.
 
 ### 3.6 Tabla de cercos, con foto de terreno
 
-El tablero dibuja cada cerco sobre la imagen satelital de Esri, armada con
-teselas en el navegador: no hay ninguna imagen guardada. Sobre el desierto de
-Mantos Blancos esa vista tiene poca resolución y una foto del sitio dice mucho
-más de cómo va el trabajo.
+**La foto ya está construida y nunca se usó.** El tablero busca fotos colgadas
+de la tarea (`ProjectDocument` con `taskId`), las asocia al CERCO —la clave es
+`parentId ?? id`— y prefiere la foto por sobre la vista satelital. Incluso elige
+la que corresponde a la semana que se esté mirando. En producción hay **cero**
+fotos cargadas.
+
+Lo que falta no es dónde guardarlas: es una forma cómoda de subirlas. Hoy habría
+que ir al flujo de documentos del proyecto y acertarle a la tarea correcta.
 
 Tercera tabla en la pestaña: **Cercos**. Una fila por cerco (55 ubicados de los
-~63 del programa), con su nombre, ubicación, avance y la foto.
+~63 del programa), con nombre, ubicación, avance y foto.
 
-- Subir una foto la muestra en el tablero **en lugar de** la satelital.
-- Sin foto, el tablero sigue mostrando la satelital exactamente como hoy. Nada
-  cambia para un cerco que nadie fotografió.
-- La foto se puede reemplazar o quitar; quitarla vuelve a la satelital.
+- Subir una foto crea un `ProjectDocument` con `taskId` = el cerco. El tablero
+  la muestra en lugar de la satelital sin ningún cambio en su código.
+- Sin foto, el tablero sigue mostrando la satelital exactamente como hoy.
+- Se puede reemplazar (sube una nueva, que por fecha gana) o quitar.
 
-La foto cuelga del **cerco** (la tarea padre), no de sus etapas: es del sitio,
-no de un montaje puntual.
+**No se agrega ninguna columna nueva.** Un `Task.photoKey` habría sido una
+segunda fuente para el mismo dato, que es justo lo que este diseño existe para
+evitar (§1.2). Se llegó a agregar en la tarea 2 del plan y se revirtió al
+descubrirlo.
 
-```prisma
-/// Foto del sitio, clave del storage. `null` = el tablero usa la satelital.
-/// Va en el cerco (tarea padre) y no en sus etapas: retrata el lugar.
-photoKey String?
-```
-
-Se procesa como las fotos de incidentes de HSE: se achica en el navegador antes
-de subir (una foto de celular pesa varios MB y en faena la señal es mala) y se
-guarda con `StorageService`.
+La foto se achica en el navegador antes de subir, como en el reporte de
+incidentes: una foto de celular pesa varios MB y en faena la señal es mala.
 
 ---
 

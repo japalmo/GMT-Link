@@ -201,14 +201,11 @@ git commit -m "feat(obra): avance semanal ponderado por HH desde las actividades
   acmRealOverride Float?
 ```
 
-- [ ] **Paso 2: Foto del cerco en `Task`**
+- [ ] **Paso 2: NO agregar columna de foto**
 
-```prisma
-  /// Foto del sitio, clave del storage. `null` = el tablero usa la vista
-  /// satelital. Va en el cerco (tarea padre), no en sus etapas: retrata el
-  /// lugar, no un montaje puntual.
-  photoKey String?
-```
+Las fotos de los cercos ya existen como `ProjectDocument` con `taskId`, y el
+tablero ya las prefiere por sobre la satelital. Agregar `Task.photoKey` sería
+una segunda fuente para el mismo dato. Se llegó a agregar y se revirtió.
 
 - [ ] **Paso 3: Generar la migración**
 
@@ -305,8 +302,8 @@ Los dos exigen `project:progress:manage` sobre el proyecto.
 ```
 PATCH /projects/:id/avance/actividad
 PATCH /projects/:id/avance/semana
-PUT   /projects/:id/cercos/:taskId/foto     (multipart)
-DELETE /projects/:id/cercos/:taskId/foto
+POST   /projects/:id/cercos/:taskId/foto    (multipart → crea ProjectDocument)
+DELETE /projects/:id/cercos/:taskId/foto    (borra el documento de foto)
 ```
 
 - [ ] **Paso 4: Pruebas del servicio**
