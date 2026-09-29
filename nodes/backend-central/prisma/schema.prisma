@@ -341,6 +341,19 @@ model ProjectWeek {
   acmPlan   Float
   acmReal   Float?
 
+  // ── Sobreescritura a mano del real ──
+  //
+  // `parReal`/`acmReal` son el valor EFECTIVO: el calculado desde las
+  // actividades, o esto cuando existe. Se guarda aparte a propósito, para que
+  // la pantalla pueda mostrar los dos y su diferencia, y para poder volver al
+  // calculado en un clic.
+  //
+  // `null` = manda el calculado. Tener dos fuentes EN SILENCIO fue lo que dejó
+  // el desglose por fases congelado dos semanas sin que nadie lo notara: acá la
+  // segunda fuente existe, pero se ve.
+  parRealOverride Float?
+  acmRealOverride Float?
+
   @@unique([projectId, code])
   @@index([projectId, index])
   @@map("project_weeks")
@@ -872,6 +885,13 @@ model Task {
   // porque la mayoría de las actividades no son un punto en el terreno.
   latitude        Float?
   longitude       Float?
+  // Foto del sitio, clave del storage. `null` = el tablero dibuja la vista
+  // satelital, que es lo que hace hoy para todos. Va en el CERCO (la tarea
+  // padre) y no en sus etapas: retrata el lugar, no un montaje puntual.
+  //
+  // Existe porque sobre el desierto de Mantos Blancos la satelital tiene poca
+  // resolución y una foto del terreno dice mucho más de cómo va el trabajo.
+  photoKey        String?
   progress        TaskProgress[]    @relation("TaskProgressEntries")
   // Cuadrilla que va a terreno. Distinta de `assignedTo`, que es el responsable
   // con cuenta: en una etapa de cerco el responsable puede ser el jefe de
