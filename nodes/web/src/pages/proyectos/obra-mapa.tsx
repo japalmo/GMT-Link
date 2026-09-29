@@ -179,7 +179,12 @@ export function ObraMapa({
   mapa: ObraMap;
   filtro?: FiltroMapa;
   /** Qué semana se está mirando, para rotular la ficha y elegir la foto. */
-  corte?: { etiqueta: string; hasta: string };
+  /**
+   * `hasta` limita las fotos a las tomadas hasta esa fecha, para que mirar una
+   * semana PASADA muestre la foto de entonces. `null` = sin límite: en el
+   * último corte se muestra la foto más nueva, aunque sea posterior al cierre.
+   */
+  corte?: { etiqueta: string; hasta: string | null };
   /**
    * Entrega el control del zoom al tablero. Los botones propios de Leaflet no
    * combinan con el vidrio, así que los dibuja el tablero y llama acá.
@@ -269,7 +274,7 @@ export function ObraMapa({
               corte?.etiqueta ?? 'Estado a hoy',
               // La foto que correspondía a esa fecha: la más nueva anterior al
               // cierre de la semana. Antes de la primera, ninguna.
-              p.photos.find((f) => !corte || f.date <= corte.hasta) ?? null,
+              p.photos.find((f) => !corte?.hasta || f.date <= corte.hasta) ?? null,
             ),
             { minWidth: ANCHO_VISTA, maxWidth: ANCHO_VISTA + 24 },
           )

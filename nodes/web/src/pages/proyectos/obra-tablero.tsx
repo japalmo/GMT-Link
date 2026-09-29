@@ -271,8 +271,17 @@ export function ObraTablero({
     () => ({ points: puntos, unlocated: data.map.unlocated }),
     [puntos, data.map.unlocated],
   );
+  // En el último corte (y en las proyecciones) la foto no se limita al cierre
+  // de la semana: una foto subida DESPUÉS del cierre es la evidencia más nueva,
+  // y con el límite quedaba escondida hasta que se cerrara la semana siguiente.
   const corteMapa = useMemo(
-    () => (corte ? { etiqueta: corte.etiqueta, hasta: corte.cierre } : undefined),
+    () =>
+      corte
+        ? {
+            etiqueta: corte.etiqueta,
+            hasta: corte.semana < corte.control.lastClosed ? corte.cierre : null,
+          }
+        : undefined,
     [corte],
   );
 
