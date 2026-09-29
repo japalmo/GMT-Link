@@ -411,7 +411,7 @@ Con foto se muestra la foto; sin foto, la vista satelital exactamente como hoy.
 El desglose por fases está congelado en S-1 porque `realByWeek` solo tiene esa
 semana. Con las tablas construidas, el detalle de S-2 y S-3 lo carga Felipe.
 
-- [ ] **Paso 0 (OBLIGATORIO, antes del primer despliegue): fijar S-1..S-3 como
+- [x] **Paso 0 (OBLIGATORIO, antes del primer despliegue): fijar S-1..S-3 como
       sobreescritura**
 
 En producción las 38 actividades tienen dato SOLO de S-1; S-2 (19,56%) y S-3
@@ -419,11 +419,18 @@ En producción las 38 actividades tienen dato SOLO de S-1; S-2 (19,56%) y S-3
 recalcula todas las semanas desde las actividades: sin este paso S-2 y S-3
 pasarían a valer lo de S-1 y el tablero caería de 23,7% a ~13%.
 
-Script idempotente, con respaldo, que copia `parReal`/`acmReal` actuales a
-`parRealOverride`/`acmRealOverride` para las semanas con real (index ≥ 1).
-Correr DESPUÉS de `migrate deploy` (las columnas deben existir). Cuando Felipe
-cargue el detalle de una semana y el calculado coincida, se quita la
-sobreescritura desde la tabla (el servidor rechaza quitarla mientras no haya
+**Resuelto como migración de datos** (`20260929190000_congelar_real_existente`),
+no como script aparte: corre sola en el `migrate deploy` del despliegue, sin
+ventana en la que una edición pueda hundir el tablero. Copia `parReal`/`acmReal`
+a las columnas de sobreescritura en toda semana con real (index ≥ 1), solo donde
+no haya una previa (idempotente).
+
+Verificado en PostgreSQL local con copia de las semanas y actividades de prod:
+tras la migración y una edición real vía `ProjectsService`, el encabezado sigue
+en 23,7% / 20,7% / +3,0; sin la migración, la misma edición deja S-3 vacía.
+
+Cuando Felipe cargue el detalle de una semana y el calculado coincida, se quita
+la sobreescritura desde la tabla (el servidor lo rechaza mientras no haya
 detalle por actividad).
 
 - [ ] **Paso 1: Pedirle a Felipe el detalle por actividad de S-2 y S-3**
