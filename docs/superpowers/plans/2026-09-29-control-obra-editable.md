@@ -370,6 +370,22 @@ informe.
 
 - [ ] **Paso 6: Commit**
 
+**Hallazgos al construirla (ya resueltos en la misma tarea):**
+
+- Una actividad sin dato en una semana contaba como 0. Al empezar a cargar S-4
+  el total se habría desplomado hasta teclear las 38. Ahora arrastra su último
+  acumulado (`acumuladoAl`), y el desglose por fase usa la MISMA regla y llega
+  hasta la última semana informada del proyecto.
+- El corte (`cutoffDate`, `planAtCutoff`) no era editable: al cargar S-4 el
+  encabezado habría comparado el real nuevo contra el plan viejo. Se agregó
+  `PATCH :id/avance/corte` y un aviso cuando hay real más allá del corte.
+- `GET :id/avance` para leer las tablas; `puedeEditar` sale de la misma
+  relación FGA que el guard de los PATCH.
+- `quitarFotoCerco` podía borrar un PDF colgado del cerco: ahora filtra por
+  imagen con el mismo criterio que el tablero (`ES_FOTO`).
+- La foto del tablero se pasaba como CLAVE de storage (imagen rota): ahora se
+  firma al leer. Esto adelanta el paso 1 de la tarea 7.
+
 ---
 
 ## Tarea 7: La foto en el tablero
@@ -394,6 +410,21 @@ Con foto se muestra la foto; sin foto, la vista satelital exactamente como hoy.
 
 El desglose por fases está congelado en S-1 porque `realByWeek` solo tiene esa
 semana. Con las tablas construidas, el detalle de S-2 y S-3 lo carga Felipe.
+
+- [ ] **Paso 0 (OBLIGATORIO, antes del primer despliegue): fijar S-1..S-3 como
+      sobreescritura**
+
+En producción las 38 actividades tienen dato SOLO de S-1; S-2 (19,56%) y S-3
+(23,72%) vienen del informe firmado, no de las actividades. La primera edición
+recalcula todas las semanas desde las actividades: sin este paso S-2 y S-3
+pasarían a valer lo de S-1 y el tablero caería de 23,7% a ~13%.
+
+Script idempotente, con respaldo, que copia `parReal`/`acmReal` actuales a
+`parRealOverride`/`acmRealOverride` para las semanas con real (index ≥ 1).
+Correr DESPUÉS de `migrate deploy` (las columnas deben existir). Cuando Felipe
+cargue el detalle de una semana y el calculado coincida, se quita la
+sobreescritura desde la tabla (el servidor rechaza quitarla mientras no haya
+detalle por actividad).
 
 - [ ] **Paso 1: Pedirle a Felipe el detalle por actividad de S-2 y S-3**
 

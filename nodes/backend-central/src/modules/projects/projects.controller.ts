@@ -24,7 +24,7 @@ import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { PermissionService } from '../../authz/permission.service';
 import { ProjectsService } from './projects.service';
-import { EditarAvanceActividadDto, EditarSemanaDto } from './dto/avance.dto';
+import { EditarAvanceActividadDto, EditarCorteDto, EditarSemanaDto } from './dto/avance.dto';
 import {
   CreateAssignmentDto,
   CreateProjectDto,
@@ -290,6 +290,34 @@ export class ProjectsController {
   // Se edita CELDA por celda y no la tabla entera: dos personas cargando
   // semanas distintas no se pisan, y un guardado parcial no reescribe valores
   // que el otro acaba de cambiar.
+
+  /**
+   * Los datos crudos del control para la pestaña "Avance". Verlo pide lo mismo
+   * que ver el proyecto; `puedeEditar` le dice a la pantalla si las celdas se
+   * abren, resuelto contra ESTE proyecto (el permiso es por proyecto, así que un
+   * chequeo global en el front mentiría).
+   */
+  @Get(':id/avance')
+  @RequirePermission('can_view', { type: 'project', param: 'id' })
+  getAvance(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+  ) {
+    const userId = this.requireUserId(authUser);
+    return this.projects.getAvanceEditable(id, userId);
+  }
+
+  @Patch(':id/avance/corte')
+  @RequirePermission('can_manage_progress', { type: 'project', param: 'id' })
+  async editarCorte(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: EditarCorteDto,
+  ): Promise<{ ok: true }> {
+    this.requireUserId(authUser);
+    await this.projects.editarCorte(id, dto);
+    return { ok: true };
+  }
 
   @Patch(':id/avance/actividad')
   @RequirePermission('can_manage_progress', { type: 'project', param: 'id' })

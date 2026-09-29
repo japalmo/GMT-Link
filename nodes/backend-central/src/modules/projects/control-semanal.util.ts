@@ -1,4 +1,5 @@
 import type { ObraControl, ObraControlPhase, ObraWeek } from '@gmt-platform/contracts';
+import { acumuladoAl } from './avance-ponderado.util';
 
 /**
  * Control de avance por HH: el informe semanal que GMT le entrega al cliente
@@ -74,6 +75,11 @@ function posicionFase(nombre: string): number {
  * de cada actividad, que ya viene acumulado y en fracción.
  */
 function fasesDe(actividades: FilaActividad[], semanas: number): ObraControlPhase[] {
+  // Hasta dónde hay informe en el PROYECTO, no en cada fase: con la misma regla
+  // que el total (`avanceSemanal`), para que el desglose y el total no puedan
+  // contar semanas distintas.
+  const cortes = Math.max(0, ...actividades.map((a) => a.realByWeek.length));
+
   const porFase = new Map<string, FilaActividad[]>();
   for (const a of actividades) {
     const previo = porFase.get(a.phase);
@@ -97,13 +103,12 @@ function fasesDe(actividades: FilaActividad[], semanas: number): ObraControlPhas
       plan.push(porcentaje(acumuladas / hh));
     }
 
-    // El real llega hasta donde llegue el informe más corto: más allá de eso
-    // no hay dato, y rellenar con ceros diría "no avanzó" en vez de "no se sabe".
-    const cortes = Math.min(...grupo.map((a) => a.realByWeek.length));
+    // El real llega hasta la última semana informada del proyecto. Una
+    // actividad sin dato de esa semana vale su último acumulado.
     const real: number[] = [0];
     for (let w = 0; w < cortes; w += 1) {
       let hecho = 0;
-      for (const a of grupo) hecho += a.hh * (a.realByWeek[w] ?? 0);
+      for (const a of grupo) hecho += a.hh * acumuladoAl(a.realByWeek, w);
       real.push(porcentaje(hecho / hh));
     }
 

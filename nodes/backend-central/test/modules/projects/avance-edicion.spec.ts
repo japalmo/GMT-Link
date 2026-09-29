@@ -21,6 +21,7 @@ interface PrismaFalso {
   projectWeek: { findMany: Mock; findFirst: Mock; update: Mock };
   projectDocument: { findMany: Mock; create: Mock; delete: Mock };
   task: { findFirst: Mock };
+  project: { findUnique: Mock };
   $transaction: Mock;
 }
 
@@ -44,6 +45,7 @@ function semanas(overrides: Record<string, { par?: number | null; acm?: number |
 describe('ProjectsService · edición del avance', () => {
   let prisma: PrismaFalso;
   let service: ProjectsService;
+  let fga: { check: Mock };
 
   beforeEach(() => {
     prisma = {
@@ -59,13 +61,15 @@ describe('ProjectsService · edición del avance', () => {
       },
       projectDocument: { findMany: vi.fn(), create: vi.fn(), delete: vi.fn() },
       task: { findFirst: vi.fn() },
+      project: { findUnique: vi.fn() },
       // Devuelve las promesas tal cual: lo que se inspecciona son las llamadas
       // a `update`, no el resultado.
       $transaction: vi.fn((ops: unknown) => Promise.all(ops as Promise<unknown>[])),
     };
+    fga = { check: vi.fn(() => Promise.resolve(true)) };
     service = new ProjectsService(
       prisma as unknown as PrismaService,
-      {} as unknown as FgaService,
+      fga as unknown as FgaService,
       {} as unknown as ClimaService,
       {} as unknown as StorageService,
     );
@@ -120,7 +124,8 @@ describe('ProjectsService · edición del avance', () => {
   });
 
   it('quitar la sobreescritura devuelve el calculado', async () => {
-    prisma.projectWeek.findFirst.mockResolvedValueOnce({ id: 'w-2' });
+    // S-2 tiene detalle por actividad (las dos llegan a S-2): hay calculado.
+    prisma.projectWeek.findFirst.mockResolvedValueOnce({ id: 'w-2', index: 2 });
     prisma.projectWeek.findMany.mockResolvedValue(semanas());
 
     await service.editarSemana('p-1', { code: 'S-2', acmRealOverride: null });
@@ -194,5 +199,69 @@ describe('ProjectsService · edición del avance', () => {
         'u-1',
       ),
     ).rejects.toThrow(/imagen/i);
+  });
+
+  it('la lectura trae el calculado AL LADO de la sobreescritura', async () => {
+    // Con una sobreescritura puesta, la pantalla tiene que poder mostrar cuánto
+    // se aparta de lo que dicen las actividades.
+    prisma.project.findUnique.mockResolvedValueOnce({ totalHh: 200, cutoffDate: null, planAtCutoff: null });
+    prisma.projectWeek.findMany.mockResolvedValueOnce(
+      semanas({ 'S-2': { acm: 0.55 } }).map((w) => ({
+        ...w,
+        closeDate: new Date('2026-09-20T00:00:00Z'),
+        hhPlan: 0,
+        parPlan: 0,
+        acmPlan: 0,
+        parReal: null,
+        acmReal: w.code === 'S-2' ? 0.55 : null,
+      })),
+    );
+
+    const r = await service.getAvanceEditable('p-1', 'u-1');
+    const s2 = r.semanas.find((w) => w.code === 'S-2');
+
+    expect(s2?.acmReal).toBeCloseTo(0.55, 5);
+    expect(s2?.acmRealOverride).toBeCloseTo(0.55, 5);
+    // (100×0,6 + 100×0,2) / 200 = 0,40
+    expect(s2?.acmRealCalculado).toBeCloseTo(0.4, 5);
+  });
+
+  it('puedeEditar sale de la misma relación FGA que el guard de los PATCH', async () => {
+    prisma.project.findUnique.mockResolvedValueOnce({ totalHh: 0, cutoffDate: null, planAtCutoff: null });
+    prisma.projectWeek.findMany.mockResolvedValueOnce([]);
+    fga.check.mockResolvedValueOnce(false);
+
+    const r = await service.getAvanceEditable('p-1', 'u-1');
+
+    expect(r.puedeEditar).toBe(false);
+    expect(fga.check).toHaveBeenCalledWith({
+      user: 'user:u-1',
+      relation: 'can_manage_progress',
+      object: 'project:p-1',
+    });
+  });
+
+  it('quitar la foto solo busca entre IMÁGENES del cerco', async () => {
+    // Si buscara cualquier documento, podría borrar el PDF de un plano colgado
+    // del mismo cerco.
+    prisma.projectDocument.findMany.mockResolvedValueOnce([]);
+
+    await expect(service.quitarFotoCerco('p-1', 'c-1')).rejects.toThrow(/no tiene fotos/i);
+
+    const arg = prisma.projectDocument.findMany.mock.calls[0]?.[0] as {
+      where: { OR?: Array<{ fileUrl: { endsWith: string } }> };
+    };
+    expect(arg.where.OR?.map((c) => c.fileUrl.endsWith)).toEqual(['.jpg', '.jpeg', '.png', '.webp']);
+  });
+
+  it('no deja quitar la sobreescritura de una semana SIN detalle por actividad', async () => {
+    // Sin calculado no hay a qué volver: la semana quedaría vacía y el tablero
+    // perdería un informe firmado. Las actividades de la prueba llegan a S-2.
+    prisma.projectWeek.findFirst.mockResolvedValueOnce({ id: 'w-3', index: 3 });
+
+    await expect(
+      service.editarSemana('p-1', { code: 'S-3', acmRealOverride: null }),
+    ).rejects.toThrow(/detalle por actividad/i);
+    expect(prisma.projectWeek.update).not.toHaveBeenCalled();
   });
 });

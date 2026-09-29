@@ -11,8 +11,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
 import { StorageService } from '../../common/storage/storage.service';
 
-/** Carpeta del storage donde viven las fotos de terreno de los cercos. */
-const CARPETA_FOTOS_CERCO = 'cercos';
 import {
   CreateAssignmentDto,
   CreateProjectDto,
@@ -34,8 +32,30 @@ import {
 } from './obra-dashboard.util';
 import { computeControlSemanal } from './control-semanal.util';
 import { avanceSemanal } from './avance-ponderado.util';
-import { EditarAvanceActividadDto, EditarSemanaDto } from './dto/avance.dto';
-import type { ObraDashboard as ObraDashboardView, TaskCrewMember } from '@gmt-platform/contracts';
+import { EditarAvanceActividadDto, EditarCorteDto, EditarSemanaDto } from './dto/avance.dto';
+import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
+import type {
+  AvanceObraEditable,
+  ObraDashboard as ObraDashboardView,
+  TaskCrewMember,
+} from '@gmt-platform/contracts';
+
+/** Carpeta del storage donde viven las fotos de terreno de los cercos. */
+const CARPETA_FOTOS_CERCO = 'cercos';
+
+/**
+ * Qué documento de una tarea cuenta como FOTO del cerco. Lo usan el tablero
+ * (para mostrarla) y `quitarFotoCerco` (para borrarla): si discreparan, quitar
+ * la foto podría borrar el PDF de un plano colgado del mismo cerco.
+ */
+const ES_FOTO: Prisma.ProjectDocumentWhereInput = {
+  OR: [
+    { fileUrl: { endsWith: '.jpg', mode: 'insensitive' } },
+    { fileUrl: { endsWith: '.jpeg', mode: 'insensitive' } },
+    { fileUrl: { endsWith: '.png', mode: 'insensitive' } },
+    { fileUrl: { endsWith: '.webp', mode: 'insensitive' } },
+  ],
+};
 
 /**
  * Saca los NOMBRES de la cuadrilla del tablero público, dejando la cuenta.
@@ -465,12 +485,7 @@ export class ProjectsService {
         where: {
           projectId: id,
           taskId: { not: null },
-          OR: [
-            { fileUrl: { endsWith: '.jpg', mode: 'insensitive' } },
-            { fileUrl: { endsWith: '.jpeg', mode: 'insensitive' } },
-            { fileUrl: { endsWith: '.png', mode: 'insensitive' } },
-            { fileUrl: { endsWith: '.webp', mode: 'insensitive' } },
-          ],
+          ...ES_FOTO,
         },
         select: { taskId: true, fileUrl: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
@@ -533,11 +548,15 @@ export class ProjectsService {
 
     // Todas las fotos por tarea, de la más nueva a la más vieja: el tablero
     // elige cuál corresponde a la semana que se esté mirando.
+    //
+    // `fileUrl` guarda la CLAVE del storage, no una URL: se firma al leer. Pasar
+    // la clave tal cual dejaba la imagen rota en el mapa.
+    const urls = await Promise.all(fotos.map((d) => resolveFreshFileUrl(this.storage, d.fileUrl)));
     const porTarea = new Map<string, Array<{ url: string; date: string }>>();
-    for (const d of fotos) {
+    for (const [i, d] of fotos.entries()) {
       if (!d.taskId) continue;
       const lista = porTarea.get(d.taskId) ?? [];
-      lista.push({ url: d.fileUrl, date: d.createdAt.toISOString().slice(0, 10) });
+      lista.push({ url: urls[i] ?? d.fileUrl, date: d.createdAt.toISOString().slice(0, 10) });
       porTarea.set(d.taskId, lista);
     }
 
@@ -916,6 +935,81 @@ export class ProjectsService {
   // ── Control de avance de obra (project:progress:manage) ────────────────────
 
   /**
+   * Los datos crudos del control, para editarlos en la pestaña "Avance".
+   *
+   * Trae el calculado AL LADO del efectivo: con una sobreescritura puesta, la
+   * pantalla tiene que poder mostrar cuánto se aparta de lo que dicen las
+   * actividades. Una segunda fuente que no se ve es la que se desincroniza.
+   */
+  async getAvanceEditable(projectId: string, userId: string): Promise<AvanceObraEditable> {
+    const [proyecto, semanas, actividades, puedeEditar] = await Promise.all([
+      this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { totalHh: true, cutoffDate: true, planAtCutoff: true },
+      }),
+      this.prisma.projectWeek.findMany({ where: { projectId }, orderBy: { index: 'asc' } }),
+      this.prisma.projectActivity.findMany({
+        where: { projectId },
+        orderBy: { wbsId: 'asc' },
+        select: { wbsId: true, name: true, phase: true, hh: true, realByWeek: true },
+      }),
+      // La MISMA consulta que hace el guard de los PATCH. Resolverlo por otro
+      // camino (p. ej. `PermissionService.can`, que además mira los grants del
+      // rol) podría abrir celdas que después el guard rechaza, o al revés.
+      this.fga.check({
+        user: `user:${userId}`,
+        relation: 'can_manage_progress',
+        object: `project:${projectId}`,
+      }),
+    ]);
+    if (!proyecto) {
+      throw new NotFoundException('El proyecto no existe.');
+    }
+
+    const calculado = avanceSemanal(actividades, Math.max(0, semanas.length - 1));
+    return {
+      puedeEditar,
+      cutoffDate: proyecto.cutoffDate ? proyecto.cutoffDate.toISOString().slice(0, 10) : null,
+      planAtCutoff: proyecto.planAtCutoff,
+      totalHh: proyecto.totalHh,
+      semanas: semanas.map((w) => {
+        // Mismo desplazamiento que `recalcularAvance`: S-0 es el arranque.
+        const calc = w.index >= 1 ? calculado[w.index - 1] : { acm: 0, par: 0 };
+        return {
+          code: w.code,
+          index: w.index,
+          closeDate: w.closeDate.toISOString().slice(0, 10),
+          hhPlan: w.hhPlan,
+          parPlan: w.parPlan,
+          acmPlan: w.acmPlan,
+          parReal: w.parReal,
+          acmReal: w.acmReal,
+          parRealCalculado: calc?.par ?? null,
+          acmRealCalculado: calc?.acm ?? null,
+          parRealOverride: w.parRealOverride,
+          acmRealOverride: w.acmRealOverride,
+        };
+      }),
+      actividades,
+    };
+  }
+
+  /** Fecha de corte del informe vigente y el plan a esa fecha. */
+  async editarCorte(projectId: string, dto: EditarCorteDto): Promise<void> {
+    const fecha = new Date(`${dto.cutoffDate}T00:00:00Z`);
+    if (Number.isNaN(fecha.getTime())) {
+      throw new BadRequestException('La fecha de corte no es válida.');
+    }
+    await this.prisma.project.update({
+      where: { id: projectId },
+      data: {
+        cutoffDate: fecha,
+        ...(dto.planAtCutoff !== undefined ? { planAtCutoff: dto.planAtCutoff } : {}),
+      },
+    });
+  }
+
+  /**
    * Recalcula `parReal`/`acmReal` de TODAS las semanas del proyecto.
    *
    * El valor efectivo es el calculado desde las actividades, salvo que la
@@ -998,10 +1092,27 @@ export class ProjectsService {
   async editarSemana(projectId: string, dto: EditarSemanaDto): Promise<void> {
     const semana = await this.prisma.projectWeek.findFirst({
       where: { projectId, code: dto.code },
-      select: { id: true },
+      select: { id: true, index: true },
     });
     if (!semana) {
       throw new NotFoundException(`La semana ${dto.code} no existe en este proyecto.`);
+    }
+
+    // Quitar una sobreescritura es volver al calculado. Si la semana no tiene
+    // detalle por actividad no HAY calculado: quedaría vacía y el tablero
+    // perdería un informe firmado.
+    if (dto.parRealOverride === null || dto.acmRealOverride === null) {
+      const actividades = await this.prisma.projectActivity.findMany({
+        where: { projectId },
+        select: { hh: true, realByWeek: true },
+      });
+      const calc = semana.index >= 1 ? avanceSemanal(actividades, semana.index)[semana.index - 1] : { acm: 0 };
+      if (calc?.acm === null || calc === undefined) {
+        throw new BadRequestException(
+          `${dto.code} no tiene detalle por actividad: no hay valor calculado al que volver. ` +
+            'Carga el avance de las actividades de esa semana o corrige el valor a mano.',
+        );
+      }
     }
 
     // Solo las claves que vinieron: `undefined` significa "no se tocó", que es
@@ -1093,7 +1204,7 @@ export class ProjectsService {
    */
   async quitarFotoCerco(projectId: string, taskId: string): Promise<{ quedan: number }> {
     const fotos = await this.prisma.projectDocument.findMany({
-      where: { projectId, taskId, fileUrl: { not: '' } },
+      where: { projectId, taskId, ...ES_FOTO },
       orderBy: { createdAt: 'desc' },
       select: { id: true, fileUrl: true },
     });

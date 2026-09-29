@@ -44,15 +44,15 @@ export function avanceSemanal(
   const acumulados: Array<number | null> = [];
   for (let semana = 0; semana < semanas; semana += 1) {
     // La semana tiene informe si ALGUNA actividad con peso lo trae. Una que
-    // todavía no reportó cuenta como cero y no excluye la semana entera: en un
-    // programa de 38 actividades siempre hay alguna que aún no empieza.
+    // todavía no reportó no excluye la semana entera: en un programa de 38
+    // actividades siempre hay alguna que aún no empieza.
     const hayInforme = conPeso.some((a) => a.realByWeek.length > semana);
     if (hhTotal === 0 || !hayInforme) {
       acumulados.push(null);
       continue;
     }
     const ponderado = conPeso.reduce(
-      (suma, a) => suma + a.hh * (a.realByWeek[semana] ?? 0),
+      (suma, a) => suma + a.hh * acumuladoAl(a.realByWeek, semana),
       0,
     );
     acumulados.push(ponderado / hhTotal);
@@ -65,4 +65,18 @@ export function avanceSemanal(
     const previo = i === 0 ? 0 : (acumulados[i - 1] ?? 0);
     return { acm, par: acm - previo };
   });
+}
+
+/**
+ * Acumulado de una actividad en una semana. Si no la informó, vale lo último
+ * que informó —lo ejecutado no se deshace por no haberlo repetido—, y cero si
+ * nunca informó nada.
+ *
+ * Contarla como cero haría que, al empezar a cargar una semana nueva, el total
+ * se desplomara hasta teclear las 38 actividades, y que una actividad que no
+ * avanzó y nadie volvió a escribir quedara en cero para siempre.
+ */
+export function acumuladoAl(realByWeek: readonly number[], semana: number): number {
+  if (realByWeek.length === 0) return 0;
+  return realByWeek[Math.min(semana, realByWeek.length - 1)] ?? 0;
 }

@@ -56,9 +56,11 @@ describe('avanceSemanal', () => {
     expect(avanceSemanal([], 2)[0]?.acm).toBeNull();
   });
 
-  it('una actividad que todavía no reporta cuenta como cero, no excluye la semana', () => {
-    // Mientras alguna actividad con peso traiga dato, la semana tiene informe.
-    // La que no reportó simplemente no aporta avance.
+  it('una actividad sin dato en una semana arrastra su último acumulado', () => {
+    // Un acumulado no retrocede por no haberlo informado. Si contara como cero,
+    // al empezar a cargar S-4 —tocando la primera de 38 actividades— el total
+    // del tablero se desplomaría hasta terminar de cargarlas todas, y la que
+    // no avanzó y nadie volvió a teclear quedaría en cero para siempre.
     const r = avanceSemanal(
       [
         { hh: 100, realByWeek: [0.5, 0.8] },
@@ -67,7 +69,20 @@ describe('avanceSemanal', () => {
       2,
     );
     expect(r[0]?.acm).toBeCloseTo(0.5, 5);
-    expect(r[1]?.acm).toBeCloseTo(0.4, 5);
+    // (100×0,8 + 100×0,5) / 200 = 0,65
+    expect(r[1]?.acm).toBeCloseTo(0.65, 5);
+  });
+
+  it('una actividad que nunca reportó cuenta como cero, no excluye la semana', () => {
+    // Siempre hay alguna actividad que todavía no empieza.
+    const r = avanceSemanal(
+      [
+        { hh: 100, realByWeek: [0.6] },
+        { hh: 100, realByWeek: [] },
+      ],
+      1,
+    );
+    expect(r[0]?.acm).toBeCloseTo(0.3, 5);
   });
 
   it('admite que el acumulado retroceda', () => {

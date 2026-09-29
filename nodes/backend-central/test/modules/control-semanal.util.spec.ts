@@ -139,15 +139,18 @@ describe('computeControlSemanal', () => {
     ).toBeNull();
   });
 
-  it('corta el real de una fase en la semana del informe más corto', () => {
-    // Si una actividad de la fase aún no tiene informe de esa semana, la fase
-    // tampoco: rellenar con cero diría "no avanzó" en vez de "no se sabe".
+  it('la fase llega hasta la última semana informada del proyecto, arrastrando', () => {
+    // Una actividad sin dato de esa semana vale su último acumulado, igual que
+    // en el total del informe. Si la fase cortara en la actividad más atrasada
+    // en ser cargada, el total avanzaría y el desglose por fase no: son dos
+    // lecturas del mismo dato y no pueden desincronizarse.
     const desparejas: FilaActividad[] = [
       { ...(ACTIVIDADES[0] as FilaActividad), realByWeek: [0, 0.5] },
       { ...(ACTIVIDADES[1] as FilaActividad), realByWeek: [0.2] },
     ];
     const control = computeControlSemanal(CABECERA, SEMANAS, desparejas);
 
-    expect(control?.phases[0]?.real).toEqual([0, 10]);
+    // S-2: (80×0,5 + 80×0,2) / 160 = 35%.
+    expect(control?.phases[0]?.real).toEqual([0, 10, 35]);
   });
 });

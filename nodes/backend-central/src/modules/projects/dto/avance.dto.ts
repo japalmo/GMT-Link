@@ -101,3 +101,28 @@ export class EditarSemanaDto {
   @Max(1)
   acmRealOverride?: number | null;
 }
+
+/**
+ * El corte del informe vigente: la fecha y cuánto esperaba el programa ESE día.
+ *
+ * Existe porque al cargar una semana nueva el real avanza, y si el corte se
+ * quedara en el informe anterior el encabezado compararía el real de S-4 contra
+ * el plan de S-3: una desviación inventada.
+ */
+export class EditarCorteDto {
+  /** aaaa-mm-dd. */
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'La fecha de corte debe ser aaaa-mm-dd.' })
+  cutoffDate!: string;
+
+  /**
+   * Plan al corte, 0-1. `null` = usar el acumulado plan de la última semana
+   * informada, que es la aproximación que ya hace el informe sin este dato.
+   */
+  @ValidateIf((_, valor) => valor !== null && valor !== undefined)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  planAtCutoff?: number | null;
+}

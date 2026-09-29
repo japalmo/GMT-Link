@@ -1705,6 +1705,53 @@ export interface ObraControl {
   phases: ObraControlPhase[];
 }
 
+// ── Control de avance EDITABLE (pestaña "Avance") ──────────────────────────
+//
+// A diferencia de `ObraControl`, que es el informe ya armado, esto son los datos
+// crudos que se editan. Los porcentajes van en FRACCIÓN 0-1, igual que en la
+// base y en los PATCH: la pantalla convierte a 0-100 al mostrar.
+
+/** Una semana tal como se edita: el efectivo, el calculado y la sobreescritura. */
+export interface AvanceSemanaEditable {
+  code: string;
+  index: number;
+  /** Cierre de semana, aaaa-mm-dd. */
+  closeDate: string;
+  hhPlan: number;
+  parPlan: number;
+  acmPlan: number;
+  /** Valor EFECTIVO: la sobreescritura si hay, si no el calculado. */
+  parReal: number | null;
+  acmReal: number | null;
+  /** Lo que sale de las actividades, haya o no sobreescritura. */
+  parRealCalculado: number | null;
+  acmRealCalculado: number | null;
+  /** `null` = manda el calculado. */
+  parRealOverride: number | null;
+  acmRealOverride: number | null;
+}
+
+export interface AvanceActividadEditable {
+  wbsId: number;
+  name: string;
+  phase: string;
+  hh: number;
+  /** Acumulado 0-1 por semana informada. Índice 0 = S-1. */
+  realByWeek: number[];
+}
+
+export interface AvanceObraEditable {
+  /** Si quien consulta puede editar (`project:progress:manage` en ESTE proyecto). */
+  puedeEditar: boolean;
+  /** Fecha de corte del informe vigente, aaaa-mm-dd, o `null`. */
+  cutoffDate: string | null;
+  /** Avance del programa AL CORTE, 0-1. El corte cae a media semana. */
+  planAtCutoff: number | null;
+  totalHh: number | null;
+  semanas: AvanceSemanaEditable[];
+  actividades: AvanceActividadEditable[];
+}
+
 /** Semáforo del proyecto, derivado de la desviación real vs planificado. */
 export type ObraStatus = 'ADELANTADO' | 'EN_LINEA' | 'LEVE_ATRASO' | 'ATRASADO';
 
