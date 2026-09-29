@@ -6,9 +6,13 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, ScopeType, TaskStatus } from '@prisma/client';
+import { Prisma, ProjectDocumentStatus, ScopeType, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FgaService } from '../../fga/fga.service';
+import { StorageService } from '../../common/storage/storage.service';
+
+/** Carpeta del storage donde viven las fotos de terreno de los cercos. */
+const CARPETA_FOTOS_CERCO = 'cercos';
 import {
   CreateAssignmentDto,
   CreateProjectDto,
@@ -29,6 +33,8 @@ import {
   type ObraDashboard,
 } from './obra-dashboard.util';
 import { computeControlSemanal } from './control-semanal.util';
+import { avanceSemanal } from './avance-ponderado.util';
+import { EditarAvanceActividadDto, EditarSemanaDto } from './dto/avance.dto';
 import type { ObraDashboard as ObraDashboardView, TaskCrewMember } from '@gmt-platform/contracts';
 
 /**
@@ -57,6 +63,7 @@ export class ProjectsService {
     private readonly prisma: PrismaService,
     private readonly fga: FgaService,
     private readonly clima: ClimaService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -903,6 +910,207 @@ export class ProjectsService {
     }
     await this.prisma.service.delete({ where: { id: serviceId } });
     return { ok: true };
+  }
+
+
+  // ── Control de avance de obra (project:progress:manage) ────────────────────
+
+  /**
+   * Recalcula `parReal`/`acmReal` de TODAS las semanas del proyecto.
+   *
+   * El valor efectivo es el calculado desde las actividades, salvo que la
+   * semana tenga sobreescritura: ahí manda la sobreescritura. Guardar el
+   * efectivo en las columnas de siempre deja el tablero intacto (no sabe que
+   * existe este cálculo) y mantiene UN solo número consultable.
+   *
+   * Se recalcula entero y no solo la semana tocada porque el acumulado de una
+   * semana arrastra a las siguientes: cambiar S-2 mueve S-3 en adelante.
+   */
+  private async recalcularAvance(projectId: string): Promise<void> {
+    const [actividades, semanas] = await Promise.all([
+      this.prisma.projectActivity.findMany({
+        where: { projectId },
+        select: { hh: true, realByWeek: true },
+      }),
+      this.prisma.projectWeek.findMany({
+        where: { projectId },
+        orderBy: { index: 'asc' },
+        select: { id: true, index: true, parRealOverride: true, acmRealOverride: true },
+      }),
+    ]);
+    if (semanas.length === 0) return;
+
+    // S-0 es el arranque y no tiene actividades detrás: el cálculo por
+    // actividad empieza en S-1, así que se desplaza un lugar.
+    const calculado = avanceSemanal(actividades, Math.max(0, semanas.length - 1));
+
+    await this.prisma.$transaction(
+      semanas.map((semana) => {
+        const desde = semana.index - 1;
+        const calc = desde >= 0 ? calculado[desde] : { acm: 0, par: 0 };
+        return this.prisma.projectWeek.update({
+          where: { id: semana.id },
+          data: {
+            parReal: semana.parRealOverride ?? calc?.par ?? null,
+            acmReal: semana.acmRealOverride ?? calc?.acm ?? null,
+          },
+        });
+      }),
+    );
+  }
+
+  /**
+   * Avance acumulado de UNA actividad en UNA semana.
+   *
+   * `realByWeek` no admite huecos: su largo dice hasta qué semana hay informe.
+   * Si la semana editada cae más adelante que el largo actual, las intermedias
+   * se rellenan con el último acumulado conocido —no con cero—, porque lo ya
+   * ejecutado no se deshace por no haberlo informado.
+   */
+  async editarAvanceActividad(projectId: string, dto: EditarAvanceActividadDto): Promise<void> {
+    const actividad = await this.prisma.projectActivity.findFirst({
+      where: { projectId, wbsId: dto.wbsId },
+      select: { id: true, realByWeek: true },
+    });
+    if (!actividad) {
+      throw new NotFoundException('La actividad no existe en este proyecto.');
+    }
+
+    const real = [...actividad.realByWeek];
+    const ultimo = real.length > 0 ? (real[real.length - 1] ?? 0) : 0;
+    while (real.length <= dto.semana) real.push(ultimo);
+    real[dto.semana] = dto.valor;
+
+    await this.prisma.projectActivity.update({
+      where: { id: actividad.id },
+      data: { realByWeek: real },
+    });
+    await this.recalcularAvance(projectId);
+  }
+
+  /**
+   * Plan o sobreescritura del real de una semana.
+   *
+   * Pasar `null` en una sobreescritura la QUITA y devuelve el valor calculado.
+   * Es la vía de vuelta: sin ella, un número mal tecleado quedaría pegado para
+   * siempre tapando el cálculo.
+   */
+  async editarSemana(projectId: string, dto: EditarSemanaDto): Promise<void> {
+    const semana = await this.prisma.projectWeek.findFirst({
+      where: { projectId, code: dto.code },
+      select: { id: true },
+    });
+    if (!semana) {
+      throw new NotFoundException(`La semana ${dto.code} no existe en este proyecto.`);
+    }
+
+    // Solo las claves que vinieron: `undefined` significa "no se tocó", que es
+    // distinto de `null` ("quitar la sobreescritura").
+    const data: Prisma.ProjectWeekUpdateInput = {};
+    if (dto.hhPlan !== undefined) data.hhPlan = dto.hhPlan;
+    if (dto.parPlan !== undefined) data.parPlan = dto.parPlan;
+    if (dto.acmPlan !== undefined) data.acmPlan = dto.acmPlan;
+    if (dto.parRealOverride !== undefined) data.parRealOverride = dto.parRealOverride;
+    if (dto.acmRealOverride !== undefined) data.acmRealOverride = dto.acmRealOverride;
+
+    if (Object.keys(data).length === 0) return;
+
+    await this.prisma.projectWeek.update({ where: { id: semana.id }, data });
+    await this.recalcularAvance(projectId);
+  }
+
+
+  /**
+   * Foto de terreno de un cerco.
+   *
+   * NO hay modelo nuevo: se crea un `ProjectDocument` colgado de la tarea, que
+   * es lo que el tablero ya lee para preferir la foto por sobre la vista
+   * satelital. Lo que faltaba era una forma cómoda de subirla, no un lugar
+   * donde guardarla.
+   *
+   * La foto va en el CERCO (la tarea padre), que es la clave con la que el
+   * tablero las agrupa (`parentId ?? id`).
+   */
+  async subirFotoCerco(
+    projectId: string,
+    taskId: string,
+    archivo: { buffer: Buffer; originalname: string; mimetype: string },
+    userId: string,
+  ): Promise<{ url: string }> {
+    const tarea = await this.prisma.task.findFirst({
+      where: { id: taskId, projectId },
+      select: { id: true, name: true, parentId: true },
+    });
+    if (!tarea) {
+      throw new NotFoundException('El cerco no existe en este proyecto.');
+    }
+    if (tarea.parentId !== null) {
+      // Una etapa no es un cerco: el tablero agrupa por el padre y la foto
+      // colgada de una hija no aparecería donde se espera.
+      throw new BadRequestException('La foto va en el cerco, no en una de sus etapas.');
+    }
+    if (!archivo.mimetype.startsWith('image/')) {
+      throw new BadRequestException('La foto debe ser una imagen.');
+    }
+
+    const guardado = await this.storage.save({
+      buffer: archivo.buffer,
+      filename: archivo.originalname,
+      contentType: archivo.mimetype,
+      folder: CARPETA_FOTOS_CERCO,
+    });
+
+    // `code` es único global y obligatorio. Una foto de terreno NO es un
+    // entregable codificado (§7): se le da un código legible y evidentemente
+    // no controlado, con la marca de tiempo como parte única.
+    const ahora = new Date();
+    const p = (n: number): string => String(n).padStart(2, '0');
+    const sello =
+      `${ahora.getFullYear()}${p(ahora.getMonth() + 1)}${p(ahora.getDate())}` +
+      `-${p(ahora.getHours())}${p(ahora.getMinutes())}${p(ahora.getSeconds())}`;
+
+    await this.prisma.projectDocument.create({
+      data: {
+        name: `Foto de avance · ${tarea.name}`,
+        code: `FOTO-${tarea.id.slice(-6)}-${sello}`,
+        fileUrl: guardado.key,
+        // BORRADOR y no PENDIENTE_QA: una foto del sitio no pasa por revisión
+        // de calidad, y meterla en esa cola ensuciaría el trabajo de QA.
+        status: ProjectDocumentStatus.BORRADOR,
+        projectId,
+        taskId: tarea.id,
+        ownerId: userId,
+      },
+    });
+    return { url: guardado.url };
+  }
+
+  /**
+   * Quita la foto MÁS NUEVA de un cerco, que es la que el tablero muestra.
+   *
+   * No borra el historial: las fotos anteriores siguen ahí y el tablero vuelve
+   * a mostrar la que corresponda. Si no queda ninguna, vuelve la satelital.
+   */
+  async quitarFotoCerco(projectId: string, taskId: string): Promise<{ quedan: number }> {
+    const fotos = await this.prisma.projectDocument.findMany({
+      where: { projectId, taskId, fileUrl: { not: '' } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, fileUrl: true },
+    });
+    const ultima = fotos[0];
+    if (!ultima) {
+      throw new NotFoundException('Este cerco no tiene fotos.');
+    }
+
+    await this.prisma.projectDocument.delete({ where: { id: ultima.id } });
+    // El archivo se borra best-effort: que quede huérfano en el storage es
+    // mucho menos grave que dejar el registro apuntando a la nada.
+    try {
+      await this.storage.delete(ultima.fileUrl);
+    } catch (error) {
+      this.logger.warn(`No se pudo borrar la foto "${ultima.fileUrl}": ${String(error)}`);
+    }
+    return { quedan: fotos.length - 1 };
   }
 
   // ── Asignación de trabajadores a proyecto ──────────────────────────────────

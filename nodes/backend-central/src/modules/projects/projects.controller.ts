@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,9 +11,12 @@ import {
   Put,
   Query,
   UnauthorizedException,
+  UploadedFile,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Headers } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { RequirePermission } from '../../authz/require-permission.decorator';
@@ -20,6 +24,7 @@ import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { PermissionService } from '../../authz/permission.service';
 import { ProjectsService } from './projects.service';
+import { EditarAvanceActividadDto, EditarSemanaDto } from './dto/avance.dto';
 import {
   CreateAssignmentDto,
   CreateProjectDto,
@@ -278,6 +283,67 @@ export class ProjectsController {
   ) {
     this.requireUserId(authUser);
     return this.projects.deleteService(id, sid);
+  }
+
+  // ── Control de avance de obra (project:progress:manage → can_manage_progress) ──
+  //
+  // Se edita CELDA por celda y no la tabla entera: dos personas cargando
+  // semanas distintas no se pisan, y un guardado parcial no reescribe valores
+  // que el otro acaba de cambiar.
+
+  @Patch(':id/avance/actividad')
+  @RequirePermission('can_manage_progress', { type: 'project', param: 'id' })
+  async editarAvanceActividad(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: EditarAvanceActividadDto,
+  ): Promise<{ ok: true }> {
+    this.requireUserId(authUser);
+    await this.projects.editarAvanceActividad(id, dto);
+    return { ok: true };
+  }
+
+  @Patch(':id/avance/semana')
+  @RequirePermission('can_manage_progress', { type: 'project', param: 'id' })
+  async editarSemana(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Body() dto: EditarSemanaDto,
+  ): Promise<{ ok: true }> {
+    this.requireUserId(authUser);
+    await this.projects.editarSemana(id, dto);
+    return { ok: true };
+  }
+
+  /**
+   * Foto de terreno de un cerco. Crea un `ProjectDocument` colgado de la tarea,
+   * que es lo que el tablero ya lee para mostrarla en vez de la satelital.
+   */
+  @Post(':id/cercos/:taskId/foto')
+  @RequirePermission('can_manage_progress', { type: 'project', param: 'id' })
+  @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async subirFotoCerco(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('taskId') taskId: string,
+    @UploadedFile() foto: { buffer: Buffer; originalname: string; mimetype: string } | undefined,
+  ): Promise<{ url: string }> {
+    const userId = this.requireUserId(authUser);
+    if (!foto) {
+      throw new BadRequestException('No llegó ninguna foto.');
+    }
+    return this.projects.subirFotoCerco(id, taskId, foto, userId);
+  }
+
+  @Delete(':id/cercos/:taskId/foto')
+  @RequirePermission('can_manage_progress', { type: 'project', param: 'id' })
+  async quitarFotoCerco(
+    @CurrentUser() authUser: AuthUser | undefined,
+    @Param('id') id: string,
+    @Param('taskId') taskId: string,
+  ): Promise<{ quedan: number }> {
+    this.requireUserId(authUser);
+    return this.projects.quitarFotoCerco(id, taskId);
   }
 
   // ── Asignación de trabajadores (project:team:manage → can_manage_team) ──────
