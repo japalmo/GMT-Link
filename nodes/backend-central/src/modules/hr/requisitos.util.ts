@@ -364,9 +364,11 @@ function comparadorPropio<T>(
   cmp: Record<string, (a: T, b: T) => number>,
   sortBy: string | undefined,
 ): ((a: T, b: T) => number) | undefined {
-  if (!sortBy || !Object.prototype.hasOwnProperty.call(cmp, sortBy)) return undefined;
-  const elegido = cmp[sortBy];
-  return typeof elegido === 'function' ? elegido : undefined;
+  // Por igualdad entre las columnas permitidas, sin indexar con la clave.
+  for (const [columna, comparador] of Object.entries(cmp)) {
+    if (columna === sortBy) return comparador;
+  }
+  return undefined;
 }
 
 function porNombre(a: { lastName: string; firstName: string }, b: typeof a): number {
