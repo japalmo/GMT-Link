@@ -127,7 +127,7 @@ services:
   # se resetea al reiniciar, por eso hay que correr `pnpm run fga:bootstrap`
   # (nodes/backend-central) después de levantarlo para recrear el store + authorization model.
   openfga:
-    image: openfga/openfga:latest
+    image: openfga/openfga:v1.18.1
     container_name: gmt_openfga
     restart: unless-stopped
     command: run

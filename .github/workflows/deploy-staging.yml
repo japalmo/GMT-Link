@@ -1,0 +1,95 @@
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref or commit to deploy
+        required: true
+        default: develop
+      service:
+        description: Service to deploy
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - api
+          - web
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Railway staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging
+
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Install pinned Railway CLI
+        run: npm install --global @railway/cli@5.23.0
+
+      - name: Guard the target environment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+        shell: bash
+        run: |
+          test -n "$RAILWAY_TOKEN"
+          railway status --environment staging --json > railway-status.json
+          node -e "const s=require('./railway-status.json'); const n=s.environment?.name ?? s.environmentName ?? s.environment; if(n!=='staging') throw new Error('Refusing to deploy outside staging: '+n)"
+
+      - name: Deploy API
+        if: inputs.service == 'all' || inputs.service == 'api'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+        run: railway up --yes --ci --environment staging --service api --message "staging:${GITHUB_SHA}"
+
+      - name: Deploy web
+        if: inputs.service == 'all' || inputs.service == 'web'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+        run: railway up --yes --ci --environment staging --service web --message "staging:${GITHUB_SHA}"
+
+      - name: Smoke test API
+        if: inputs.service == 'all' || inputs.service == 'api'
+        env:
+          URL: ${{ vars.STAGING_API_URL }}
+        shell: bash
+        run: |
+          test -n "$URL"
+          for attempt in {1..30}; do
+            if curl --fail --silent "$URL/health" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging API did not become healthy" >&2
+          exit 1
+
+      - name: Smoke test web
+        if: inputs.service == 'all' || inputs.service == 'web'
+        env:
+          URL: ${{ vars.STAGING_WEB_URL }}
+        shell: bash
+        run: |
+          test -n "$URL"
+          for attempt in {1..30}; do
+            if curl --fail --silent "$URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging web did not become healthy" >&2
+          exit 1

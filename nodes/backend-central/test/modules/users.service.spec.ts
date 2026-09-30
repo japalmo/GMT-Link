@@ -277,9 +277,9 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
 
   function serviceWith(userMock: {
     findUnique: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
+    update?: ReturnType<typeof vi.fn>;
   }): UsersService {
-    const prisma = { user: userMock } as unknown as PrismaService;
+    const prisma = { user: { update: vi.fn(), ...userMock } } as unknown as PrismaService;
     return new UsersService(prisma, buildFgaMock().fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
   }
 

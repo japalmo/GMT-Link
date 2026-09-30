@@ -96,6 +96,7 @@ function buildDocRow(overrides: Partial<AssetDocument> = {}): AssetDocument {
     previousFileUrl: null,
     reviewedById: null,
     reviewedAt: null,
+    visibleInFiche: false,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -152,6 +153,9 @@ function buildSubmissionRow(overrides: Partial<ChecklistSubmission> = {}): Check
     templateId: 'tpl-1',
     userId: 'u-1',
     answers: [],
+    externalSource: null,
+    externalId: null,
+    externalAuthor: null,
     createdAt: new Date('2026-06-16T00:00:00.000Z'),
     ...overrides,
   };

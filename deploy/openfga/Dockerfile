@@ -9,7 +9,7 @@
 #   OPENFGA_DATASTORE_URI=postgres://...@postgres.railway.internal:5432/railway?sslmode=disable
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
-COPY --from=openfga/openfga:latest /openfga /usr/local/bin/openfga
+COPY --from=openfga/openfga:v1.18.1 /openfga /usr/local/bin/openfga
 # HTTP (8080), gRPC (8081). Railway enruta el dominio público al puerto HTTP.
 EXPOSE 8080 8081
 # migrate es idempotente: corre en cada arranque (no-op si el esquema ya existe) y

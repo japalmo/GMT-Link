@@ -1,5 +1,19 @@
 # Despliegue en Railway — GMT Link (MVP)
 
+> [!IMPORTANT]
+> Estado verificado el 31-08-2026: los últimos despliegues de `api` y `web` se
+> hicieron mediante `railway up` desde un working tree y Railway no registró hash
+> de commit. El runtime se recuperó en `feat/fase1b-documental` (`0338073`), pero
+> `main` aún está en `c87b9b3` y **no debe desplegarse hasta integrar la rama**.
+> La topología, inventario y riesgos vigentes están en
+> [Arquitectura y estado actual](arquitectura-actual.md).
+
+> [!WARNING]
+> Los nombres reales son `Postgres`, `api`, `web`, `web-dev`, `openfga`, `Redis`
+> y tres PostgreSQL adicionales. La configuración actual conecta tanto `api` como
+> `openfga` a `Postgres`; Redis y las otras tres bases no tienen consumidor
+> demostrado. No eliminar infraestructura sin respaldo y confirmación.
+
 Guía para dejar GMT Link online en Railway con **deploy continuo desde GitHub**
 (`japalmo/GMT-Link`, rama `main`). BD: **PostgreSQL gestionado por Railway**
 (migrar a servidores de Albemarle más adelante; ver §5).
@@ -17,12 +31,12 @@ Guía para dejar GMT Link online en Railway con **deploy continuo desde GitHub**
 
 ## 1. Topología de servicios
 
-| Servicio | Qué es | Origen |
-| :-- | :-- | :-- |
-| **postgres-gmt** | BD de la app | Plugin Postgres de Railway → inyecta `DATABASE_URL` |
-| **openfga** | Autorización (§4.3) | Imagen `openfga/openfga` + su propio Postgres backing |
-| **api** | NestJS (`nodes/backend-central`) | Repo GitHub, build por Dockerfile |
-| **web** | React/Vite (`nodes/web`) | Repo GitHub, build por Dockerfile |
+| Servicio         | Qué es                           | Origen                                                |
+| :--------------- | :------------------------------- | :---------------------------------------------------- |
+| **postgres-gmt** | BD de la app                     | Plugin Postgres de Railway → inyecta `DATABASE_URL`   |
+| **openfga**      | Autorización (§4.3)              | Imagen `openfga/openfga` + su propio Postgres backing |
+| **api**          | NestJS (`nodes/backend-central`) | Repo GitHub, build por Dockerfile                     |
+| **web**          | React/Vite (`nodes/web`)         | Repo GitHub, build por Dockerfile                     |
 
 Dominio público: sólo **api** y **web**. El resto se comunica por
 `*.railway.internal`. Flujo: `web` (build con `VITE_API_URL`) → `api` → `api` usa
@@ -40,25 +54,26 @@ Dominio público: sólo **api** y **web**. El resto se comunica por
 - **Healthcheck path:** `/health`
 
 ### Variables del servicio API
-| Variable | Valor | ¿Secret? |
-| :-- | :-- | :-- |
-| `RAILWAY_DOCKERFILE_PATH` | `nodes/backend-central/Dockerfile` | — |
-| `DATABASE_URL` | `${{postgres-gmt.DATABASE_URL}}` | — (referencia) |
-| `AUTH_JWT_SECRET` | secreto HS256 de **>= 32 bytes** (ver nota) | 🔒 |
-| `ADMIN_PASSWORD` | clave inicial del admin sembrado (opcional; si se omite, el seed genera una aleatoria y la imprime una vez) | 🔒 |
-| `FGA_API_URL` | `http://openfga.railway.internal:8080` | — |
-| `FGA_STORE_ID` | tras el bootstrap (§4) | — |
-| `FGA_MODEL_ID` | tras el bootstrap (§4) | — |
-| `NVIDIA_API_KEY` | clave NVIDIA NIM (texto) | 🔒 |
-| `NVIDIA_API_KEY_VISION` | clave NVIDIA NIM (visión) | 🔒 |
-| `CORS_ORIGINS` | URLs públicas del frontend separadas por comas (web **y** web-dev, §3), p. ej. `https://gmt-link-web.up.railway.app,https://web-dev-production-xxxx.up.railway.app` | — |
-| `SMTP_HOST` | host SMTP; **vacío = no se envían correos** (NoopEmailService). Se llena en Fase 3. | — |
-| `SMTP_PORT` | puerto SMTP (default 587) | — |
-| `SMTP_USER` | usuario SMTP | 🔒 |
-| `SMTP_PASS` | password SMTP | 🔒 |
-| `EMAIL_FROM` | remitente, default `no-reply@gmt.cl` | — |
-| `NODE_ENV` | `production` | — |
-| `PORT` | lo inyecta Railway (no fijar) | — |
+
+| Variable                  | Valor                                                                                                                                                               | ¿Secret?       |
+| :------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :------------- |
+| `RAILWAY_DOCKERFILE_PATH` | `nodes/backend-central/Dockerfile`                                                                                                                                  | —              |
+| `DATABASE_URL`            | `${{postgres-gmt.DATABASE_URL}}`                                                                                                                                    | — (referencia) |
+| `AUTH_JWT_SECRET`         | secreto HS256 de **>= 32 bytes** (ver nota)                                                                                                                         | 🔒             |
+| `ADMIN_PASSWORD`          | clave inicial del admin sembrado (opcional; si se omite, el seed genera una aleatoria y la imprime una vez)                                                         | 🔒             |
+| `FGA_API_URL`             | `http://openfga.railway.internal:8080`                                                                                                                              | —              |
+| `FGA_STORE_ID`            | tras el bootstrap (§4)                                                                                                                                              | —              |
+| `FGA_MODEL_ID`            | tras el bootstrap (§4)                                                                                                                                              | —              |
+| `NVIDIA_API_KEY`          | clave NVIDIA NIM (texto)                                                                                                                                            | 🔒             |
+| `NVIDIA_API_KEY_VISION`   | clave NVIDIA NIM (visión)                                                                                                                                           | 🔒             |
+| `CORS_ORIGINS`            | URLs públicas del frontend separadas por comas (web **y** web-dev, §3), p. ej. `https://gmt-link-web.up.railway.app,https://web-dev-production-xxxx.up.railway.app` | —              |
+| `SMTP_HOST`               | host SMTP; **vacío = no se envían correos** (NoopEmailService). Se llena en Fase 3.                                                                                 | —              |
+| `SMTP_PORT`               | puerto SMTP (default 587)                                                                                                                                           | —              |
+| `SMTP_USER`               | usuario SMTP                                                                                                                                                        | 🔒             |
+| `SMTP_PASS`               | password SMTP                                                                                                                                                       | 🔒             |
+| `EMAIL_FROM`              | remitente, default `no-reply@gmt.cl`                                                                                                                                | —              |
+| `NODE_ENV`                | `production`                                                                                                                                                        | —              |
+| `PORT`                    | lo inyecta Railway (no fijar)                                                                                                                                       | —              |
 
 > El envío de credenciales por email queda **DESACTIVADO** hasta Fase 3 (spec §4.3/§7):
 > con `SMTP_HOST` vacío el backend usa `NoopEmailService`. En Fase 1b/1c la clave
@@ -67,9 +82,11 @@ Dominio público: sólo **api** y **web**. El resto se comunica por
 > **`AUTH_JWT_SECRET` es obligatorio y validado al arrancar.** El bootstrap
 > (`src/common/env.ts` → `validateAuthJwtSecret`, invocado en `main.ts`) **aborta
 > el arranque** si la variable falta o mide menos de 32 bytes. Genera uno con:
+>
 > ```
 > node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 > ```
+>
 > y cárgalo como secret del servicio api. Si el contenedor no levanta, revisa
 > primero esta variable en los logs del deploy.
 
@@ -85,10 +102,11 @@ Dominio público: sólo **api** y **web**. El resto se comunica por
 - **Dockerfile:** `RAILWAY_DOCKERFILE_PATH=nodes/web/Dockerfile`.
 
 ### Variables del servicio Web
-| Variable | Valor |
-| :-- | :-- |
-| `RAILWAY_DOCKERFILE_PATH` | `nodes/web/Dockerfile` |
-| `VITE_API_URL` | URL pública del api, p. ej. `https://gmt-link-api.up.railway.app` (se hornea en build) |
+
+| Variable                  | Valor                                                                                  |
+| :------------------------ | :------------------------------------------------------------------------------------- |
+| `RAILWAY_DOCKERFILE_PATH` | `nodes/web/Dockerfile`                                                                 |
+| `VITE_API_URL`            | URL pública del api, p. ej. `https://gmt-link-api.up.railway.app` (se hornea en build) |
 
 > No hay variables `VITE_FIREBASE_*`: la web ya no usa Firebase Auth. Tras cambiar
 > `VITE_API_URL` hay que re-desplegar la web (se compila en build).
@@ -98,10 +116,10 @@ Dominio público: sólo **api** y **web**. El resto se comunica por
 Segundo servicio web `web-dev` en el mismo env `production`, mismo Dockerfile que `web`,
 **misma `api` y misma BD**. Se deploya lo nuevo aquí; cuando el owner valida, se promueve a `web`.
 
-| Variable | Valor |
-| :-- | :-- |
-| `RAILWAY_DOCKERFILE_PATH` | `nodes/web/Dockerfile` |
-| `VITE_API_URL` | **la misma** URL pública del `api` que usa `web` |
+| Variable                  | Valor                                            |
+| :------------------------ | :----------------------------------------------- |
+| `RAILWAY_DOCKERFILE_PATH` | `nodes/web/Dockerfile`                           |
+| `VITE_API_URL`            | **la misma** URL pública del `api` que usa `web` |
 
 Crear: `railway add --service web-dev --repo japalmo/GMT-Link --branch main --variables 'RAILWAY_DOCKERFILE_PATH=nodes/web/Dockerfile' --variables 'VITE_API_URL=<url-api>'` y luego `railway domain --service web-dev`.
 
@@ -126,7 +144,7 @@ Crear: `railway add --service web-dev --repo japalmo/GMT-Link --branch main --va
    ```
    Anota `FGA_STORE_ID` y `FGA_MODEL_ID` que imprime y cárgalos en el servicio api (§2).
 5. El seed del admin (release del api, §2) escribe la tupla FGA `user:<id> admin
-   organization:gmt` una vez que `FGA_STORE_ID`/`FGA_MODEL_ID` están presentes.
+organization:gmt` una vez que `FGA_STORE_ID`/`FGA_MODEL_ID` están presentes.
 
 ---
 

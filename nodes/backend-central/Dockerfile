@@ -7,7 +7,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@9.15.9
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ WORKDIR /app
 COPY . .
 
 # Instala dependencias de todo el workspace.
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 # shared-types se consume compilado (main: dist/index.js) -> hay que construirlo.
 RUN pnpm --filter @gmt-platform/contracts build

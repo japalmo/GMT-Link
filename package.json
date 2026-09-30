@@ -3,16 +3,20 @@
   "private": true,
   "version": "0.1.0",
   "description": "GMT Link — plataforma interna de operaciones de GMT (monorepo)",
+  "packageManager": "pnpm@9.15.9",
   "engines": {
-    "node": ">=22",
-    "pnpm": ">=9"
+    "node": "22.x",
+    "pnpm": "9.15.9"
   },
   "scripts": {
     "dev": "pnpm --recursive --parallel --stream dev",
     "build": "pnpm --recursive build",
     "lint": "eslint .",
+    "test": "pnpm --filter @gmt-platform/contracts test && pnpm --filter @gmt-platform/backend-central test:unit && pnpm --filter @gmt-platform/web test",
+    "ci:prepare": "pnpm --filter @gmt-platform/contracts build && pnpm --filter @gmt-platform/backend-central exec prisma generate",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,css}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,css}\""
+    "format:check": "node scripts/check-format-changed.mjs",
+    "format:check:all": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,css,yml,yaml}\""
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
