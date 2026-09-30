@@ -50,7 +50,10 @@ export function acumuladoAl(realByWeek: readonly number[], semana: number): numb
 }
 
 /** Avance ponderado por HH de un grupo de actividades en una semana, 0-1. */
-export function ponderado(grupo: readonly AvanceActividadEditable[], semana: number): number | null {
+export function ponderado(
+  grupo: readonly AvanceActividadEditable[],
+  semana: number,
+): number | null {
   const hh = grupo.reduce((s, a) => s + Math.max(0, a.hh), 0);
   if (hh <= 0) return null;
   return grupo.reduce((s, a) => s + Math.max(0, a.hh) * acumuladoAl(a.realByWeek, semana), 0) / hh;

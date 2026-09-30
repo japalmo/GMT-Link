@@ -89,7 +89,9 @@ describe('HseService: fotos', () => {
   it('acepta hasta el máximo y rechaza una de más', () => {
     const { servicio } = armar();
     expect(servicio.validarFotos(Array(MAX_FOTOS).fill(FOTO))).toHaveLength(MAX_FOTOS);
-    expect(() => servicio.validarFotos(Array(MAX_FOTOS + 1).fill(FOTO))).toThrow(BadRequestException);
+    expect(() => servicio.validarFotos(Array(MAX_FOTOS + 1).fill(FOTO))).toThrow(
+      BadRequestException,
+    );
   });
 
   it('rechaza formatos que el PDF no sabe incrustar', () => {

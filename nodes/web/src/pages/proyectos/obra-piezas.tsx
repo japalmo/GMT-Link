@@ -231,11 +231,15 @@ function Dato({
 }): ReactNode {
   return (
     <div className="min-w-0">
-      <p className={`flex items-center gap-1 text-base font-bold leading-none tabular-nums 2xl:text-lg ${clase}`}>
+      <p
+        className={`flex items-center gap-1 text-base font-bold leading-none tabular-nums 2xl:text-lg ${clase}`}
+      >
         <Icon className="size-3.5 shrink-0 opacity-70 lg:size-4" aria-hidden />
         {valor}
       </p>
-      <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-white/55 2xl:text-xs">{etiqueta}</p>
+      <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-white/55 2xl:text-xs">
+        {etiqueta}
+      </p>
       <p className="truncate text-[10px] text-white/70 2xl:text-xs">{pie}</p>
     </div>
   );

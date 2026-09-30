@@ -333,9 +333,14 @@ export class UsersService {
     } catch (error: unknown) {
       // La clave ya se rotó; avisar del fallo de envío (no dejarlo silencioso como
       // en la creación, porque aquí el admin espera que el correo salga).
-      this.logger.error(`No se pudo reenviar el correo de credenciales a ${to}: ${this.errorMessage(error)}`);
+      this.logger.error(
+        `No se pudo reenviar el correo de credenciales a ${to}: ${this.errorMessage(error)}`,
+      );
       throw new HttpException(
-        { code: 'EMAIL_SEND_FAILED', message: 'La clave se regeneró, pero no se pudo enviar el correo.' },
+        {
+          code: 'EMAIL_SEND_FAILED',
+          message: 'La clave se regeneró, pero no se pudo enviar el correo.',
+        },
         502,
       );
     }
@@ -444,7 +449,9 @@ export class UsersService {
         });
       } catch (error: unknown) {
         const label =
-          validation.dto.emailInstitucional ?? validation.dto.emailPersonal ?? validation.dto.username;
+          validation.dto.emailInstitucional ??
+          validation.dto.emailPersonal ??
+          validation.dto.username;
         errors.push({ index, email: label, message: this.errorMessage(error) });
       }
     }
@@ -593,8 +600,7 @@ export class UsersService {
     if (tipo === 'cliente') filterParts.push({ isClientUser: true });
     else if (tipo === 'interno') filterParts.push({ isClientUser: false });
 
-    const where =
-      tableAndWhere<Prisma.UserWhereInput>(searchWhere, ...filterParts) ?? {};
+    const where = tableAndWhere<Prisma.UserWhereInput>(searchWhere, ...filterParts) ?? {};
 
     const orderBy = tableOrderBy<Prisma.UserOrderByWithRelationInput[]>(
       req,
@@ -613,7 +619,12 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
-    return tablePage(rows.map((user) => this.toListItem(user)), total, page, pageSize);
+    return tablePage(
+      rows.map((user) => this.toListItem(user)),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   /**
@@ -737,7 +748,9 @@ export class UsersService {
       // Un turno cíclico sin fecha de inicio no permite computar faena/descanso:
       // se exige el ancla del ciclo (día 1 en faena).
       if (cycleStart === null) {
-        throw new BadRequestException('Los turnos cíclicos requieren una fecha de inicio de ciclo.');
+        throw new BadRequestException(
+          'Los turnos cíclicos requieren una fecha de inicio de ciclo.',
+        );
       }
       // En faena todos los días son iguales: rige la jornada única y el horario
       // semanal por día no aplica.
@@ -953,7 +966,9 @@ export class UsersService {
         dto.emailPersonal !== undefined ? dto.emailPersonal?.trim() || null : current.emailPersonal;
       const nextEmail = nextInstitucional ?? nextPersonal;
       if (!nextEmail) {
-        throw new BadRequestException('El usuario debe conservar al menos un correo (institucional o personal).');
+        throw new BadRequestException(
+          'El usuario debe conservar al menos un correo (institucional o personal).',
+        );
       }
       data.emailInstitucional = nextInstitucional;
       data.emailPersonal = nextPersonal;
@@ -990,7 +1005,10 @@ export class UsersService {
     }
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, memberships: { select: { roleKey: true, scopeType: true, scopeId: true } } },
+      select: {
+        id: true,
+        memberships: { select: { roleKey: true, scopeType: true, scopeId: true } },
+      },
     });
     if (!user) {
       throw new NotFoundException(`No existe un usuario con id "${id}".`);
@@ -1304,10 +1322,7 @@ export class UsersService {
         400,
       );
     }
-    await this.fga.syncRoleAssignment(
-      { ...input, scopeType: input.scopeType },
-      op,
-    );
+    await this.fga.syncRoleAssignment({ ...input, scopeType: input.scopeType }, op);
   }
 
   /**
@@ -1448,7 +1463,11 @@ export class UsersService {
   }
 
   /** Proyección pública de una Membership (contrato UserMembership, A4). */
-  private toUserMembership(m: { roleKey: string; scopeType: string; scopeId: string }): UserMembership {
+  private toUserMembership(m: {
+    roleKey: string;
+    scopeType: string;
+    scopeId: string;
+  }): UserMembership {
     return { roleKey: m.roleKey, scopeType: m.scopeType as ScopeType, scopeId: m.scopeId };
   }
 
@@ -1468,10 +1487,7 @@ export class UsersService {
     return out;
   }
 
-  private toProvisionedUser(
-    user: User,
-    roleKeys: RoleKey[],
-  ): CreateUserResponse['user'] {
+  private toProvisionedUser(user: User, roleKeys: RoleKey[]): CreateUserResponse['user'] {
     return {
       id: user.id,
       email: user.email,
@@ -1519,8 +1535,10 @@ export class UsersService {
     }
     const target = (error as { meta?: { target?: unknown } }).meta?.target;
     const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
-    if (fields.some((f) => f.includes('username'))) return 'Ya existe un usuario con ese nombre de usuario.';
-    if (fields.some((f) => f.includes('emailInstitucional'))) return 'Ya existe un usuario con ese email institucional.';
+    if (fields.some((f) => f.includes('username')))
+      return 'Ya existe un usuario con ese nombre de usuario.';
+    if (fields.some((f) => f.includes('emailInstitucional')))
+      return 'Ya existe un usuario con ese email institucional.';
     return 'Ya existe un usuario con ese email.';
   }
 

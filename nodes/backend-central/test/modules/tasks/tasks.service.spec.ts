@@ -116,12 +116,14 @@ describe('TasksService', () => {
         name: dto.name,
         projectId: dto.projectId,
         reviewDate: new Date('2026-07-20T00:00:00Z'),
-        dueDate: new Date('2026-07-25T00:00:00Z')
+        dueDate: new Date('2026-07-25T00:00:00Z'),
       } as Record<string, unknown>);
 
       await service.create('u1', dto);
 
-      const data = (prismaMock.task.create.mock.calls[0]?.[0] as { data: { reviewDate: Date; dueDate: Date } }).data;
+      const data = (
+        prismaMock.task.create.mock.calls[0]?.[0] as { data: { reviewDate: Date; dueDate: Date } }
+      ).data;
       expect(data.reviewDate).toEqual(new Date('2026-07-20'));
       expect(data.dueDate).toEqual(new Date('2026-07-25'));
     });
@@ -135,8 +137,8 @@ describe('TasksService', () => {
         name: 'Actividad Principal',
         steps: [
           { name: 'Paso 1', startDate: '2026-08-01' },
-          { name: 'Paso 2', dueDate: '2026-08-05' }
-        ]
+          { name: 'Paso 2', dueDate: '2026-08-05' },
+        ],
       };
 
       await service.create('user1', dto);
@@ -149,25 +151,27 @@ describe('TasksService', () => {
               create: expect.arrayContaining([
                 expect.objectContaining({ name: 'Paso 1' }),
                 expect.objectContaining({ name: 'Paso 2' }),
-              ])
-            }
-          })
-        })
+              ]),
+            },
+          }),
+        }),
       );
     });
 
     it('un paso sin priority explícita no hereda la prioridad manual del padre', async () => {
       permissionMock.scopeFilter.mockResolvedValue({ kind: 'none' });
-      prismaMock.task.create.mockResolvedValue({ id: 'parent1', priority: 'URGENTE', priorityManual: true });
+      prismaMock.task.create.mockResolvedValue({
+        id: 'parent1',
+        priority: 'URGENTE',
+        priorityManual: true,
+      });
       gamificationMock.awardPoints.mockResolvedValue(undefined);
 
       const dto = {
         name: 'Actividad Urgente',
         priority: 'URGENTE' as TaskPriority,
         priorityManual: true,
-        steps: [
-          { name: 'Paso con fecha', dueDate: '2026-09-01' }
-        ]
+        steps: [{ name: 'Paso con fecha', dueDate: '2026-09-01' }],
       };
 
       await service.create('user1', dto);
@@ -195,10 +199,7 @@ describe('TasksService', () => {
       await service.list('u1', {});
 
       const prismaArgs = prismaMock.task.findMany.mock.calls[0]?.[0];
-      expect(prismaArgs.where.OR).toEqual([
-        { assignedToId: 'u1' },
-        { createdById: 'u1' },
-      ]);
+      expect(prismaArgs.where.OR).toEqual([{ assignedToId: 'u1' }, { createdById: 'u1' }]);
     });
 
     it('aplica filtro WHERE con kind:projects', async () => {
@@ -224,9 +225,19 @@ describe('TasksService', () => {
   // ─── getById ─────────────────────────────────────────────────────────
   describe('getById', () => {
     it('retorna la tarea si permissions.can devuelve allow', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', createdById: 'u2', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        createdById: 'u2',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
 
       const res = await service.getById('t1', 'u1');
       expect(res).toBeDefined();
@@ -242,8 +253,16 @@ describe('TasksService', () => {
     });
 
     it('lanza NotFoundException si permissions.can devuelve deny para tarea con proyecto', async () => {
-      prismaMock.task.findUnique.mockResolvedValue({ id: 't1', projectId: 'p1', createdById: 'u1', assignedToId: 'u1' });
-      permissionMock.can.mockResolvedValue({ effect: 'deny', filter: { kind: 'projects', ids: [] } });
+      prismaMock.task.findUnique.mockResolvedValue({
+        id: 't1',
+        projectId: 'p1',
+        createdById: 'u1',
+        assignedToId: 'u1',
+      });
+      permissionMock.can.mockResolvedValue({
+        effect: 'deny',
+        filter: { kind: 'projects', ids: [] },
+      });
 
       await expect(service.getById('t1', 'u1')).rejects.toThrow(NotFoundException);
     });
@@ -251,24 +270,44 @@ describe('TasksService', () => {
     it('deniega a creador de tarea con proyecto si FGA no da acceso al proyecto', async () => {
       const task = { id: 't1', projectId: 'p1', createdById: 'user1', assignedToId: 'user2' };
       prismaMock.task.findUnique.mockResolvedValue(task);
-      permissionMock.can.mockResolvedValue({ effect: 'deny', filter: { kind: 'projects', ids: [] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'deny',
+        filter: { kind: 'projects', ids: [] },
+      });
 
       await expect(service.getById('t1', 'user1')).rejects.toThrow(NotFoundException);
-      expect(permissionMock.can).toHaveBeenCalledWith('user1', 'task:read', { projectId: 'p1', createdById: 'user1' });
+      expect(permissionMock.can).toHaveBeenCalledWith('user1', 'task:read', {
+        projectId: 'p1',
+        createdById: 'user1',
+      });
     });
 
     it('deniega a asignado de tarea con proyecto si FGA no da acceso al proyecto', async () => {
       const task = { id: 't1', projectId: 'p1', createdById: 'user2', assignedToId: 'user1' };
       prismaMock.task.findUnique.mockResolvedValue(task);
-      permissionMock.can.mockResolvedValue({ effect: 'deny', filter: { kind: 'projects', ids: [] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'deny',
+        filter: { kind: 'projects', ids: [] },
+      });
 
       await expect(service.getById('t1', 'user1')).rejects.toThrow(NotFoundException);
     });
 
     it('permite a miembro del proyecto (FGA allow)', async () => {
-      const task = { id: 't1', projectId: 'p1', createdById: 'user2', assignedToId: 'user2', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const task = {
+        id: 't1',
+        projectId: 'p1',
+        createdById: 'user2',
+        assignedToId: 'user2',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(task);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
 
       const res = await service.getById('t1', 'user1');
       expect(res).toBeDefined();
@@ -278,7 +317,15 @@ describe('TasksService', () => {
   // ─── update ──────────────────────────────────────────────────────────
   describe('update', () => {
     it('permite al creador editar su tarea suelta', async () => {
-      const task = { id: 't1', createdById: 'user1', projectId: null, priority: 'BAJA', priorityManual: false, dueDate: null, assignedToId: null };
+      const task = {
+        id: 't1',
+        createdById: 'user1',
+        projectId: null,
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+        assignedToId: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(task);
       // getById llama permissions.can → allow (creador de tarea suelta)
       permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'none' } });
@@ -290,7 +337,15 @@ describe('TasksService', () => {
     });
 
     it('permite a un usuario GLOBAL editar una tarea suelta ajena', async () => {
-      const task = { id: 't1', createdById: 'user1', projectId: null, priority: 'BAJA', priorityManual: false, dueDate: null, assignedToId: null };
+      const task = {
+        id: 't1',
+        createdById: 'user1',
+        projectId: null,
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+        assignedToId: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(task);
       // getById: allow (GLOBAL)
       permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'none' } });
@@ -298,35 +353,78 @@ describe('TasksService', () => {
       permissionMock.scopeFilter.mockResolvedValue({ kind: 'none' });
       prismaMock.task.update.mockResolvedValue(task);
 
-      await expect(service.update('t1', 'admin_global', { name: 'new name' })).resolves.toBeDefined();
+      await expect(
+        service.update('t1', 'admin_global', { name: 'new name' }),
+      ).resolves.toBeDefined();
     });
 
     it('deniega a un gestor con alcance de proyectos editar una tarea suelta ajena', async () => {
-      const task = { id: 't1', createdById: 'user1', assignedToId: 'user2', projectId: null, priority: 'BAJA', priorityManual: false, dueDate: null };
+      const task = {
+        id: 't1',
+        createdById: 'user1',
+        assignedToId: 'user2',
+        projectId: null,
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(task);
       // getById: allow (let's say the gestor has projects scope, but can see it)
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       // canOperateStandaloneTask for task:update: kind:projects → not GLOBAL, not creator
       permissionMock.scopeFilter.mockResolvedValue({ kind: 'projects', ids: ['p1'] });
       prismaMock.task.update.mockResolvedValue(task);
 
       // gestor1 is not the creator (user1), not assignedTo (user2), canAssign is false
-      await expect(service.update('t1', 'gestor1', { name: 'new name' })).rejects.toThrow(BadRequestException);
+      await expect(service.update('t1', 'gestor1', { name: 'new name' })).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('bloquea ciclo directo (parentId === id)', async () => {
-      const task = { id: 't1', createdById: 'user1', projectId: 'p1', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const task = {
+        id: 't1',
+        createdById: 'user1',
+        projectId: 'p1',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(task);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       fgaMock.check.mockResolvedValue(true);
 
-      await expect(service.update('t1', 'user1', { parentId: 't1' })).rejects.toThrow('Una tarea no puede ser padre de sí misma.');
+      await expect(service.update('t1', 'user1', { parentId: 't1' })).rejects.toThrow(
+        'Una tarea no puede ser padre de sí misma.',
+      );
     });
 
     it('bloquea ciclo indirecto (A es ancestro de B y se intenta asignar B como padre de A)', async () => {
       // t1 (parent=null) -> t2 (parent=t1). Intentamos hacer t1.parentId = t2.
-      const taskA = { id: 't1', createdById: 'user1', projectId: 'p1', parentId: null, priority: 'BAJA', priorityManual: false, dueDate: null };
-      const taskB = { id: 't2', createdById: 'user1', projectId: 'p1', parentId: 't1', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const taskA = {
+        id: 't1',
+        createdById: 'user1',
+        projectId: 'p1',
+        parentId: null,
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
+      const taskB = {
+        id: 't2',
+        createdById: 'user1',
+        projectId: 'p1',
+        parentId: 't1',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
 
       prismaMock.task.findUnique.mockImplementation(({ where }: { where: { id: string } }) => {
         if (where.id === 't1') return Promise.resolve(taskA);
@@ -334,10 +432,15 @@ describe('TasksService', () => {
         return Promise.resolve(null);
       });
 
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       fgaMock.check.mockResolvedValue(true);
 
-      await expect(service.update('t1', 'user1', { parentId: 't2' })).rejects.toThrow('El parentId crea un ciclo en la jerarquía de tareas.');
+      await expect(service.update('t1', 'user1', { parentId: 't2' })).rejects.toThrow(
+        'El parentId crea un ciclo en la jerarquía de tareas.',
+      );
     });
   });
 
@@ -345,32 +448,59 @@ describe('TasksService', () => {
   describe('updateStatus', () => {
     /** Helper: mock getById pass-through for project tasks via permissions.can */
     function mockGetByIdAllow() {
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
     }
 
     it('modifica el estado y otorga puntos de gamificación al completarse', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.PENDIENTE, assignedToId: 'u2', estimatedPoints: 10, createdById: 'u1', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        status: TaskStatus.PENDIENTE,
+        assignedToId: 'u2',
+        estimatedPoints: 10,
+        createdById: 'u1',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
       mockGetByIdAllow();
       fgaMock.check.mockResolvedValue(true);
       prismaMock.task.update.mockResolvedValue({ ...mockTask, status: TaskStatus.COMPLETADO });
 
-      const res = await service.updateStatus('t1', 'u1', { status: TaskStatus.COMPLETADO, actualPoints: 12 });
+      const res = await service.updateStatus('t1', 'u1', {
+        status: TaskStatus.COMPLETADO,
+        actualPoints: 12,
+      });
 
       expect(res.status).toBe(TaskStatus.COMPLETADO);
-      expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          status: TaskStatus.COMPLETADO,
-          actualPoints: 12,
-          rejectionReason: null,
-          completedAt: expect.any(Date),
+      expect(prismaMock.task.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: TaskStatus.COMPLETADO,
+            actualPoints: 12,
+            rejectionReason: null,
+            completedAt: expect.any(Date),
+          }),
         }),
-      }));
+      );
       expect(gamificationMock.awardPoints).toHaveBeenCalledWith('u2', 'COMPLETE_TASK');
     });
 
     it('rechazar (REVISADO→EN_PROGRESO) exige gestión y guarda el motivo', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.REVISADO, assignedToId: 'u2', createdById: 'u1', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        status: TaskStatus.REVISADO,
+        assignedToId: 'u2',
+        createdById: 'u1',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
       mockGetByIdAllow();
       fgaMock.check.mockResolvedValue(true);
@@ -381,16 +511,27 @@ describe('TasksService', () => {
         rejectionReason: 'Falta el informe firmado',
       });
 
-      expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          status: TaskStatus.EN_PROGRESO,
-          rejectionReason: 'Falta el informe firmado',
+      expect(prismaMock.task.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: TaskStatus.EN_PROGRESO,
+            rejectionReason: 'Falta el informe firmado',
+          }),
         }),
-      }));
+      );
     });
 
     it('el responsable NO puede aprobar su propia tarea (solo gestión)', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.REVISADO, assignedToId: 'u2', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        status: TaskStatus.REVISADO,
+        assignedToId: 'u2',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
       mockGetByIdAllow();
       // u2 has can_view + can_create_task but NOT can_assign_task → not a manager
@@ -405,7 +546,16 @@ describe('TasksService', () => {
     });
 
     it('reabrir una tarea COMPLETADO exige gestión (un no-gestor no revierte la aprobación)', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.COMPLETADO, assignedToId: 'u2', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        status: TaskStatus.COMPLETADO,
+        assignedToId: 'u2',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
       mockGetByIdAllow();
       fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
@@ -419,7 +569,16 @@ describe('TasksService', () => {
     });
 
     it('el responsable envía a revisión (EN_PROGRESO→REVISADO) y limpia el motivo previo', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.EN_PROGRESO, assignedToId: 'u2', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        status: TaskStatus.EN_PROGRESO,
+        assignedToId: 'u2',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
       mockGetByIdAllow();
       fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
@@ -429,13 +588,24 @@ describe('TasksService', () => {
 
       await service.updateStatus('t1', 'u2', { status: TaskStatus.REVISADO });
 
-      expect(prismaMock.task.update).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ status: TaskStatus.REVISADO, rejectionReason: null }),
-      }));
+      expect(prismaMock.task.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: TaskStatus.REVISADO, rejectionReason: null }),
+        }),
+      );
     });
 
     it('un gestor con SOLO can_assign_task (sin can_create_task ni ser asignado) puede aprobar', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', status: TaskStatus.REVISADO, assignedToId: 'u2', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        status: TaskStatus.REVISADO,
+        assignedToId: 'u2',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
       mockGetByIdAllow();
       fgaMock.check.mockImplementation(({ relation }: { relation: string }) =>
@@ -453,28 +623,52 @@ describe('TasksService', () => {
   // ─── startTime ───────────────────────────────────────────────────────
   describe('startTime', () => {
     it('registra el inicio de tiempo si no hay otra actividad abierta para esa tarea', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', assignedToId: 'u1', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        assignedToId: 'u1',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       prismaMock.taskTimeLog.findFirst.mockResolvedValue(null);
       prismaMock.taskTimeLog.create.mockResolvedValue({ id: 'log1', taskId: 't1', userId: 'u1' });
 
       const res = await service.startTime('t1', 'u1', 'Nota inicial');
 
       expect(res).toBeDefined();
-      expect(prismaMock.taskTimeLog.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          taskId: 't1',
-          userId: 'u1',
-          note: 'Nota inicial',
+      expect(prismaMock.taskTimeLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            taskId: 't1',
+            userId: 'u1',
+            note: 'Nota inicial',
+          }),
         }),
-      }));
+      );
     });
 
     it('rechaza si ya hay una actividad abierta (endedAt = null) para esa tarea y usuario', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', assignedToId: 'u1', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        assignedToId: 'u1',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       prismaMock.taskTimeLog.findFirst.mockResolvedValue({ id: 'log1', endedAt: null });
 
       await expect(service.startTime('t1', 'u1')).rejects.toThrow(BadRequestException);
@@ -484,27 +678,51 @@ describe('TasksService', () => {
   // ─── finishTime ──────────────────────────────────────────────────────
   describe('finishTime', () => {
     it('registra el fin de la actividad abierta exitosamente', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', assignedToId: 'u1', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        assignedToId: 'u1',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       prismaMock.taskTimeLog.findFirst.mockResolvedValue({ id: 'log1', startedAt: new Date() });
       prismaMock.taskTimeLog.update.mockResolvedValue({ id: 'log1', endedAt: new Date() });
 
       const res = await service.finishTime('t1', 'u1', 'Nota final');
 
       expect(res).toBeDefined();
-      expect(prismaMock.taskTimeLog.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'log1' },
-        data: expect.objectContaining({
-          note: 'Nota final',
+      expect(prismaMock.taskTimeLog.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'log1' },
+          data: expect.objectContaining({
+            note: 'Nota final',
+          }),
         }),
-      }));
+      );
     });
 
     it('rechaza si no hay una actividad abierta', async () => {
-      const mockTask = { id: 't1', projectId: 'p1', assignedToId: 'u1', createdById: 'u9', priority: 'BAJA', priorityManual: false, dueDate: null };
+      const mockTask = {
+        id: 't1',
+        projectId: 'p1',
+        assignedToId: 'u1',
+        createdById: 'u9',
+        priority: 'BAJA',
+        priorityManual: false,
+        dueDate: null,
+      };
       prismaMock.task.findUnique.mockResolvedValue(mockTask);
-      permissionMock.can.mockResolvedValue({ effect: 'allow', filter: { kind: 'projects', ids: ['p1'] } });
+      permissionMock.can.mockResolvedValue({
+        effect: 'allow',
+        filter: { kind: 'projects', ids: ['p1'] },
+      });
       prismaMock.taskTimeLog.findFirst.mockResolvedValue(null);
 
       await expect(service.finishTime('t1', 'u1')).rejects.toThrow(BadRequestException);

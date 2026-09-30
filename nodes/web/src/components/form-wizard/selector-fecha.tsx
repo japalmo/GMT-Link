@@ -215,7 +215,10 @@ export function SelectorFecha({
 
           <div className="grid grid-cols-7 gap-1 text-center">
             {DIAS.map((d) => (
-              <span key={d} className="pb-1 text-[11px] font-medium uppercase text-muted-foreground">
+              <span
+                key={d}
+                className="pb-1 text-[11px] font-medium uppercase text-muted-foreground"
+              >
                 {d}
               </span>
             ))}

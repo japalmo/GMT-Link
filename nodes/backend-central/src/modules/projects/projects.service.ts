@@ -25,11 +25,7 @@ import { computeProjectDashboard, type DashboardActivity } from './dashboard.uti
 import { ClimaService } from './clima.service';
 import { hashPassword, verifyPassword } from '../../common/password';
 import { signObraPass, verifyObraPass } from '../../common/jwt';
-import {
-  computeObraDashboard,
-  type ObraActivity,
-  type ObraDashboard,
-} from './obra-dashboard.util';
+import { computeObraDashboard, type ObraActivity, type ObraDashboard } from './obra-dashboard.util';
 import { computeControlSemanal } from './control-semanal.util';
 import { avanceSemanal } from './avance-ponderado.util';
 import { EditarAvanceActividadDto, EditarCorteDto, EditarSemanaDto } from './dto/avance.dto';
@@ -260,10 +256,7 @@ export class ProjectsService {
       .map((m) => m.scopeId);
 
     const accessClause = {
-      OR: [
-        { id: { in: projectIds } },
-        { departmentId: { in: departmentIds } },
-      ],
+      OR: [{ id: { in: projectIds } }, { departmentId: { in: departmentIds } }],
     };
     const projects = await this.prisma.project.findMany({
       // Solo envolvemos en AND cuando hay filtro por faena; sin filtro,
@@ -413,7 +406,10 @@ export class ProjectsService {
    * La clave se guarda hasheada: el enlace se comparte con el cliente y una
    * clave en claro en base sería un regalo.
    */
-  async setPublicPassword(projectId: string, password: string | null): Promise<{ publicPasswordSet: boolean }> {
+  async setPublicPassword(
+    projectId: string,
+    password: string | null,
+  ): Promise<{ publicPasswordSet: boolean }> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { id: true },
@@ -770,7 +766,14 @@ export class ProjectsService {
       where: { id: projectId },
       include: {
         _count: {
-          select: { services: true, tasks: true, documents: true, elements: true, workers: true, overtimeRequests: true },
+          select: {
+            services: true,
+            tasks: true,
+            documents: true,
+            elements: true,
+            workers: true,
+            overtimeRequests: true,
+          },
         },
       },
     });
@@ -794,9 +797,7 @@ export class ProjectsService {
     if (assetCount > 0) blockers.push(`${assetCount} activo(s)`);
 
     if (blockers.length > 0) {
-      throw new ConflictException(
-        `No puedes eliminar el proyecto: tiene ${blockers.join(', ')}.`,
-      );
+      throw new ConflictException(`No puedes eliminar el proyecto: tiene ${blockers.join(', ')}.`);
     }
 
     // Membresías de scope PROJECT del proyecto (incluye la autocreada
@@ -823,7 +824,9 @@ export class ProjectsService {
     // se mapea al mismo 409 que clientes/faenas (carrera TOCTOU).
     try {
       await this.prisma.$transaction(async (tx) => {
-        await tx.membership.deleteMany({ where: { scopeType: ScopeType.PROJECT, scopeId: projectId } });
+        await tx.membership.deleteMany({
+          where: { scopeType: ScopeType.PROJECT, scopeId: projectId },
+        });
         await tx.project.delete({ where: { id: projectId } });
       });
     } catch (error: unknown) {
@@ -930,7 +933,6 @@ export class ProjectsService {
     await this.prisma.service.delete({ where: { id: serviceId } });
     return { ok: true };
   }
-
 
   // ── Control de avance de obra (project:progress:manage) ────────────────────
 
@@ -1106,7 +1108,8 @@ export class ProjectsService {
         where: { projectId },
         select: { hh: true, realByWeek: true },
       });
-      const calc = semana.index >= 1 ? avanceSemanal(actividades, semana.index)[semana.index - 1] : { acm: 0 };
+      const calc =
+        semana.index >= 1 ? avanceSemanal(actividades, semana.index)[semana.index - 1] : { acm: 0 };
       if (calc?.acm === null || calc === undefined) {
         throw new BadRequestException(
           `${dto.code} no tiene detalle por actividad: no hay valor calculado al que volver. ` +
@@ -1129,7 +1132,6 @@ export class ProjectsService {
     await this.prisma.projectWeek.update({ where: { id: semana.id }, data });
     await this.recalcularAvance(projectId);
   }
-
 
   /**
    * Foto de terreno de un cerco.

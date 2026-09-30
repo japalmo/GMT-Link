@@ -196,10 +196,7 @@ export class ApiError extends Error {
  * `fallback` en cualquier otro caso. Reemplaza los `toMessage` locales
  * duplicados en los diálogos de rechazo (finanzas / recursos).
  */
-export function errorToMessage(
-  error: unknown,
-  fallback = 'Ocurrió un error',
-): string {
+export function errorToMessage(error: unknown, fallback = 'Ocurrió un error'): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error && error.message.length > 0) return error.message;
   return fallback;
@@ -245,10 +242,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       // respuesta sin cuerpo JSON; usamos el fallback
     }
-    throw new ApiError(
-      extractMessage(body, `Error ${res.status} al llamar a la API.`),
-      res.status,
-    );
+    throw new ApiError(extractMessage(body, `Error ${res.status} al llamar a la API.`), res.status);
   }
 
   if (res.status === 204) return undefined as T;
@@ -518,7 +512,8 @@ export function listUsers(
   params: { search?: string; limit?: number; cursor?: string } = {},
 ): Promise<Paginated<UserListItem>> {
   const query = new URLSearchParams();
-  if (params.search && params.search.trim().length > 0) query.append('search', params.search.trim());
+  if (params.search && params.search.trim().length > 0)
+    query.append('search', params.search.trim());
   if (params.limit !== undefined) query.append('limit', String(params.limit));
   if (params.cursor) query.append('cursor', params.cursor);
   const qs = query.toString();
@@ -584,21 +579,16 @@ export function removeUserRole(id: string, membership: UserMembership): Promise<
     scopeType: membership.scopeType,
     scopeId: membership.scopeId,
   });
-  return request<UserRolesResponse>(
-    `/users/${encodeURIComponent(id)}/roles?${query.toString()}`,
-    { method: 'DELETE' },
-  );
+  return request<UserRolesResponse>(`/users/${encodeURIComponent(id)}/roles?${query.toString()}`, {
+    method: 'DELETE',
+  });
 }
 
 /** `PATCH /users/:id/avatar` — sube la foto de perfil de un usuario. */
 export function uploadUserAvatar(id: string, file: File): Promise<UserListItem> {
   const formData = new FormData();
   formData.append('file', file);
-  return uploadRequest<UserListItem>(
-    `/users/${encodeURIComponent(id)}/avatar`,
-    formData,
-    'PATCH',
-  );
+  return uploadRequest<UserListItem>(`/users/${encodeURIComponent(id)}/avatar`, formData, 'PATCH');
 }
 
 /**
@@ -624,11 +614,14 @@ export function resendUserInvitePreview(id: string): Promise<ResendInvitePreview
  * `sendEmail: true` el servidor envía el correo (clave inyectada allí, NO
  * retornada); si no, retorna la clave una vez para compartirla a mano.
  */
-export function resendUserInvite(id: string, input: ResendInviteInput): Promise<ResendInviteResult> {
-  return request<ResendInviteResult>(
-    `/users/${encodeURIComponent(id)}/resend-invite`,
-    { method: 'POST', body: JSON.stringify(input) },
-  );
+export function resendUserInvite(
+  id: string,
+  input: ResendInviteInput,
+): Promise<ResendInviteResult> {
+  return request<ResendInviteResult>(`/users/${encodeURIComponent(id)}/resend-invite`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 /** `PATCH /users/:id` — edita el detalle de un usuario (admin). */
@@ -695,10 +688,9 @@ export function rejectDocument(id: string, reason?: string): Promise<PersonalDoc
  * sesiones. Devuelve el {@link UserListItem} ya suspendido.
  */
 export function revokeUserInvite(id: string): Promise<UserListItem> {
-  return request<UserListItem>(
-    `/users/${encodeURIComponent(id)}/revoke-invite`,
-    { method: 'POST' },
-  );
+  return request<UserListItem>(`/users/${encodeURIComponent(id)}/revoke-invite`, {
+    method: 'POST',
+  });
 }
 
 /**
@@ -706,10 +698,7 @@ export function revokeUserInvite(id: string): Promise<UserListItem> {
  * cambiar su estado. No devuelve cuerpo.
  */
 export function revokeUserSessions(id: string): Promise<void> {
-  return request<void>(
-    `/users/${encodeURIComponent(id)}/revoke-sessions`,
-    { method: 'POST' },
-  );
+  return request<void>(`/users/${encodeURIComponent(id)}/revoke-sessions`, { method: 'POST' });
 }
 
 /**
@@ -718,10 +707,9 @@ export function revokeUserSessions(id: string): Promise<void> {
  * PENDING_FIRST_LOGIN si nunca entró. Devuelve el {@link UserListItem} restaurado.
  */
 export function restoreUserAccess(id: string): Promise<UserListItem> {
-  return request<UserListItem>(
-    `/users/${encodeURIComponent(id)}/restore-access`,
-    { method: 'POST' },
-  );
+  return request<UserListItem>(`/users/${encodeURIComponent(id)}/restore-access`, {
+    method: 'POST',
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -877,9 +865,7 @@ export function requestEmailVerify(kind: EmailKind): Promise<void> {
 /** `GET /directory?search=` — entradas del directorio scopeadas por permisos. */
 export function listDirectory(search?: string): Promise<DirectoryEntry[]> {
   const query =
-    search && search.trim().length > 0
-      ? `?search=${encodeURIComponent(search.trim())}`
-      : '';
+    search && search.trim().length > 0 ? `?search=${encodeURIComponent(search.trim())}` : '';
   return request<DirectoryEntry[]>(`/directory${query}`);
 }
 
@@ -914,9 +900,7 @@ export function getDirectoryEntry(id: string): Promise<DirectoryEntry> {
  * llamador debe manejar ese 403 silenciosamente y mostrar solo el básico.
  */
 export function getDirectoryExtended(id: string): Promise<DirectoryEntryExtended> {
-  return request<DirectoryEntryExtended>(
-    `/directory/${encodeURIComponent(id)}/extended`,
-  );
+  return request<DirectoryEntryExtended>(`/directory/${encodeURIComponent(id)}/extended`);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -945,10 +929,7 @@ export function addExperience(input: CvExperienceInput): Promise<CvExperienceVie
 }
 
 /** `PATCH /cv/me/experiences/:id` — edita una experiencia. */
-export function updateExperience(
-  id: string,
-  input: CvExperienceInput,
-): Promise<CvExperienceView> {
+export function updateExperience(id: string, input: CvExperienceInput): Promise<CvExperienceView> {
   return request<CvExperienceView>(`/cv/me/experiences/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
@@ -971,10 +952,7 @@ export function addEducation(input: CvEducationInput): Promise<CvEducationView> 
 }
 
 /** `PATCH /cv/me/education/:id` — edita una formación académica. */
-export function updateEducation(
-  id: string,
-  input: CvEducationInput,
-): Promise<CvEducationView> {
+export function updateEducation(id: string, input: CvEducationInput): Promise<CvEducationView> {
   return request<CvEducationView>(`/cv/me/education/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
@@ -989,9 +967,7 @@ export function deleteEducation(id: string): Promise<void> {
 }
 
 /** `POST /cv/me/certifications` — agrega una certificación. */
-export function addCertification(
-  input: CvCertificationInput,
-): Promise<CvCertificationView> {
+export function addCertification(input: CvCertificationInput): Promise<CvCertificationView> {
   return request<CvCertificationView>('/cv/me/certifications', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -1003,10 +979,10 @@ export function updateCertification(
   id: string,
   input: CvCertificationInput,
 ): Promise<CvCertificationView> {
-  return request<CvCertificationView>(
-    `/cv/me/certifications/${encodeURIComponent(id)}`,
-    { method: 'PATCH', body: JSON.stringify(input) },
-  );
+  return request<CvCertificationView>(`/cv/me/certifications/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
 }
 
 /** `DELETE /cv/me/certifications/:id` — elimina una certificación. */
@@ -1021,10 +997,7 @@ export function deleteCertification(id: string): Promise<void> {
  * certificación, vía multipart (campo `file`). Devuelve la certificación con su
  * `fileUrl` ya poblado.
  */
-export function uploadDiploma(
-  id: string,
-  file: File,
-): Promise<CvCertificationView> {
+export function uploadDiploma(id: string, file: File): Promise<CvCertificationView> {
   const formData = new FormData();
   formData.append('file', file);
   return uploadRequest<CvCertificationView>(
@@ -1049,16 +1022,12 @@ export function getCvCertificationDiplomaUrl(id: string): Promise<{ url: string 
 /* -------------------------------------------------------------------------- */
 
 /** `GET /documents/me?status=&expiring=` — documentos personales del usuario. */
-export function listDocuments(
-  filters: DocumentFilters = {},
-): Promise<PersonalDocumentView[]> {
+export function listDocuments(filters: DocumentFilters = {}): Promise<PersonalDocumentView[]> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.expiring) params.set('expiring', 'true');
   const query = params.toString();
-  return request<PersonalDocumentView[]>(
-    `/documents/me${query ? `?${query}` : ''}`,
-  );
+  return request<PersonalDocumentView[]>(`/documents/me${query ? `?${query}` : ''}`);
 }
 
 /**
@@ -1101,10 +1070,7 @@ export function uploadDocument(
  * `POST /documents/me/:id/version` — sube una versión nueva del documento
  * (campo `file`). Conserva `previousFileUrl` y vuelve a `EN_REVISION`.
  */
-export function uploadDocumentVersion(
-  id: string,
-  file: File,
-): Promise<PersonalDocumentView> {
+export function uploadDocumentVersion(id: string, file: File): Promise<PersonalDocumentView> {
   const formData = new FormData();
   formData.append('file', file);
   return uploadRequest<PersonalDocumentView>(
@@ -1180,10 +1146,9 @@ export function getUnreadCount(): Promise<{ count: number }> {
 
 /** `POST /notifications/:id/read` — marca una propia como leída. 404 si es ajena. */
 export function markNotificationRead(id: string): Promise<NotificationView> {
-  return request<NotificationView>(
-    `/notifications/${encodeURIComponent(id)}/read`,
-    { method: 'POST' },
-  );
+  return request<NotificationView>(`/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
 }
 
 /** `POST /notifications/read-all` — marca todas las no leídas. Retorna cuántas. */
@@ -1246,10 +1211,9 @@ export function listPendingPermissionRequests(): Promise<PermissionRequestAdminV
 
 /** `POST /permission-requests/:id/approve` — aprueba una solicitud. SOLO admin. */
 export function approvePermissionRequest(id: string): Promise<PermissionRequestView> {
-  return request<PermissionRequestView>(
-    `/permission-requests/${encodeURIComponent(id)}/approve`,
-    { method: 'POST' },
-  );
+  return request<PermissionRequestView>(`/permission-requests/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+  });
 }
 
 /**
@@ -1262,10 +1226,10 @@ export function rejectPermissionRequest(
 ): Promise<PermissionRequestView> {
   const body: { reason?: string } = {};
   if (reason && reason.trim().length > 0) body.reason = reason.trim();
-  return request<PermissionRequestView>(
-    `/permission-requests/${encodeURIComponent(id)}/reject`,
-    { method: 'POST', body: JSON.stringify(body) },
-  );
+  return request<PermissionRequestView>(`/permission-requests/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1388,9 +1352,7 @@ export function fetchReimbursementsTable(req: TableRequest): Promise<TablePage<R
  * `GET /reimbursements/summary` — totales agregados por el servidor (§5.2). Solo
  * gestores (403 si no). C2 agrega client-side, pero el wrapper queda disponible.
  */
-export function reimbursementsSummary(
-  filters: ReimbursementListFilters = {},
-): Promise<unknown> {
+export function reimbursementsSummary(filters: ReimbursementListFilters = {}): Promise<unknown> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.userId) params.set('userId', filters.userId);
@@ -1407,10 +1369,7 @@ export function reimbursementsSummary(
  * `file` PDF/imagen). SOLO el dueño y solo si está PENDIENTE. Devuelve el
  * reembolso con su `receiptUrl` ya poblado.
  */
-export function attachReimbursementReceipt(
-  id: string,
-  file: File,
-): Promise<ReimbursementView> {
+export function attachReimbursementReceipt(id: string, file: File): Promise<ReimbursementView> {
   const formData = new FormData();
   formData.append('file', file);
   return uploadRequest<ReimbursementView>(
@@ -1421,34 +1380,29 @@ export function attachReimbursementReceipt(
 
 /** `POST /reimbursements/:id/approve` — aprueba (gestor). PENDIENTE→APROBADO; 409 si no. */
 export function approveReimbursement(id: string): Promise<ReimbursementView> {
-  return request<ReimbursementView>(
-    `/reimbursements/${encodeURIComponent(id)}/approve`,
-    { method: 'POST' },
-  );
+  return request<ReimbursementView>(`/reimbursements/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+  });
 }
 
 /**
  * `POST /reimbursements/:id/reject` — rechaza (gestor), con motivo opcional.
  * PENDIENTE→RECHAZADO; 409 si el estado no lo permite.
  */
-export function rejectReimbursement(
-  id: string,
-  reason?: string,
-): Promise<ReimbursementView> {
+export function rejectReimbursement(id: string, reason?: string): Promise<ReimbursementView> {
   const body: { reason?: string } = {};
   if (reason && reason.trim().length > 0) body.reason = reason.trim();
-  return request<ReimbursementView>(
-    `/reimbursements/${encodeURIComponent(id)}/reject`,
-    { method: 'POST', body: JSON.stringify(body) },
-  );
+  return request<ReimbursementView>(`/reimbursements/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 /** `POST /reimbursements/:id/pay` — marca pagado (gestor). APROBADO→PAGADO; 409 si no. */
 export function payReimbursement(id: string): Promise<ReimbursementView> {
-  return request<ReimbursementView>(
-    `/reimbursements/${encodeURIComponent(id)}/pay`,
-    { method: 'POST' },
-  );
+  return request<ReimbursementView>(`/reimbursements/${encodeURIComponent(id)}/pay`, {
+    method: 'POST',
+  });
 }
 
 /**
@@ -1605,9 +1559,7 @@ export interface OvertimeListFilters {
   cursor?: string;
 }
 
-export function listAllOvertime(
-  filters: OvertimeListFilters,
-): Promise<Paginated<OvertimeView>> {
+export function listAllOvertime(filters: OvertimeListFilters): Promise<Paginated<OvertimeView>> {
   const params = new URLSearchParams();
   if (filters.status) params.set('status', filters.status);
   if (filters.userId) params.set('userId', filters.userId);
@@ -1636,10 +1588,9 @@ export async function downloadOvertimeMonthlyReport(month: string): Promise<Blob
 
   let res: Response;
   try {
-    res = await fetch(
-      `${API_URL}/overtime/report/monthly?month=${encodeURIComponent(month)}`,
-      { headers },
-    );
+    res = await fetch(`${API_URL}/overtime/report/monthly?month=${encodeURIComponent(month)}`, {
+      headers,
+    });
   } catch {
     throw new ApiError('No se pudo conectar con el servidor.', 0);
   }
@@ -1651,7 +1602,10 @@ export async function downloadOvertimeMonthlyReport(month: string): Promise<Blob
     } catch {
       // sin cuerpo JSON
     }
-    throw new ApiError(extractMessage(body, `Error ${res.status} al generar el reporte.`), res.status);
+    throw new ApiError(
+      extractMessage(body, `Error ${res.status} al generar el reporte.`),
+      res.status,
+    );
   }
   return res.blob();
 }
@@ -1727,42 +1681,33 @@ export function overtimeSummary(filters: OvertimeListFilters = {}): Promise<unkn
  * BORRADOR→PENDIENTE; 409 si el estado no lo permite.
  */
 export function closeOvertime(id: string, endTime: string): Promise<OvertimeView> {
-  return request<OvertimeView>(
-    `/overtime/${encodeURIComponent(id)}/close`,
-    { method: 'POST', body: JSON.stringify({ endTime }) },
-  );
+  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}/close`, {
+    method: 'POST',
+    body: JSON.stringify({ endTime }),
+  });
 }
 
 /** `POST /overtime/:id/approve` — aprueba (gestor). PENDIENTE→APROBADO; 409 si no. */
 export function approveOvertime(id: string): Promise<OvertimeView> {
-  return request<OvertimeView>(
-    `/overtime/${encodeURIComponent(id)}/approve`,
-    { method: 'POST' },
-  );
+  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}/approve`, { method: 'POST' });
 }
 
 /**
  * `POST /overtime/:id/reject` — rechaza (gestor), con motivo opcional.
  * PENDIENTE→RECHAZADO; 409 si el estado no lo permite.
  */
-export function rejectOvertime(
-  id: string,
-  reason?: string,
-): Promise<OvertimeView> {
+export function rejectOvertime(id: string, reason?: string): Promise<OvertimeView> {
   const body: { reason?: string } = {};
   if (reason && reason.trim().length > 0) body.reason = reason.trim();
-  return request<OvertimeView>(
-    `/overtime/${encodeURIComponent(id)}/reject`,
-    { method: 'POST', body: JSON.stringify(body) },
-  );
+  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 /** `POST /overtime/:id/pay` — marca pagada (gestor). APROBADO→PAGADO; 409 si no. */
 export function payOvertime(id: string): Promise<OvertimeView> {
-  return request<OvertimeView>(
-    `/overtime/${encodeURIComponent(id)}/pay`,
-    { method: 'POST' },
-  );
+  return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}/pay`, { method: 'POST' });
 }
 
 /**
@@ -1770,10 +1715,7 @@ export function payOvertime(id: string): Promise<OvertimeView> {
  * PENDIENTE). Las horas se recomputan de `startTime`/`endTime` server-side.
  * Devuelve la solicitud actualizada.
  */
-export function updateOvertime(
-  id: string,
-  input: UpdateOvertimeInput,
-): Promise<OvertimeView> {
+export function updateOvertime(id: string, input: UpdateOvertimeInput): Promise<OvertimeView> {
   return request<OvertimeView>(`/overtime/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(input),
@@ -1813,9 +1755,7 @@ export function listDepartments(): Promise<Array<{ id: string; name: string; cod
  * backend valida los gates y campos según el shape recibido.
  */
 export function createProject(
-  dto:
-    | { code: string; name: string; departmentId: string; clientId: string }
-    | CreateProjectInput,
+  dto: { code: string; name: string; departmentId: string; clientId: string } | CreateProjectInput,
 ): Promise<ProjectView> {
   return request<ProjectView>('/projects', {
     method: 'POST',
@@ -1855,7 +1795,10 @@ export function createServiceType(input: CreateServiceTypeInput): Promise<Servic
 }
 
 /** `PATCH /service-types/:id` — edita un tipo de servicio. */
-export function updateServiceType(id: string, input: UpdateServiceTypeInput): Promise<ServiceTypeView> {
+export function updateServiceType(
+  id: string,
+  input: UpdateServiceTypeInput,
+): Promise<ServiceTypeView> {
   return request<ServiceTypeView>(`/service-types/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
@@ -1867,7 +1810,10 @@ export function deleteServiceType(id: string): Promise<void> {
   return request<void>(`/service-types/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-export function updateProjectKpis(projectId: string, kpis: Record<string, unknown>): Promise<ProjectView> {
+export function updateProjectKpis(
+  projectId: string,
+  kpis: Record<string, unknown>,
+): Promise<ProjectView> {
   return request<ProjectView>(`/projects/${encodeURIComponent(projectId)}/kpis`, {
     method: 'PUT',
     body: JSON.stringify({ kpis }),
@@ -1938,10 +1884,7 @@ export function createTask(dto: {
   });
 }
 
-export function updateTask(
-  id: string,
-  dto: UpdateTaskInput,
-): Promise<TaskView> {
+export function updateTask(id: string, dto: UpdateTaskInput): Promise<TaskView> {
   return request<TaskView>(`/tasks/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(dto),
@@ -1980,8 +1923,12 @@ export function finishTaskTime(id: string, note?: string): Promise<TaskTimeLogVi
   });
 }
 
-export function getTaskAssignees(projectId: string): Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>> {
-  return request<Array<{ id: string; firstName: string; lastName: string; email: string }>>(`/tasks/assignees?projectId=${encodeURIComponent(projectId)}`);
+export function getTaskAssignees(
+  projectId: string,
+): Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>> {
+  return request<Array<{ id: string; firstName: string; lastName: string; email: string }>>(
+    `/tasks/assignees?projectId=${encodeURIComponent(projectId)}`,
+  );
 }
 
 /* --- RRHH --- */
@@ -1998,9 +1945,7 @@ export function getHrSummary(userId: string): Promise<HrWorkerSummary> {
 
 /** HH del trabajador en un período, calculadas sobre los registros de Operaciones. */
 export function getHrHours(userId: string, from: string, to: string): Promise<HrHours> {
-  return request<HrHours>(
-    `/hr/workers/${encodeURIComponent(userId)}/hours?from=${from}&to=${to}`,
-  );
+  return request<HrHours>(`/hr/workers/${encodeURIComponent(userId)}/hours?from=${from}&to=${to}`);
 }
 
 export function listHrExams(userId: string): Promise<HrExam[]> {
@@ -2022,14 +1967,11 @@ export function listHrInductions(userId: string): Promise<HrInduction[]> {
   return request<HrInduction[]>(`/hr/workers/${encodeURIComponent(userId)}/inductions`);
 }
 
-export function saveHrInduction(
-  input: Record<string, unknown>,
-  id?: string,
-): Promise<HrInduction> {
-  return request<HrInduction>(
-    id ? `/hr/inductions/${encodeURIComponent(id)}` : '/hr/inductions',
-    { method: id ? 'PUT' : 'POST', body: JSON.stringify(input) },
-  );
+export function saveHrInduction(input: Record<string, unknown>, id?: string): Promise<HrInduction> {
+  return request<HrInduction>(id ? `/hr/inductions/${encodeURIComponent(id)}` : '/hr/inductions', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export function deleteHrInduction(id: string): Promise<{ removed: true }> {
@@ -2187,10 +2129,9 @@ export function getHseIncident(id: string): Promise<HseIncidentDetail> {
 
 /** Borra el reporte, sus fotos y su PDF. Exige `hse:manage`. */
 export function deleteHseIncident(id: string): Promise<{ removed: true; code: string }> {
-  return request<{ removed: true; code: string }>(
-    `/hse/incidents/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  );
+  return request<{ removed: true; code: string }>(`/hse/incidents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 /* --- Cuadrilla de faena --- */
@@ -2307,10 +2248,16 @@ export function uploadProjectDocument(
   return uploadRequest<ProjectDocumentView>('/project-documents', formData);
 }
 
-export function uploadProjectDocumentRevision(id: string, file: File): Promise<ProjectDocumentView> {
+export function uploadProjectDocumentRevision(
+  id: string,
+  file: File,
+): Promise<ProjectDocumentView> {
   const formData = new FormData();
   formData.append('file', file);
-  return uploadRequest<ProjectDocumentView>(`/project-documents/${encodeURIComponent(id)}/revision`, formData);
+  return uploadRequest<ProjectDocumentView>(
+    `/project-documents/${encodeURIComponent(id)}/revision`,
+    formData,
+  );
 }
 
 export function signProjectDocumentQA(id: string): Promise<ProjectDocumentView> {
@@ -2348,18 +2295,21 @@ export function deleteProjectDocument(id: string): Promise<void> {
  * `cursor`. `search` filtra server-side por código / nombre / descripción; `type`
  * / `status` / `projectId` filtran por esos campos. `limit` default 30, máx. 100.
  */
-export function listAssets(params: {
-  limit?: number;
-  cursor?: string;
-  search?: string;
-  type?: AssetType;
-  status?: AssetStatus;
-  projectId?: string;
-} = {}): Promise<Paginated<AssetView>> {
+export function listAssets(
+  params: {
+    limit?: number;
+    cursor?: string;
+    search?: string;
+    type?: AssetType;
+    status?: AssetStatus;
+    projectId?: string;
+  } = {},
+): Promise<Paginated<AssetView>> {
   const query = new URLSearchParams();
   if (params.limit !== undefined) query.append('limit', String(params.limit));
   if (params.cursor) query.append('cursor', params.cursor);
-  if (params.search && params.search.trim().length > 0) query.append('search', params.search.trim());
+  if (params.search && params.search.trim().length > 0)
+    query.append('search', params.search.trim());
   if (params.type) query.append('type', params.type);
   if (params.status) query.append('status', params.status);
   if (params.projectId) query.append('projectId', params.projectId);
@@ -2561,7 +2511,10 @@ export function listAssetAccessories(id: string): Promise<AssetAccessoryView[]> 
   return request<AssetAccessoryView[]>(`/assets/${encodeURIComponent(id)}/accessories`);
 }
 
-export function addAssetAccessory(id: string, dto: CreateAccessoryInput): Promise<AssetAccessoryView> {
+export function addAssetAccessory(
+  id: string,
+  dto: CreateAccessoryInput,
+): Promise<AssetAccessoryView> {
   return request<AssetAccessoryView>(`/assets/${encodeURIComponent(id)}/accessories`, {
     method: 'POST',
     body: JSON.stringify(dto),
@@ -2609,13 +2562,19 @@ export function reviewChecklistTemplate(
   id: string,
   dto: ReviewChecklistTemplateInput,
 ): Promise<ChecklistTemplateView> {
-  return request<ChecklistTemplateView>(`/assets/${encodeURIComponent(id)}/checklist/template/review`, {
-    method: 'POST',
-    body: JSON.stringify(dto),
-  });
+  return request<ChecklistTemplateView>(
+    `/assets/${encodeURIComponent(id)}/checklist/template/review`,
+    {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    },
+  );
 }
 
-export function submitChecklist(id: string, dto: SubmitChecklistInput): Promise<ChecklistSubmissionView> {
+export function submitChecklist(
+  id: string,
+  dto: SubmitChecklistInput,
+): Promise<ChecklistSubmissionView> {
   return request<ChecklistSubmissionView>(`/assets/${encodeURIComponent(id)}/checklist/submit`, {
     method: 'POST',
     body: JSON.stringify(dto),
@@ -2667,10 +2626,10 @@ export function submitPublicChecklist(
   token: string,
   dto: SubmitPublicChecklistInput,
 ): Promise<ChecklistSubmissionView> {
-  return request<ChecklistSubmissionView>(
-    `/assets/public/${encodeURIComponent(token)}/checklist`,
-    { method: 'POST', body: JSON.stringify(dto) },
-  );
+  return request<ChecklistSubmissionView>(`/assets/public/${encodeURIComponent(token)}/checklist`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
 }
 
 /** `POST /assets/:id/checklist/sign-options` — arranca la firma (biometría u OTP). */
@@ -2688,7 +2647,9 @@ export function prepareChecklistSignature(
 }
 
 export function listChecklistSubmissions(id: string): Promise<ChecklistSubmissionView[]> {
-  return request<ChecklistSubmissionView[]>(`/assets/${encodeURIComponent(id)}/checklist/submissions`);
+  return request<ChecklistSubmissionView[]>(
+    `/assets/${encodeURIComponent(id)}/checklist/submissions`,
+  );
 }
 
 /**
@@ -2697,10 +2658,7 @@ export function listChecklistSubmissions(id: string): Promise<ChecklistSubmissio
  * devuelve como `Blob` para descargar. Mismo permiso que ver el activo. El
  * llamador arma el objeto de descarga (`URL.createObjectURL`).
  */
-export async function downloadChecklistPdf(
-  assetId: string,
-  submissionId: string,
-): Promise<Blob> {
+export async function downloadChecklistPdf(assetId: string, submissionId: string): Promise<Blob> {
   const headers = new Headers();
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -2740,10 +2698,9 @@ export async function getChecklistTemplatePdf(id: string): Promise<Blob> {
 
   let res: Response;
   try {
-    res = await fetch(
-      `${API_URL}/assets/${encodeURIComponent(id)}/checklist/template/pdf`,
-      { headers },
-    );
+    res = await fetch(`${API_URL}/assets/${encodeURIComponent(id)}/checklist/template/pdf`, {
+      headers,
+    });
   } catch {
     throw new ApiError('No se pudo conectar con el servidor.', 0);
   }
@@ -2897,7 +2854,9 @@ export function convertCoordinate(dto: ConvertPointInput): Promise<ConvertPointR
   });
 }
 
-export function convertCoordinatesBulk(dto: { points: ConvertPointInput[] }): Promise<ConvertPointResult[]> {
+export function convertCoordinatesBulk(dto: {
+  points: ConvertPointInput[];
+}): Promise<ConvertPointResult[]> {
   return request<ConvertPointResult[]>('/tools/coords/convert/bulk', {
     method: 'POST',
     body: JSON.stringify(dto),
@@ -3065,16 +3024,22 @@ export function listMetricVariables(phaseId: string): Promise<MetricVariable[]> 
   return request<MetricVariable[]>(`/metrics/variables?phaseId=${encodeURIComponent(phaseId)}`);
 }
 
-export function getMetricDataPoints(phaseId: string, elementId?: string): Promise<MetricDataPoint[]> {
+export function getMetricDataPoints(
+  phaseId: string,
+  elementId?: string,
+): Promise<MetricDataPoint[]> {
   const query = elementId ? `?elementId=${encodeURIComponent(elementId)}` : '';
   return request<MetricDataPoint[]>(`/metrics/data/${encodeURIComponent(phaseId)}${query}`);
-}export function submitMetricDataPoints(points: Array<{
-  value: string;
-  variableId: string;
-  elementId: string;
-  phaseId: string;
-  taskId?: string;
-}>): Promise<void> {
+}
+export function submitMetricDataPoints(
+  points: Array<{
+    value: string;
+    variableId: string;
+    elementId: string;
+    phaseId: string;
+    taskId?: string;
+  }>,
+): Promise<void> {
   return request<void>('/metrics/data', {
     method: 'POST',
     body: JSON.stringify({ points }),
@@ -3294,7 +3259,10 @@ export function quitarFotoCerco(id: string, taskId: string): Promise<{ quedan: n
  * Si el proyecto tiene clave, responde 401 salvo que se acompañe el pase que
  * entrega {@link unlockPublicObraDashboard} o que haya sesión con permiso.
  */
-export function getPublicObraDashboard(token: string, pase?: string | null): Promise<ObraDashboard> {
+export function getPublicObraDashboard(
+  token: string,
+  pase?: string | null,
+): Promise<ObraDashboard> {
   return request<ObraDashboard>(`/projects/public/${encodeURIComponent(token)}/obra-dashboard`, {
     headers: pase ? { 'X-Obra-Pase': pase } : undefined,
   });
@@ -3305,7 +3273,10 @@ export function getPublicObraDashboard(token: string, pase?: string | null): Pro
  * es correcta; el backend responde igual si el token no existe, para que nadie
  * pueda distinguir un enlace inválido de una clave errada.
  */
-export function unlockPublicObraDashboard(token: string, password: string): Promise<{ pass: string }> {
+export function unlockPublicObraDashboard(
+  token: string,
+  password: string,
+): Promise<{ pass: string }> {
   return request<{ pass: string }>(`/projects/public/${encodeURIComponent(token)}/unlock`, {
     method: 'POST',
     body: JSON.stringify({ password }),
@@ -3398,10 +3369,7 @@ export function removeAssignment(projectId: string, assignmentId: string): Promi
  * `PUT /metrics/phases/:phaseId/dataspec` — fija las variables tipadas esperadas
  * de una fase (editor de datos esperados, A0). Reemplaza el spec completo.
  */
-export function setPhaseDataSpec(
-  phaseId: string,
-  dto: PhaseDataSpecInput,
-): Promise<void> {
+export function setPhaseDataSpec(phaseId: string, dto: PhaseDataSpecInput): Promise<void> {
   return request<void>(`/metrics/phases/${encodeURIComponent(phaseId)}/dataspec`, {
     method: 'PUT',
     body: JSON.stringify(dto),
@@ -3430,7 +3398,6 @@ export function deleteService(projectId: string, serviceId: string): Promise<{ o
     { method: 'DELETE' },
   );
 }
-
 
 /**
  * Ficha pública de un activo por su token opaco (el que va en el QR de la

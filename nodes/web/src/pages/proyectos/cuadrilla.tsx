@@ -141,7 +141,10 @@ export function NuevoTrabajador({
   }
 
   return (
-    <Modal open={abierto} onOpenChange={(v) => (v ? onAbierto(true) : (limpiar(), onAbierto(false)))}>
+    <Modal
+      open={abierto}
+      onOpenChange={(v) => (v ? onAbierto(true) : (limpiar(), onAbierto(false)))}
+    >
       <ModalContent>
         <form onSubmit={guardar} className="flex flex-col gap-4">
           <ModalHeader>
@@ -194,7 +197,12 @@ export function NuevoTrabajador({
           </div>
 
           <ModalFooter>
-            <Button type="button" variant="ghost" onClick={() => onAbierto(false)} disabled={guardando}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onAbierto(false)}
+              disabled={guardando}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={guardando || !firstName.trim() || !lastName.trim()}>
@@ -435,7 +443,10 @@ export function AsignarCuadrilla({
   const mezcladas = useMemo(() => {
     if (tareas.length < 2) return false;
     const firmas = tareas.map((t) =>
-      (t.crew ?? []).map((m) => m.userId).sort().join('|'),
+      (t.crew ?? [])
+        .map((m) => m.userId)
+        .sort()
+        .join('|'),
     );
     return !firmas.every((f) => f === firmas[0]);
   }, [tareas]);
@@ -472,8 +483,7 @@ export function AsignarCuadrilla({
         leadUserId: jefe,
       });
       onGuardado(actualizadas);
-      const donde =
-        tareas.length === 1 ? 'la etapa' : `las ${tareas.length} etapas`;
+      const donde = tareas.length === 1 ? 'la etapa' : `las ${tareas.length} etapas`;
       toast.success(
         seleccion.length === 0
           ? `Quitaste la cuadrilla de ${donde}.`
@@ -522,7 +532,9 @@ export function AsignarCuadrilla({
                     key={id}
                     className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs"
                   >
-                    {jefe === id && <Star className="size-3 fill-amber-400 text-amber-500" aria-hidden />}
+                    {jefe === id && (
+                      <Star className="size-3 fill-amber-400 text-amber-500" aria-hidden />
+                    )}
                     {nombreCorto(w.firstName, w.lastName)}
                     <button
                       type="button"

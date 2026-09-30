@@ -13,10 +13,7 @@ import type {
 } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useDataTable } from '@/hooks/use-data-table';
-import {
-  DataTable,
-  type DataTableColumn,
-} from '@/components/primitives/data-table/data-table';
+import { DataTable, type DataTableColumn } from '@/components/primitives/data-table/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -187,7 +184,12 @@ export default function SoportePage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Contador icon={Inbox} label="Sin triage" valor={stats?.sinTriage ?? 0} />
-        <Contador icon={AlertTriangle} label="SLA vencido" valor={stats?.slaVencido ?? 0} destacado />
+        <Contador
+          icon={AlertTriangle}
+          label="SLA vencido"
+          valor={stats?.slaVencido ?? 0}
+          destacado
+        />
         <Contador icon={Play} label="En curso" valor={stats?.enCurso ?? 0} />
       </div>
 

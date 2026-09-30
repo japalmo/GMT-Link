@@ -78,11 +78,7 @@ export function ObraDashboardTab({
           Actualizar
         </Button>
         {publicUrl && canManage && (
-          <ObraClavePublica
-            projectId={projectId}
-            protegido={protegido}
-            onCambio={setProtegido}
-          />
+          <ObraClavePublica projectId={projectId} protegido={protegido} onCambio={setProtegido} />
         )}
         {publicUrl && (
           <>

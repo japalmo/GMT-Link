@@ -16,13 +16,7 @@ import { ErrorState, LoadingState } from '@/components/ui/states';
 import { errorToMessage, getHrDashboard } from '@/lib/api';
 import { ConsultaRrhh } from './consulta-tabla';
 import type { EstadoConsulta, FiltrosConsulta, ModoConsulta } from './consulta-estado';
-import {
-  EtiquetaVigencia,
-  fechaCorta,
-  plural,
-  TIPO_REQUISITO,
-  type FichaTab,
-} from './rrhh-shared';
+import { EtiquetaVigencia, fechaCorta, plural, TIPO_REQUISITO, type FichaTab } from './rrhh-shared';
 
 /**
  * Tablero de RRHH.
@@ -201,7 +195,9 @@ function Resumen({
               ))}
             </ul>
           )}
-          <p className="mt-auto text-xs text-muted-foreground">Personas habilitadas hoy, por cliente.</p>
+          <p className="mt-auto text-xs text-muted-foreground">
+            Personas habilitadas hoy, por cliente.
+          </p>
         </div>
       </div>
 
@@ -240,7 +236,10 @@ function Resumen({
                 const tipo = TIPO_REQUISITO[r.tipo];
                 const Icono = tipo.icon;
                 return (
-                  <li key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
+                  <li
+                    key={r.key}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5"
+                  >
                     <Icono className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
@@ -317,7 +316,9 @@ function Resumen({
                       <td className="py-1.5 text-right tabular-nums">{t.total}</td>
                       <td
                         className={`py-1.5 text-right tabular-nums ${
-                          t.vencidos > 0 ? 'font-semibold text-red-700 dark:text-red-300' : 'text-muted-foreground'
+                          t.vencidos > 0
+                            ? 'font-semibold text-red-700 dark:text-red-300'
+                            : 'text-muted-foreground'
                         }`}
                       >
                         {t.vencidos}
@@ -379,7 +380,10 @@ function Indicador({
       <span className="text-xs text-muted-foreground">{detalle}</span>
       <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary">
         {accion}
-        <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" aria-hidden />
+        <ArrowRight
+          className="size-3 transition-transform group-hover:translate-x-0.5"
+          aria-hidden
+        />
       </span>
     </button>
   );
@@ -436,7 +440,9 @@ function Turnos({
                 className="grid w-full grid-cols-[9rem_1fr_2.5rem] items-center gap-3 rounded px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`${t.label}: ${plural(t.personas, 'persona', 'personas')}. Ver listado`}
               >
-                <span className={`truncate text-sm ${t.key === 'SIN' ? 'italic text-muted-foreground' : ''}`}>
+                <span
+                  className={`truncate text-sm ${t.key === 'SIN' ? 'italic text-muted-foreground' : ''}`}
+                >
                   {t.label}
                 </span>
                 <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>

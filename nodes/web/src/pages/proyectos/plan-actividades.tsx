@@ -153,7 +153,9 @@ export function PlanActividades({
         if (!q) return { raiz, etapas, visibles: etapas.length > 0 ? visiblesPorEstado : [] };
 
         const grupoCoincide = raiz.name.toLowerCase().includes(q);
-        const etapasCoinciden = visiblesPorEstado.filter((t) => textoBuscable(t, raiz.name).includes(q));
+        const etapasCoinciden = visiblesPorEstado.filter((t) =>
+          textoBuscable(t, raiz.name).includes(q),
+        );
         if (!grupoCoincide && etapasCoinciden.length === 0) return null;
         return {
           raiz,
@@ -290,7 +292,7 @@ export function PlanActividades({
                       <span className="block truncate text-xs text-muted-foreground">
                         {etapas.length > 0
                           ? `${listas} de ${etapas.length} etapas listas`
-                          : NOMBRE_ESTADO[raiz.status] ?? raiz.status}
+                          : (NOMBRE_ESTADO[raiz.status] ?? raiz.status)}
                         {fecha(raiz.startDate) && ` · desde ${fecha(raiz.startDate)}`}
                         {fecha(raiz.dueDate) && ` · entrega ${fecha(raiz.dueDate)}`}
                       </span>
@@ -311,9 +313,7 @@ export function PlanActividades({
                           setAsignando({
                             tareas: etapas.length > 0 ? etapas : [raiz],
                             titulo:
-                              etapas.length > 0
-                                ? `${raiz.name} · todas las etapas`
-                                : raiz.name,
+                              etapas.length > 0 ? `${raiz.name} · todas las etapas` : raiz.name,
                           })
                         }
                       >
@@ -385,7 +385,10 @@ export function PlanActividades({
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              setAsignando({ tareas: [etapa], titulo: `${raiz.name} · ${etapa.name}` })
+                              setAsignando({
+                                tareas: [etapa],
+                                titulo: `${raiz.name} · ${etapa.name}`,
+                              })
                             }
                           >
                             <Users className="mr-1 size-3.5" aria-hidden />

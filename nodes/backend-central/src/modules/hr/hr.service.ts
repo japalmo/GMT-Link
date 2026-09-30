@@ -34,11 +34,7 @@ import {
   type FiltrosRrhh,
   type FuentePersona,
 } from './requisitos.util';
-import type {
-  UpsertAccreditationDto,
-  UpsertExamDto,
-  UpsertInductionDto,
-} from './dto/hr.dto';
+import type { UpsertAccreditationDto, UpsertExamDto, UpsertInductionDto } from './dto/hr.dto';
 
 /**
  * RRHH: los antecedentes laborales del trabajador y su habilitación para faena.
@@ -55,7 +51,12 @@ import type {
 
 const FAENA_SELECT = { id: true, code: true, name: true } as const;
 
-const TIPOS_VALIDOS: readonly HrRequisitoTipo[] = ['DOCUMENTO', 'EXAMEN', 'INDUCCION', 'ACREDITACION'];
+const TIPOS_VALIDOS: readonly HrRequisitoTipo[] = [
+  'DOCUMENTO',
+  'EXAMEN',
+  'INDUCCION',
+  'ACREDITACION',
+];
 const VIGENCIAS_VALIDAS: readonly HrVigencia[] = [
   'VIGENTE',
   'POR_VENCER',
@@ -187,7 +188,12 @@ export class HrService {
     ]);
     return construirTablero(
       personas,
-      faenas.map((f) => ({ id: f.id, name: f.name, clientId: f.clientId, clientName: f.client.name })),
+      faenas.map((f) => ({
+        id: f.id,
+        name: f.name,
+        clientId: f.clientId,
+        clientName: f.client.name,
+      })),
       clientes,
       hoy,
     );
@@ -505,10 +511,7 @@ export class HrService {
     }));
   }
 
-  async upsertAccreditation(
-    dto: UpsertAccreditationDto,
-    id?: string,
-  ): Promise<HrAccreditation> {
+  async upsertAccreditation(dto: UpsertAccreditationDto, id?: string): Promise<HrAccreditation> {
     await this.assertUsuario(dto.userId);
     if (dto.faenaId) {
       const faena = await this.prisma.faena.findUnique({

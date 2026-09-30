@@ -41,7 +41,9 @@ export function SelectorHora({
 
   function ahora(): void {
     const d = new Date();
-    const minuto = String(Math.round(d.getMinutes() / 5) * 5 === 60 ? 55 : Math.round(d.getMinutes() / 5) * 5).padStart(2, '0');
+    const minuto = String(
+      Math.round(d.getMinutes() / 5) * 5 === 60 ? 55 : Math.round(d.getMinutes() / 5) * 5,
+    ).padStart(2, '0');
     onChange(`${String(d.getHours()).padStart(2, '0')}:${minuto}`);
   }
 

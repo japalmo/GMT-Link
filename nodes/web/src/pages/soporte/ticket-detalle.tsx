@@ -171,9 +171,7 @@ export function TicketDetalle({ ticketId, onOpenChange, onChanged }: Props) {
             <dl className="grid gap-4 sm:grid-cols-2">
               <Dato label="Solicitante">{ticket.requesterName}</Dato>
               <Dato label="Jefatura que respalda">{ticket.managerName}</Dato>
-              <Dato label="Personas afectadas">
-                {TICKET_PEOPLE_LABELS[ticket.peopleAffected]}
-              </Dato>
+              <Dato label="Personas afectadas">{TICKET_PEOPLE_LABELS[ticket.peopleAffected]}</Dato>
               <Dato label="Frecuencia">{TICKET_FREQUENCY_LABELS[ticket.frequency]}</Dato>
               <Dato label="Enviado">
                 {ticket.submittedAt ? formatDate(ticket.submittedAt) : '—'}

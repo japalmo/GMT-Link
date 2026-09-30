@@ -40,7 +40,9 @@ describe('decodificarFirma', () => {
 
   it('rechaza un tipo que no sea PNG', () => {
     expect(() => decodificarFirma(`data:image/jpeg;base64,${PNG_1X1}`)).toThrow(FirmaInvalidaError);
-    expect(() => decodificarFirma('data:text/html;base64,PHNjcmlwdD4=')).toThrow(FirmaInvalidaError);
+    expect(() => decodificarFirma('data:text/html;base64,PHNjcmlwdD4=')).toThrow(
+      FirmaInvalidaError,
+    );
   });
 
   it('rechaza un texto que no es data URL', () => {

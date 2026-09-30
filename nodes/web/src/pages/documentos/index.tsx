@@ -35,7 +35,12 @@ const STATUS_LABEL: Record<DocumentStatus, string> = {
 };
 
 /** Opciones del filtro por estado. */
-const STATUS_OPTIONS: ReadonlyArray<DocumentStatus> = ['BORRADOR', 'EN_REVISION', 'APROBADO', 'RECHAZADO'];
+const STATUS_OPTIONS: ReadonlyArray<DocumentStatus> = [
+  'BORRADOR',
+  'EN_REVISION',
+  'APROBADO',
+  'RECHAZADO',
+];
 
 /**
  * Página "Mis documentos" (§6-1.5).
@@ -71,10 +76,30 @@ export default function DocumentsPage(): ReactNode {
   };
 
   const columns: ReadonlyArray<DataTableColumn<PersonalDocumentView>> = [
-    { id: 'documento', header: 'Documento', sortable: true, render: (doc) => <span className="font-medium">{doc.name}</span> },
-    { id: 'tipo', header: 'Tipo', sortable: true, render: (doc) => <span className="text-muted-foreground">{doc.type}</span> },
-    { id: 'estado', header: 'Estado', sortable: true, render: (doc) => <StatusBadge type="document" status={doc.status} /> },
-    { id: 'vencimiento', header: 'Vencimiento', sortable: true, render: (doc) => <ExpiryCell document={doc} /> },
+    {
+      id: 'documento',
+      header: 'Documento',
+      sortable: true,
+      render: (doc) => <span className="font-medium">{doc.name}</span>,
+    },
+    {
+      id: 'tipo',
+      header: 'Tipo',
+      sortable: true,
+      render: (doc) => <span className="text-muted-foreground">{doc.type}</span>,
+    },
+    {
+      id: 'estado',
+      header: 'Estado',
+      sortable: true,
+      render: (doc) => <StatusBadge type="document" status={doc.status} />,
+    },
+    {
+      id: 'vencimiento',
+      header: 'Vencimiento',
+      sortable: true,
+      render: (doc) => <ExpiryCell document={doc} />,
+    },
     {
       id: 'archivo',
       header: 'Archivo',
@@ -191,8 +216,8 @@ export default function DocumentsPage(): ReactNode {
         description={
           <>
             ¿Seguro que quieres eliminar{' '}
-            <span className="font-medium text-foreground">{toDelete?.name}</span>? Esta acción no se puede
-            deshacer.
+            <span className="font-medium text-foreground">{toDelete?.name}</span>? Esta acción no se
+            puede deshacer.
           </>
         }
         onConfirm={async () => {

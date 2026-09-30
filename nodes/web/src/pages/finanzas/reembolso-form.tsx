@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Camera, Info, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -69,9 +63,16 @@ const SCAN_TIMEOUT_MS = 20_000;
 function normalizeCategory(raw: string | undefined): ReimbursementCategory | '' {
   if (!raw) return '';
   const up = raw.toUpperCase();
-  if (up.includes('ALIMENT') || up.includes('COMIDA') || up.includes('RESTAUR')) return 'ALIMENTACION';
+  if (up.includes('ALIMENT') || up.includes('COMIDA') || up.includes('RESTAUR'))
+    return 'ALIMENTACION';
   if (up.includes('TRANSP') || up.includes('TAXI') || up.includes('PASAJE')) return 'TRANSPORTE';
-  if (up.includes('VEHIC') || up.includes('COMBUS') || up.includes('BENCINA') || up.includes('PETROLEO')) return 'VEHICULOS';
+  if (
+    up.includes('VEHIC') ||
+    up.includes('COMBUS') ||
+    up.includes('BENCINA') ||
+    up.includes('PETROLEO')
+  )
+    return 'VEHICULOS';
   return 'OTROS';
 }
 
@@ -172,10 +173,10 @@ export function ReembolsoFormDialog({
         setConcept(initial.concept);
         setAmount(String(initial.amount));
         setDate(initial.date.slice(0, 10));
-        setCategory(initial.category ? LABEL_TO_CATEGORY[initial.category] ?? '' : '');
+        setCategory(initial.category ? (LABEL_TO_CATEGORY[initial.category] ?? '') : '');
         setVehicle(initial.vehicle ?? '');
         setVehicleSubcategory(
-          initial.subcategory ? LABEL_TO_SUBCAT[initial.subcategory] ?? '' : '',
+          initial.subcategory ? (LABEL_TO_SUBCAT[initial.subcategory] ?? '') : '',
         );
         setObservations(initial.observations ?? '');
         setReceiptFile(null);
@@ -233,7 +234,8 @@ export function ReembolsoFormDialog({
       // Un escaneo superado (o cancelado al enviar) no debe pisar lo ya escrito.
       if (!isCurrent()) return;
       if (res.concept) setConcept(res.concept);
-      if (typeof res.amount === 'number' && res.amount > 0) setAmount(String(Math.round(res.amount)));
+      if (typeof res.amount === 'number' && res.amount > 0)
+        setAmount(String(Math.round(res.amount)));
       if (res.date) {
         // Ventana beta: si la boleta trae una fecha fuera del plazo, NO se
         // aplica (quedaría un 400 seguro al enviar); el usuario la corrige a
@@ -284,7 +286,8 @@ export function ReembolsoFormDialog({
 
     const parsedAmount = parseInt(amount, 10);
     if (!concept.trim()) return setError('El concepto es obligatorio.');
-    if (concept.trim().length > 200) return setError('El concepto no puede superar los 200 caracteres.');
+    if (concept.trim().length > 200)
+      return setError('El concepto no puede superar los 200 caracteres.');
     if (!amount || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       return setError('El monto debe ser un número entero mayor a cero.');
     }
@@ -362,72 +365,79 @@ export function ReembolsoFormDialog({
               que un archivo nuevo se descarte en silencio). La boleta se cambia
               con su propio flujo desde la lista. */}
           {!isEdit && (
-          <div className="flex flex-col gap-1.5">
-            <Label>Boleta</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() => uploadRef.current?.click()}
-              >
-                {scanning ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                ) : (
-                  <Upload className="size-4" aria-hidden />
-                )}
-                Subir imagen
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() => cameraRef.current?.click()}
-              >
-                <Camera className="size-4" aria-hidden />
-                Tomar foto
-              </Button>
-              {receiptFile && !scanning && (
-                <span className="text-xs text-muted-foreground truncate max-w-[12rem]" title={receiptFile.name}>
-                  {receiptFile.name}
-                </span>
-              )}
-            </div>
-            {/* Aviso de espera: el OCR (NVIDIA) tarda varios segundos. Se aclara que
-                NO hay que esperarlo, porque el envío ya no depende del escaneo. */}
-            {scanning && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground"
-              >
-                <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" aria-hidden />
-                <span>
-                  <span className="font-medium">Estamos interpretando la boleta…</span>{' '}
-                  <span className="text-muted-foreground">
-                    No hace falta esperar: completa los campos a mano y crea la solicitud cuando quieras.
+            <div className="flex flex-col gap-1.5">
+              <Label>Boleta</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => uploadRef.current?.click()}
+                >
+                  {scanning ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Upload className="size-4" aria-hidden />
+                  )}
+                  Subir imagen
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => cameraRef.current?.click()}
+                >
+                  <Camera className="size-4" aria-hidden />
+                  Tomar foto
+                </Button>
+                {receiptFile && !scanning && (
+                  <span
+                    className="text-xs text-muted-foreground truncate max-w-[12rem]"
+                    title={receiptFile.name}
+                  >
+                    {receiptFile.name}
                   </span>
-                </span>
+                )}
               </div>
-            )}
-            <input
-              ref={uploadRef}
-              type="file"
-              accept={IMAGE_ACCEPT}
-              className="sr-only"
-              onChange={handleFileChange}
-            />
-            <input
-              ref={cameraRef}
-              type="file"
-              accept={IMAGE_ACCEPT}
-              capture="environment"
-              className="sr-only"
-              onChange={handleFileChange}
-            />
-          </div>
+              {/* Aviso de espera: el OCR (NVIDIA) tarda varios segundos. Se aclara que
+                NO hay que esperarlo, porque el envío ya no depende del escaneo. */}
+              {scanning && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm text-foreground"
+                >
+                  <Loader2
+                    className="mt-0.5 size-4 shrink-0 animate-spin text-primary"
+                    aria-hidden
+                  />
+                  <span>
+                    <span className="font-medium">Estamos interpretando la boleta…</span>{' '}
+                    <span className="text-muted-foreground">
+                      No hace falta esperar: completa los campos a mano y crea la solicitud cuando
+                      quieras.
+                    </span>
+                  </span>
+                </div>
+              )}
+              <input
+                ref={uploadRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                className="sr-only"
+                onChange={handleFileChange}
+              />
+              <input
+                ref={cameraRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                capture="environment"
+                className="sr-only"
+                onChange={handleFileChange}
+              />
+            </div>
           )}
 
           <div className="flex flex-col gap-1.5">

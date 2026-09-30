@@ -1,11 +1,5 @@
 import type { ReactNode } from 'react';
-import {
-  FileText,
-  FolderOpen,
-  ShieldCheck,
-  Stethoscope,
-  type LucideIcon,
-} from 'lucide-react';
+import { FileText, FolderOpen, ShieldCheck, Stethoscope, type LucideIcon } from 'lucide-react';
 import type {
   HrDocumentStatus,
   HrRequisitoTipo,
@@ -43,7 +37,12 @@ export const TIPO_REQUISITO: Record<
   DOCUMENTO: { label: 'Documento', plural: 'Documentos', icon: FolderOpen, tab: 'documentos' },
   EXAMEN: { label: 'Examen', plural: 'Exámenes', icon: Stethoscope, tab: 'examenes' },
   INDUCCION: { label: 'Inducción', plural: 'Inducciones', icon: FileText, tab: 'inducciones' },
-  ACREDITACION: { label: 'Acreditación', plural: 'Acreditaciones', icon: ShieldCheck, tab: 'datos' },
+  ACREDITACION: {
+    label: 'Acreditación',
+    plural: 'Acreditaciones',
+    icon: ShieldCheck,
+    tab: 'datos',
+  },
 };
 
 export const TIPOS_REQUISITO: readonly HrRequisitoTipo[] = [
@@ -77,10 +76,7 @@ export const ESTADO_DOCUMENTO: Record<HrDocumentStatus, string> = {
  * tiene que poder leer si un examen está vencido, y en una impresión en blanco
  * y negro el color no existe.
  */
-export const VIGENCIA: Record<
-  HrVigencia,
-  { label: string; clase: string; orden: number }
-> = {
+export const VIGENCIA: Record<HrVigencia, { label: string; clase: string; orden: number }> = {
   VENCIDO: {
     label: 'Vencido',
     clase:
@@ -137,7 +133,9 @@ export function EtiquetaVigencia({
     >
       {v.label}
       {diasRestantes !== null && diasRestantes !== undefined && vigencia !== 'VIGENTE' && (
-        <span className="ml-1 font-normal tabular-nums opacity-80">{plazoCorto(diasRestantes)}</span>
+        <span className="ml-1 font-normal tabular-nums opacity-80">
+          {plazoCorto(diasRestantes)}
+        </span>
       )}
     </span>
   );

@@ -27,7 +27,9 @@ function leer(ambito: string): Record<string, Desplazamiento> {
     const crudo = window.localStorage.getItem(clave(ambito));
     if (!crudo) return {};
     const dato: unknown = JSON.parse(crudo);
-    return typeof dato === 'object' && dato !== null ? (dato as Record<string, Desplazamiento>) : {};
+    return typeof dato === 'object' && dato !== null
+      ? (dato as Record<string, Desplazamiento>)
+      : {};
   } catch {
     // Modo privado, almacenamiento lleno o dato corrupto: se arranca ordenado.
     return {};

@@ -71,7 +71,10 @@ interface PrismaParts {
   workSchedule: ReturnType<typeof vi.fn>;
 }
 
-function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
+function buildPrisma(parts: Partial<PrismaParts> = {}): {
+  prisma: PrismaService;
+  parts: PrismaParts;
+} {
   const resolved: PrismaParts = {
     create: parts.create ?? vi.fn(),
     findMany: parts.findMany ?? vi.fn(() => Promise.resolve([])),
@@ -390,7 +393,12 @@ describe('OvertimeService', () => {
     // 2026-05-03 está fuera del mes en curso (reloj fijo 15/07); con onBehalf debe pasar.
     await service.create(
       'admin-1',
-      { date: '2026-05-03T00:00:00.000Z', startTime: '09:00', endTime: '11:00', onBehalfOfUserId: 'worker-9' },
+      {
+        date: '2026-05-03T00:00:00.000Z',
+        startTime: '09:00',
+        endTime: '11:00',
+        onBehalfOfUserId: 'worker-9',
+      },
       true,
     );
 
@@ -454,7 +462,12 @@ describe('OvertimeService', () => {
 
     await service.create(
       'admin-1',
-      { date: '2026-07-03T00:00:00.000Z', startTime: '08:00', endTime: '10:00', onBehalfOfUserId: 'worker-9' },
+      {
+        date: '2026-07-03T00:00:00.000Z',
+        startTime: '08:00',
+        endTime: '10:00',
+        onBehalfOfUserId: 'worker-9',
+      },
       true,
     );
 
@@ -504,7 +517,13 @@ describe('OvertimeService', () => {
     // current.weekendOrHoliday, así que NO consulta el turno y todo entra como HE.
     const findFirst = vi.fn(() =>
       Promise.resolve(
-        buildRow({ isDraft: true, endTime: null, hours: null, startTime: '08:00', weekendOrHoliday: true }),
+        buildRow({
+          isDraft: true,
+          endTime: null,
+          hours: null,
+          startTime: '08:00',
+          weekendOrHoliday: true,
+        }),
       ),
     );
     const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
@@ -538,7 +557,9 @@ describe('OvertimeService', () => {
   });
 
   it('approve sobre borrador => 409', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ isDraft: true, endTime: null, hours: null })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ isDraft: true, endTime: null, hours: null })),
+    );
     const update = vi.fn();
     const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
@@ -559,7 +580,11 @@ describe('OvertimeService', () => {
 
     const view = await service.close('u1', 'o-1', '12:30');
 
-    const data = update.mock.calls[0]?.[0]?.data as { endTime: string; hours: number; isDraft: boolean };
+    const data = update.mock.calls[0]?.[0]?.data as {
+      endTime: string;
+      hours: number;
+      isDraft: boolean;
+    };
     expect(data.endTime).toBe('12:30');
     expect(data.hours).toBe(3.5);
     expect(data.isDraft).toBe(false);
@@ -637,7 +662,9 @@ describe('OvertimeService', () => {
 
   it('update de una solicitud ajena por un GESTOR (canManage) => actualiza', async () => {
     const findUnique = vi.fn(() =>
-      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'otro', startTime: '09:00' })),
+      Promise.resolve(
+        buildRow({ status: FinanceStatus.PENDIENTE, userId: 'otro', startTime: '09:00' }),
+      ),
     );
     const update = vi.fn((args: { data: Partial<OvertimeRequest> }) =>
       Promise.resolve(buildRow({ ...args.data })),
@@ -645,7 +672,12 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    const view = await service.update('gestor', 'o-1', { startTime: '08:00', endTime: '10:30' }, true);
+    const view = await service.update(
+      'gestor',
+      'o-1',
+      { startTime: '08:00', endTime: '10:30' },
+      true,
+    );
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(view).toBeDefined();
@@ -657,16 +689,18 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ findUnique, update });
     const service = makeService(prisma);
 
-    await expect(
-      service.update('u1', 'o-1', { startTime: '09:00' }, false),
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.update('u1', 'o-1', { startTime: '09:00' }, false)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(update).not.toHaveBeenCalled();
   });
 
   const OT_PAID_GUARD = { where: { id: 'o-1', status: { not: FinanceStatus.PAGADO } } };
 
   it('remove: el dueño elimina su solicitud PENDIENTE (borrado condicionado por estado)', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'u1' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PENDIENTE, userId: 'u1' })),
+    );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -677,7 +711,9 @@ describe('OvertimeService', () => {
   });
 
   it('remove: el dueño elimina su solicitud RECHAZADA (ya no se bloquea por estado)', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.RECHAZADO, userId: 'u1' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.RECHAZADO, userId: 'u1' })),
+    );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -688,7 +724,9 @@ describe('OvertimeService', () => {
   });
 
   it('remove de una solicitud AJENA sin gestión => 404 y no borra', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })),
+    );
     const deleteMany = vi.fn();
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -698,7 +736,9 @@ describe('OvertimeService', () => {
   });
 
   it('remove: un GESTOR (canManage) elimina una solicitud APROBADA ajena', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })),
+    );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -709,7 +749,9 @@ describe('OvertimeService', () => {
   });
 
   it('remove de una solicitud PAGADA => 409 y no borra (ni el gestor)', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PAGADO, userId: 'u1' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PAGADO, userId: 'u1' })),
+    );
     const deleteMany = vi.fn();
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -719,7 +761,9 @@ describe('OvertimeService', () => {
   });
 
   it('remove: carrera con pay (deleteMany count=0) => 409', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'u1' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'u1' })),
+    );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 0 }));
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -901,7 +945,9 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ findUnique });
     const service = makeService(prisma);
 
-    await expect(service.getById('o-1', 'intruso', false)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getById('o-1', 'intruso', false)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('getById: inexistente → 404', async () => {
@@ -909,7 +955,9 @@ describe('OvertimeService', () => {
     const { prisma } = buildPrisma({ findUnique });
     const service = makeService(prisma);
 
-    await expect(service.getById('nope', 'manager', true)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getById('nope', 'manager', true)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('approve: PENDIENTE→APROBADO, fija decisor y notifica al solicitante', async () => {
@@ -1053,7 +1101,9 @@ describe('OvertimeService', () => {
       }
       return Promise.resolve([]); // statusGroups
     });
-    const userFindMany = vi.fn(() => Promise.resolve([{ id: 'u1', firstName: 'Ana', lastName: 'Pérez' }]));
+    const userFindMany = vi.fn(() =>
+      Promise.resolve([{ id: 'u1', firstName: 'Ana', lastName: 'Pérez' }]),
+    );
     const projectFindMany = vi.fn(() => Promise.resolve([{ id: 'p1', name: 'Proyecto 1' }]));
     const prisma = {
       overtimeRequest: { groupBy },

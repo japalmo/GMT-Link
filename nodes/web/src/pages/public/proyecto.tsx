@@ -122,9 +122,7 @@ export default function PublicObraDashboardPage(): ReactNode {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">
-        {pideClave && token && (
-          <PuertaClave token={token} onAbierto={() => load()} />
-        )}
+        {pideClave && token && <PuertaClave token={token} onAbierto={() => load()} />}
         {!pideClave && loading && (
           <div className="flex flex-1 items-center justify-center text-sm text-white/70">
             Cargando el avance de la obra…

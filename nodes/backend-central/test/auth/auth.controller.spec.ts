@@ -35,7 +35,11 @@ interface Mocks {
 }
 
 function buildController(options: {
-  user?: UserRow | { status: string; passwordHash?: string | null } | Record<string, unknown> | null;
+  user?:
+    | UserRow
+    | { status: string; passwordHash?: string | null }
+    | Record<string, unknown>
+    | null;
   canManageRoles?: boolean;
   permissions?: string[];
 }): Mocks {
@@ -157,7 +161,17 @@ describe('AuthController · GET /auth/me', () => {
     });
     const result = await controller.me(ACTIVE_USER);
     expect(result.modules).toEqual([
-      'dashboard', 'usuarios', 'rrhh', 'finanzas', 'operaciones', 'proyectos', 'recursos', 'hse', 'herramientas', 'soporte', 'v-metric',
+      'dashboard',
+      'usuarios',
+      'rrhh',
+      'finanzas',
+      'operaciones',
+      'proyectos',
+      'recursos',
+      'hse',
+      'herramientas',
+      'soporte',
+      'v-metric',
     ]);
   });
 

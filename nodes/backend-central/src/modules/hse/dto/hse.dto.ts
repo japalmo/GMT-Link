@@ -32,8 +32,9 @@ const recortar = (): PropertyDecorator =>
  * lista blanca y el envío completo se rechaza.
  */
 const casilla = (): PropertyDecorator => (target, clave) => {
-  Transform(({ value }: { value: unknown }) =>
-    value === true || value === 'true' || value === '1' || value === 'on',
+  Transform(
+    ({ value }: { value: unknown }) =>
+      value === true || value === 'true' || value === '1' || value === 'on',
   )(target, clave);
   IsOptional()(target, clave);
   IsBoolean()(target, clave);

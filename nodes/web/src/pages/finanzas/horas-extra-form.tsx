@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -24,11 +18,7 @@ import { useDirectory } from '@/hooks/use-directory';
 import { useHasPermission } from '@/hooks/use-has-permission';
 import { useFinanceProjects } from './use-finance-projects';
 import { oneMonthBackSantiagoString, todaySantiagoString } from '@/lib/santiago-time';
-import type {
-  CreateOvertimeInput,
-  OvertimeView,
-  UpdateOvertimeInput,
-} from '@/types/finance';
+import type { CreateOvertimeInput, OvertimeView, UpdateOvertimeInput } from '@/types/finance';
 
 /** Roles habilitados como "Autorizado por" (admin de contrato / gerencias). */
 const AUTHORIZER_ROLES: ReadonlySet<string> = new Set([

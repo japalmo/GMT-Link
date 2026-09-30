@@ -66,7 +66,10 @@ export function DirectorioView({
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return workers.filter((w) => {
-      if (q && !`${w.firstName} ${w.lastName} ${w.cargo ?? ''} ${w.email}`.toLowerCase().includes(q)) {
+      if (
+        q &&
+        !`${w.firstName} ${w.lastName} ${w.cargo ?? ''} ${w.email}`.toLowerCase().includes(q)
+      ) {
         return false;
       }
       if (turno === 'sin' && w.turno !== null) return false;
@@ -203,7 +206,9 @@ export function DirectorioView({
                   </td>
                   <td className="px-3 py-2">
                     {w.acreditadoEn.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">Sin acreditaciones vigentes</span>
+                      <span className="text-xs text-muted-foreground">
+                        Sin acreditaciones vigentes
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs">
                         <ShieldCheck className="size-3.5 text-emerald-600" aria-hidden />

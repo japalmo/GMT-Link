@@ -552,7 +552,10 @@ export class AuthController {
         `No se pudo enviar ${what} a ${to}: ${error instanceof Error ? error.message : String(error)}`,
       );
       throw new HttpException(
-        { code: 'EMAIL_SEND_FAILED', message: 'No se pudo enviar el correo. Intenta de nuevo en unos minutos.' },
+        {
+          code: 'EMAIL_SEND_FAILED',
+          message: 'No se pudo enviar el correo. Intenta de nuevo en unos minutos.',
+        },
         502,
       );
     }

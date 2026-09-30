@@ -51,7 +51,11 @@ async function main(): Promise<void> {
       fgaRelation: p.fgaRelation ?? null,
       scopeable: p.scopeable,
     };
-    await prisma.permission.upsert({ where: { key: p.key }, update: data, create: { key: p.key, ...data } });
+    await prisma.permission.upsert({
+      where: { key: p.key },
+      update: data,
+      create: { key: p.key, ...data },
+    });
   }
   console.log(`Permisos asegurados: ${PERMISSIONS.length}`);
 

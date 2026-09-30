@@ -43,10 +43,7 @@ function armar(o: Opciones = {}) {
   const leerRango = vi.fn((rango: string) => {
     // El servicio lee dos pestañas: los checklists y el maestro de vehículos.
     if (rango.startsWith('VEHICULOS')) {
-      return Promise.resolve([
-        ['idVeh', 'patente'],
-        ...(o.maestro ?? [['V011', 'SKRF88']]),
-      ]);
+      return Promise.resolve([['idVeh', 'patente'], ...(o.maestro ?? [['V011', 'SKRF88']])]);
     }
     return Promise.resolve([CABECERA, ...(o.filas ?? [])]);
   });
@@ -229,9 +226,7 @@ describe('SheetsImportService: lo que no puede importar lo REPORTA', () => {
     expect(r.importadas).toBe(3);
     expect(r.sinVehiculo).toEqual([]);
     // El código sigue la serie: el mayor era GMT-VH-0012, así que el nuevo es 0013.
-    expect(r.vehiculosCreados).toEqual([
-      { patente: 'PZXP25', code: 'GMT-VH-0013', filas: 2 },
-    ]);
+    expect(r.vehiculosCreados).toEqual([{ patente: 'PZXP25', code: 'GMT-VH-0013', filas: 2 }]);
     expect(createMany.mock.calls[0]![0].data).toHaveLength(3);
     expect(crearAsset).toHaveBeenCalledTimes(1);
   });
@@ -322,9 +317,8 @@ describe('SheetsImportService: dirección', () => {
     // GMT Link es el sistema principal: la planilla se lee y nunca se actualiza
     // (decisión del dueño). Se fija estructuralmente para que agregar una
     // escritura sea una decisión consciente y no un descuido.
-    const { SheetsClientService: Cliente } = await import(
-      '../../../src/modules/assets/sheets-client.service'
-    );
+    const { SheetsClientService: Cliente } =
+      await import('../../../src/modules/assets/sheets-client.service');
     const metodos = Object.getOwnPropertyNames(Cliente.prototype);
     expect(metodos.filter((m) => /escrib|write|update|append|set/i.test(m))).toEqual([]);
     expect(metodos).toContain('leerRango');
@@ -343,7 +337,9 @@ describe('SheetsImportService: códigos de los vehículos creados', () => {
       ],
     });
     await servicio.importar();
-    expect((crearAsset.mock.calls[0]![0] as { data: { code: string } }).data.code).toBe('GMT-VH-0018');
+    expect((crearAsset.mock.calls[0]![0] as { data: { code: string } }).data.code).toBe(
+      'GMT-VH-0018',
+    );
   });
 
   it('no reusa el código de un vehículo existente', async () => {

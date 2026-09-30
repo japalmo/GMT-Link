@@ -108,7 +108,9 @@ function FilaChecklist({
   const fecha = new Date(sub.createdAt);
 
   return (
-    <div className={`rounded-lg border ${conFalla ? 'border-rose-500/20 bg-rose-500/5' : 'bg-card/30'}`}>
+    <div
+      className={`rounded-lg border ${conFalla ? 'border-rose-500/20 bg-rose-500/5' : 'bg-card/30'}`}
+    >
       <button
         type="button"
         onClick={() => setAbierto((v) => !v)}
@@ -233,7 +235,10 @@ function DetalleChecklist({
                   : String(ans.value);
 
           return (
-            <div key={idx} className="flex flex-col gap-0.5 border-b border-border/20 pb-1 text-[11px]">
+            <div
+              key={idx}
+              className="flex flex-col gap-0.5 border-b border-border/20 pb-1 text-[11px]"
+            >
               <div className="flex justify-between gap-2">
                 <span className="truncate text-muted-foreground">{ans.label || ans.itemId}:</span>
                 <span
@@ -279,7 +284,10 @@ function DetalleChecklist({
  * evidencia de que el vehículo se revisó: no pueden verse igual que uno con
  * sesión.
  */
-const ORIGENES: Record<Exclude<ChecklistSubmissionView['origen'], 'GMT_LINK'>, { texto: string; ayuda: string; clase: string }> = {
+const ORIGENES: Record<
+  Exclude<ChecklistSubmissionView['origen'], 'GMT_LINK'>,
+  { texto: string; ayuda: string; clase: string }
+> = {
   SIN_VERIFICAR: {
     texto: 'Sin verificar',
     ayuda: 'Lo llenó alguien sin cuenta en GMT Link. El nombre es el que escribió.',
@@ -302,4 +310,3 @@ function MarcaOrigen({ origen }: { origen: ChecklistSubmissionView['origen'] }):
     </Badge>
   );
 }
-

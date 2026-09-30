@@ -54,7 +54,10 @@ export function UserDocumentsTab({ userId }: { userId: string }): ReactNode {
     setDocs((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
   }
 
-  async function handleReview(doc: PersonalDocumentView, action: 'approve' | 'reject'): Promise<void> {
+  async function handleReview(
+    doc: PersonalDocumentView,
+    action: 'approve' | 'reject',
+  ): Promise<void> {
     setBusyId(doc.id);
     try {
       const updated =

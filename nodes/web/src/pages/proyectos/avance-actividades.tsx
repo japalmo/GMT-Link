@@ -64,7 +64,9 @@ export function AvanceActividades({
       }
       toast.success(`Se pegaron ${hechos} valores.`);
     } catch (e) {
-      toast.error(`Se pegaron ${hechos} de ${destino.length}. ${errorToMessage(e, 'Falló el resto.')}`);
+      toast.error(
+        `Se pegaron ${hechos} de ${destino.length}. ${errorToMessage(e, 'Falló el resto.')}`,
+      );
     } finally {
       await onCambio();
     }
@@ -91,7 +93,9 @@ export function AvanceActividades({
               const nueva = w >= informadas;
               return (
                 <th key={w} className="w-20 px-1 py-2 text-right font-medium">
-                  <span className={nueva ? 'text-primary' : 'text-foreground'}>{s?.code ?? `S-${w + 1}`}</span>
+                  <span className={nueva ? 'text-primary' : 'text-foreground'}>
+                    {s?.code ?? `S-${w + 1}`}
+                  </span>
                   <span className="block text-[11px] font-normal">
                     {nueva ? 'nuevo corte' : s ? fechaCorta(s.closeDate) : ''}
                   </span>
@@ -119,7 +123,9 @@ export function AvanceActividades({
                   <tr key={a.wbsId} className="border-t border-border/60">
                     <td className="sticky left-0 z-10 max-w-[18rem] bg-card px-3 py-1">
                       <span className="line-clamp-2">{a.name}</span>
-                      {hito && <span className="text-[11px] text-muted-foreground">Hito · no pesa</span>}
+                      {hito && (
+                        <span className="text-[11px] text-muted-foreground">Hito · no pesa</span>
+                      )}
                     </td>
                     <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
                       {hito ? '—' : a.hh.toLocaleString('es-CL', { maximumFractionDigits: 0 })}
@@ -143,7 +149,9 @@ export function AvanceActividades({
                             soloLectura={!puedeEditar}
                             aria-label={`${a.name}, ${semanaDe(w)?.code ?? ''}, % acumulado`}
                             onGuardar={(v) => guardar(a.wbsId, w, v)}
-                            onPegarColumna={(desde, col, valores) => void pegar(desde, col, valores)}
+                            onPegarColumna={(desde, col, valores) =>
+                              void pegar(desde, col, valores)
+                            }
                           />
                         </td>
                       );
@@ -152,7 +160,9 @@ export function AvanceActividades({
                 );
               })}
               <tr className="border-t border-border text-xs text-muted-foreground">
-                <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium">Avance {fase}</td>
+                <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium">
+                  Avance {fase}
+                </td>
                 <td />
                 {indices.map((w) => (
                   <td key={w} className="px-2 py-1.5 text-right tabular-nums">

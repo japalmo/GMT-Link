@@ -4,7 +4,14 @@ import { KeyRound, Lock, LockOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalDescription } from '@/components/ui/modal';
+import {
+  Modal,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+  ModalDescription,
+} from '@/components/ui/modal';
 import { Alert } from '@/components/ui/alert';
 import { errorToMessage, setProjectPublicPassword } from '@/lib/api';
 

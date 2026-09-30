@@ -143,7 +143,10 @@ export type ShiftPattern =
 export type DayNight = 'DIA' | 'NOCHE';
 
 /** Días de faena/descanso por preset cíclico. `null` = no aplica (administrativo/personalizado). */
-export const SHIFT_PATTERN_CYCLE: Record<ShiftPattern, { workDays: number; restDays: number } | null> = {
+export const SHIFT_PATTERN_CYCLE: Record<
+  ShiftPattern,
+  { workDays: number; restDays: number } | null
+> = {
   ADMINISTRATIVO: null,
   SIETE_POR_SIETE: { workDays: 7, restDays: 7 },
   CUATRO_POR_TRES: { workDays: 4, restDays: 3 },
@@ -414,10 +417,7 @@ export interface DirectoryEntryExtended extends DirectoryEntry {
  *  - `own`      → OWN: WHERE createdById = userId.
  *  - `projects` → PROJECT: WHERE projectId IN (ids del usuario).
  */
-export type ScopeFilter =
-  | { kind: 'none' }
-  | { kind: 'own' }
-  | { kind: 'projects'; ids: string[] };
+export type ScopeFilter = { kind: 'none' } | { kind: 'own' } | { kind: 'projects'; ids: string[] };
 
 /** Decisión de autorización para un recurso individual. */
 export interface PermissionDecision {
@@ -530,12 +530,7 @@ export type FaenaStatus = 'PLANIFICADA' | 'EN_PROGRESO' | 'COMPLETADA';
 export type ProjectWorkerStatus = 'ACTIVO' | 'INACTIVO';
 
 /** Frecuencia de un servicio RUTINARIO (espejo del enum Prisma `ServiceFrequency`). */
-export type ServiceFrequency =
-  | 'DIARIA'
-  | 'SEMANAL'
-  | 'QUINCENAL'
-  | 'MENSUAL'
-  | 'A_DEMANDA';
+export type ServiceFrequency = 'DIARIA' | 'SEMANAL' | 'QUINCENAL' | 'MENSUAL' | 'A_DEMANDA';
 
 // ============ Tipos de servicio + procedimientos (Tanda 4) ============
 
@@ -954,7 +949,6 @@ export interface UsoLecturaDescartada {
   conductor: string | null;
 }
 
-
 /**
  * Uso de un vehículo calculado sobre el odómetro que reportan sus checklists.
  * `promedios` y `proyeccion` son `null` cuando no hay lecturas suficientes
@@ -1176,12 +1170,7 @@ export interface ObraBreakdown {
  * segundo es uno al que todavía NO le cargaron la fecha. Juntarlos haría pasar
  * un dato faltante por un dato tranquilizador.
  */
-export type HrVigencia =
-  | 'VIGENTE'
-  | 'POR_VENCER'
-  | 'VENCIDO'
-  | 'SIN_VENCIMIENTO'
-  | 'SIN_FECHA';
+export type HrVigencia = 'VIGENTE' | 'POR_VENCER' | 'VENCIDO' | 'SIN_VENCIMIENTO' | 'SIN_FECHA';
 
 /** Qué clase de requisito es. Ordena el tablero y los filtros. */
 export type HrRequisitoTipo = 'DOCUMENTO' | 'EXAMEN' | 'INDUCCION' | 'ACREDITACION';

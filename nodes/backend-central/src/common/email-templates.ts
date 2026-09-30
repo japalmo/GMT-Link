@@ -33,8 +33,7 @@ const BRAND_NAVY = '#2A2E63';
  * frontend; configurable por env para apuntar al dominio de producción.
  */
 const LOGO_URL =
-  process.env.EMAIL_LOGO_URL ||
-  'https://web-dev-production-05f2.up.railway.app/gmt-link-logo.png';
+  process.env.EMAIL_LOGO_URL || 'https://web-dev-production-05f2.up.railway.app/gmt-link-logo.png';
 
 const FOOTER_NOTE = 'Este es un correo automático de GMT Link. No respondas a esta dirección.';
 
@@ -77,7 +76,8 @@ function codeBox(code: string): string {
 
 /** Correo de verificación de un nuevo correo (OTP de 6 dígitos). */
 export function verificationCodeEmail(code: string): EmailContent {
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Verifica tu correo</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Verifica tu correo</p>
               <p style="margin:0;color:#475569;">Usa el siguiente código para confirmar tu dirección de correo en GMT Link:</p>
               ${codeBox(code)}
               <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;">Si no solicitaste este código, ignora este mensaje.</p>`);
@@ -91,7 +91,8 @@ export function verificationCodeEmail(code: string): EmailContent {
 
 /** Correo con el OTP para cambiar la contraseña. */
 export function passwordChangeCodeEmail(code: string): EmailContent {
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Cambio de contraseña</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Cambio de contraseña</p>
               <p style="margin:0;color:#475569;">Ingresa este código para confirmar el cambio de tu contraseña en GMT Link:</p>
               ${codeBox(code)}
               <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;">Si no solicitaste el cambio, ignora este mensaje y tu contraseña seguirá igual.</p>`);
@@ -105,7 +106,8 @@ export function passwordChangeCodeEmail(code: string): EmailContent {
 
 /** Correo con el OTP para RECUPERAR la contraseña (usuario olvidó su clave). */
 export function passwordResetCodeEmail(code: string): EmailContent {
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Recupera tu contraseña</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Recupera tu contraseña</p>
               <p style="margin:0;color:#475569;">Recibimos una solicitud para restablecer tu contraseña en GMT Link. Ingresa este código para continuar:</p>
               ${codeBox(code)}
               <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;">Si no solicitaste recuperar tu contraseña, ignora este mensaje y tu contraseña seguirá igual.</p>`);
@@ -119,7 +121,8 @@ export function passwordResetCodeEmail(code: string): EmailContent {
 
 /** Correo con el OTP para FIRMAR un checklist (fallback sin biometría, #68). */
 export function checklistSignatureCodeEmail(code: string): EmailContent {
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Firma tu checklist</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Firma tu checklist</p>
               <p style="margin:0;color:#475569;">Usa este código para firmar el checklist que estás enviando en GMT Link:</p>
               ${codeBox(code)}
               <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;">Si no estás enviando un checklist, ignora este mensaje.</p>`);
@@ -147,7 +150,8 @@ export function credentialsEmail(params: {
   const { nombre, username, provisionalPassword, loginUrl } = params;
   const safeLoginUrl = escapeHtml(loginUrl);
 
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
               <p style="margin:0;color:#475569;">Se creó tu cuenta en GMT Link. Estas son tus credenciales de acceso:</p>
               <div style="margin:24px 0;padding:22px 20px;background-color:#f4f6fb;border:1px solid #e2e8f0;border-radius:10px;">
                 ${credentialRow('Usuario', username)}
@@ -216,7 +220,8 @@ export function resendCredentialsEmail(params: {
       ? messageToHtml(trimmedMessage)
       : `<p style="margin:0;color:#475569;">Te reenviamos tus credenciales de acceso a GMT Link.</p>`;
 
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
               ${introHtml}
               <div style="margin:24px 0;padding:22px 20px;background-color:#f4f6fb;border:1px solid #e2e8f0;border-radius:10px;">
                 ${credentialRow('Usuario', username)}
@@ -233,7 +238,10 @@ export function resendCredentialsEmail(params: {
               <p style="margin:0 0 20px;"><a href="${safeLoginUrl}" style="color:${BRAND_NAVY};font-size:13px;word-break:break-all;">${safeLoginUrl}</a></p>
               <p style="margin:0;color:#b45309;font-size:13px;background-color:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">Por seguridad, cambia tu contraseña en tu primer ingreso.</p>`);
 
-  const bodyIntro = trimmedMessage.length > 0 ? trimmedMessage : 'Te reenviamos tus credenciales de acceso a GMT Link.';
+  const bodyIntro =
+    trimmedMessage.length > 0
+      ? trimmedMessage
+      : 'Te reenviamos tus credenciales de acceso a GMT Link.';
   return {
     subject: subject.trim().length > 0 ? subject.trim() : 'Tus credenciales de acceso a GMT Link',
     body: `Hola ${nombre}:
@@ -284,10 +292,10 @@ export function onboardingCredentialsEmail(params: {
   const prefillUrl = `${loginUrl}?u=${encodeURIComponent(username)}&p=${encodeURIComponent(provisionalPassword)}`;
   const safePrefillUrl = escapeHtml(prefillUrl);
   const safeLoginUrl = escapeHtml(loginUrl);
-  const disclaimer =
-    `Eres parte del primer grupo de usuarios de prueba de GMT Link. Es normal que encuentres detalles por pulir o errores que aún no alcanzamos a detectar. Si algo no funciona como esperas, escríbenos a ${feedbackEmail} y cuéntanos qué pasó: tu opinión nos ayuda a mejorar la plataforma antes del lanzamiento general. Gracias por probar.`;
+  const disclaimer = `Eres parte del primer grupo de usuarios de prueba de GMT Link. Es normal que encuentres detalles por pulir o errores que aún no alcanzamos a detectar. Si algo no funciona como esperas, escríbenos a ${feedbackEmail} y cuéntanos qué pasó: tu opinión nos ayuda a mejorar la plataforma antes del lanzamiento general. Gracias por probar.`;
 
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Hola ${escapeHtml(nombre)}:</p>
               <p style="margin:0;color:#475569;">Se creó tu cuenta en GMT Link y eres parte del primer grupo de usuarios de prueba. Estas son tus credenciales de acceso:</p>
               <div style="margin:24px 0;padding:22px 20px;background-color:#f4f6fb;border:1px solid #e2e8f0;border-radius:10px;">
                 ${credentialRow('Usuario', username)}
@@ -343,7 +351,8 @@ export function checklistEnviadoEmail(params: {
     ? 'Reportaste una falla, así que el vehículo quedó marcado en mantenimiento hasta que alguien lo revise.'
     : '';
 
-  const html = shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Checklist registrado</p>
+  const html =
+    shell(`<p style="margin:0 0 12px;font-size:19px;font-weight:600;color:${BRAND_NAVY};">Checklist registrado</p>
               <p style="margin:0;color:#475569;">Queda una copia en PDF adjunta a este correo.</p>
               <table role="presentation" style="margin:18px 0 0;font-size:14px;color:#475569;">
                 <tr><td style="padding:2px 14px 2px 0;color:#94a3b8;">Vehículo</td><td>${escapeHtml(vehiculo)}</td></tr>

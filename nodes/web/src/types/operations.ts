@@ -46,8 +46,6 @@ export interface TaskTimeLogView {
   createdAt: string;
 }
 
-
-
 /** Datos de la persona en una cuadrilla, como los devuelve la API de tareas. */
 export interface CrewUser {
   id: string;
@@ -158,7 +156,12 @@ export interface CreateProjectDocumentInput {
   taskId?: string;
 }
 
-export type ProjectDocumentStatus = 'BORRADOR' | 'PENDIENTE_QA' | 'PENDIENTE_CLIENTE' | 'APROBADO' | 'RECHAZADO';
+export type ProjectDocumentStatus =
+  | 'BORRADOR'
+  | 'PENDIENTE_QA'
+  | 'PENDIENTE_CLIENTE'
+  | 'APROBADO'
+  | 'RECHAZADO';
 
 export interface ProjectDocumentView {
   id: string;

@@ -19,8 +19,7 @@ const partsFmt = new Intl.DateTimeFormat('en-CA', {
 
 function santiagoParts(now: Date): { year: number; month: number; day: number } {
   const parts = partsFmt.formatToParts(now);
-  const get = (type: string): number =>
-    Number(parts.find((p) => p.type === type)?.value);
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
   return { year: get('year'), month: get('month'), day: get('day') };
 }
 

@@ -153,13 +153,15 @@ function caja(page: PDFPage, x0: number, y0: number, x1: number, y1: number, gro
  * o una comilla tipográfica pegada desde el celular hace fallar el PDF entero.
  */
 function limpiar(texto: string): string {
-  return texto
-    .replace(/[‘’‛]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, '-')
-    .replace(/…/g, '...')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[^\u0000-ÿ]/g, '');
+  return (
+    texto
+      .replace(/[‘’‛]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[–—]/g, '-')
+      .replace(/…/g, '...')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[^\u0000-ÿ]/g, '')
+  );
 }
 
 interface OpcionesTexto {
@@ -260,11 +262,7 @@ export async function buildIncidentePdf(datos: DatosIncidente): Promise<Buffer> 
     size: 11,
     color: NEGRO,
   });
-  const codigo = [
-    'Codigo: GMT-SGC-SG-INC-FR-01',
-    'Fecha emision: 10-07-2026',
-    'Rev:01',
-  ];
+  const codigo = ['Codigo: GMT-SGC-SG-INC-FR-01', 'Fecha emision: 10-07-2026', 'Rev:01'];
   codigo.forEach((linea, i) => {
     centrado(page, linea, CAB.xCodigo, X_DER, 110.1 + i * 9.35, {
       font: negrita,
@@ -507,7 +505,12 @@ export async function buildIncidentePdf(datos: DatosIncidente): Promise<Buffer> 
     ? `${datos.preparaNombre} ${datos.preparaCargo}`
     : datos.preparaNombre;
   texto(page, prepara, 76.7, 680.4, { font: normal, size: 9, color: NAVY, maxAncho: 330 });
-  texto(page, datos.preparaFecha, 414.3, 680.4, { font: normal, size: 9, color: NAVY, maxAncho: 118 });
+  texto(page, datos.preparaFecha, 414.3, 680.4, {
+    font: normal,
+    size: 9,
+    color: NAVY,
+    maxAncho: 118,
+  });
 
   // ── Nota al pie (fuera del marco, como en el original) ──
   centrado(

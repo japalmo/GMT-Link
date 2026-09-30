@@ -30,7 +30,7 @@ observaciones generales, más las cinco secciones del formato impreso
 columna de la planilla, así que la importación es un mapeo directo.
 
 `checklist-formato-pdf.util.ts` dibuja el PDF con el molde real, reconstruido
-desde la pestaña `FORMATO CHECKLIST` del libro *CHECK LIST CAMIONETAS*.
+desde la pestaña `FORMATO CHECKLIST` del libro _CHECK LIST CAMIONETAS_.
 
 **No hay trabajo de migración pendiente.**
 
@@ -48,10 +48,10 @@ faltan los datos.
 Esto vuelve el trabajo principal un **relleno de datos**, no una reescritura de
 la UI de ítems.
 
-| | plantillas | ítems | secciones |
-|---|---|---|---|
-| Vehículos en producción | 20 | 73 | 0 |
-| Definición canónica | 1 | 73 | 5 |
+|                         | plantillas | ítems | secciones |
+| ----------------------- | ---------- | ----- | --------- |
+| Vehículos en producción | 20         | 73    | 0         |
+| Definición canónica     | 1          | 73    | 5         |
 
 Hay 2.439 envíos registrados, de los cuales 2.425 vienen importados de la
 planilla. Es decir: el formulario nuevo de GMT Link casi no se ha usado todavía,
@@ -65,12 +65,12 @@ builder lo llena hoy con `[]`. El bloque existe en el dibujo y llega vacío.
 
 RRHH ya modela todo lo que el dueño describió:
 
-| Concepto | Modelo existente | Alcance |
-|---|---|---|
-| Licencia de conducir municipal | `PersonalDocument` | por persona |
-| Exámenes ocupacionales | `MedicalExam` | por persona |
-| Capacitaciones | `Induction` | por cliente y faenas |
-| Licencia interna / acreditación | `WorkerAccreditation` | por cliente y faena |
+| Concepto                        | Modelo existente      | Alcance              |
+| ------------------------------- | --------------------- | -------------------- |
+| Licencia de conducir municipal  | `PersonalDocument`    | por persona          |
+| Exámenes ocupacionales          | `MedicalExam`         | por persona          |
+| Capacitaciones                  | `Induction`           | por cliente y faenas |
+| Licencia interna / acreditación | `WorkerAccreditation` | por cliente y faena  |
 
 No hay que inventar una sección "Trabajadores por cliente": está construida y se
 gestiona desde RRHH.
@@ -83,13 +83,13 @@ adjuntar el archivo. El placeholder que pidió el dueño exige volverlo opcional
 
 ## 2. Decisiones tomadas
 
-| # | Decisión | Quién |
-|---|---|---|
-| D1 | Se permite llenar el checklist sin cuenta. Esos envíos quedan **marcados como "sin verificar"** en el historial; no se bloquean ni requieren aprobación. | dueño |
-| D2 | El PDF se manda **solo a quien llenó el formulario**. Sin copia fija interna por ahora. | dueño |
-| D3 | La licencia municipal sale de un **documento personal de RRHH**, que puede existir con solo la fecha de vencimiento y sin archivo, y genera un **recordatorio** para subirlo. | dueño |
-| D4 | La licencia interna sale de la **acreditación por faena** que ya existe. La gestión completa (RRHH edita, Proyectos solo observa) es trabajo aparte, fuera de este alcance. | dueño |
-| D5 | El PDF conserva exactamente el formato actual. | dueño |
+| #   | Decisión                                                                                                                                                                      | Quién |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| D1  | Se permite llenar el checklist sin cuenta. Esos envíos quedan **marcados como "sin verificar"** en el historial; no se bloquean ni requieren aprobación.                      | dueño |
+| D2  | El PDF se manda **solo a quien llenó el formulario**. Sin copia fija interna por ahora.                                                                                       | dueño |
+| D3  | La licencia municipal sale de un **documento personal de RRHH**, que puede existir con solo la fecha de vencimiento y sin archivo, y genera un **recordatorio** para subirlo. | dueño |
+| D4  | La licencia interna sale de la **acreditación por faena** que ya existe. La gestión completa (RRHH edita, Proyectos solo observa) es trabajo aparte, fuera de este alcance.   | dueño |
+| D5  | El PDF conserva exactamente el formato actual.                                                                                                                                | dueño |
 
 ---
 
@@ -131,12 +131,12 @@ Dos caminos, presentados como dos tarjetas:
 
 Mismos campos en los dos caminos; cambia de dónde salen.
 
-| Campo | Con sesión | Sin sesión |
-|---|---|---|
-| Nombre | perfil (`firstName` + `lastName`) | lo escribe |
-| Clase de licencia municipal | documento personal tipo licencia | lo elige |
-| Vencimiento licencia municipal | `expiresAt` de ese documento | lo escribe |
-| Vencimiento licencia interna | acreditación vigente del cliente/faena | lo escribe |
+| Campo                          | Con sesión                             | Sin sesión |
+| ------------------------------ | -------------------------------------- | ---------- |
+| Nombre                         | perfil (`firstName` + `lastName`)      | lo escribe |
+| Clase de licencia municipal    | documento personal tipo licencia       | lo elige   |
+| Vencimiento licencia municipal | `expiresAt` de ese documento           | lo escribe |
+| Vencimiento licencia interna   | acreditación vigente del cliente/faena | lo escribe |
 
 Con sesión los campos se muestran **prellenados y editables**, con un aviso
 explícito:
@@ -257,12 +257,12 @@ Se anotan para que no se pierdan, pero **no** se construyen ahora:
 
 ## 5. Riesgos
 
-| Riesgo | Mitigación |
-|---|---|
+| Riesgo                                                                | Mitigación                                                                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | El endpoint público permite que cualquiera con el QR genere registros | Throttle por IP, marca visible de "sin verificar", y la salida documentada de exigir aprobación si se ensucia |
-| El relleno de secciones toca 20 plantillas vivas | Script idempotente, respaldo previo a CSV, y verificación de que el conteo de ítems no cambia |
-| Extraer los componentes de HSE puede alterar ese formulario | El refactor no cambia comportamiento; se verifica el formulario de HSE en el navegador antes de seguir |
-| El correo puede fallar en silencio | Envío best-effort, el checklist se guarda primero, la pantalla lo dice y ofrece descarga |
+| El relleno de secciones toca 20 plantillas vivas                      | Script idempotente, respaldo previo a CSV, y verificación de que el conteo de ítems no cambia                 |
+| Extraer los componentes de HSE puede alterar ese formulario           | El refactor no cambia comportamiento; se verifica el formulario de HSE en el navegador antes de seguir        |
+| El correo puede fallar en silencio                                    | Envío best-effort, el checklist se guarda primero, la pantalla lo dice y ofrece descarga                      |
 
 ---
 

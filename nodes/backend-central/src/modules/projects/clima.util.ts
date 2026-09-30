@@ -144,5 +144,5 @@ export function componerClima(l: LecturaClima): ObraWeather {
 /** Punto cardinal desde el que sopla el viento, para leerlo sin grados. */
 export function rumbo(grados: number): string {
   const puntos = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
-  return puntos[Math.round(((grados % 360) + 360) % 360 / 45) % 8] ?? 'N';
+  return puntos[Math.round((((grados % 360) + 360) % 360) / 45) % 8] ?? 'N';
 }

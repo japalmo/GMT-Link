@@ -113,7 +113,9 @@ describe('construirFormato: fallas y datos del vehículo', () => {
 
   it('la respuesta peligrosa del conductor sale marcada', () => {
     // "sí consumo medicamentos que dan sueño" es la falla, no el "no".
-    const d = construirFormato(entrada({ answers: [{ itemId: 'medicamentosSueno', value: true }] }));
+    const d = construirFormato(
+      entrada({ answers: [{ itemId: 'medicamentosSueno', value: true }] }),
+    );
     const fila = d.condicionesConductor.find((f) => f.valor === 'Sí');
     expect(fila?.esFalla).toBe(true);
   });
@@ -130,7 +132,11 @@ describe('construirFormato: fallas y datos del vehículo', () => {
     const d = construirFormato(
       entrada({
         documentos: [
-          { name: 'Permiso 2026', type: 'PERMISO_CIRCULACION', expirationDate: new Date(2027, 2, 31) },
+          {
+            name: 'Permiso 2026',
+            type: 'PERMISO_CIRCULACION',
+            expirationDate: new Date(2027, 2, 31),
+          },
         ],
       }),
     );
@@ -252,7 +258,9 @@ describe('las observaciones se ENVUELVEN, nunca se recortan', () => {
   it('una observación que no cabe en su celda se copia ENTERA a observaciones generales', async () => {
     const largo = 'RAYADURAS Y ABOLLADURAS EN LA PUERTA TRASERA DERECHA Y EL PARACHOQUES';
     const bytes = await composeChecklistFormatoPdf(
-      construirFormato(entrada({ answers: [{ itemId: 'sistemaFrenos', value: 'Malo', comment: largo }] })),
+      construirFormato(
+        entrada({ answers: [{ itemId: 'sistemaFrenos', value: 'Malo', comment: largo }] }),
+      ),
     );
     const texto = await textoDe(bytes);
     for (const palabra of largo.split(' ')) expect(texto).toContain(palabra);
@@ -289,7 +297,10 @@ describe('el formato impreso', () => {
   it('una respuesta sin fila en el formato va a observaciones generales', () => {
     const d = construirFormato(
       entrada({
-        items: [...PLANTILLA_ACTIVO, { id: 'presionAire', label: 'Presión de aire', type: 'TEXTO' }],
+        items: [
+          ...PLANTILLA_ACTIVO,
+          { id: 'presionAire', label: 'Presión de aire', type: 'TEXTO' },
+        ],
         answers: [
           { itemId: 'nivelAdBlue', value: 'Bajo' },
           { itemId: 'presionAire', value: '32 psi' },

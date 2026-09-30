@@ -79,9 +79,7 @@ export function PuertaClave({
           </span>
           <div>
             <h2 className="text-base font-bold">Tablero protegido</h2>
-            <p className="text-xs text-white/70">
-              Esta obra pide clave para ver su avance.
-            </p>
+            <p className="text-xs text-white/70">Esta obra pide clave para ver su avance.</p>
           </div>
         </div>
 

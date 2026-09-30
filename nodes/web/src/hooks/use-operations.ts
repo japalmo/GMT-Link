@@ -28,7 +28,12 @@ export interface UseProjectsResult {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  create: (dto: { code: string; name: string; departmentId: string; clientId: string }) => Promise<ProjectView>;
+  create: (dto: {
+    code: string;
+    name: string;
+    departmentId: string;
+    clientId: string;
+  }) => Promise<ProjectView>;
   createSrv: (projectId: string, dto: CreateServiceByTypeInput) => Promise<ServiceView>;
   updateKpis: (projectId: string, kpis: Record<string, unknown>) => Promise<ProjectView>;
 }
@@ -122,20 +127,29 @@ export interface UseTasksResult {
   patch: (actualizadas: TaskView[]) => void;
   create: (dto: CreateTaskInput) => Promise<TaskView>;
   update: (id: string, dto: UpdateTaskInput) => Promise<TaskView>;
-  updateStatus: (id: string, status: TaskStatus, actualPoints?: number, rejectionReason?: string) => Promise<TaskView>;
+  updateStatus: (
+    id: string,
+    status: TaskStatus,
+    actualPoints?: number,
+    rejectionReason?: string,
+  ) => Promise<TaskView>;
   remove: (id: string) => Promise<void>;
   startTime: (id: string, note?: string) => Promise<void>;
   finishTime: (id: string, note?: string) => Promise<void>;
-  getAssignees: (projectId: string) => Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>>;
+  getAssignees: (
+    projectId: string,
+  ) => Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>>;
 }
 
-export function useTasks(filters: {
-  projectId?: string;
-  serviceId?: string;
-  status?: TaskStatus;
-  assignedToId?: string | null;
-  search?: string;
-} = {}): UseTasksResult {
+export function useTasks(
+  filters: {
+    projectId?: string;
+    serviceId?: string;
+    status?: TaskStatus;
+    assignedToId?: string | null;
+    search?: string;
+  } = {},
+): UseTasksResult {
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -224,12 +238,9 @@ export function useTasks(filters: {
     [load],
   );
 
-  const getAssignees = useCallback(
-    async (projectId: string) => {
-      return api.getTaskAssignees(projectId);
-    },
-    [],
-  );
+  const getAssignees = useCallback(async (projectId: string) => {
+    return api.getTaskAssignees(projectId);
+  }, []);
 
   return {
     tasks,
@@ -264,7 +275,10 @@ export interface UseProjectDocumentsResult {
   remove: (id: string) => Promise<void>;
 }
 
-export function useProjectDocuments(projectId?: string, serviceId?: string): UseProjectDocumentsResult {
+export function useProjectDocuments(
+  projectId?: string,
+  serviceId?: string,
+): UseProjectDocumentsResult {
   const [documents, setDocuments] = useState<ProjectDocumentView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -142,8 +142,7 @@ export function computeControlSemanal(
     parReal: f.parReal === null ? null : porcentaje(f.parReal),
     acmPlan: porcentaje(f.acmPlan),
     acmReal: f.acmReal === null ? null : porcentaje(f.acmReal),
-    deviation:
-      f.acmReal === null ? null : Math.round((f.acmReal - f.acmPlan) * 1000) / 10,
+    deviation: f.acmReal === null ? null : Math.round((f.acmReal - f.acmPlan) * 1000) / 10,
   }));
 
   // La última semana informada. S-0 vale como informada (arranca en 0) y por
@@ -157,9 +156,7 @@ export function computeControlSemanal(
   // programa se prorratea por día. Si no vino, se cae al de la última semana
   // informada, que es la aproximación más cercana que existe con estos datos.
   const planPercent =
-    cabecera.planAtCutoff !== null
-      ? porcentaje(cabecera.planAtCutoff)
-      : (ultima?.acmPlan ?? 0);
+    cabecera.planAtCutoff !== null ? porcentaje(cabecera.planAtCutoff) : (ultima?.acmPlan ?? 0);
 
   const cutoff = cabecera.cutoffDate
     ? dayISO(cabecera.cutoffDate)

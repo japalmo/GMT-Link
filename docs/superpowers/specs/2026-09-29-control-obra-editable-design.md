@@ -29,10 +29,10 @@ Al corte S-3 el tablero coincide exactamente con el informe firmado
 
 ### 1.2 Hay DOS fuentes para el mismo número, y hoy están desincronizadas
 
-| Fuente | Alimenta | Estado al 29-09 |
-|---|---|---|
-| `ProjectWeek.parReal` / `acmReal` | encabezado y curva S | al día (S-3) |
-| `ProjectActivity.realByWeek` | **desglose por fases** | congelado en S-1 |
+| Fuente                            | Alimenta               | Estado al 29-09  |
+| --------------------------------- | ---------------------- | ---------------- |
+| `ProjectWeek.parReal` / `acmReal` | encabezado y curva S   | al día (S-3)     |
+| `ProjectActivity.realByWeek`      | **desglose por fases** | congelado en S-1 |
 
 En el tablero que hoy se proyecta, el encabezado dice 23,7% y el bloque de fases
 muestra Gestión 7,1% y Construcción 0%. Nadie lo notó porque nada cruza las dos
@@ -57,11 +57,11 @@ desglose por fases: la información no viaja ahí.
 
 ## 2. Decisiones tomadas
 
-| # | Decisión | Quién |
-|---|---|---|
-| D1 | Se editan **las dos cosas**: el avance por actividad como fuente, y el porcentaje semanal se puede sobreescribir cuando no cuadre con el informe. | dueño |
-| D2 | **Permiso nuevo** de avance de obra, que el dueño asigna. Proyectos sigue viendo sin poder editar. | dueño |
-| D3 | El plan **es editable, con aviso** de que mueve la referencia de todo el informe. | dueño |
+| #   | Decisión                                                                                                                                          | Quién |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| D1  | Se editan **las dos cosas**: el avance por actividad como fuente, y el porcentaje semanal se puede sobreescribir cuando no cuadre con el informe. | dueño |
+| D2  | **Permiso nuevo** de avance de obra, que el dueño asigna. Proyectos sigue viendo sin poder editar.                                                | dueño |
+| D3  | El plan **es editable, con aviso** de que mueve la referencia de todo el informe.                                                                 | dueño |
 
 ### 2.1 Cómo se cierra el riesgo de D1
 
@@ -186,13 +186,13 @@ incidentes: una foto de celular pesa varios MB y en faena la señal es mala.
 
 ## 5. Riesgos
 
-| Riesgo | Mitigación |
-|---|---|
-| Las dos fuentes vuelven a desincronizarse | El override es visible y muestra el calculado al lado (§2.1) |
-| Un error de tipeo en el plan mueve la referencia del informe | Aviso explícito al editar el plan (D3) |
-| Autoguardado escribiendo basura por una celda a medias | Se valida rango 0-100 antes de mandar; una celda inválida no se guarda y se marca |
-| El acumulado por actividad puede retroceder | Se avisa, pero se permite: una corrección legítima de un informe anterior es un retroceso |
-| Fotos de celular de varios MB en un tablero que se proyecta | Se achican en el navegador antes de subir, como en el reporte de incidentes |
+| Riesgo                                                       | Mitigación                                                                                |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Las dos fuentes vuelven a desincronizarse                    | El override es visible y muestra el calculado al lado (§2.1)                              |
+| Un error de tipeo en el plan mueve la referencia del informe | Aviso explícito al editar el plan (D3)                                                    |
+| Autoguardado escribiendo basura por una celda a medias       | Se valida rango 0-100 antes de mandar; una celda inválida no se guarda y se marca         |
+| El acumulado por actividad puede retroceder                  | Se avisa, pero se permite: una corrección legítima de un informe anterior es un retroceso |
+| Fotos de celular de varios MB en un tablero que se proyecta  | Se achican en el navegador antes de subir, como en el reporte de incidentes               |
 
 ---
 

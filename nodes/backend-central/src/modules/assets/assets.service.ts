@@ -1,7 +1,28 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { autorDelEnvio, origenDelEnvio } from './checklist-origen.util';
 import { ZodError } from 'zod';
-import { AssetStatus, AssetType, AssetIdentifierType, DocumentStatus, Prisma, ScopeType, AssetAccessory, ChecklistTemplate, ChecklistSubmission, UsageCycleStatus, SignatureContextType, SignatureMethod, AccreditationStatus } from '@prisma/client';
+import {
+  AssetStatus,
+  AssetType,
+  AssetIdentifierType,
+  DocumentStatus,
+  Prisma,
+  ScopeType,
+  AssetAccessory,
+  ChecklistTemplate,
+  ChecklistSubmission,
+  UsageCycleStatus,
+  SignatureContextType,
+  SignatureMethod,
+  AccreditationStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SignatureService } from '../signatures/signature.service';
 import type { IncomingSignature, VerifiedSignature } from '../signatures/signature.service';
@@ -15,16 +36,23 @@ import { checklistEnviadoEmail } from '../../common/email-templates';
 import { freshFileUrl } from '../../common/storage/fresh-file-url';
 import { resolveFreshFileUrl } from '../../common/storage/fresh-file-url.util';
 import { GamificationService } from '../gamification/gamification.service';
-import type { TablePage, TableRequest, UsageCycleView, EndUsageCycleInput } from '@gmt-platform/contracts';
-import { CreateAssetDto, UpdateAssetDto, UpdateAssetStatusDto, SubmitTelemetryDto, SubmitPublicChecklistDto } from './dto/assets.dto';
+import type {
+  TablePage,
+  TableRequest,
+  UsageCycleView,
+  EndUsageCycleInput,
+} from '@gmt-platform/contracts';
+import {
+  CreateAssetDto,
+  UpdateAssetDto,
+  UpdateAssetStatusDto,
+  SubmitTelemetryDto,
+  SubmitPublicChecklistDto,
+} from './dto/assets.dto';
 import { composeTemplatePreviewPdf } from './checklist-pdf.util';
 import { composeChecklistFormatoPdf } from './checklist-formato-pdf.util';
 import { construirFormato } from './checklist-formato.builder';
-import {
-  decodificarFirma,
-  esFirmaNueva,
-  FirmaInvalidaError,
-} from './checklist-firma.util';
+import { decodificarFirma, esFirmaNueva, FirmaInvalidaError } from './checklist-firma.util';
 import { claseDeLicencia, construirDatosConductor } from './checklist-conductor.util';
 import type { Licencia } from './checklist-conductor.util';
 import type { TemplatePreviewSection } from './checklist-pdf.util';
@@ -90,7 +118,6 @@ function asAssetStatus(value: unknown): AssetStatus | undefined {
     : undefined;
 }
 
-
 /** Fecha ISO opcional del formulario a `Date`, o `null` si no vino. */
 function fechaOpcional(iso: string | undefined): Date | null {
   return iso ? new Date(iso) : null;
@@ -98,7 +125,6 @@ function fechaOpcional(iso: string | undefined): Date | null {
 
 /** Carpeta del storage donde viven las firmas a mano alzada de los checklists. */
 const CARPETA_FIRMAS = 'checklist-firmas';
-
 
 @Injectable()
 export class AssetsService {
@@ -272,10 +298,7 @@ export class AssetsService {
 
     const projects = await this.prisma.project.findMany({
       where: {
-        OR: [
-          { id: { in: userProjectIds } },
-          { departmentId: { in: departmentIds } },
-        ],
+        OR: [{ id: { in: userProjectIds } }, { departmentId: { in: departmentIds } }],
       },
       select: { id: true },
     });
@@ -286,13 +309,15 @@ export class AssetsService {
   /**
    * Mapea un registro de Asset de base de datos a la vista del frontend.
    */
-  private toAssetView(row: Prisma.AssetGetPayload<{
-    include: {
-      project: true;
-      assignedTo: true;
-      inUseBy: true;
-    };
-  }>): AssetView {
+  private toAssetView(
+    row: Prisma.AssetGetPayload<{
+      include: {
+        project: true;
+        assignedTo: true;
+        inUseBy: true;
+      };
+    }>,
+  ): AssetView {
     return {
       id: row.id,
       code: row.code,
@@ -314,7 +339,11 @@ export class AssetsService {
       updatedAt: row.updatedAt.toISOString(),
       project: row.project ? { id: row.project.id, name: row.project.name } : null,
       assignedTo: row.assignedTo
-        ? { id: row.assignedTo.id, firstName: row.assignedTo.firstName, lastName: row.assignedTo.lastName }
+        ? {
+            id: row.assignedTo.id,
+            firstName: row.assignedTo.firstName,
+            lastName: row.assignedTo.lastName,
+          }
         : null,
       inUseBy: row.inUseBy
         ? { id: row.inUseBy.id, firstName: row.inUseBy.firstName, lastName: row.inUseBy.lastName }
@@ -325,11 +354,13 @@ export class AssetsService {
   /**
    * Mapea un registro de documento de activo a su vista.
    */
-  private async toDocView(row: Prisma.AssetDocumentGetPayload<{
-    include: {
-      reviewedBy: true;
-    };
-  }>): Promise<AssetDocumentView> {
+  private async toDocView(
+    row: Prisma.AssetDocumentGetPayload<{
+      include: {
+        reviewedBy: true;
+      };
+    }>,
+  ): Promise<AssetDocumentView> {
     // `fileUrl`/`previousFileUrl` guardan la CLAVE del storage (o una URL
     // absoluta legada): se resuelven a una URL de descarga FRESCA al leer.
     const fileUrl = await freshFileUrl(this.storage, row.fileUrl);
@@ -357,11 +388,13 @@ export class AssetsService {
   /**
    * Mapea un registro del historial a su vista.
    */
-  private toHistoryView(row: Prisma.AssetHistoryEntryGetPayload<{
-    include: {
-      actor: true;
-    };
-  }>): AssetHistoryEntryView {
+  private toHistoryView(
+    row: Prisma.AssetHistoryEntryGetPayload<{
+      include: {
+        actor: true;
+      };
+    }>,
+  ): AssetHistoryEntryView {
     return {
       id: row.id,
       assetId: row.assetId,
@@ -369,9 +402,7 @@ export class AssetsService {
       description: row.description,
       actorId: row.actorId,
       createdAt: row.createdAt.toISOString(),
-      actor: row.actor
-        ? { firstName: row.actor.firstName, lastName: row.actor.lastName }
-        : null,
+      actor: row.actor ? { firstName: row.actor.firstName, lastName: row.actor.lastName } : null,
     };
   }
 
@@ -464,84 +495,88 @@ export class AssetsService {
     }
     const code = codigoManual || (await this.generateAssetCode(dto.type));
 
-    const assetId = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.asset.create({
-        data: {
-          code,
-          type: dto.type,
-          name: dto.name,
-          description: dto.description ?? null,
-          manufacturer: dto.manufacturer ?? null,
-          identifier: dto.identifier ?? null,
-          identifierType: dto.identifierType ?? null,
-          vehicleSubtype: dto.vehicleSubtype ?? null,
-          status: AssetStatus.DISPONIBLE,
-          projectId: dto.projectId ?? null,
-          assignedToId: dto.assignedToId ?? null,
-          metadata: dto.metadata ? (dto.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
-        },
-      });
-
-      // Crear tuplas estructurales en OpenFGA
-      const writes: { user: string; relation: string; object: string }[] = [];
-      
-      if (created.projectId) {
-        writes.push({
-          user: `project:${created.projectId}`,
-          relation: 'project',
-          object: `asset:${created.id}`,
+    const assetId = await this.prisma
+      .$transaction(async (tx) => {
+        const created = await tx.asset.create({
+          data: {
+            code,
+            type: dto.type,
+            name: dto.name,
+            description: dto.description ?? null,
+            manufacturer: dto.manufacturer ?? null,
+            identifier: dto.identifier ?? null,
+            identifierType: dto.identifierType ?? null,
+            vehicleSubtype: dto.vehicleSubtype ?? null,
+            status: AssetStatus.DISPONIBLE,
+            projectId: dto.projectId ?? null,
+            assignedToId: dto.assignedToId ?? null,
+            metadata: dto.metadata ? (dto.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+          },
         });
-      }
 
-      if (created.assignedToId) {
-        writes.push({
-          user: `user:${created.assignedToId}`,
-          relation: 'assigned',
-          object: `asset:${created.id}`,
-        });
-      }
+        // Crear tuplas estructurales en OpenFGA
+        const writes: { user: string; relation: string; object: string }[] = [];
 
-      if (writes.length > 0) {
-        await this.fga.writeTuples(writes);
-      }
+        if (created.projectId) {
+          writes.push({
+            user: `project:${created.projectId}`,
+            relation: 'project',
+            object: `asset:${created.id}`,
+          });
+        }
 
-      // Registrar historial
-      const typeLabel = (
-        {
-          [AssetType.EQUIPO]: 'Equipo',
-          [AssetType.VEHICULO]: 'Vehículo',
-          [AssetType.MAQUINARIA]: 'Maquinaria',
-        } as Record<AssetType, string>
-      )[dto.type];
-      await this.createHistoryEntry(
-        tx,
-        created.id,
-        'CREADO',
-        `${typeLabel} registrado con código ${code}.`,
-        userId,
-      );
+        if (created.assignedToId) {
+          writes.push({
+            user: `user:${created.assignedToId}`,
+            relation: 'assigned',
+            object: `asset:${created.id}`,
+          });
+        }
 
-      if (created.assignedToId) {
-        const assignedUser = await tx.user.findUnique({ where: { id: created.assignedToId } });
-        const nameStr = assignedUser ? `${assignedUser.firstName} ${assignedUser.lastName}` : created.assignedToId;
+        if (writes.length > 0) {
+          await this.fga.writeTuples(writes);
+        }
+
+        // Registrar historial
+        const typeLabel = (
+          {
+            [AssetType.EQUIPO]: 'Equipo',
+            [AssetType.VEHICULO]: 'Vehículo',
+            [AssetType.MAQUINARIA]: 'Maquinaria',
+          } as Record<AssetType, string>
+        )[dto.type];
         await this.createHistoryEntry(
           tx,
           created.id,
-          'ASIGNADO',
-          `Asignado inicialmente a ${nameStr} como responsable.`,
+          'CREADO',
+          `${typeLabel} registrado con código ${code}.`,
           userId,
         );
-      }
 
-      return created.id;
-    }).catch((err: unknown) => {
-      // Dos altas simultáneas con el mismo código: la restricción única de la
-      // base es la que decide, y se informa igual que la verificación previa.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException(`Ya existe un activo con el código ${code}.`);
-      }
-      throw err;
-    });
+        if (created.assignedToId) {
+          const assignedUser = await tx.user.findUnique({ where: { id: created.assignedToId } });
+          const nameStr = assignedUser
+            ? `${assignedUser.firstName} ${assignedUser.lastName}`
+            : created.assignedToId;
+          await this.createHistoryEntry(
+            tx,
+            created.id,
+            'ASIGNADO',
+            `Asignado inicialmente a ${nameStr} como responsable.`,
+            userId,
+          );
+        }
+
+        return created.id;
+      })
+      .catch((err: unknown) => {
+        // Dos altas simultáneas con el mismo código: la restricción única de la
+        // base es la que decide, y se informa igual que la verificación previa.
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new ConflictException(`Ya existe un activo con el código ${code}.`);
+        }
+        throw err;
+      });
 
     const row = await this.prisma.asset.findUniqueOrThrow({
       where: { id: assetId },
@@ -665,7 +700,12 @@ export class AssetsService {
       this.prisma.asset.count({ where }),
     ]);
 
-    return tablePage(rows.map((r) => this.toAssetView(r)), total, page, pageSize);
+    return tablePage(
+      rows.map((r) => this.toAssetView(r)),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   /**
@@ -775,7 +815,9 @@ export class AssetsService {
     await this.assertCanManageAsset(userId, asset);
 
     if (dto.vehicleSubtype != null && asset.type !== AssetType.VEHICULO) {
-      throw new BadRequestException('El subtipo de vehículo solo aplica a activos de tipo VEHICULO.');
+      throw new BadRequestException(
+        'El subtipo de vehículo solo aplica a activos de tipo VEHICULO.',
+      );
     }
 
     // Unicidad blanda del identificador (paridad con create), excluyéndose a sí mismo.
@@ -783,10 +825,7 @@ export class AssetsService {
       dto.identifier !== undefined ? dto.identifier?.trim() || null : asset.identifier;
     const nextIdentifierType =
       dto.identifierType !== undefined ? dto.identifierType : asset.identifierType;
-    if (
-      (dto.identifier !== undefined || dto.identifierType !== undefined) &&
-      nextIdentifier
-    ) {
+    if ((dto.identifier !== undefined || dto.identifierType !== undefined) && nextIdentifier) {
       const clash = await this.prisma.asset.findFirst({
         where: {
           id: { not: id },
@@ -818,7 +857,10 @@ export class AssetsService {
       // checklist) que el editor descriptivo no toca. `null` limpia toda la metadata
       // con el guard `Prisma.JsonNull` (Prisma rechaza un null JS plano en Json?).
       data.metadata = dto.metadata
-        ? ({ ...((asset.metadata as Record<string, unknown> | null) ?? {}), ...dto.metadata } as Prisma.InputJsonValue)
+        ? ({
+            ...((asset.metadata as Record<string, unknown> | null) ?? {}),
+            ...dto.metadata,
+          } as Prisma.InputJsonValue)
         : Prisma.JsonNull;
     }
 
@@ -884,10 +926,18 @@ export class AssetsService {
     // coincide con un activo vivo).
     const fgaDeletes: { user: string; relation: string; object: string }[] = [];
     if (asset.projectId) {
-      fgaDeletes.push({ user: `project:${asset.projectId}`, relation: 'project', object: `asset:${id}` });
+      fgaDeletes.push({
+        user: `project:${asset.projectId}`,
+        relation: 'project',
+        object: `asset:${id}`,
+      });
     }
     if (asset.assignedToId) {
-      fgaDeletes.push({ user: `user:${asset.assignedToId}`, relation: 'assigned', object: `asset:${id}` });
+      fgaDeletes.push({
+        user: `user:${asset.assignedToId}`,
+        relation: 'assigned',
+        object: `asset:${id}`,
+      });
     }
     // Una a una y tolerante: el Write de borrado de OpenFGA es atómico, así que si una
     // tupla ya no existe (drift) reventaría el batch entero y dejaría la otra colgada.
@@ -1514,9 +1564,9 @@ export class AssetsService {
           status: UsageCycleStatus.CERRADO,
           endedAt: new Date(),
           endKind: dto.endKind,
-          endLatitude: dto.endKind === 'GPS' ? dto.latitude ?? null : null,
-          endLongitude: dto.endKind === 'GPS' ? dto.longitude ?? null : null,
-          endText: dto.endKind === 'ESTACIONAMIENTO' ? dto.text ?? null : null,
+          endLatitude: dto.endKind === 'GPS' ? (dto.latitude ?? null) : null,
+          endLongitude: dto.endKind === 'GPS' ? (dto.longitude ?? null) : null,
+          endText: dto.endKind === 'ESTACIONAMIENTO' ? (dto.text ?? null) : null,
           handoffToUserId,
           endPhotoUrl: endPhoto?.url ?? null,
           endPhotoKey: endPhoto?.key ?? null,
@@ -1776,11 +1826,7 @@ export class AssetsService {
    * `listDocuments` (admin/gerencia vía `assertCanManageAssetById`): 404 si el
    * activo o el documento no existen; 403 si no gestiona el activo.
    */
-  async getDocumentFileUrl(
-    id: string,
-    docId: string,
-    userId: string,
-  ): Promise<{ url: string }> {
+  async getDocumentFileUrl(id: string, docId: string, userId: string): Promise<{ url: string }> {
     await this.assertCanManageAssetById(id, userId);
     const doc = await this.prisma.assetDocument.findUnique({
       where: { id: docId },
@@ -2156,7 +2202,7 @@ export class AssetsService {
     } catch (error) {
       this.logger.warn(
         `Secciones de checklist con shape inválido; se ignoran. ${
-          error instanceof ZodError ? error.issues[0]?.message ?? '' : ''
+          error instanceof ZodError ? (error.issues[0]?.message ?? '') : ''
         }`,
       );
       return [];
@@ -2191,7 +2237,7 @@ export class AssetsService {
     } catch (error) {
       this.logger.warn(
         `Plantilla de checklist con shape inválido; se ignoran los ítems para la detección de falla. ${
-          error instanceof ZodError ? error.issues[0]?.message ?? '' : ''
+          error instanceof ZodError ? (error.issues[0]?.message ?? '') : ''
         }`,
       );
       return [];
@@ -2213,7 +2259,8 @@ export class AssetsService {
     });
 
     if (!template) {
-      const defaultItems = asset.type === AssetType.VEHICULO ? this.loadDefaultVehicleChecklist() : [];
+      const defaultItems =
+        asset.type === AssetType.VEHICULO ? this.loadDefaultVehicleChecklist() : [];
       template = await this.prisma.checklistTemplate.create({
         data: {
           assetId,
@@ -2252,7 +2299,9 @@ export class AssetsService {
     // un cliente que no envía secciones no las borra). El cruce item.section ↔
     // sección existente se valida contra las secciones efectivas.
     const normalizedSections =
-      sections !== undefined ? this.validateSections(sections) : this.readSections(template.sections);
+      sections !== undefined
+        ? this.validateSections(sections)
+        : this.readSections(template.sections);
     const sectionIds = new Set(normalizedSections.map((section) => section.id));
     for (const item of normalizedItems) {
       if (item.section && !sectionIds.has(item.section)) {
@@ -2310,7 +2359,7 @@ export class AssetsService {
           status,
           reviewedById: userId,
           reviewedAt: new Date(),
-          rejectionReason: status === DocumentStatus.RECHAZADO ? reason ?? null : null,
+          rejectionReason: status === DocumentStatus.RECHAZADO ? (reason ?? null) : null,
         },
         include: { reviewedBy: true },
       });
@@ -2345,9 +2394,7 @@ export class AssetsService {
       userId: row.userId,
       answers: row.answers as unknown as ChecklistAnswer[],
       createdAt: row.createdAt.toISOString(),
-      user: row.user
-        ? { firstName: row.user.firstName, lastName: row.user.lastName }
-        : null,
+      user: row.user ? { firstName: row.user.firstName, lastName: row.user.lastName } : null,
       externalSource: row.externalSource,
       externalAuthor: row.externalAuthor,
       // Nombre declarado por quien lo llenó sin cuenta. Lo necesita el
@@ -2390,7 +2437,9 @@ export class AssetsService {
       throw new NotFoundException('La plantilla no corresponde a este activo.');
     }
     if (template.status !== DocumentStatus.APROBADO) {
-      throw new BadRequestException('Solo se pueden enviar checklists basados en plantillas aprobadas.');
+      throw new BadRequestException(
+        'Solo se pueden enviar checklists basados en plantillas aprobadas.',
+      );
     }
     return { asset, template };
   }
@@ -2474,7 +2523,10 @@ export class AssetsService {
     method: 'WEBAUTHN' | 'EMAIL_OTP',
     originHeader: string | undefined,
   ): Promise<
-    | { method: 'WEBAUTHN'; options: import('@simplewebauthn/server').PublicKeyCredentialRequestOptionsJSON }
+    | {
+        method: 'WEBAUTHN';
+        options: import('@simplewebauthn/server').PublicKeyCredentialRequestOptionsJSON;
+      }
     | { method: 'EMAIL_OTP'; maskedEmail: string }
   > {
     await this.assertCanSubmitChecklist(assetId, templateId, userId);
@@ -2527,7 +2579,9 @@ export class AssetsService {
       throw new NotFoundException('La plantilla no corresponde a este activo.');
     }
     if (template.status !== DocumentStatus.APROBADO) {
-      throw new BadRequestException('Solo se pueden enviar checklists basados en plantillas aprobadas.');
+      throw new BadRequestException(
+        'Solo se pueden enviar checklists basados en plantillas aprobadas.',
+      );
     }
 
     // Valida las respuestas con Zod ANTES de persistir. Los ítems de la plantilla
@@ -2656,7 +2710,6 @@ export class AssetsService {
     return this.toSubmissionView(submission);
   }
 
-
   /**
    * Reglas de negocio de un checklist enviado, iguales para el camino con
    * sesión y el público: odómetro (monótono), ítems obligatorios, opciones
@@ -2773,7 +2826,6 @@ export class AssetsService {
 
     return { updatedOdometerKm, hasFailure, failureDetail };
   }
-
 
   /**
    * Envío del checklist SIN sesión, desde el QR de la plaquita.
@@ -2904,7 +2956,6 @@ export class AssetsService {
     return { ...this.toSubmissionView(submission), correoEnviado };
   }
 
-
   /**
    * Manda el PDF del checklist a quien lo llenó. Devuelve si salió.
    *
@@ -2961,7 +3012,6 @@ export class AssetsService {
     }
   }
 
-
   /**
    * Plantilla de checklist de un activo, por su token público (sin sesión).
    *
@@ -2994,7 +3044,6 @@ export class AssetsService {
 
     return this.toTemplateView(template);
   }
-
 
   /**
    * PDF de un checklist enviado, por el token público del activo.
@@ -3030,7 +3079,10 @@ export class AssetsService {
     void this.gamification.awardPoints(userId, 'RUN_CHECKLIST');
   }
 
-  async listChecklistSubmissions(assetId: string, userId: string): Promise<ChecklistSubmissionView[]> {
+  async listChecklistSubmissions(
+    assetId: string,
+    userId: string,
+  ): Promise<ChecklistSubmissionView[]> {
     await this.assertCanViewAsset(assetId, userId);
     const rows = await this.prisma.checklistSubmission.findMany({
       where: { assetId },
@@ -3045,7 +3097,11 @@ export class AssetsService {
    * Devuelve los bytes (application/pdf). Lanza 404 si la submission no existe
    * o no pertenece al activo indicado.
    */
-  async generateChecklistSubmissionPdf(assetId: string, submissionId: string, userId: string): Promise<Uint8Array> {
+  async generateChecklistSubmissionPdf(
+    assetId: string,
+    submissionId: string,
+    userId: string,
+  ): Promise<Uint8Array> {
     await this.assertCanViewAsset(assetId, userId);
     return this.construirPdfDeEnvio(assetId, submissionId);
   }
@@ -3346,7 +3402,9 @@ export class AssetsService {
     }
 
     if (asset.type !== AssetType.VEHICULO) {
-      throw new BadRequestException('Solo los vehículos soportan telemetría de ubicación y velocidad.');
+      throw new BadRequestException(
+        'Solo los vehículos soportan telemetría de ubicación y velocidad.',
+      );
     }
 
     const currentMeta = (asset.metadata as Record<string, unknown> | null) || {};

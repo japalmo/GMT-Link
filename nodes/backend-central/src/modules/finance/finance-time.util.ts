@@ -29,8 +29,7 @@ export function santiagoDateParts(instant: Date = new Date()): {
   day: number;
 } {
   const parts = dtf.formatToParts(instant);
-  const get = (type: string): number =>
-    Number(parts.find((p) => p.type === type)?.value);
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
   return { year: get('year'), month: get('month'), day: get('day') };
 }
 

@@ -63,12 +63,14 @@ export function ConsultaRrhh({
 
   const requisitos = useDataTable<HrRequirementRow>(
     (req) =>
-      fetchHrRequirements({ ...req, search: consulta.q.trim() || undefined, filters: filtrosApi }).then(
-        (p) => {
-          setConteoReq({ filas: p.total, personas: p.people });
-          return p;
-        },
-      ),
+      fetchHrRequirements({
+        ...req,
+        search: consulta.q.trim() || undefined,
+        filters: filtrosApi,
+      }).then((p) => {
+        setConteoReq({ filas: p.total, personas: p.people });
+        return p;
+      }),
     {
       initialPageSize: 25,
       initialSortDir: 'asc',
@@ -79,10 +81,12 @@ export function ConsultaRrhh({
 
   const personas = useDataTable<HrPersonRow>(
     (req) =>
-      fetchHrPeople({ ...req, search: consulta.q.trim() || undefined, filters: filtrosApi }).then((p) => {
-        setConteoPer({ filas: p.total, requisitos: p.requirements });
-        return p;
-      }),
+      fetchHrPeople({ ...req, search: consulta.q.trim() || undefined, filters: filtrosApi }).then(
+        (p) => {
+          setConteoPer({ filas: p.total, requisitos: p.requirements });
+          return p;
+        },
+      ),
     {
       initialPageSize: 25,
       initialSortDir: 'asc',
@@ -208,7 +212,9 @@ export function ConsultaRrhh({
       id: 'vencimiento',
       header: 'Vence',
       sortable: true,
-      render: (r) => <span className="whitespace-nowrap tabular-nums">{fechaCorta(r.expiresAt)}</span>,
+      render: (r) => (
+        <span className="whitespace-nowrap tabular-nums">{fechaCorta(r.expiresAt)}</span>
+      ),
     },
     {
       id: 'vigencia',
@@ -220,7 +226,9 @@ export function ConsultaRrhh({
       id: 'estado',
       header: 'Estado del registro',
       render: (r) => (
-        <span className="whitespace-nowrap text-xs text-muted-foreground">{r.estadoRegistro ?? '—'}</span>
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {r.estadoRegistro ?? '—'}
+        </span>
       ),
     },
   ];
@@ -245,8 +253,7 @@ export function ConsultaRrhh({
     {
       id: 'turno',
       header: 'Turno',
-      render: (p) =>
-        p.turno ?? <span className="italic text-muted-foreground">Sin cargar</span>,
+      render: (p) => p.turno ?? <span className="italic text-muted-foreground">Sin cargar</span>,
     },
     {
       id: 'vencidos',
@@ -447,7 +454,9 @@ export function ConsultaRrhh({
                   type="button"
                   aria-pressed={activo}
                   onClick={() =>
-                    activo ? fijar({ desde: undefined, hasta: undefined }) : fijar({ desde: hoy, hasta })
+                    activo
+                      ? fijar({ desde: undefined, hasta: undefined })
+                      : fijar({ desde: hoy, hasta })
                   }
                   className={chip(activo)}
                 >
@@ -459,7 +468,11 @@ export function ConsultaRrhh({
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Tipo de requisito">
+          <div
+            className="flex flex-wrap items-center gap-1.5"
+            role="group"
+            aria-label="Tipo de requisito"
+          >
             <span className="mr-1 text-xs font-medium text-muted-foreground">Tipo</span>
             {TIPOS_REQUISITO.map((t) => (
               <button

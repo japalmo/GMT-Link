@@ -100,7 +100,11 @@ describe('rbac-catalog — invariantes', () => {
 
   it('org_admin y admin_ti también incluyen finance:request:create (vía ALL_GLOBAL_EXCEPT_BETA)', () => {
     for (const k of ['org_admin', 'admin_ti']) {
-      expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'finance:request:create' && x.scope === 'GLOBAL')).toBe(true);
+      expect(
+        roleByKey
+          .get(k)!
+          .grants.some((x) => x.perm === 'finance:request:create' && x.scope === 'GLOBAL'),
+      ).toBe(true);
     }
   });
 
@@ -143,7 +147,9 @@ describe('rbac-catalog — invariantes', () => {
 
   it('org_admin y admin_ti incluyen asset:use:report (vía ALL_GLOBAL_EXCEPT_BETA)', () => {
     for (const k of ['org_admin', 'admin_ti']) {
-      expect(roleByKey.get(k)!.grants.some((x) => x.perm === 'asset:use:report' && x.scope === 'GLOBAL')).toBe(true);
+      expect(
+        roleByKey.get(k)!.grants.some((x) => x.perm === 'asset:use:report' && x.scope === 'GLOBAL'),
+      ).toBe(true);
     }
   });
 });

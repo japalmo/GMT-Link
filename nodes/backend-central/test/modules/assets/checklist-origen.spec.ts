@@ -25,16 +25,24 @@ describe('origenDelEnvio', () => {
 describe('autorDelEnvio', () => {
   it('prefiere el usuario con cuenta', () => {
     expect(
-      autorDelEnvio({ user: { firstName: 'Ana', lastName: 'Rojas' }, declaredName: 'Otro', externalAuthor: null }),
+      autorDelEnvio({
+        user: { firstName: 'Ana', lastName: 'Rojas' },
+        declaredName: 'Otro',
+        externalAuthor: null,
+      }),
     ).toBe('Ana Rojas');
   });
 
   it('usa el nombre declarado en el enlace público', () => {
-    expect(autorDelEnvio({ user: null, declaredName: '  Pedro Soto ', externalAuthor: null })).toBe('Pedro Soto');
+    expect(autorDelEnvio({ user: null, declaredName: '  Pedro Soto ', externalAuthor: null })).toBe(
+      'Pedro Soto',
+    );
   });
 
   it('usa el autor de la planilla', () => {
-    expect(autorDelEnvio({ user: null, declaredName: null, externalAuthor: 'jperez' })).toBe('jperez');
+    expect(autorDelEnvio({ user: null, declaredName: null, externalAuthor: 'jperez' })).toBe(
+      'jperez',
+    );
   });
 
   it('sin ningún dato no inventa un nombre', () => {

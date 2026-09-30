@@ -42,12 +42,7 @@ import {
   TablaControl,
 } from './obra-curva';
 import { useDisposicion } from './usar-arrastre';
-import {
-  Arrastrable,
-  ControlesTablero,
-  PanelClima,
-  useDesplazadoAuto,
-} from './obra-piezas';
+import { Arrastrable, ControlesTablero, PanelClima, useDesplazadoAuto } from './obra-piezas';
 
 /**
  * Tablero de avance de obra: el mapa satelital de la faena es el FONDO y todo
@@ -104,9 +99,19 @@ const ESTADO: Record<
   ObraStatus,
   { label: string; clase: string; punto: string; Icon: typeof TrendingUp }
 > = {
-  ADELANTADO: { label: 'Adelantado', clase: 'text-emerald-300', punto: 'bg-emerald-400', Icon: TrendingUp },
+  ADELANTADO: {
+    label: 'Adelantado',
+    clase: 'text-emerald-300',
+    punto: 'bg-emerald-400',
+    Icon: TrendingUp,
+  },
   EN_LINEA: { label: 'En línea', clase: 'text-sky-300', punto: 'bg-sky-400', Icon: Minus },
-  LEVE_ATRASO: { label: 'Leve atraso', clase: 'text-amber-300', punto: 'bg-amber-400', Icon: TrendingDown },
+  LEVE_ATRASO: {
+    label: 'Leve atraso',
+    clase: 'text-amber-300',
+    punto: 'bg-amber-400',
+    Icon: TrendingDown,
+  },
   ATRASADO: { label: 'Atrasado', clase: 'text-rose-300', punto: 'bg-rose-400', Icon: TrendingDown },
 };
 
@@ -220,8 +225,7 @@ function puntosEn(puntos: ObraMapPoint[], corte: Corte | null): ObraMapPoint[] {
     const valor = serie[corte.semana];
     if (valor === undefined) return p;
     const avance = Math.round(valor * 10) / 10;
-    const status =
-      avance >= 99.95 ? 'TERMINADO' : avance > 0 ? 'EN_EJECUCION' : 'PENDIENTE';
+    const status = avance >= 99.95 ? 'TERMINADO' : avance > 0 ? 'EN_EJECUCION' : 'PENDIENTE';
     return {
       ...p,
       percent: avance,
@@ -260,10 +264,7 @@ export function ObraTablero({
   // informe: es lo que hay que mirar, no donde quedó el navegador.
   useEffect(() => setSemana(arranque), [data.projectId, control?.cutoff, arranque]);
 
-  const corte = useMemo(
-    () => (control ? cortarEn(control, semana) : null),
-    [control, semana],
-  );
+  const corte = useMemo(() => (control ? cortarEn(control, semana) : null), [control, semana]);
   const puntos = useMemo(() => puntosEn(data.map.points, corte), [data.map.points, corte]);
   // Identidades estables: el mapa reencuadra cada vez que cambian, así que un
   // objeto nuevo por render lo dejaría reencuadrando para siempre.
@@ -293,10 +294,7 @@ export function ObraTablero({
     () => construirPaneles(data, puntos, corte, semana, setSemana),
     [data, puntos, corte, semana],
   );
-  const duplas = useMemo(
-    () => emparejar(paneles, dosTarjetas ? 2 : 1),
-    [paneles, dosTarjetas],
-  );
+  const duplas = useMemo(() => emparejar(paneles, dosTarjetas ? 2 : 1), [paneles, dosTarjetas]);
   const [turno, setTurno] = useState(0);
   const [fijada, setFijada] = useState<number | null>(null);
 
@@ -371,12 +369,7 @@ export function ObraTablero({
         <Arrastrable id="indicadores" posiciones={posiciones} onMover={mover} asaCompleta>
           <div className="flex flex-col gap-1.5">
             {control && corte && (
-              <BarraCorte
-                control={control}
-                corte={corte}
-                semana={semana}
-                onSemana={setSemana}
-              />
+              <BarraCorte control={control} corte={corte} semana={semana} onSemana={setSemana} />
             )}
             <Indicadores data={data} corte={corte} quieto={quieto} />
           </div>
@@ -396,11 +389,7 @@ export function ObraTablero({
               izquierda y todos los paneles terminaban apilados a la derecha. */}
           <div className="flex min-w-0 flex-col items-center justify-end gap-2 lg:order-2 lg:flex-1">
             {conMapa && (
-              <ControlesTablero
-                controles={controles}
-                movido={movido}
-                onReiniciar={reiniciar}
-              />
+              <ControlesTablero controles={controles} movido={movido} onReiniciar={reiniciar} />
             )}
             {conMapa && (
               <Arrastrable id="leyenda" posiciones={posiciones} onMover={mover}>
@@ -552,7 +541,9 @@ function TarjetaPanel({
             aria-pressed={fijada}
             title={fijada ? 'Volver a rotar' : 'Fijar esta vista'}
             className={`rounded-md p-1 transition-colors ${
-              fijada ? 'bg-white text-slate-900' : 'text-white/70 hover:bg-white/15 hover:text-white'
+              fijada
+                ? 'bg-white text-slate-900'
+                : 'text-white/70 hover:bg-white/15 hover:text-white'
             }`}
           >
             {fijada ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
@@ -631,7 +622,7 @@ function Indicadores({
   // de cabecera del informe y la que traduce el porcentaje a algo tangible.
   const hh = corte
     ? {
-        hechas: Math.round((corte.control.totalHh * ((real ?? plan) / 100)) * 10) / 10,
+        hechas: Math.round(corte.control.totalHh * ((real ?? plan) / 100) * 10) / 10,
         totales: corte.control.totalHh,
       }
     : null;
@@ -639,12 +630,7 @@ function Indicadores({
   return (
     <div className="pointer-events-auto grid shrink-0 grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
       <div className="vidrio col-span-2 flex items-center gap-3 rounded-xl px-3 py-2 lg:col-span-1">
-        <Gauge
-          real={real}
-          planned={plan}
-          proyectado={proyectado}
-          quieto={quieto}
-        />
+        <Gauge real={real} planned={plan} proyectado={proyectado} quieto={quieto} />
         {/* La tarjeta del medidor NO repite el porcentaje de al lado: pone las
             HH, que es el otro dato de cabecera del informe. */}
         <div className="min-w-0">
@@ -670,7 +656,13 @@ function Indicadores({
         etiqueta="Avance real"
         valor={real}
         sufijo="%"
-        pie={real === null ? 'Semana sin corte' : corte ? corte.etiqueta : `Al ${fechaLarga(data.asOf)}`}
+        pie={
+          real === null
+            ? 'Semana sin corte'
+            : corte
+              ? corte.etiqueta
+              : `Al ${fechaLarga(data.asOf)}`
+        }
         clase="text-sky-300"
         quieto={quieto}
       />
@@ -678,7 +670,11 @@ function Indicadores({
         etiqueta="Programado"
         valor={plan}
         sufijo="%"
-        pie={corte ? `Al cierre ${corte.control.weeks[corte.semana]?.code ?? ''}` : `Al ${fechaLarga(data.asOf)}`}
+        pie={
+          corte
+            ? `Al cierre ${corte.control.weeks[corte.semana]?.code ?? ''}`
+            : `Al ${fechaLarga(data.asOf)}`
+        }
         clase="text-amber-300"
         quieto={quieto}
       />
@@ -693,8 +689,12 @@ function Indicadores({
       />
 
       <div className="vidrio flex flex-col justify-center rounded-xl px-3 py-2">
-        <span className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">Estado</span>
-        <span className={`mt-0.5 flex items-center gap-2 text-base font-bold 2xl:text-lg 2xl:text-xl ${est.clase}`}>
+        <span className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">
+          Estado
+        </span>
+        <span
+          className={`mt-0.5 flex items-center gap-2 text-base font-bold 2xl:text-lg 2xl:text-xl ${est.clase}`}
+        >
           <span className="relative flex size-2.5" aria-hidden>
             {!quieto && (
               <span
@@ -733,12 +733,12 @@ function Indicador({
 }): ReactNode {
   const mostrado = useConteo(valor ?? 0, !quieto && valor !== null);
   const texto =
-    valor === null
-      ? '—'
-      : `${signo && mostrado > 0 ? '+' : ''}${porcentaje(mostrado)}${sufijo}`;
+    valor === null ? '—' : `${signo && mostrado > 0 ? '+' : ''}${porcentaje(mostrado)}${sufijo}`;
   return (
     <div className="vidrio flex flex-col justify-center rounded-xl px-3 py-2">
-      <span className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">{etiqueta}</span>
+      <span className="text-[10px] uppercase tracking-wide text-white/60 2xl:text-xs">
+        {etiqueta}
+      </span>
       <span
         className={`mt-0.5 text-xl font-bold tabular-nums 2xl:text-2xl 2xl:text-3xl ${
           valor === null ? 'text-white/40' : clase
@@ -997,10 +997,7 @@ const ICONO_CORTE: Record<ObraBreakdown['key'], typeof Activity> = {
  * ya vienen llevados a la fecha elegida. El corte por etapa no puede: una
  * semana pasada no guarda qué etapa estaba cerrada, solo cuánto se llevaba.
  */
-function cortarPuntos(
-  puntos: ObraMapPoint[],
-  clave: (p: ObraMapPoint) => string,
-): ObraLine[] {
+function cortarPuntos(puntos: ObraMapPoint[], clave: (p: ObraMapPoint) => string): ObraLine[] {
   const grupos = new Map<string, ObraMapPoint[]>();
   for (const p of puntos) {
     const k = clave(p);
@@ -1015,8 +1012,7 @@ function cortarPuntos(
       unit: null,
       quantityTotal: grupo.length,
       quantityDone: grupo.filter((p) => p.status === 'TERMINADO').length,
-      percent:
-        Math.round((grupo.reduce((s, p) => s + p.percent, 0) / grupo.length) * 10) / 10,
+      percent: Math.round((grupo.reduce((s, p) => s + p.percent, 0) / grupo.length) * 10) / 10,
       detail: `${grupo.length} ${grupo.length === 1 ? 'cerco' : 'cercos'}`,
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -1092,11 +1088,7 @@ function construirPaneles(
       titulo: 'Últimos avances reportados',
       Icon: Activity,
       contenido: (
-        <Avances
-          items={
-            corte ? data.recent.filter((r) => r.date <= corte.cierre) : data.recent
-          }
-        />
+        <Avances items={corte ? data.recent.filter((r) => r.date <= corte.cierre) : data.recent} />
       ),
     });
   }
@@ -1438,7 +1430,9 @@ function Avances({ items }: { items: ObraRecentReport[] }): ReactNode {
           className="flex animate-entrada items-center gap-2 text-xs 2xl:text-sm"
           style={{ animationDelay: `${i * 50}ms` } as React.CSSProperties}
         >
-          <span className="w-20 shrink-0 tabular-nums text-white/60 lg:w-24">{fechaLarga(r.date)}</span>
+          <span className="w-20 shrink-0 tabular-nums text-white/60 lg:w-24">
+            {fechaLarga(r.date)}
+          </span>
           <span className="min-w-0 flex-1 truncate">{r.activityName}</span>
           <span className="shrink-0 font-semibold tabular-nums text-sky-300">
             +{cantidad(r.quantity)}

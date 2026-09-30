@@ -17,17 +17,18 @@ puntos 1 y 2 cambian cubicación y conviene que queden confirmados por escrito.
 
 Los planos REV-B dan 6, 7 y 9 dados por cerco según el tipo. La carta Gantt asume 3.
 
-| Partida | Carta Gantt | Planos REV-B | Diferencia |
-| --- | ---: | ---: | ---: |
-| Excavación dados cercos Tipo A | 33 | 66 (11 × 6) | +33 |
-| Excavación dados cercos Tipo B | 135 | 315 (45 × 7) | +180 |
-| Excavación dados cercos Tipo C | 21 | 63 (7 × 9) | +42 |
-| **Total a excavar y montar** | **189** | **444** | **+255** |
-| Suministro de dados de hormigón | 378 | 444 | +66 |
+| Partida                         | Carta Gantt | Planos REV-B | Diferencia |
+| ------------------------------- | ----------: | -----------: | ---------: |
+| Excavación dados cercos Tipo A  |          33 |  66 (11 × 6) |        +33 |
+| Excavación dados cercos Tipo B  |         135 | 315 (45 × 7) |       +180 |
+| Excavación dados cercos Tipo C  |          21 |   63 (7 × 9) |        +42 |
+| **Total a excavar y montar**    |     **189** |      **444** |   **+255** |
+| Suministro de dados de hormigón |         378 |          444 |        +66 |
 
 **Criterio aplicado:** mandan los planos. El dashboard mide contra 444 dados.
 
 **Se solicita confirmar:**
+
 - ¿Se ratifica la cubicación de 444 dados como la oficial del contrato?
 - La carta Gantt vigente quedó corta en excavación y montaje de dados. ¿Se reprograma
   el plazo, se refuerza cuadrilla, o la diferencia ya estaba considerada en otra partida?
@@ -39,12 +40,12 @@ Los planos REV-B dan 6, 7 y 9 dados por cerco según el tipo. La carta Gantt asu
 La lista de poyos entregada trae 55 cercos con código Mantos y coordenadas. Los planos
 exigen 63. Los 8 que faltan son, por diferencia de tipo, **7 del tipo B y 1 del tipo C**.
 
-| Tipo | En la lista de poyos | En los planos | Faltan |
-| --- | ---: | ---: | ---: |
-| A | 11 | 11 | 0 |
-| B | 38 | 45 | 7 |
-| C | 6 | 7 | 1 |
-| **Total** | **55** | **63** | **8** |
+| Tipo      | En la lista de poyos | En los planos | Faltan |
+| --------- | -------------------: | ------------: | -----: |
+| A         |                   11 |            11 |      0 |
+| B         |                   38 |            45 |      7 |
+| C         |                    6 |             7 |      1 |
+| **Total** |               **55** |        **63** |  **8** |
 
 **Criterio aplicado:** los 8 están cargados como `B-XXXIX` a `B-XLV` y `C-VII`, agrupados
 en el dashboard bajo el sector «Por definir».
@@ -87,15 +88,15 @@ directa en la plataforma: cada cerco tiene su propia etapa de replanteo.
 63 cercos, cada uno con 7 etapas de montaje tomadas de la lista de materiales de su
 plano. Las cantidades cambian según el tipo:
 
-| Etapa | Unidad | Tipo A | Tipo B | Tipo C | Total obra |
-| --- | --- | ---: | ---: | ---: | ---: |
-| Replanteo topográfico | pto | 1 | 1 | 1 | 63 |
-| Excavación de dados | un | 6 | 7 | 9 | 444 |
-| Colocación de dados de hormigón | un | 6 | 7 | 9 | 444 |
-| Montaje de pilares galvanizados | un | 6 | 7 | 9 | 444 |
-| Montaje de mallas ACMAFOR | paño | 5 | 6 | 8 | 381 |
-| Montaje de puerta | un | 1 | 1 | 1 | 63 |
-| Remachado y fijaciones | un | 40 | 44 | 36 | 2.672 |
+| Etapa                           | Unidad | Tipo A | Tipo B | Tipo C | Total obra |
+| ------------------------------- | ------ | -----: | -----: | -----: | ---------: |
+| Replanteo topográfico           | pto    |      1 |      1 |      1 |         63 |
+| Excavación de dados             | un     |      6 |      7 |      9 |        444 |
+| Colocación de dados de hormigón | un     |      6 |      7 |      9 |        444 |
+| Montaje de pilares galvanizados | un     |      6 |      7 |      9 |        444 |
+| Montaje de mallas ACMAFOR       | paño   |      5 |      6 |      8 |        381 |
+| Montaje de puerta               | un     |      1 |      1 |      1 |         63 |
+| Remachado y fijaciones          | un     |     40 |     44 |     36 |      2.672 |
 
 El replanteo se mantiene en 1 punto por cerco porque así lo cubica la carta Gantt
 («Replanteo topográfico general, 63 puntos»); los planos no cubican replanteo.

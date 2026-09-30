@@ -287,12 +287,12 @@ export function pasaPersona(p: FuentePersona, f: FiltrosRrhh, conBusqueda: boole
 export function hayFiltroDeRequisito(f: FiltrosRrhh): boolean {
   return Boolean(
     f.clientId ||
-      f.faenaId ||
-      f.habilitante ||
-      f.desde ||
-      f.hasta ||
-      (f.tipos && f.tipos.length > 0) ||
-      (f.vigencias && f.vigencias.length > 0),
+    f.faenaId ||
+    f.habilitante ||
+    f.desde ||
+    f.hasta ||
+    (f.tipos && f.tipos.length > 0) ||
+    (f.vigencias && f.vigencias.length > 0),
   );
 }
 
@@ -524,7 +524,8 @@ export function construirTablero(
     }))
     .sort(
       (a, b) =>
-        a.clientName.localeCompare(b.clientName, 'es') || a.faenaName.localeCompare(b.faenaName, 'es'),
+        a.clientName.localeCompare(b.clientName, 'es') ||
+        a.faenaName.localeCompare(b.faenaName, 'es'),
     );
 
   return {

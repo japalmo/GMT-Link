@@ -17,9 +17,15 @@
  * La variante dark trae halo blanco para fondos oscuros; la light, contorno
  * navy para fondos claros.
  */
-.brand-dark-only { display: none; }
-.dark .brand-dark-only { display: inline; }
-.dark .brand-light-only { display: none; }
+.brand-dark-only {
+  display: none;
+}
+.dark .brand-dark-only {
+  display: inline;
+}
+.dark .brand-light-only {
+  display: none;
+}
 
 /*
  * Design system GMT Link — Etapa 0.6.
@@ -182,40 +188,76 @@
 }
 
 @keyframes overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes overlay-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 @keyframes content-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes content-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes panel-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes entrada {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 /* La barra crece hasta el porcentaje que le pasa el componente en --barra. */
 @keyframes barra {
-  from { width: 0; }
-  to { width: var(--barra, 0%); }
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--barra, 0%);
+  }
 }
 /* Las barras semanales de la curva S son <rect> de SVG y no divs: no se puede
    animar el ancho, así que crecen desde su base con una escala vertical. */
 @keyframes barra-alto {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 .animate-barra-alto {
   transform-box: fill-box;
@@ -223,12 +265,20 @@
 }
 /* La curva real se dibuja sola: se traza el path desde el inicio del programa. */
 @keyframes trazo {
-  from { stroke-dasharray: 0 4000; }
-  to { stroke-dasharray: 4000 0; }
+  from {
+    stroke-dasharray: 0 4000;
+  }
+  to {
+    stroke-dasharray: 4000 0;
+  }
 }
 @keyframes turno {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 /* Marcadores del mapa de cercos: el divIcon de Leaflet trae fondo y borde
@@ -314,9 +364,18 @@
   animation: pulso-cerco 2s ease-out infinite;
 }
 @keyframes pulso-cerco {
-  0% { transform: scale(0.6); opacity: 0.5; }
-  70% { transform: scale(1.5); opacity: 0; }
-  100% { transform: scale(1.5); opacity: 0; }
+  0% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
 }
 
 /* Quien pidió menos movimiento ve el mismo tablero, pero sin animaciones. */
@@ -330,7 +389,9 @@
   .pulso-cerco {
     animation: none !important;
   }
-  .animate-barra { width: var(--barra, 0%); }
+  .animate-barra {
+    width: var(--barra, 0%);
+  }
 }
 
 /* Estado base de la app: el borde por defecto usa el token, y el body hereda

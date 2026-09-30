@@ -105,7 +105,11 @@ const ESTADO_GENERAL: ChecklistTemplateItem[] = [
   ...estado(SEC_GENERAL, 'estadoMotor', 'Estado de funcionamiento del motor'),
   ...estado(SEC_GENERAL, 'neumaticos', 'Neumáticos'),
   ...estado(SEC_GENERAL, 'neumaticoRepuesto', 'Neumático de repuesto'),
-  ...estado(SEC_GENERAL, 'luces', 'Luces (conducción, estacionamiento, intermitente, freno, retroceso)'),
+  ...estado(
+    SEC_GENERAL,
+    'luces',
+    'Luces (conducción, estacionamiento, intermitente, freno, retroceso)',
+  ),
   ...estado(SEC_GENERAL, 'bocina', 'Bocina'),
   ...estado(SEC_GENERAL, 'velocimetroIndicadores', 'Velocímetro y otros indicadores'),
   ...estado(SEC_GENERAL, 'parabrisasVidrios', 'Parabrisas, vidrios laterales y posterior'),

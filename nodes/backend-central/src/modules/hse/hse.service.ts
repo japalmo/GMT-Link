@@ -100,7 +100,10 @@ export class HseService {
       ),
     );
 
-    const incidente = await this.crearConCorrelativo(dto, guardadas.map((g) => g.key));
+    const incidente = await this.crearConCorrelativo(
+      dto,
+      guardadas.map((g) => g.key),
+    );
 
     // El PDF se arma al enviar para que quien reporta se lo lleve al instante.
     // Si fallara, el reporte igual queda guardado: la copia se puede regenerar.
@@ -245,9 +248,10 @@ export class HseService {
       instalacionesLugar: incidente.instalacionesLugar,
       cuasiAccidente: incidente.cuasiAccidente,
       procesoAfectado: incidente.procesoAfectado,
-      tiempoPerdido: incidente.tiempoPerdido === 'CON' || incidente.tiempoPerdido === 'SIN'
-        ? incidente.tiempoPerdido
-        : null,
+      tiempoPerdido:
+        incidente.tiempoPerdido === 'CON' || incidente.tiempoPerdido === 'SIN'
+          ? incidente.tiempoPerdido
+          : null,
       descripcion: incidente.descripcion,
       accionesInmediatas: incidente.accionesInmediatas,
       preparaNombre: incidente.preparaNombre,
@@ -430,7 +434,8 @@ export class HseService {
       instalacionesLugar: f.instalacionesLugar,
       cuasiAccidente: f.cuasiAccidente,
       procesoAfectado: f.procesoAfectado,
-      tiempoPerdido: f.tiempoPerdido === 'CON' || f.tiempoPerdido === 'SIN' ? f.tiempoPerdido : null,
+      tiempoPerdido:
+        f.tiempoPerdido === 'CON' || f.tiempoPerdido === 'SIN' ? f.tiempoPerdido : null,
       descripcion: f.descripcion,
       accionesInmediatas: f.accionesInmediatas,
       preparaNombre: f.preparaNombre,
@@ -443,7 +448,10 @@ export class HseService {
   }
 
   private async buscar(where: Prisma.HseIncidentWhereUniqueInput): Promise<IncidenteConFotos> {
-    const incidente = await this.prisma.hseIncident.findUnique({ where, include: { photos: true } });
+    const incidente = await this.prisma.hseIncident.findUnique({
+      where,
+      include: { photos: true },
+    });
     if (!incidente) throw new NotFoundException('El reporte de incidente no existe.');
     return incidente;
   }

@@ -132,8 +132,7 @@ export async function buildOvertimeReportWorkbook(
   ];
   // Orden estable: por trabajador y luego por fecha.
   const sorted = [...rows].sort(
-    (a, b) =>
-      a.workerName.localeCompare(b.workerName, 'es') || a.dateIso.localeCompare(b.dateIso),
+    (a, b) => a.workerName.localeCompare(b.workerName, 'es') || a.dateIso.localeCompare(b.dateIso),
   );
   for (const r of sorted) {
     const row = detailSheet.addRow([

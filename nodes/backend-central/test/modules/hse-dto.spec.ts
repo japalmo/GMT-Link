@@ -58,8 +58,10 @@ describe('CreateIncidentDto', () => {
     expect(dto.danoInfraestructura).toBe(true);
     expect(dto.lesionPersonas).toBe(false);
     // Ausente equivale a no marcada: el formato imprime la casilla vacía.
-    expect(plainToInstance(CreateIncidentDto, { ...ENVIO_REAL, cuasiAccidente: undefined })
-      .cuasiAccidente).toBe(false);
+    expect(
+      plainToInstance(CreateIncidentDto, { ...ENVIO_REAL, cuasiAccidente: undefined })
+        .cuasiAccidente,
+    ).toBe(false);
   });
 
   it('convierte los números de la fuga, con coma o con punto', () => {

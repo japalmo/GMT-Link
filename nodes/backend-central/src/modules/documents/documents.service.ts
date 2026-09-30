@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { DocumentStatus } from '@prisma/client';
 import type { PersonalDocument, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -145,7 +140,11 @@ export class DocumentsService {
         documento: (dir) => [{ name: dir }, { id: 'desc' }],
         tipo: (dir) => [{ type: dir }, { id: 'desc' }],
         estado: (dir) => [{ status: dir }, { id: 'desc' }],
-        vencimiento: (dir) => [{ expiresAt: { sort: dir, nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+        vencimiento: (dir) => [
+          { expiresAt: { sort: dir, nulls: 'last' } },
+          { createdAt: 'desc' },
+          { id: 'desc' },
+        ],
         creado: (dir) => [{ createdAt: dir }, { id: 'desc' }],
       },
       [{ expiresAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
@@ -156,7 +155,12 @@ export class DocumentsService {
       this.prisma.personalDocument.count({ where }),
     ]);
 
-    return tablePage(rows.map((row) => this.toView(row)), total, page, pageSize);
+    return tablePage(
+      rows.map((row) => this.toView(row)),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   /**

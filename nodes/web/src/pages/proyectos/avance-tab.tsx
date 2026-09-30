@@ -54,7 +54,9 @@ export function AvanceTab({ projectId }: { projectId: string }): ReactNode {
 
       <section className="flex flex-col gap-3" aria-labelledby="avance-semanas">
         <header>
-          <h2 id="avance-semanas" className="text-base font-semibold">Informe semanal</h2>
+          <h2 id="avance-semanas" className="text-base font-semibold">
+            Informe semanal
+          </h2>
           <p className="text-sm text-muted-foreground">
             Las columnas del informe. El real sale de las actividades; si lo sobreescribes, la celda
             queda marcada con el calculado al lado.
@@ -65,7 +67,9 @@ export function AvanceTab({ projectId }: { projectId: string }): ReactNode {
 
       <section className="flex flex-col gap-3" aria-labelledby="avance-actividades">
         <header>
-          <h2 id="avance-actividades" className="text-base font-semibold">Avance por actividad</h2>
+          <h2 id="avance-actividades" className="text-base font-semibold">
+            Avance por actividad
+          </h2>
           <p className="text-sm text-muted-foreground">
             % acumulado de cada actividad al cierre de cada semana. Enter y las flechas mueven entre
             celdas; se guarda al salir. Puedes pegar una columna desde Excel. En gris, el valor que
@@ -77,7 +81,9 @@ export function AvanceTab({ projectId }: { projectId: string }): ReactNode {
 
       <section className="flex flex-col gap-3" aria-labelledby="avance-cercos">
         <header>
-          <h2 id="avance-cercos" className="text-base font-semibold">Fotos de los cercos</h2>
+          <h2 id="avance-cercos" className="text-base font-semibold">
+            Fotos de los cercos
+          </h2>
           <p className="text-sm text-muted-foreground">
             Sin foto, el tablero muestra la vista satelital. Al subir una foto del sitio, el tablero
             muestra esa foto.

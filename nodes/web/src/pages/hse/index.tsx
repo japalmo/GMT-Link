@@ -53,10 +53,11 @@ export default function HsePage(): ReactNode {
   // solo existe para quien tiene el permiso de gestión.
   const puedeBorrar = useHasPermission('hse:manage');
 
-  const tabla = useDataTable<HseIncidentRow>(
-    (req) => fetchHseIncidents(req),
-    { initialPageSize: 20, initialSortBy: 'fecha', initialSortDir: 'desc' },
-  );
+  const tabla = useDataTable<HseIncidentRow>((req) => fetchHseIncidents(req), {
+    initialPageSize: 20,
+    initialSortBy: 'fecha',
+    initialSortDir: 'desc',
+  });
 
   async function descargar(fila: HseIncidentRow): Promise<void> {
     setDescargando(fila.id);
@@ -294,7 +295,10 @@ function DetalleIncidente({
           ) : (
             <div className="flex max-h-[65vh] flex-col gap-5 overflow-y-auto pr-1">
               <section className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <Dato rotulo="Ocurrió" valor={`${fechaCorta(detalle.occurredOn)} · ${detalle.occurredAt}`} />
+                <Dato
+                  rotulo="Ocurrió"
+                  valor={`${fechaCorta(detalle.occurredOn)} · ${detalle.occurredAt}`}
+                />
                 <Dato rotulo="Turno" valor={detalle.turno ?? 'Sin registrar'} />
                 <Dato rotulo="Sitio" valor={detalle.sitio ?? 'Sin registrar'} />
                 <Dato rotulo="Área" valor={detalle.area ?? 'Sin registrar'} />
@@ -424,10 +428,13 @@ function Detalles({ detalle }: { detalle: HseIncidentDetail }): ReactNode {
   if (detalle.cargoLesionado) filas.push(['Cargo del lesionado', detalle.cargoLesionado]);
   if (detalle.danoDetalle) filas.push(['Qué se dañó', detalle.danoDetalle]);
   if (detalle.fugaSustancia) filas.push(['Sustancia', detalle.fugaSustancia]);
-  if (detalle.fugaDuracionMin !== null) filas.push(['Duración fuga', `${detalle.fugaDuracionMin} min`]);
-  if (detalle.fugaVolumenM3 !== null) filas.push(['Volumen derramado', `${detalle.fugaVolumenM3} m3`]);
+  if (detalle.fugaDuracionMin !== null)
+    filas.push(['Duración fuga', `${detalle.fugaDuracionMin} min`]);
+  if (detalle.fugaVolumenM3 !== null)
+    filas.push(['Volumen derramado', `${detalle.fugaVolumenM3} m3`]);
   if (detalle.fugaPh !== null) filas.push(['pH', String(detalle.fugaPh)]);
-  if (detalle.fugaSuperficieM2 !== null) filas.push(['Superficie', `${detalle.fugaSuperficieM2} m2`]);
+  if (detalle.fugaSuperficieM2 !== null)
+    filas.push(['Superficie', `${detalle.fugaSuperficieM2} m2`]);
   if (detalle.emisionGases) filas.push(['Gases', detalle.emisionGases]);
   if (detalle.emisionDuracionMin !== null)
     filas.push(['Duración emisión', `${detalle.emisionDuracionMin} min`]);

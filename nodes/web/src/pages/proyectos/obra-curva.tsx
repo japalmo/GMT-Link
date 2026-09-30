@@ -154,10 +154,7 @@ export function CurvaControl({
   // La escala de las barras se ajusta al máximo real de la obra y no a un 100%
   // fijo: con semanales de 3% a 17%, un eje a 100 dejaría las barras planas.
   const techo = useMemo(() => {
-    const maximo = Math.max(
-      ...weeks.map((w) => Math.max(w.parPlan, w.parReal ?? 0)),
-      5,
-    );
+    const maximo = Math.max(...weeks.map((w) => Math.max(w.parPlan, w.parReal ?? 0)), 5);
     return Math.ceil(maximo / 5) * 5;
   }, [weeks]);
 
@@ -178,152 +175,152 @@ export function CurvaControl({
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div ref={caja} className="min-h-0 w-full flex-1 overflow-hidden">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        width={W}
-        height={H}
-        className="block"
-        role="img"
-        aria-label="Avance semanal y curva S: programa contra real"
-        onMouseLeave={() => setSobre(null)}
-      >
-        {/* Grilla del acumulado, que es el eje que se lee de lejos. */}
-        {[0, 25, 50, 75, 100].map((g) => (
-          <g key={g}>
-            <line
-              x1={PAD.left}
-              y1={yLinea(g)}
-              x2={W - PAD.right}
-              y2={yLinea(g)}
-              stroke="rgb(255 255 255 / 0.14)"
-              strokeWidth={1}
-            />
-            <text
-              x={W - PAD.right + 6}
-              y={yLinea(g) + 4}
-              fill="rgb(255 255 255 / 0.55)"
-              fontSize={11}
-            >
-              {g}%
-            </text>
-          </g>
-        ))}
-        {[0, techo / 2, techo].map((g) => (
-          <text
-            key={g}
-            x={PAD.left - 6}
-            y={yBarra(g) + 4}
-            textAnchor="end"
-            fill="rgb(255 255 255 / 0.45)"
-            fontSize={11}
-          >
-            {numero(g, 0)}%
-          </text>
-        ))}
-
-        {/* Semana seleccionada: la franja que ancla todo el tablero. */}
-        <rect
-          x={PAD.left + banda * foco}
-          y={PAD.top}
-          width={banda}
-          height={plotH}
-          fill="rgb(255 255 255 / 0.09)"
-        />
-
-        {weeks.map((w, i) => (
-          <g key={w.code}>
-            {/* Barra del programa: hueca, porque es el fondo contra el que se
-                compara, no el dato que importa. */}
-            <rect
-              x={centro(i) - anchoBarra}
-              y={yBarra(w.parPlan)}
-              width={anchoBarra}
-              height={Math.max(0, plotH + PAD.top - yBarra(w.parPlan))}
-              fill="rgb(251 191 36 / 0.30)"
-              stroke={COLOR_PLAN}
-              strokeWidth={1}
-              className={quieto ? '' : 'animate-barra-alto'}
-              style={{ animationDelay: `${i * 45}ms` }}
-            />
-            {w.parReal !== null && (
-              <rect
-                x={centro(i)}
-                y={yBarra(w.parReal)}
-                width={anchoBarra}
-                height={Math.max(0, plotH + PAD.top - yBarra(w.parReal))}
-                fill={COLOR_REAL}
-                className={quieto ? '' : 'animate-barra-alto'}
-                style={{ animationDelay: `${i * 45}ms` }}
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          width={W}
+          height={H}
+          className="block"
+          role="img"
+          aria-label="Avance semanal y curva S: programa contra real"
+          onMouseLeave={() => setSobre(null)}
+        >
+          {/* Grilla del acumulado, que es el eje que se lee de lejos. */}
+          {[0, 25, 50, 75, 100].map((g) => (
+            <g key={g}>
+              <line
+                x1={PAD.left}
+                y1={yLinea(g)}
+                x2={W - PAD.right}
+                y2={yLinea(g)}
+                stroke="rgb(255 255 255 / 0.14)"
+                strokeWidth={1}
               />
-            )}
-          </g>
-        ))}
-
-        <polyline
-          points={acmPlan.join(' ')}
-          fill="none"
-          stroke={COLOR_PLAN}
-          strokeWidth={2.5}
-          strokeDasharray="7 5"
-          strokeLinejoin="round"
-        />
-        {acmReal.length > 1 && (
-          <polyline
-            points={acmReal.join(' ')}
-            fill="none"
-            stroke={COLOR_REAL}
-            strokeWidth={3.5}
-            strokeLinejoin="round"
-            className={quieto ? '' : 'animate-trazo'}
-          />
-        )}
-        {weeks.map((w) =>
-          w.acmReal === null ? null : (
-            <circle
-              key={w.code}
-              cx={centro(w.index)}
-              cy={yLinea(w.acmReal)}
-              r={w.index === control.lastClosed ? 5.5 : 3.5}
-              fill={COLOR_REAL}
-            />
-          ),
-        )}
-
-        {/* En un celular la banda queda en 28 px y "S-10" no cabe: se rotula una
-            de cada dos, más la que esté en foco, que es la que importa. */}
-        {weeks.map((w, i) =>
-          banda >= 34 || i % 2 === 0 || i === foco ? (
+              <text
+                x={W - PAD.right + 6}
+                y={yLinea(g) + 4}
+                fill="rgb(255 255 255 / 0.55)"
+                fontSize={11}
+              >
+                {g}%
+              </text>
+            </g>
+          ))}
+          {[0, techo / 2, techo].map((g) => (
             <text
-              key={w.code}
-              x={centro(i)}
-              y={H - 10}
-              textAnchor="middle"
-              fill={i === foco ? 'rgb(255 255 255 / 0.95)' : 'rgb(255 255 255 / 0.55)'}
+              key={g}
+              x={PAD.left - 6}
+              y={yBarra(g) + 4}
+              textAnchor="end"
+              fill="rgb(255 255 255 / 0.45)"
               fontSize={11}
-              fontWeight={i === foco ? 700 : 400}
             >
-              {w.code}
+              {numero(g, 0)}%
             </text>
-          ) : null,
-        )}
+          ))}
 
-        {/* Zonas sensibles al final: capturan el cursor sin tapar el dibujo. */}
-        {weeks.map((w, i) => (
+          {/* Semana seleccionada: la franja que ancla todo el tablero. */}
           <rect
-            key={w.code}
-            x={PAD.left + banda * i}
+            x={PAD.left + banda * foco}
             y={PAD.top}
             width={banda}
             height={plotH}
-            fill="transparent"
-            className="cursor-pointer"
-            onMouseEnter={() => setSobre(i)}
-            onClick={() => onSemana(i)}
-          >
-            <title>{`${w.code}, cierre ${diaMes(w.closeDate)}`}</title>
-          </rect>
-        ))}
-      </svg>
+            fill="rgb(255 255 255 / 0.09)"
+          />
+
+          {weeks.map((w, i) => (
+            <g key={w.code}>
+              {/* Barra del programa: hueca, porque es el fondo contra el que se
+                compara, no el dato que importa. */}
+              <rect
+                x={centro(i) - anchoBarra}
+                y={yBarra(w.parPlan)}
+                width={anchoBarra}
+                height={Math.max(0, plotH + PAD.top - yBarra(w.parPlan))}
+                fill="rgb(251 191 36 / 0.30)"
+                stroke={COLOR_PLAN}
+                strokeWidth={1}
+                className={quieto ? '' : 'animate-barra-alto'}
+                style={{ animationDelay: `${i * 45}ms` }}
+              />
+              {w.parReal !== null && (
+                <rect
+                  x={centro(i)}
+                  y={yBarra(w.parReal)}
+                  width={anchoBarra}
+                  height={Math.max(0, plotH + PAD.top - yBarra(w.parReal))}
+                  fill={COLOR_REAL}
+                  className={quieto ? '' : 'animate-barra-alto'}
+                  style={{ animationDelay: `${i * 45}ms` }}
+                />
+              )}
+            </g>
+          ))}
+
+          <polyline
+            points={acmPlan.join(' ')}
+            fill="none"
+            stroke={COLOR_PLAN}
+            strokeWidth={2.5}
+            strokeDasharray="7 5"
+            strokeLinejoin="round"
+          />
+          {acmReal.length > 1 && (
+            <polyline
+              points={acmReal.join(' ')}
+              fill="none"
+              stroke={COLOR_REAL}
+              strokeWidth={3.5}
+              strokeLinejoin="round"
+              className={quieto ? '' : 'animate-trazo'}
+            />
+          )}
+          {weeks.map((w) =>
+            w.acmReal === null ? null : (
+              <circle
+                key={w.code}
+                cx={centro(w.index)}
+                cy={yLinea(w.acmReal)}
+                r={w.index === control.lastClosed ? 5.5 : 3.5}
+                fill={COLOR_REAL}
+              />
+            ),
+          )}
+
+          {/* En un celular la banda queda en 28 px y "S-10" no cabe: se rotula una
+            de cada dos, más la que esté en foco, que es la que importa. */}
+          {weeks.map((w, i) =>
+            banda >= 34 || i % 2 === 0 || i === foco ? (
+              <text
+                key={w.code}
+                x={centro(i)}
+                y={H - 10}
+                textAnchor="middle"
+                fill={i === foco ? 'rgb(255 255 255 / 0.95)' : 'rgb(255 255 255 / 0.55)'}
+                fontSize={11}
+                fontWeight={i === foco ? 700 : 400}
+              >
+                {w.code}
+              </text>
+            ) : null,
+          )}
+
+          {/* Zonas sensibles al final: capturan el cursor sin tapar el dibujo. */}
+          {weeks.map((w, i) => (
+            <rect
+              key={w.code}
+              x={PAD.left + banda * i}
+              y={PAD.top}
+              width={banda}
+              height={plotH}
+              fill="transparent"
+              className="cursor-pointer"
+              onMouseEnter={() => setSobre(i)}
+              onClick={() => onSemana(i)}
+            >
+              <title>{`${w.code}, cierre ${diaMes(w.closeDate)}`}</title>
+            </rect>
+          ))}
+        </svg>
       </div>
 
       {/* La ficha aparece solo al pasar el cursor: dejarla fija taparía las
@@ -611,11 +608,7 @@ function RotuloSerie({
       }`}
     >
       <span className="inline-flex items-center gap-1">
-        <span
-          className="size-1.5 rounded-full"
-          style={{ backgroundColor: color }}
-          aria-hidden
-        />
+        <span className="size-1.5 rounded-full" style={{ backgroundColor: color }} aria-hidden />
         {texto}
       </span>
     </th>
@@ -637,7 +630,10 @@ export function FasesControl({
 }): ReactNode {
   const auto = useDesplazadoAuto<HTMLUListElement>();
   return (
-    <ul ref={auto} className="desplazable flex h-full min-h-0 flex-col justify-around gap-2 overflow-y-auto">
+    <ul
+      ref={auto}
+      className="desplazable flex h-full min-h-0 flex-col justify-around gap-2 overflow-y-auto"
+    >
       {control.phases.map((f, i) => {
         const plan = f.plan[semana] ?? f.plan.at(-1) ?? 0;
         const real = f.real[semana] ?? null;

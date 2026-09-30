@@ -128,9 +128,7 @@ export function ChecklistFillBody({
   const obsItemIds = useMemo(
     () =>
       new Set(
-        template.items
-          .map((it) => it.config?.obsItemId)
-          .filter((v): v is string => Boolean(v)),
+        template.items.map((it) => it.config?.obsItemId).filter((v): v is string => Boolean(v)),
       ),
     [template.items],
   );
@@ -292,7 +290,9 @@ export function ChecklistFillBody({
             min={item.config?.min}
             max={item.config?.max}
             value={(answers[item.id] as string | number | undefined) ?? ''}
-            onChange={(e) => setAnswer(item.id, e.target.value === '' ? '' : Number(e.target.value))}
+            onChange={(e) =>
+              setAnswer(item.id, e.target.value === '' ? '' : Number(e.target.value))
+            }
             placeholder="Ingresa un valor numérico"
             className="h-8 text-xs w-full max-w-xs"
           />
@@ -399,9 +399,7 @@ export function ChecklistFillBody({
           {pages.map((p, i) => (
             <span
               key={p.key}
-              className={`h-1 flex-1 rounded-full ${
-                i <= safeIndex ? 'bg-primary' : 'bg-border'
-              }`}
+              className={`h-1 flex-1 rounded-full ${i <= safeIndex ? 'bg-primary' : 'bg-border'}`}
               aria-hidden
             />
           ))}

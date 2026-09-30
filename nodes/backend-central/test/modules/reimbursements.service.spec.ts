@@ -98,7 +98,10 @@ interface PrismaParts {
   geminiCreate: ReturnType<typeof vi.fn>;
 }
 
-function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
+function buildPrisma(parts: Partial<PrismaParts> = {}): {
+  prisma: PrismaService;
+  parts: PrismaParts;
+} {
   const resolved: PrismaParts = {
     create: parts.create ?? vi.fn(),
     findMany: parts.findMany ?? vi.fn(() => Promise.resolve([])),
@@ -166,7 +169,9 @@ describe('ReimbursementsService', () => {
   });
 
   function makeService(prisma: PrismaService): ReimbursementsService {
-    const config = { get: vi.fn(() => undefined) } as unknown as import('@nestjs/config').ConfigService;
+    const config = {
+      get: vi.fn(() => undefined),
+    } as unknown as import('@nestjs/config').ConfigService;
     return new ReimbursementsService(prisma, storageBits.storage, notifBits.notifications, config);
   }
 
@@ -467,7 +472,9 @@ describe('ReimbursementsService', () => {
     const { prisma } = buildPrisma({ findUnique });
     const service = makeService(prisma);
 
-    await expect(service.getById('r-1', 'intruso', false)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getById('r-1', 'intruso', false)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('getById: inexistente → 404', async () => {
@@ -475,7 +482,9 @@ describe('ReimbursementsService', () => {
     const { prisma } = buildPrisma({ findUnique });
     const service = makeService(prisma);
 
-    await expect(service.getById('nope', 'manager', true)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getById('nope', 'manager', true)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('attachReceipt: solo el dueño + PENDIENTE sube boleta', async () => {
@@ -603,7 +612,12 @@ describe('ReimbursementsService', () => {
     const service = makeService(prisma);
 
     await expect(
-      service.update('gestor', 'r-1', { amount: 500, date: TODAY_ISO, concept: 'Corrección' }, true),
+      service.update(
+        'gestor',
+        'r-1',
+        { amount: 500, date: TODAY_ISO, concept: 'Corrección' },
+        true,
+      ),
     ).resolves.toBeDefined();
     expect(update).toHaveBeenCalledTimes(1);
   });
@@ -685,7 +699,12 @@ describe('ReimbursementsService', () => {
 
     // Reenvía la MISMA fecha (mismo día date-only) y corrige solo el monto.
     await expect(
-      service.update('u1', 'r-1', { amount: 99999, date: TOO_OLD_ISO, concept: 'Taxi al puerto' }, false),
+      service.update(
+        'u1',
+        'r-1',
+        { amount: 99999, date: TOO_OLD_ISO, concept: 'Taxi al puerto' },
+        false,
+      ),
     ).resolves.toBeDefined();
     expect(update).toHaveBeenCalled();
     const data = update.mock.calls[0]?.[0]?.data as { amount: number };
@@ -712,7 +731,11 @@ describe('ReimbursementsService', () => {
   it('remove: el dueño elimina un reembolso PENDIENTE (borrado condicionado + boleta del storage)', async () => {
     const findUnique = vi.fn(() =>
       Promise.resolve(
-        buildRow({ status: FinanceStatus.PENDIENTE, userId: 'u1', receiptKey: 'reimbursements/boleta.pdf' }),
+        buildRow({
+          status: FinanceStatus.PENDIENTE,
+          userId: 'u1',
+          receiptKey: 'reimbursements/boleta.pdf',
+        }),
       ),
     );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
@@ -728,7 +751,9 @@ describe('ReimbursementsService', () => {
   });
 
   it('remove: el dueño elimina un reembolso APROBADO (ya no se bloquea por estado)', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'u1' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'u1' })),
+    );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -739,7 +764,9 @@ describe('ReimbursementsService', () => {
   });
 
   it('remove: ajeno sin gestión o inexistente → 404 y NO borra fila ni boleta', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.APROBADO, userId: 'otro' })),
+    );
     const deleteMany = vi.fn();
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -752,7 +779,11 @@ describe('ReimbursementsService', () => {
   it('remove: un GESTOR (canManage) elimina un reembolso APROBADO ajeno (+ boleta)', async () => {
     const findUnique = vi.fn(() =>
       Promise.resolve(
-        buildRow({ status: FinanceStatus.APROBADO, userId: 'otro', receiptKey: 'reimbursements/boleta.pdf' }),
+        buildRow({
+          status: FinanceStatus.APROBADO,
+          userId: 'otro',
+          receiptKey: 'reimbursements/boleta.pdf',
+        }),
       ),
     );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
@@ -766,7 +797,9 @@ describe('ReimbursementsService', () => {
   });
 
   it('remove: reembolso PAGADO → 409 y NO borra fila ni boleta (ni el gestor)', async () => {
-    const findUnique = vi.fn(() => Promise.resolve(buildRow({ status: FinanceStatus.PAGADO, userId: 'u1' })));
+    const findUnique = vi.fn(() =>
+      Promise.resolve(buildRow({ status: FinanceStatus.PAGADO, userId: 'u1' })),
+    );
     const deleteMany = vi.fn();
     const { prisma } = buildPrisma({ findUnique, deleteMany });
     const service = makeService(prisma);
@@ -779,7 +812,11 @@ describe('ReimbursementsService', () => {
   it('remove: carrera con pay (deleteMany count=0) → 409 y NO borra la boleta', async () => {
     const findUnique = vi.fn(() =>
       Promise.resolve(
-        buildRow({ status: FinanceStatus.APROBADO, userId: 'u1', receiptKey: 'reimbursements/boleta.pdf' }),
+        buildRow({
+          status: FinanceStatus.APROBADO,
+          userId: 'u1',
+          receiptKey: 'reimbursements/boleta.pdf',
+        }),
       ),
     );
     // Entre el findUnique y el delete el reembolso pasó a PAGADO → count 0.
@@ -794,7 +831,11 @@ describe('ReimbursementsService', () => {
   it('remove: si el borrado de la boleta en storage rechaza, igual resuelve (best-effort)', async () => {
     const findUnique = vi.fn(() =>
       Promise.resolve(
-        buildRow({ status: FinanceStatus.PENDIENTE, userId: 'u1', receiptKey: 'reimbursements/boleta.pdf' }),
+        buildRow({
+          status: FinanceStatus.PENDIENTE,
+          userId: 'u1',
+          receiptKey: 'reimbursements/boleta.pdf',
+        }),
       ),
     );
     const deleteMany = vi.fn(() => Promise.resolve({ count: 1 }));
@@ -999,7 +1040,10 @@ describe('ReimbursementsService', () => {
   it('generateBatchPdf usa receiptKey y arma el PDF', async () => {
     const findMany = vi.fn(() =>
       Promise.resolve([
-        buildRowWithRequester({ receiptKey: 'reimbursements/a.png', receiptUrl: 'https://r2/x?sig=1' }),
+        buildRowWithRequester({
+          receiptKey: 'reimbursements/a.png',
+          receiptUrl: 'https://r2/x?sig=1',
+        }),
       ]),
     );
     const read = vi.fn(() =>
@@ -1012,7 +1056,9 @@ describe('ReimbursementsService', () => {
     );
     const prisma = { reimbursement: { findMany } } as unknown as PrismaService;
     const storage = { save: vi.fn(), delete: vi.fn(), read } as unknown as StorageService;
-    const config = { get: vi.fn(() => undefined) } as unknown as import('@nestjs/config').ConfigService;
+    const config = {
+      get: vi.fn(() => undefined),
+    } as unknown as import('@nestjs/config').ConfigService;
     const service = new ReimbursementsService(prisma, storage, notifBits.notifications, config);
 
     const pdf = await service.generateBatchPdf(['r-1'], { perPage: 2 });
@@ -1022,7 +1068,10 @@ describe('ReimbursementsService', () => {
 
   it('markPrinted marca impresas por id', async () => {
     const updateMany = vi.fn<
-      (args: { where: { id: { in: string[] } }; data: { printed: boolean; printedAt: Date } }) => Promise<{ count: number }>
+      (args: {
+        where: { id: { in: string[] } };
+        data: { printed: boolean; printedAt: Date };
+      }) => Promise<{ count: number }>
     >(() => Promise.resolve({ count: 2 }));
     const { prisma } = buildPrisma({ updateMany });
     const service = makeService(prisma);

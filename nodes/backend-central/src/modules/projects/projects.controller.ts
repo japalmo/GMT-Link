@@ -53,10 +53,7 @@ export class ProjectsController {
    * admin_ti / department_admin lo tienen; las gerencias con beta:full también).
    */
   @Post()
-  async create(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Body() dto: CreateProjectDto,
-  ) {
+  async create(@CurrentUser() authUser: AuthUser | undefined, @Body() dto: CreateProjectDto) {
     const userId = this.requireUserId(authUser);
     await this.requireFunctional(userId, 'project:create');
     return this.projects.create(userId, dto);
@@ -67,10 +64,7 @@ export class ProjectsController {
    * Filtra opcionalmente por faena (`?faenaId=`).
    */
   @Get()
-  listAll(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Query('faenaId') faenaId?: string,
-  ) {
+  listAll(@CurrentUser() authUser: AuthUser | undefined, @Query('faenaId') faenaId?: string) {
     const userId = this.requireUserId(authUser);
     return this.projects.listAll(userId, faenaId);
   }
@@ -120,9 +114,7 @@ export class ProjectsController {
     // Con sesión iniciada vale el permiso de siempre; sin sesión, el pase que
     // entrega la clave. Así el enlace protegido se abre de las dos formas que
     // pidió el negocio sin duplicar la regla de autorización.
-    const sesionAutorizada = user
-      ? await this.projects.puedeVerPorToken(token, user.id)
-      : false;
+    const sesionAutorizada = user ? await this.projects.puedeVerPorToken(token, user.id) : false;
     return this.projects.getPublicObraDashboard(token, { pase, sesionAutorizada });
   }
 
@@ -152,10 +144,7 @@ export class ProjectsController {
    */
   @Get(':id')
   @RequirePermission('can_view', { type: 'project', param: 'id' })
-  getById(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  getById(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     const userId = this.requireUserId(authUser);
     return this.projects.getById(id, userId);
   }
@@ -166,10 +155,7 @@ export class ProjectsController {
    */
   @Get(':id/dashboard')
   @RequirePermission('can_view', { type: 'project', param: 'id' })
-  getDashboard(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  getDashboard(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     this.requireUserId(authUser);
     return this.projects.getDashboard(id);
   }
@@ -180,10 +166,7 @@ export class ProjectsController {
    */
   @Get(':id/obra-dashboard')
   @RequirePermission('can_view', { type: 'project', param: 'id' })
-  getObraDashboard(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  getObraDashboard(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     this.requireUserId(authUser);
     return this.projects.getObraDashboard(id);
   }
@@ -213,10 +196,7 @@ export class ProjectsController {
    * `PermissionService.can`.
    */
   @Delete(':id')
-  async remove(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  async remove(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     const userId = this.requireUserId(authUser);
     const decision = await this.permissions.can(userId, 'project:delete', { projectId: id });
     if (decision.effect !== 'allow') {
@@ -299,10 +279,7 @@ export class ProjectsController {
    */
   @Get(':id/avance')
   @RequirePermission('can_view', { type: 'project', param: 'id' })
-  getAvance(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  getAvance(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     const userId = this.requireUserId(authUser);
     return this.projects.getAvanceEditable(id, userId);
   }
@@ -378,10 +355,7 @@ export class ProjectsController {
 
   @Get(':id/assignments')
   @RequirePermission('can_manage_team', { type: 'project', param: 'id' })
-  listAssignments(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  listAssignments(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     this.requireUserId(authUser);
     return this.projects.listAssignments(id);
   }

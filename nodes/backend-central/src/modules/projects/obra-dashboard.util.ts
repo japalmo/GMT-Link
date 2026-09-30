@@ -90,8 +90,7 @@ export function doneOf(a: ObraActivity): number {
  */
 export function weightOf(a: ObraActivity): number {
   if (a.isMilestone || !a.quantityTotal || a.quantityTotal <= 0) return 0;
-  const days =
-    a.start && a.end ? Math.max(1, (a.end.getTime() - a.start.getTime()) / MS_DAY) : 1;
+  const days = a.start && a.end ? Math.max(1, (a.end.getTime() - a.start.getTime()) / MS_DAY) : 1;
   return a.quantityTotal * days;
 }
 
@@ -100,11 +99,7 @@ export function weightOf(a: ObraActivity): number {
  * LINEALMENTE entre `desde` y `hasta`. Es la convención estándar de curva S
  * cuando no hay perfil de producción por actividad.
  */
-function plannedFractionAt(
-  at: Date,
-  desde: Date | null,
-  hasta: Date | null,
-): number {
+function plannedFractionAt(at: Date, desde: Date | null, hasta: Date | null): number {
   if (!desde || !hasta) return 0;
   const t = at.getTime();
   const a = desde.getTime();
@@ -365,9 +360,7 @@ export function computeObraDashboard(
 ): ObraDashboard {
   // Una actividad con hijas es un AGRUPADOR (un cerco), no algo que se mida:
   // su avance sale de sus hijas. Medir las dos contaría dos veces la misma obra.
-  const conHijas = new Set(
-    activities.map((a) => a.parentId).filter((id): id is string => !!id),
-  );
+  const conHijas = new Set(activities.map((a) => a.parentId).filter((id): id is string => !!id));
   const porId = new Map(activities.map((a) => [a.id, a]));
   const medibles = activities.filter((a) => !a.isMilestone && !conHijas.has(a.id));
 
@@ -400,49 +393,51 @@ export function computeObraDashboard(
   const phases: ObraPhase[] = [...porFase.entries()]
     .sort(([, a], [, b]) => inicioFase(a) - inicioFase(b))
     .map(([phaseId, acts]) => {
-    // Dentro de la fase, cada actividad cuelga de su padre (el cerco) o va
-    // suelta (una zanja, un letrero).
-    const porPadre = new Map<string, ObraActivity[]>();
-    for (const a of acts) {
-      const clave = a.parentId ?? a.id;
-      const previo = porPadre.get(clave);
-      if (previo) previo.push(a);
-      else porPadre.set(clave, [a]);
-    }
+      // Dentro de la fase, cada actividad cuelga de su padre (el cerco) o va
+      // suelta (una zanja, un letrero).
+      const porPadre = new Map<string, ObraActivity[]>();
+      for (const a of acts) {
+        const clave = a.parentId ?? a.id;
+        const previo = porPadre.get(clave);
+        if (previo) previo.push(a);
+        else porPadre.set(clave, [a]);
+      }
 
-    const inicioDe = (grupo: ObraActivity[]): number =>
-      Math.min(...grupo.map((a) => a.start?.getTime() ?? Number.MAX_SAFE_INTEGER));
+      const inicioDe = (grupo: ObraActivity[]): number =>
+        Math.min(...grupo.map((a) => a.start?.getTime() ?? Number.MAX_SAFE_INTEGER));
 
-    const lineas: Array<ObraActivityLine & { desde: number }> = [...porPadre.entries()].map(([clave, grupo]) => {
-      const suelta = grupo.length === 1 && grupo[0]?.id === clave;
-      const { done, total } = acumulado(grupo);
-      const cabeza = grupo[0];
+      const lineas: Array<ObraActivityLine & { desde: number }> = [...porPadre.entries()].map(
+        ([clave, grupo]) => {
+          const suelta = grupo.length === 1 && grupo[0]?.id === clave;
+          const { done, total } = acumulado(grupo);
+          const cabeza = grupo[0];
+          return {
+            desde: inicioDe(grupo),
+            id: clave,
+            name: (suelta ? cabeza?.name : porId.get(clave)?.name) ?? clave,
+            unit: suelta ? (cabeza?.unit ?? null) : unidadComun(grupo),
+            quantityTotal: total,
+            quantityDone: done,
+            percent: porcentajeDe(grupo),
+            steps: suelta ? [] : grupo.slice().sort(porPrograma).map(lineaDe),
+            stepsDone: suelta ? (terminada(cabeza!) ? 1 : 0) : grupo.filter(terminada).length,
+            stepsTotal: grupo.length,
+          };
+        },
+      );
+
       return {
-        desde: inicioDe(grupo),
-        id: clave,
-        name: (suelta ? cabeza?.name : porId.get(clave)?.name) ?? clave,
-        unit: suelta ? (cabeza?.unit ?? null) : unidadComun(grupo),
-        quantityTotal: total,
-        quantityDone: done,
-        percent: porcentajeDe(grupo),
-        steps: suelta ? [] : grupo.slice().sort(porPrograma).map(lineaDe),
-        stepsDone: suelta ? (terminada(cabeza!) ? 1 : 0) : grupo.filter(terminada).length,
-        stepsTotal: grupo.length,
+        id: phaseId,
+        name: acts[0]?.phaseName ?? 'Sin fase',
+        unit: null,
+        quantityTotal: acumulado(acts).total,
+        quantityDone: acumulado(acts).done,
+        percent: porcentajeDe(acts),
+        activities: lineas
+          .sort((x, y) => x.desde - y.desde || x.name.localeCompare(y.name, 'es'))
+          .map(({ desde: _desde, ...linea }) => linea),
       };
     });
-
-    return {
-      id: phaseId,
-      name: acts[0]?.phaseName ?? 'Sin fase',
-      unit: null,
-      quantityTotal: acumulado(acts).total,
-      quantityDone: acumulado(acts).done,
-      percent: porcentajeDe(acts),
-      activities: lineas
-        .sort((x, y) => x.desde - y.desde || x.name.localeCompare(y.name, 'es'))
-        .map(({ desde: _desde, ...linea }) => linea),
-    };
-  });
 
   // ── Cortes transversales ──
   // Las etapas se ordenan por fecha de ejecución, no alfabéticamente: en la TV
@@ -527,7 +522,10 @@ export function computeObraDashboard(
     // que la cuadrilla está haciendo o la que sigue.
     const enCurso =
       estado === 'EN_EJECUCION'
-        ? (grupo.slice().sort(porPrograma).find((a) => !terminada(a))?.name ?? null)
+        ? (grupo
+            .slice()
+            .sort(porPrograma)
+            .find((a) => !terminada(a))?.name ?? null)
         : null;
     // Historia y proyección del cerco, para que el mapa siga a la semana que
     // se esté mirando. El real llega hasta la última semana informada; el plan
@@ -554,9 +552,7 @@ export function computeObraDashboard(
       }
     }
     const cuadrilla = [...porPersona.values()].sort(
-      (x, y) =>
-        Number(y.lead) - Number(x.lead) ||
-        x.lastName.localeCompare(y.lastName, 'es'),
+      (x, y) => Number(y.lead) - Number(x.lead) || x.lastName.localeCompare(y.lastName, 'es'),
     );
 
     puntos.push({
@@ -612,9 +608,27 @@ export function computeObraDashboard(
   // ── Curvas ──
   const dias = timeline(activities);
   const curves = {
-    early: plannedCurve(medibles, dias, totalWeight, (a) => a.earlyStart, (a) => a.earlyFinish),
-    scheduled: plannedCurve(medibles, dias, totalWeight, (a) => a.start, (a) => a.end),
-    late: plannedCurve(medibles, dias, totalWeight, (a) => a.lateStart, (a) => a.lateFinish),
+    early: plannedCurve(
+      medibles,
+      dias,
+      totalWeight,
+      (a) => a.earlyStart,
+      (a) => a.earlyFinish,
+    ),
+    scheduled: plannedCurve(
+      medibles,
+      dias,
+      totalWeight,
+      (a) => a.start,
+      (a) => a.end,
+    ),
+    late: plannedCurve(
+      medibles,
+      dias,
+      totalWeight,
+      (a) => a.lateStart,
+      (a) => a.lateFinish,
+    ),
     real: realCurve(medibles, dias, totalWeight),
   };
 

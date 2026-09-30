@@ -299,7 +299,10 @@ export class UsersController {
     @Param('id') id: string,
     @Body() dto: AssignRoleScopedDto,
   ): Promise<UserRolesResponse> {
-    return this.usersService.assignRoleScoped(id, this.resolveScopedInput(dto.roleKey, dto.scopeType, dto.scopeId));
+    return this.usersService.assignRoleScoped(
+      id,
+      this.resolveScopedInput(dto.roleKey, dto.scopeType, dto.scopeId),
+    );
   }
 
   /**
@@ -315,7 +318,10 @@ export class UsersController {
     @Query('scopeType') scopeType?: ScopeType,
     @Query('scopeId') scopeId?: string,
   ): Promise<UserRolesResponse> {
-    return this.usersService.removeRoleScoped(id, this.resolveScopedInput(roleKey, scopeType, scopeId));
+    return this.usersService.removeRoleScoped(
+      id,
+      this.resolveScopedInput(roleKey, scopeType, scopeId),
+    );
   }
 
   /**

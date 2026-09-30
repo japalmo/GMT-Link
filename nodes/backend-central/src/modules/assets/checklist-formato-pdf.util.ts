@@ -110,19 +110,45 @@ const GRIS_PIE = rgb(0.45, 0.45, 0.45);
 
 /** Filas de cada tabla, en el orden del formato, por id canónico. */
 export const FILAS_GENERAL = [
-  'sistemaFrenos', 'direccion', 'estadoMotor', 'neumaticos', 'neumaticoRepuesto', 'luces',
-  'bocina', 'velocimetroIndicadores', 'parabrisasVidrios', 'limpiaparabrisas', 'espejos',
-  'proteccionPickupCabina', 'carroceriaEstructura', 'velocidadCrucero', 'radioBase',
-  'sistemaMonitoreoGPS', 'trabatuercasCheckpointSafelock', 'logotipoEmpresa', 'numeroIdentificacion',
+  'sistemaFrenos',
+  'direccion',
+  'estadoMotor',
+  'neumaticos',
+  'neumaticoRepuesto',
+  'luces',
+  'bocina',
+  'velocimetroIndicadores',
+  'parabrisasVidrios',
+  'limpiaparabrisas',
+  'espejos',
+  'proteccionPickupCabina',
+  'carroceriaEstructura',
+  'velocidadCrucero',
+  'radioBase',
+  'sistemaMonitoreoGPS',
+  'trabatuercasCheckpointSafelock',
+  'logotipoEmpresa',
+  'numeroIdentificacion',
   'logoAutorizacionTransito',
 ] as const;
 export const FILAS_EMERGENCIA = [
-  'cinturonSeguridad', 'alarmaRetroceso', 'triangulosReflectantes', 'extintores',
-  'botiquinPrimerosAuxilios', 'llaveRuedas', 'gataHidraulica', 'baliza', 'barraAntivuelco',
-  'pertigaBanderaLuz', 'cunas',
+  'cinturonSeguridad',
+  'alarmaRetroceso',
+  'triangulosReflectantes',
+  'extintores',
+  'botiquinPrimerosAuxilios',
+  'llaveRuedas',
+  'gataHidraulica',
+  'baliza',
+  'barraAntivuelco',
+  'pertigaBanderaLuz',
+  'cunas',
 ] as const;
 export const FILAS_CONDUCTOR = [
-  'capacidadConducir', 'horasDescanso', 'medicamentosSueno', 'problemasInquietan',
+  'capacidadConducir',
+  'horasDescanso',
+  'medicamentosSueno',
+  'problemasInquietan',
 ] as const;
 
 /** Línea base de la primera fila de cada tabla. */
@@ -138,7 +164,12 @@ const COL_RESPUESTA_CENTRO = 445.25;
 
 /** Casillas: esquina superior izquierda, 7,6 pt de lado. */
 const CASILLA = 7.6;
-const CASILLAS_VEHICULO = { permiso: 155.1, revision: 164.2, seguro: 173.4, extintor: 182.5 } as const;
+const CASILLAS_VEHICULO = {
+  permiso: 155.1,
+  revision: 164.2,
+  seguro: 173.4,
+  extintor: 182.5,
+} as const;
 const CASILLA_VEHICULO_X = 421.5;
 const CASILLAS_LICENCIA_Y = [182.5, 191.6] as const;
 const CASILLA_LICENCIA_X = 143;
@@ -204,7 +235,13 @@ function centrado(p: PDFPage, texto: string, centro: number, base: number, e: Es
   const tam = e.tam ?? TAM;
   const t = e.max ? recortar(texto, e.fuente, tam, e.max) : texto;
   const ancho = e.fuente.widthOfTextAtSize(t, tam);
-  p.drawText(t, { x: centro - ancho / 2, y: aPdf(base), size: tam, font: e.fuente, color: e.color ?? NEGRO });
+  p.drawText(t, {
+    x: centro - ancho / 2,
+    y: aPdf(base),
+    size: tam,
+    font: e.fuente,
+    color: e.color ?? NEGRO,
+  });
 }
 
 /**
@@ -214,7 +251,14 @@ function centrado(p: PDFPage, texto: string, centro: number, base: number, e: Es
 function casilla(p: PDFPage, x: number, yArriba: number, marcada: boolean): void {
   const y = aPdf(yArriba + CASILLA);
   if (!marcada) {
-    p.drawRectangle({ x, y, width: CASILLA, height: CASILLA, borderColor: GRIS_CASILLA, borderWidth: 0.8 });
+    p.drawRectangle({
+      x,
+      y,
+      width: CASILLA,
+      height: CASILLA,
+      borderColor: GRIS_CASILLA,
+      borderWidth: 0.8,
+    });
     return;
   }
   p.drawRectangle({ x, y, width: CASILLA, height: CASILLA, color: GRIS_CASILLA });
@@ -268,7 +312,9 @@ function dibujarTabla(
   desbordes: string[],
 ): void {
   const porId = new Map(filas.map((f) => [f.id, f]));
-  orden.forEach((id, i) => filaTabla(p, porId.get(id), primera + i * PASO_FILA, centro, fuente, desbordes));
+  orden.forEach((id, i) =>
+    filaTabla(p, porId.get(id), primera + i * PASO_FILA, centro, fuente, desbordes),
+  );
 }
 
 /** Bloque de texto libre dentro de un recuadro; lo que no cabe se avisa. */
@@ -292,7 +338,12 @@ function bloqueTexto(
   }
 }
 
-async function dibujarFirma(doc: PDFDocument, p: PDFPage, datos: ChecklistFormatoData, fuente: PDFFont): Promise<void> {
+async function dibujarFirma(
+  doc: PDFDocument,
+  p: PDFPage,
+  datos: ChecklistFormatoData,
+  fuente: PDFFont,
+): Promise<void> {
   // Recuadro de la firma: entre el nombre del conductor y el rótulo FIRMA.
   const caja = { x: 106, arriba: 142, ancho: 121.6, alto: 30 };
   const centroX = caja.x + caja.ancho / 2;
@@ -315,7 +366,12 @@ async function dibujarFirma(doc: PDFDocument, p: PDFPage, datos: ChecklistFormat
     centrado(p, 'No se pudo leer la firma', centroX, 160, { fuente, color: GRIS_PIE });
     return;
   }
-  centrado(p, datos.firmaNota ?? 'Sin firma registrada', centroX, 160, { fuente, color: GRIS_PIE, tam: 5.5, max: 200 });
+  centrado(p, datos.firmaNota ?? 'Sin firma registrada', centroX, 160, {
+    fuente,
+    color: GRIS_PIE,
+    tam: 5.5,
+    max: 200,
+  });
 }
 
 export async function composeChecklistFormatoPdf(datos: ChecklistFormatoData): Promise<Uint8Array> {
@@ -338,7 +394,10 @@ export async function composeChecklistFormatoPdf(datos: ChecklistFormatoData): P
     casilla(p, CASILLA_LICENCIA_X, arriba, lic.valor !== 'No registrada');
     const base = arriba + 5.3;
     const vencida = lic.valor.includes('VENCIDA');
-    centrado(p, fechaDeFormato(lic.vencimiento), 265.75, base, { fuente, color: vencida ? ROJO : NEGRO });
+    centrado(p, fechaDeFormato(lic.vencimiento), 265.75, base, {
+      fuente,
+      color: vencida ? ROJO : NEGRO,
+    });
   });
 
   // ── Datos del vehículo ──
@@ -354,9 +413,33 @@ export async function composeChecklistFormatoPdf(datos: ChecklistFormatoData): P
 
   // ── Tablas ──
   const desbordes: string[] = [];
-  dibujarTabla(p, FILAS_GENERAL, datos.estadoGeneral, BASE_GENERAL, COL_ESTADO_CENTRO, fuente, desbordes);
-  dibujarTabla(p, FILAS_EMERGENCIA, datos.equiposEmergencia, BASE_EMERGENCIA, COL_ESTADO_CENTRO, fuente, desbordes);
-  dibujarTabla(p, FILAS_CONDUCTOR, datos.condicionesConductor, BASE_CONDUCTOR, COL_RESPUESTA_CENTRO, fuente, desbordes);
+  dibujarTabla(
+    p,
+    FILAS_GENERAL,
+    datos.estadoGeneral,
+    BASE_GENERAL,
+    COL_ESTADO_CENTRO,
+    fuente,
+    desbordes,
+  );
+  dibujarTabla(
+    p,
+    FILAS_EMERGENCIA,
+    datos.equiposEmergencia,
+    BASE_EMERGENCIA,
+    COL_ESTADO_CENTRO,
+    fuente,
+    desbordes,
+  );
+  dibujarTabla(
+    p,
+    FILAS_CONDUCTOR,
+    datos.condicionesConductor,
+    BASE_CONDUCTOR,
+    COL_RESPUESTA_CENTRO,
+    fuente,
+    desbordes,
+  );
 
   // ── Observaciones de la carrocería: a la izquierda del dibujo ──
   bloqueTexto(p, datos.carroceria, 31.5, 603, 372, 9, fuente);
@@ -371,7 +454,9 @@ export async function composeChecklistFormatoPdf(datos: ChecklistFormatoData): P
 
   // ── Pie, fuera del marco ──
   const avisos = datos.avisos ?? [];
-  avisos.forEach((a, i) => izquierda(p, a, 27.7, 750 + i * 7, { fuente, tam: 5.5, color: GRIS_PIE, max: 557 }));
+  avisos.forEach((a, i) =>
+    izquierda(p, a, 27.7, 750 + i * 7, { fuente, tam: 5.5, color: GRIS_PIE, max: 557 }),
+  );
 
   return doc.save();
 }

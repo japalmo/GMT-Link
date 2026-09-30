@@ -199,13 +199,17 @@ export function TrabajadorDetalle({
                   {resumen.alertas.map((a) => {
                     const tipo = TIPO_REQUISITO[a.tipo];
                     return (
-                      <li key={`${a.tipo}-${a.id}`} className="flex flex-wrap items-center gap-3 py-2">
+                      <li
+                        key={`${a.tipo}-${a.id}`}
+                        className="flex flex-wrap items-center gap-3 py-2"
+                      >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{a.nombre}</span>
                           <span className="block truncate text-xs text-muted-foreground">
                             {tipo.label}
                             {a.clientName ? ` · ${a.clientName}` : ''}
-                            {a.faenaName ? ` · ${a.faenaName}` : ''} · vence {fechaCorta(a.expiresAt)}
+                            {a.faenaName ? ` · ${a.faenaName}` : ''} · vence{' '}
+                            {fechaCorta(a.expiresAt)}
                           </span>
                         </span>
                         <EtiquetaVigencia vigencia={a.vigencia} diasRestantes={a.diasRestantes} />
@@ -234,11 +238,7 @@ export function TrabajadorDetalle({
                 <UserScheduleTab userId={userId} />
               </div>
             </section>
-            <AcreditacionesSeccion
-              userId={userId}
-              puedeEditar={puedeEditar}
-              onCambio={cargar}
-            />
+            <AcreditacionesSeccion userId={userId} puedeEditar={puedeEditar} onCambio={cargar} />
           </div>
         )}
 

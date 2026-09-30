@@ -1,10 +1,7 @@
 import path from 'node:path';
 import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-import {
-  CHECKLIST_VEHICULO_GMT,
-  SECCIONES_CHECKLIST_VEHICULO,
-} from '@gmt-platform/contracts';
+import { CHECKLIST_VEHICULO_GMT, SECCIONES_CHECKLIST_VEHICULO } from '@gmt-platform/contracts';
 
 // Misma convención que el resto de los scripts: el .env vive en la raíz del
 // monorepo. Para correrlo contra producción se exporta `DATABASE_URL` antes,

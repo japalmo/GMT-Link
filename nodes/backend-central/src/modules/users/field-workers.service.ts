@@ -170,7 +170,8 @@ export class FieldWorkersService {
         .replace(/[^a-zA-Z]/gu, '')
         .toLowerCase();
 
-    const base = `${limpiar(firstName).slice(0, 1)}${limpiar(lastName)}`.slice(0, 24) || 'trabajador';
+    const base =
+      `${limpiar(firstName).slice(0, 1)}${limpiar(lastName)}`.slice(0, 24) || 'trabajador';
     for (let i = 0; i < MAX_INTENTOS_USUARIO; i += 1) {
       const intento = i === 0 ? base : `${base}${i + 1}`;
       const tomado = await this.prisma.user.findUnique({

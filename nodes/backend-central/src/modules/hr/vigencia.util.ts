@@ -24,11 +24,7 @@ export const DIAS_POR_VENCER = AVISO_TEMPRANO_DIAS;
  * que uno al que todavía no le cargaron la fecha, y confundirlos haría pasar un
  * dato faltante por uno tranquilizador.
  */
-export function estadoDe(
-  expiresAt: Date | null | undefined,
-  hoy: Date,
-  caduca = true,
-): HrEstado {
+export function estadoDe(expiresAt: Date | null | undefined, hoy: Date, caduca = true): HrEstado {
   if (!expiresAt) {
     return {
       vigencia: caduca ? 'SIN_FECHA' : 'SIN_VENCIMIENTO',

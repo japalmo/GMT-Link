@@ -32,10 +32,7 @@ export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
   @Post()
-  create(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Body() dto: CreateTaskDto,
-  ) {
+  create(@CurrentUser() authUser: AuthUser | undefined, @Body() dto: CreateTaskDto) {
     const userId = this.requireUserId(authUser);
     return this.tasks.create(userId, dto);
   }
@@ -100,10 +97,7 @@ export class TasksController {
   }
 
   @Get(':id')
-  getById(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  getById(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     const userId = this.requireUserId(authUser);
     return this.tasks.getById(id, userId);
   }
@@ -123,10 +117,7 @@ export class TasksController {
    * colisiona, el orden deja explícito que las rutas estáticas mandan.
    */
   @Put('crew/bulk')
-  setCrewBulk(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Body() dto: SetTaskCrewBulkDto,
-  ) {
+  setCrewBulk(@CurrentUser() authUser: AuthUser | undefined, @Body() dto: SetTaskCrewBulkDto) {
     const userId = this.requireUserId(authUser);
     return this.tasks.setCrewBulk(dto.taskIds, userId, {
       userIds: dto.userIds,
@@ -141,7 +132,10 @@ export class TasksController {
     @Body() dto: SetTaskCrewDto,
   ) {
     const userId = this.requireUserId(authUser);
-    return this.tasks.setCrew(id, userId, { userIds: dto.userIds, leadUserId: dto.leadUserId ?? null });
+    return this.tasks.setCrew(id, userId, {
+      userIds: dto.userIds,
+      leadUserId: dto.leadUserId ?? null,
+    });
   }
 
   @Put(':id/status')
@@ -179,10 +173,7 @@ export class TasksController {
 
   @Delete(':id')
   @HttpCode(204)
-  remove(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ) {
+  remove(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string) {
     const userId = this.requireUserId(authUser);
     return this.tasks.remove(id, userId);
   }

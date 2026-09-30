@@ -49,8 +49,7 @@ export function PasoIdentificacion({
         <span className="flex-1">
           <span className="block text-[16px] font-semibold">Continuar sin cuenta</span>
           <span className="block text-[13px] leading-snug text-muted-foreground">
-            Tendrás que escribir tus datos, y el registro quedará marcado como no
-            verificado.
+            Tendrás que escribir tus datos, y el registro quedará marcado como no verificado.
           </span>
         </span>
         <ArrowRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />

@@ -27,7 +27,11 @@ export type {
   Paginated,
 } from '@gmt-platform/contracts';
 
-import type { ChecklistAnswer, ChecklistSection, ChecklistTemplateItem } from '@gmt-platform/contracts';
+import type {
+  ChecklistAnswer,
+  ChecklistSection,
+  ChecklistTemplateItem,
+} from '@gmt-platform/contracts';
 
 export interface AssetDocumentView {
   id: string;

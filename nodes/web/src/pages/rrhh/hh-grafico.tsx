@@ -50,10 +50,7 @@ export function HhGrafico({ userId }: { userId: string }): ReactNode {
     };
   }, [userId, desde, hasta]);
 
-  const maximo = useMemo(
-    () => Math.max(1, ...(datos?.points ?? []).map((p) => p.hours)),
-    [datos],
-  );
+  const maximo = useMemo(() => Math.max(1, ...(datos?.points ?? []).map((p) => p.hours)), [datos]);
 
   return (
     <section className="rounded-lg border border-border bg-card p-4">
@@ -122,7 +119,9 @@ export function HhGrafico({ userId }: { userId: string }): ReactNode {
             {datos.openEntries > 0 && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                 {datos.openEntries}{' '}
-                {datos.openEntries === 1 ? 'actividad sigue abierta' : 'actividades siguen abiertas'}
+                {datos.openEntries === 1
+                  ? 'actividad sigue abierta'
+                  : 'actividades siguen abiertas'}
                 : sus horas todavía no se cuentan.
               </p>
             )}

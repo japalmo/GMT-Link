@@ -17,11 +17,7 @@ import {
   tableSkipTake,
 } from '../../common/table-pagination.util';
 import { santiagoDateParts } from '../finance/finance-time.util';
-import {
-  findTransition,
-  slaTriageDueAt,
-  transitionsFrom,
-} from './ticket-state-machine';
+import { findTransition, slaTriageDueAt, transitionsFrom } from './ticket-state-machine';
 import type {
   CommentTicketDto,
   CreateTicketDto,
@@ -127,11 +123,18 @@ export class TicketsService {
       this.prisma.ticket.count({ where }),
     ]);
 
-    return tablePage(rows.map((row) => this.toView(row)), total, page, pageSize);
+    return tablePage(
+      rows.map((row) => this.toView(row)),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   /** Contadores del panel: sin triage, SLA vencido y en curso. */
-  async queueStats(userId: string): Promise<{ sinTriage: number; slaVencido: number; enCurso: number }> {
+  async queueStats(
+    userId: string,
+  ): Promise<{ sinTriage: number; slaVencido: number; enCurso: number }> {
     await this.assertCan(userId, P_READ_ALL, 'No tienes permiso para ver todos los tickets.');
     const ahora = new Date();
     const [sinTriage, slaVencido, enCurso] = await this.prisma.$transaction([
@@ -197,7 +200,8 @@ export class TicketsService {
 
     await this.assertExists('Department', dto.departmentId, 'El área indicada no existe.');
     if (dto.faenaId) await this.assertExists('Faena', dto.faenaId, 'La faena indicada no existe.');
-    if (dto.projectId) await this.assertExists('Project', dto.projectId, 'El proyecto indicado no existe.');
+    if (dto.projectId)
+      await this.assertExists('Project', dto.projectId, 'El proyecto indicado no existe.');
 
     const requesterName = `${user.firstName} ${user.lastName}`.trim();
     const submittedAt = new Date();
@@ -295,7 +299,9 @@ export class TicketsService {
         dto.size !== undefined ? `tamaño ${dto.size}` : null,
         dto.priority !== undefined ? `prioridad ${dto.priority}` : null,
         dto.assignedToId !== undefined ? 'responsable asignado' : null,
-      ].filter(Boolean).join(', ');
+      ]
+        .filter(Boolean)
+        .join(', ');
 
       await tx.ticketEvent.create({
         data: {
@@ -369,7 +375,9 @@ export class TicketsService {
             ? { triagedAt: ahora }
             : {}),
           ...(dto.to === TicketStatus.CERRADO ? { closedAt: ahora } : {}),
-          ...(dto.to === TicketStatus.RECHAZADO ? { rejectionReason: comment, closedAt: ahora } : {}),
+          ...(dto.to === TicketStatus.RECHAZADO
+            ? { rejectionReason: comment, closedAt: ahora }
+            : {}),
         },
         include: TICKET_INCLUDE,
       });

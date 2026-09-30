@@ -254,7 +254,8 @@ export class ReimbursementsService {
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
     const lastRow = pageRows[pageRows.length - 1];
-    const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
+    const nextCursor =
+      hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
 
     return { items: await Promise.all(pageRows.map((r) => this.present(r))), nextCursor };
   }
@@ -319,7 +320,11 @@ export class ReimbursementsService {
         fecha: (dir) => [{ date: dir }, { id: dir }],
         monto: (dir) => [{ amount: dir }, { date: 'desc' }, { id: 'desc' }],
         estado: (dir) => [{ status: dir }, { date: 'desc' }, { id: 'desc' }],
-        solicitante: (dir) => [{ user: { firstName: dir } }, { user: { lastName: dir } }, { id: 'desc' }],
+        solicitante: (dir) => [
+          { user: { firstName: dir } },
+          { user: { lastName: dir } },
+          { id: 'desc' },
+        ],
       },
       [{ date: 'desc' }, { id: 'desc' }],
     );
@@ -440,11 +445,7 @@ export class ReimbursementsService {
    * 404 (no revela existencia de ajenos). El gestor recibe los datos del
    * solicitante.
    */
-  async getById(
-    id: string,
-    requesterId: string,
-    isManager: boolean,
-  ): Promise<ReimbursementView> {
+  async getById(id: string, requesterId: string, isManager: boolean): Promise<ReimbursementView> {
     const row = await this.prisma.reimbursement.findUnique({
       where: { id },
       include: { user: REQUESTER_SELECT },

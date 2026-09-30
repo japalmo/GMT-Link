@@ -155,7 +155,8 @@ export class BrevoEmailService extends EmailService {
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      const errorMessage = `Brevo rechazó el envío a ${message.to}: HTTP ${res.status} ${res.statusText} ${detail}`.trim();
+      const errorMessage =
+        `Brevo rechazó el envío a ${message.to}: HTTP ${res.status} ${res.statusText} ${detail}`.trim();
       this.logger.error(errorMessage);
       throw new Error(errorMessage);
     }

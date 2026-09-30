@@ -220,7 +220,9 @@ export function DocumentosRrhh({
                     <p className="font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground">{d.type}</p>
                   </td>
-                  <td className="px-3 py-2 tabular-nums text-muted-foreground">{fechaCorta(d.issuedAt)}</td>
+                  <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                    {fechaCorta(d.issuedAt)}
+                  </td>
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">
                     {d.noExpiry ? 'No vence' : fechaCorta(d.expiresAt)}
                   </td>
@@ -378,7 +380,9 @@ export function DocumentosRrhh({
                 <NoVence
                   id="doc-no-vence"
                   checked={form?.noExpiry ?? false}
-                  onChange={(v) => setForm((p) => (p ? { ...p, noExpiry: v, expiresAt: v ? '' : p.expiresAt } : p))}
+                  onChange={(v) =>
+                    setForm((p) => (p ? { ...p, noExpiry: v, expiresAt: v ? '' : p.expiresAt } : p))
+                  }
                 />
               </div>
             </div>

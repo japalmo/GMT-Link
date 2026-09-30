@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ExternalLink, Pencil, Plus, Stethoscope, Trash2 } from 'lucide-react';
-import type {
-  HrAccreditation,
-  HrExam,
-  HrInduction,
-  HrVigencia,
-} from '@gmt-platform/contracts';
+import type { HrAccreditation, HrExam, HrInduction, HrVigencia } from '@gmt-platform/contracts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,7 +75,13 @@ function Acciones({
   if (!puedeEditar) return null;
   return (
     <div className="flex justify-end gap-1">
-      <Button variant="ghost" size="icon" className="size-7" onClick={onEditar} aria-label={`Editar ${etiqueta}`}>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        onClick={onEditar}
+        aria-label={`Editar ${etiqueta}`}
+      >
         <Pencil className="size-4" aria-hidden />
       </Button>
       <Button
@@ -325,7 +326,11 @@ export function ExamenesTab({
                   id="ex-vence-no"
                   checked={editando?.noExpiry ?? false}
                   onChange={(v) =>
-                    setEditando((p) => ({ ...p, noExpiry: v, expiresAt: v ? null : p?.expiresAt ?? null }))
+                    setEditando((p) => ({
+                      ...p,
+                      noExpiry: v,
+                      expiresAt: v ? null : (p?.expiresAt ?? null),
+                    }))
                   }
                 />
                 <span className="text-xs text-muted-foreground">
@@ -347,7 +352,10 @@ export function ExamenesTab({
                   aria-label="Resultado del examen"
                   value={editando?.result ?? ''}
                   onChange={(e) =>
-                    setEditando((p) => ({ ...p, result: (e.target.value || null) as HrExam['result'] }))
+                    setEditando((p) => ({
+                      ...p,
+                      result: (e.target.value || null) as HrExam['result'],
+                    }))
                   }
                 >
                   {RESULTADOS.map((r) => (
@@ -611,7 +619,9 @@ export function InduccionesTab({
                 {!editando?.clientId ? (
                   <p className="text-xs text-muted-foreground">Elige primero el cliente.</p>
                 ) : faenas.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Ese cliente no tiene faenas cargadas.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Ese cliente no tiene faenas cargadas.
+                  </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {faenas.map((f) => {
@@ -620,7 +630,9 @@ export function InduccionesTab({
                         <label
                           key={f.id}
                           className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors ${
-                            marcada ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                            marcada
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:bg-muted'
                           }`}
                         >
                           <input
@@ -628,7 +640,9 @@ export function InduccionesTab({
                             checked={marcada}
                             onChange={() =>
                               setFaenaIds((prev) =>
-                                prev.includes(f.id) ? prev.filter((x) => x !== f.id) : [...prev, f.id],
+                                prev.includes(f.id)
+                                  ? prev.filter((x) => x !== f.id)
+                                  : [...prev, f.id],
                               )
                             }
                             className="size-4"
@@ -663,7 +677,11 @@ export function InduccionesTab({
                   id="in-vence-no"
                   checked={editando?.noExpiry ?? false}
                   onChange={(v) =>
-                    setEditando((p) => ({ ...p, noExpiry: v, expiresAt: v ? null : p?.expiresAt ?? null }))
+                    setEditando((p) => ({
+                      ...p,
+                      noExpiry: v,
+                      expiresAt: v ? null : (p?.expiresAt ?? null),
+                    }))
                   }
                 />
               </div>
@@ -845,7 +863,9 @@ export function AcreditacionesSeccion({
         <ModalContent>
           <div className="flex flex-col gap-4">
             <ModalHeader>
-              <ModalTitle>{editando?.id ? 'Editar acreditación' : 'Agregar acreditación'}</ModalTitle>
+              <ModalTitle>
+                {editando?.id ? 'Editar acreditación' : 'Agregar acreditación'}
+              </ModalTitle>
               <ModalDescription>
                 Deja la faena vacía si el cliente acredita para toda su operación.
               </ModalDescription>
@@ -898,7 +918,10 @@ export function AcreditacionesSeccion({
                   aria-label="Estado de la acreditación"
                   value={editando?.status ?? 'EN_TRAMITE'}
                   onChange={(e) =>
-                    setEditando((p) => ({ ...p, status: e.target.value as HrAccreditation['status'] }))
+                    setEditando((p) => ({
+                      ...p,
+                      status: e.target.value as HrAccreditation['status'],
+                    }))
                   }
                 >
                   {ESTADOS_ACRED.map((e) => (
@@ -921,7 +944,11 @@ export function AcreditacionesSeccion({
                   id="ac-vence-no"
                   checked={editando?.noExpiry ?? false}
                   onChange={(v) =>
-                    setEditando((p) => ({ ...p, noExpiry: v, expiresAt: v ? null : p?.expiresAt ?? null }))
+                    setEditando((p) => ({
+                      ...p,
+                      noExpiry: v,
+                      expiresAt: v ? null : (p?.expiresAt ?? null),
+                    }))
                   }
                 />
               </div>

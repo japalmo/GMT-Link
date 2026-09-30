@@ -48,7 +48,12 @@ const TASK_INCLUDE = {
 } satisfies Prisma.TaskInclude;
 
 /** Estados válidos de tarea (whitelist del filtro de estado de la tabla). */
-const VALID_TASK_STATUSES: readonly string[] = ['PENDIENTE', 'EN_PROGRESO', 'REVISADO', 'COMPLETADO'];
+const VALID_TASK_STATUSES: readonly string[] = [
+  'PENDIENTE',
+  'EN_PROGRESO',
+  'REVISADO',
+  'COMPLETADO',
+];
 
 /**
  * Estrecha un valor de query a string no vacío ('all' = sin filtro). NO confiar en
@@ -75,7 +80,9 @@ export class TasksService {
    * Helper que computa la prioridad al leer, actualiza los objetos devueltos,
    * y lanza un lazy update a BD para mantener los índices sincronizados.
    */
-  private applyPriorityEscalation<T extends { id: string; priority: TaskPriority; priorityManual: boolean; dueDate: Date | null }>(tasks: T[]): T[] {
+  private applyPriorityEscalation<
+    T extends { id: string; priority: TaskPriority; priorityManual: boolean; dueDate: Date | null },
+  >(tasks: T[]): T[] {
     const now = new Date();
 
     const result = tasks.map((t) => {
@@ -108,18 +115,22 @@ export class TasksService {
       // Tarea suelta: requiere permiso funcional global (ej. desde Operaciones)
       const filter = await this.permissions.scopeFilter(userId, 'task:create');
       if (!filter || filter.kind !== 'none') {
-        throw new BadRequestException('No tienes permisos para crear tareas sueltas (se requiere acceso GLOBAL a tareas).');
+        throw new BadRequestException(
+          'No tienes permisos para crear tareas sueltas (se requiere acceso GLOBAL a tareas).',
+        );
       }
     }
 
     if (dto.parentId) {
       const parent = await this.getById(dto.parentId, userId);
       if ((parent.projectId || null) !== (dto.projectId || null)) {
-        throw new BadRequestException('La tarea padre debe pertenecer al mismo proyecto (o ambas sueltas).');
+        throw new BadRequestException(
+          'La tarea padre debe pertenecer al mismo proyecto (o ambas sueltas).',
+        );
       }
     }
 
-    const priorityManual = dto.priority !== undefined ? true : (dto.priorityManual || false);
+    const priorityManual = dto.priority !== undefined ? true : dto.priorityManual || false;
 
     const task = await this.prisma.task.create({
       data: {
@@ -141,34 +152,41 @@ export class TasksService {
         clientUserId: dto.clientUserId || null,
         phaseId: dto.phaseId || null,
         elementId: dto.elementId || null,
-        dataSpec: dto.dataSpec === undefined ? Prisma.JsonNull : (dto.dataSpec as Prisma.InputJsonValue),
+        dataSpec:
+          dto.dataSpec === undefined ? Prisma.JsonNull : (dto.dataSpec as Prisma.InputJsonValue),
         status: TaskStatus.PENDIENTE,
-        children: dto.steps && dto.steps.length > 0 ? {
-          create: dto.steps.map((step) => {
-            const stepPriorityManual = step.priority !== undefined;
-            return {
-              name: step.name,
-              description: step.description,
-              projectId: dto.projectId || null,
-              type: dto.type || 'SPOT',
-              priority: step.priority ?? 'BAJA',
-              priorityManual: stepPriorityManual,
-              startDate: step.startDate ? new Date(step.startDate) : null,
-              serviceId: dto.serviceId || null,
-              assignedToId: step.assignedToId || dto.assignedToId || null,
-              createdById: userId,
-              estimatedPoints: 0,
-              reviewDate: step.reviewDate ? new Date(step.reviewDate) : null,
-              dueDate: step.dueDate ? new Date(step.dueDate) : null,
-              recurrence: dto.recurrence || null,
-              clientUserId: dto.clientUserId || null,
-              phaseId: dto.phaseId || null,
-              elementId: dto.elementId || null,
-              dataSpec: step.dataSpec === undefined ? Prisma.JsonNull : (step.dataSpec as Prisma.InputJsonValue),
-              status: TaskStatus.PENDIENTE,
-            };
-          }),
-        } : undefined,
+        children:
+          dto.steps && dto.steps.length > 0
+            ? {
+                create: dto.steps.map((step) => {
+                  const stepPriorityManual = step.priority !== undefined;
+                  return {
+                    name: step.name,
+                    description: step.description,
+                    projectId: dto.projectId || null,
+                    type: dto.type || 'SPOT',
+                    priority: step.priority ?? 'BAJA',
+                    priorityManual: stepPriorityManual,
+                    startDate: step.startDate ? new Date(step.startDate) : null,
+                    serviceId: dto.serviceId || null,
+                    assignedToId: step.assignedToId || dto.assignedToId || null,
+                    createdById: userId,
+                    estimatedPoints: 0,
+                    reviewDate: step.reviewDate ? new Date(step.reviewDate) : null,
+                    dueDate: step.dueDate ? new Date(step.dueDate) : null,
+                    recurrence: dto.recurrence || null,
+                    clientUserId: dto.clientUserId || null,
+                    phaseId: dto.phaseId || null,
+                    elementId: dto.elementId || null,
+                    dataSpec:
+                      step.dataSpec === undefined
+                        ? Prisma.JsonNull
+                        : (step.dataSpec as Prisma.InputJsonValue),
+                    status: TaskStatus.PENDIENTE,
+                  };
+                }),
+              }
+            : undefined,
       },
       include: TASK_INCLUDE,
     });
@@ -338,7 +356,11 @@ export class TasksService {
    * - Usuario con alcance GLOBAL (ej. Administrador de Operaciones)
    * - El creador de la propia tarea
    */
-  private async canOperateStandaloneTask(task: { createdById: string }, userId: string, permissionKey: string): Promise<boolean> {
+  private async canOperateStandaloneTask(
+    task: { createdById: string },
+    userId: string,
+    permissionKey: string,
+  ): Promise<boolean> {
     const filter = await this.permissions.scopeFilter(userId, permissionKey);
     if (!filter) return false;
     if (filter.kind === 'none') return true;
@@ -364,9 +386,9 @@ export class TasksService {
       projectId: task.projectId || undefined,
       createdById: task.createdById,
     });
-    
+
     let allowed = decision.effect === 'allow';
-    
+
     // Atajo para asignados en tareas sueltas (ya que el PermissionService no mira assignedToId)
     if (!task.projectId && !allowed && decision.filter.kind !== 'none') {
       if (task.assignedToId === userId) allowed = true;
@@ -409,7 +431,9 @@ export class TasksService {
       if (dto.parentId !== null) {
         const parent = await this.getById(dto.parentId, userId);
         if ((parent.projectId || null) !== (task.projectId || null)) {
-          throw new BadRequestException('La tarea padre debe pertenecer al mismo proyecto (o ambas sueltas).');
+          throw new BadRequestException(
+            'La tarea padre debe pertenecer al mismo proyecto (o ambas sueltas).',
+          );
         }
         // Detección de ciclos indirectos: recorre ancestros del padre propuesto.
         // Si encontramos `id` en la cadena, aceptar crearía un ciclo.
@@ -442,13 +466,24 @@ export class TasksService {
         priority: dto.priority !== undefined ? dto.priority : undefined,
         type: dto.type !== undefined ? dto.type : undefined,
         priorityManual: priorityManual !== undefined ? priorityManual : undefined,
-        startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+        startDate:
+          dto.startDate !== undefined
+            ? dto.startDate
+              ? new Date(dto.startDate)
+              : null
+            : undefined,
         assignedToId: dto.assignedToId !== undefined ? dto.assignedToId : undefined,
         estimatedPoints: dto.estimatedPoints,
         actualPoints: dto.actualPoints,
         // Fechas (#76): `undefined` deja intacto; `null` o "" limpia la fecha; ISO válido la fija.
-        reviewDate: dto.reviewDate !== undefined ? (dto.reviewDate ? new Date(dto.reviewDate) : null) : undefined,
-        dueDate: dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+        reviewDate:
+          dto.reviewDate !== undefined
+            ? dto.reviewDate
+              ? new Date(dto.reviewDate)
+              : null
+            : undefined,
+        dueDate:
+          dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
         recurrence: dto.recurrence,
         clientUserId: dto.clientUserId,
       },
@@ -473,15 +508,23 @@ export class TasksService {
     let canAssign = false;
     if (task.projectId) {
       const results = await Promise.all([
-        this.fga.check({ user: `user:${userId}`, relation: 'can_create_task', object: `project:${task.projectId}` }),
-        this.fga.check({ user: `user:${userId}`, relation: 'can_assign_task', object: `project:${task.projectId}` }),
+        this.fga.check({
+          user: `user:${userId}`,
+          relation: 'can_create_task',
+          object: `project:${task.projectId}`,
+        }),
+        this.fga.check({
+          user: `user:${userId}`,
+          relation: 'can_assign_task',
+          object: `project:${task.projectId}`,
+        }),
       ]);
       canCreate = results[0];
       canAssign = results[1];
     } else {
       const [createOk, assignOk] = await Promise.all([
         this.canOperateStandaloneTask(task, userId, 'task:create'),
-        this.canOperateStandaloneTask(task, userId, 'task:update')
+        this.canOperateStandaloneTask(task, userId, 'task:update'),
       ]);
       canCreate = createOk;
       canAssign = assignOk;
@@ -499,8 +542,10 @@ export class TasksService {
     //  - REABRIR: cualquier salida DE COMPLETADO (deshace una aprobación).
     // El responsable solo mueve PENDIENTE→EN_PROGRESO (reportar inicio) y
     // EN_PROGRESO→REVISADO (enviar a revisión).
-    const isApproval = dto.status === TaskStatus.COMPLETADO && task.status !== TaskStatus.COMPLETADO;
-    const isRejection = task.status === TaskStatus.REVISADO && dto.status === TaskStatus.EN_PROGRESO;
+    const isApproval =
+      dto.status === TaskStatus.COMPLETADO && task.status !== TaskStatus.COMPLETADO;
+    const isRejection =
+      task.status === TaskStatus.REVISADO && dto.status === TaskStatus.EN_PROGRESO;
     const requiresManagement =
       task.status !== dto.status &&
       (dto.status === TaskStatus.COMPLETADO ||
@@ -642,7 +687,9 @@ export class TasksService {
     });
     if (!open) {
       // Lock de concurrencia: si la inició otro operador, solo ese puede cerrarla.
-      const openOther = await this.prisma.taskTimeLog.findFirst({ where: { taskId: id, endedAt: null } });
+      const openOther = await this.prisma.taskTimeLog.findFirst({
+        where: { taskId: id, endedAt: null },
+      });
       if (openOther) {
         throw new BadRequestException('Solo el operador que inició la actividad puede cerrarla.');
       }

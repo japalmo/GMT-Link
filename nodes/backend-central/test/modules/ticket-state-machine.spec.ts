@@ -46,9 +46,15 @@ describe('máquina de estados de tickets', () => {
   });
 
   it('exige comentario donde el procedimiento pide justificar', () => {
-    expect(findTransition(TicketStatus.EN_TRIAGE, TicketStatus.REQUIERE_INFO)?.requiresComment).toBe(true);
-    expect(findTransition(TicketStatus.EN_TRIAGE, TicketStatus.RECHAZADO)?.requiresComment).toBe(true);
-    expect(findTransition(TicketStatus.EN_QA, TicketStatus.EN_DESARROLLO)?.requiresComment).toBe(true);
+    expect(
+      findTransition(TicketStatus.EN_TRIAGE, TicketStatus.REQUIERE_INFO)?.requiresComment,
+    ).toBe(true);
+    expect(findTransition(TicketStatus.EN_TRIAGE, TicketStatus.RECHAZADO)?.requiresComment).toBe(
+      true,
+    );
+    expect(findTransition(TicketStatus.EN_QA, TicketStatus.EN_DESARROLLO)?.requiresComment).toBe(
+      true,
+    );
   });
 
   it('aceptar al backlog exige la clasificación completa', () => {
@@ -73,7 +79,9 @@ describe('máquina de estados de tickets', () => {
   });
 
   it('desde EN_TRIAGE ofrece las tres salidas del procedimiento', () => {
-    const destinos = transitionsFrom(TicketStatus.EN_TRIAGE).map((t) => t.to).sort();
+    const destinos = transitionsFrom(TicketStatus.EN_TRIAGE)
+      .map((t) => t.to)
+      .sort();
     expect(destinos).toEqual(
       [TicketStatus.EN_BACKLOG, TicketStatus.RECHAZADO, TicketStatus.REQUIERE_INFO].sort(),
     );

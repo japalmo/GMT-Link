@@ -24,36 +24,36 @@ componentes visuales del formulario de HSE.
 
 **Se crean:**
 
-| Archivo | Responsabilidad |
-|---|---|
-| `nodes/web/src/components/form-wizard/index.ts` | Barril de los componentes compartidos |
-| `nodes/web/src/components/form-wizard/pantalla.tsx` | `Pantalla`, `Campo`, `Aviso`, `Segmentado` |
-| `nodes/web/src/components/form-wizard/barra-pasos.tsx` | Indicador de progreso |
-| `nodes/web/src/components/form-wizard/selector-fecha.tsx` | `SelectorFecha` (movido) |
-| `nodes/web/src/components/form-wizard/selector-hora.tsx` | `SelectorHora` + `Columna` (movido) |
-| `nodes/web/src/pages/checklist/paso-identificacion.tsx` | Elegir login o sin cuenta |
-| `nodes/web/src/pages/checklist/paso-conductor.tsx` | Nombre y licencias |
-| `nodes/web/src/pages/checklist/paso-cierre.tsx` | Correo, firma y envío |
-| `nodes/backend-central/src/modules/assets/checklist-conductor.util.ts` | Arma `datosConductor` del PDF (puro) |
-| `nodes/backend-central/scripts/backfill-checklist-sections.ts` | Relleno de secciones |
-| `nodes/backend-central/test/modules/assets/checklist-conductor.spec.ts` | Tests del util |
-| `nodes/backend-central/test/modules/assets/checklist-publico.spec.ts` | Tests del envío público |
+| Archivo                                                                 | Responsabilidad                            |
+| ----------------------------------------------------------------------- | ------------------------------------------ |
+| `nodes/web/src/components/form-wizard/index.ts`                         | Barril de los componentes compartidos      |
+| `nodes/web/src/components/form-wizard/pantalla.tsx`                     | `Pantalla`, `Campo`, `Aviso`, `Segmentado` |
+| `nodes/web/src/components/form-wizard/barra-pasos.tsx`                  | Indicador de progreso                      |
+| `nodes/web/src/components/form-wizard/selector-fecha.tsx`               | `SelectorFecha` (movido)                   |
+| `nodes/web/src/components/form-wizard/selector-hora.tsx`                | `SelectorHora` + `Columna` (movido)        |
+| `nodes/web/src/pages/checklist/paso-identificacion.tsx`                 | Elegir login o sin cuenta                  |
+| `nodes/web/src/pages/checklist/paso-conductor.tsx`                      | Nombre y licencias                         |
+| `nodes/web/src/pages/checklist/paso-cierre.tsx`                         | Correo, firma y envío                      |
+| `nodes/backend-central/src/modules/assets/checklist-conductor.util.ts`  | Arma `datosConductor` del PDF (puro)       |
+| `nodes/backend-central/scripts/backfill-checklist-sections.ts`          | Relleno de secciones                       |
+| `nodes/backend-central/test/modules/assets/checklist-conductor.spec.ts` | Tests del util                             |
+| `nodes/backend-central/test/modules/assets/checklist-publico.spec.ts`   | Tests del envío público                    |
 
 **Se modifican:**
 
-| Archivo | Cambio |
-|---|---|
-| `nodes/backend-central/prisma/schema.prisma` | Campos de invitado; `fileUrl` opcional |
-| `nodes/backend-central/src/modules/assets/checklist-formato.builder.ts` | Llenar `datosConductor` |
-| `nodes/backend-central/src/modules/assets/assets.service.ts` | `submitPublicChecklist`, correo |
-| `nodes/backend-central/src/modules/assets/assets.controller.ts` | Endpoint público |
-| `nodes/backend-central/src/modules/assets/dto/assets.dto.ts` | DTO del envío público |
-| `nodes/web/src/pages/public/incidente.tsx` | Importa los componentes extraídos |
-| `nodes/web/src/pages/public/incidente-campos.tsx` | Re-exporta desde `form-wizard` |
-| `nodes/web/src/pages/checklist/llenar-checklist.tsx` | Orquesta los pasos nuevos |
-| `nodes/web/src/lib/api.ts` | `submitPublicChecklist` |
-| `nodes/web/src/pages/recursos/historial-checklists.tsx` | Marca "sin verificar" |
-| `packages/contracts/src/index.ts` | Tipos del envío público |
+| Archivo                                                                 | Cambio                                 |
+| ----------------------------------------------------------------------- | -------------------------------------- |
+| `nodes/backend-central/prisma/schema.prisma`                            | Campos de invitado; `fileUrl` opcional |
+| `nodes/backend-central/src/modules/assets/checklist-formato.builder.ts` | Llenar `datosConductor`                |
+| `nodes/backend-central/src/modules/assets/assets.service.ts`            | `submitPublicChecklist`, correo        |
+| `nodes/backend-central/src/modules/assets/assets.controller.ts`         | Endpoint público                       |
+| `nodes/backend-central/src/modules/assets/dto/assets.dto.ts`            | DTO del envío público                  |
+| `nodes/web/src/pages/public/incidente.tsx`                              | Importa los componentes extraídos      |
+| `nodes/web/src/pages/public/incidente-campos.tsx`                       | Re-exporta desde `form-wizard`         |
+| `nodes/web/src/pages/checklist/llenar-checklist.tsx`                    | Orquesta los pasos nuevos              |
+| `nodes/web/src/lib/api.ts`                                              | `submitPublicChecklist`                |
+| `nodes/web/src/pages/recursos/historial-checklists.tsx`                 | Marca "sin verificar"                  |
+| `packages/contracts/src/index.ts`                                       | Tipos del envío público                |
 
 ---
 
@@ -62,6 +62,7 @@ componentes visuales del formulario de HSE.
 Refactor puro. El formulario de HSE debe verse y comportarse igual al terminar.
 
 **Archivos:**
+
 - Crear: `nodes/web/src/components/form-wizard/pantalla.tsx`
 - Crear: `nodes/web/src/components/form-wizard/barra-pasos.tsx`
 - Crear: `nodes/web/src/components/form-wizard/selector-fecha.tsx`
@@ -126,10 +127,7 @@ export function BarraPasos({ paso, total }: { paso: number; total: number }): Re
         aria-label="Avance del formulario"
       >
         {Array.from({ length: total }, (_, i) => (
-          <div
-            key={i}
-            className={/* ← misma expresión de clases del original */}
-          />
+          <div key={i} className={/* ← misma expresión de clases del original */} />
         ))}
       </div>
     </>
@@ -194,6 +192,7 @@ git commit -m "refactor(web): los pasos del formulario de HSE pasan a componente
 ## Tarea 2: Migración de base de datos
 
 **Archivos:**
+
 - Modificar: `nodes/backend-central/prisma/schema.prisma`
 - Crear: `nodes/backend-central/prisma/migrations/20260928120000_checklist_invitado/migration.sql`
 
@@ -261,16 +260,14 @@ git commit -m "feat(checklist): campos de invitado y documento personal sin arch
 ## Tarea 3: Rellenar las secciones de las plantillas de producción
 
 **Archivos:**
+
 - Crear: `nodes/backend-central/scripts/backfill-checklist-sections.ts`
 
 - [ ] **Paso 1: Escribir el script**
 
 ```ts
 import { PrismaClient } from '@prisma/client';
-import {
-  CHECKLIST_VEHICULO_GMT,
-  SECCIONES_CHECKLIST_VEHICULO,
-} from '@gmt-platform/contracts';
+import { CHECKLIST_VEHICULO_GMT, SECCIONES_CHECKLIST_VEHICULO } from '@gmt-platform/contracts';
 
 /**
  * Le devuelve las secciones a las plantillas de vehículos que ya viven en
@@ -306,7 +303,8 @@ async function main(): Promise<void> {
     // ¿Es una plantilla de vehículo? Se decide por los ids, no por el nombre
     // del activo: el nombre lo escribe una persona y no es confiable.
     const reconocidos = items.filter(
-      (i) => typeof i === 'object' && i !== null && SECCION_DE.has(String((i as { id?: unknown }).id)),
+      (i) =>
+        typeof i === 'object' && i !== null && SECCION_DE.has(String((i as { id?: unknown }).id)),
     ).length;
     if (reconocidos < items.length / 2) continue;
 
@@ -386,6 +384,7 @@ git commit -m "feat(checklist): script que devuelve las secciones a las plantill
 ## Tarea 4: Llenar el bloque de datos del conductor en el PDF
 
 **Archivos:**
+
 - Crear: `nodes/backend-central/src/modules/assets/checklist-conductor.util.ts`
 - Crear: `nodes/backend-central/test/modules/assets/checklist-conductor.spec.ts`
 - Modificar: `nodes/backend-central/src/modules/assets/checklist-formato.builder.ts`
@@ -416,7 +415,12 @@ describe('construirDatosConductor', () => {
       nombre: 'Yerko Jara',
       licenciaPerfil: { clase: 'B', vence: new Date('2028-08-14T00:00:00Z') },
       acreditacionFaena: null,
-      declarado: { nombre: null, clase: 'A4', vence: new Date('2030-01-31T00:00:00Z'), interna: null },
+      declarado: {
+        nombre: null,
+        clase: 'A4',
+        vence: new Date('2030-01-31T00:00:00Z'),
+        interna: null,
+      },
     });
     expect(filas[1]).toEqual({
       etiqueta: 'Licencia municipal:',
@@ -551,6 +555,7 @@ git commit -m "feat(checklist): el PDF muestra los datos y licencias del conduct
 ## Tarea 5: Envío público del checklist
 
 **Archivos:**
+
 - Modificar: `nodes/backend-central/src/modules/assets/dto/assets.dto.ts`
 - Modificar: `nodes/backend-central/src/modules/assets/assets.service.ts`
 - Modificar: `nodes/backend-central/src/modules/assets/assets.controller.ts`
@@ -605,11 +610,21 @@ Con el Prisma mockeado, al estilo de `test/modules/hse.service.spec.ts`:
 
 ```ts
 describe('submitPublicChecklist', () => {
-  it('rechaza una plantilla que no es del activo del token', async () => { /* … */ });
-  it('rechaza una plantilla que no está aprobada', async () => { /* … */ });
-  it('guarda con userId null y los datos del invitado', async () => { /* … */ });
-  it('no acepta firma: sin identidad no hay nada que verificar', async () => { /* … */ });
-  it('valida las respuestas con el mismo Zod que el camino autenticado', async () => { /* … */ });
+  it('rechaza una plantilla que no es del activo del token', async () => {
+    /* … */
+  });
+  it('rechaza una plantilla que no está aprobada', async () => {
+    /* … */
+  });
+  it('guarda con userId null y los datos del invitado', async () => {
+    /* … */
+  });
+  it('no acepta firma: sin identidad no hay nada que verificar', async () => {
+    /* … */
+  });
+  it('valida las respuestas con el mismo Zod que el camino autenticado', async () => {
+    /* … */
+  });
 });
 ```
 
@@ -670,6 +685,7 @@ git commit -m "feat(checklist): envio publico desde el QR, sin sesion"
 ## Tarea 6: Enviar el PDF por correo
 
 **Archivos:**
+
 - Modificar: `nodes/backend-central/src/modules/assets/assets.service.ts`
 - Modificar: `nodes/backend-central/src/common/email-templates.ts`
 - Modificar: `nodes/backend-central/src/modules/assets/assets.module.ts`
@@ -731,6 +747,7 @@ git commit -m "feat(checklist): el PDF se envia por correo al terminar"
 ## Tarea 7: Contratos y cliente del front
 
 **Archivos:**
+
 - Modificar: `packages/contracts/src/index.ts`
 - Modificar: `nodes/web/src/lib/api.ts`
 
@@ -777,6 +794,7 @@ git commit -m "feat(contracts): tipos del envio publico de checklist"
 ## Tarea 8: Pasos de identificación y conductor
 
 **Archivos:**
+
 - Crear: `nodes/web/src/pages/checklist/paso-identificacion.tsx`
 - Crear: `nodes/web/src/pages/checklist/paso-conductor.tsx`
 
@@ -804,7 +822,7 @@ Con sesión, los campos llegan prellenados y se muestra el aviso:
 ```
 
 Si el usuario con sesión no tiene la licencia cargada, ofrecer una casilla
-explícita: *"Guardar esta licencia en mi perfil"*. Sin esa casilla marcada **no
+explícita: _"Guardar esta licencia en mi perfil"_. Sin esa casilla marcada **no
 se escribe nada** en RRHH.
 
 - [ ] **Paso 3: Build y commit**
@@ -820,6 +838,7 @@ git commit -m "feat(web): pasos de identificacion y datos del conductor"
 ## Tarea 9: Integrar el asistente completo
 
 **Archivos:**
+
 - Modificar: `nodes/web/src/pages/checklist/llenar-checklist.tsx`
 - Crear: `nodes/web/src/pages/checklist/paso-cierre.tsx`
 
@@ -843,9 +862,11 @@ corresponda, y botón de envío que elige el camino según haya sesión o no.
 - [ ] **Paso 4: Pantalla de éxito honesta**
 
 ```tsx
-{correoEnviado
-  ? `Te lo mandamos a ${correo}.`
-  : 'El checklist quedó guardado, pero no pudimos enviarte el correo. Descárgalo acá.'}
+{
+  correoEnviado
+    ? `Te lo mandamos a ${correo}.`
+    : 'El checklist quedó guardado, pero no pudimos enviarte el correo. Descárgalo acá.';
+}
 ```
 
 - [ ] **Paso 5: Verificar en el navegador**
@@ -865,6 +886,7 @@ git commit -m "feat(web): el checklist se llena por pasos, con o sin sesion"
 ## Tarea 10: Marca "sin verificar" en el historial
 
 **Archivos:**
+
 - Modificar: `nodes/web/src/pages/recursos/historial-checklists.tsx`
 - Modificar: `nodes/backend-central/src/modules/assets/assets.service.ts`
 
@@ -875,8 +897,8 @@ Agregar `origen: 'GMT_LINK' | 'SIN_VERIFICAR' | 'PLANILLA'`, derivado de
 
 - [ ] **Paso 2: Dibujar la marca**
 
-Una insignia junto al nombre. Con tooltip que explique qué significa: *"Lo llenó
-alguien sin cuenta en GMT Link. El nombre es el que escribió."*
+Una insignia junto al nombre. Con tooltip que explique qué significa: _"Lo llenó
+alguien sin cuenta en GMT Link. El nombre es el que escribió."_
 
 - [ ] **Paso 3: Build, verificación y commit**
 

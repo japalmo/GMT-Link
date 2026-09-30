@@ -13,9 +13,7 @@ import { FinanceStatus } from '@prisma/client';
 
 /** Recorta espacios de un valor string (deja intactos los no-string). */
 const trim = (): PropertyDecorator =>
-  Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  );
+  Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value));
 
 /** Formato "HH:mm" (00:00–23:59). */
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;

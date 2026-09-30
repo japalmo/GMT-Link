@@ -20,16 +20,16 @@ explícita, y tres tablas editables en una pestaña nueva.
 
 **Se crean:**
 
-| Archivo | Responsabilidad |
-|---|---|
-| `nodes/backend-central/src/modules/projects/avance-ponderado.util.ts` | Calcula PAR/ACM real desde las actividades (puro) |
-| `nodes/backend-central/test/modules/projects/avance-ponderado.spec.ts` | Sus pruebas |
-| `nodes/backend-central/src/modules/projects/dto/avance.dto.ts` | DTO de las ediciones |
-| `nodes/web/src/pages/proyectos/avance-tab.tsx` | La pestaña, con las tres tablas |
-| `nodes/web/src/pages/proyectos/avance-actividades.tsx` | Tabla de actividades |
-| `nodes/web/src/pages/proyectos/avance-semanas.tsx` | Tabla de semanas |
-| `nodes/web/src/pages/proyectos/avance-cercos.tsx` | Tabla de cercos con foto |
-| `nodes/web/src/components/ui/celda-editable.tsx` | Celda con navegación de teclado |
+| Archivo                                                                | Responsabilidad                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------- |
+| `nodes/backend-central/src/modules/projects/avance-ponderado.util.ts`  | Calcula PAR/ACM real desde las actividades (puro) |
+| `nodes/backend-central/test/modules/projects/avance-ponderado.spec.ts` | Sus pruebas                                       |
+| `nodes/backend-central/src/modules/projects/dto/avance.dto.ts`         | DTO de las ediciones                              |
+| `nodes/web/src/pages/proyectos/avance-tab.tsx`                         | La pestaña, con las tres tablas                   |
+| `nodes/web/src/pages/proyectos/avance-actividades.tsx`                 | Tabla de actividades                              |
+| `nodes/web/src/pages/proyectos/avance-semanas.tsx`                     | Tabla de semanas                                  |
+| `nodes/web/src/pages/proyectos/avance-cercos.tsx`                      | Tabla de cercos con foto                          |
+| `nodes/web/src/components/ui/celda-editable.tsx`                       | Celda con navegación de teclado                   |
 
 **Se modifican:** `schema.prisma`, `control-semanal.util.ts`,
 `projects.service.ts`, `projects.controller.ts`, `rbac-catalog.ts`,
@@ -41,6 +41,7 @@ explícita, y tres tablas editables en una pestaña nueva.
 ## Tarea 1: Cálculo del avance ponderado por HH
 
 **Archivos:**
+
 - Crear: `src/modules/projects/avance-ponderado.util.ts`
 - Crear: `test/modules/projects/avance-ponderado.spec.ts`
 
@@ -322,6 +323,7 @@ que sin el permiso responde 403; que el recálculo no deja huecos en `realByWeek
 - [ ] **Paso 1: El componente**
 
 Entrada numérica con:
+
 - Tab / Enter / flechas para moverse entre celdas, como una planilla.
 - Autoguardado al salir del campo, con indicador (guardando / guardado / error).
 - Validación de rango antes de mandar: una celda fuera de 0-100 se marca y NO

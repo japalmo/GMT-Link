@@ -44,7 +44,11 @@ export function AvanceCercos({
   if (error) return <ErrorState message={error} onRetry={() => void cargar()} />;
   if (!cercos) return <LoadingState rows={4} label="Cargando los cercos…" />;
   if (cercos.length === 0) {
-    return <p className="text-sm text-muted-foreground">Esta obra no tiene cercos ubicados en el mapa.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Esta obra no tiene cercos ubicados en el mapa.
+      </p>
+    );
   }
 
   return (
@@ -217,7 +221,9 @@ function FilaCerco({
 function porCodigo(x: ObraMapPoint, y: ObraMapPoint): number {
   const [tx = '', rx = ''] = x.code.split('-');
   const [ty = '', ry = ''] = y.code.split('-');
-  return tx.localeCompare(ty, 'es') || romano(rx) - romano(ry) || x.code.localeCompare(y.code, 'es');
+  return (
+    tx.localeCompare(ty, 'es') || romano(rx) - romano(ry) || x.code.localeCompare(y.code, 'es')
+  );
 }
 
 function romano(texto: string): number {

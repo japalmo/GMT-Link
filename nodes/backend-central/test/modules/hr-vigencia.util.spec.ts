@@ -90,9 +90,9 @@ describe('porUrgencia', () => {
 
 describe('horasEntre', () => {
   it('cuenta las horas de un registro cerrado', () => {
-    expect(
-      horasEntre(new Date('2026-09-11T08:00:00Z'), new Date('2026-09-11T16:30:00Z')),
-    ).toBe(8.5);
+    expect(horasEntre(new Date('2026-09-11T08:00:00Z'), new Date('2026-09-11T16:30:00Z'))).toBe(
+      8.5,
+    );
   });
 
   it('un registro abierto vale 0', () => {
@@ -102,8 +102,6 @@ describe('horasEntre', () => {
   });
 
   it('un cierre anterior al inicio no resta horas', () => {
-    expect(
-      horasEntre(new Date('2026-09-11T16:00:00Z'), new Date('2026-09-11T08:00:00Z')),
-    ).toBe(0);
+    expect(horasEntre(new Date('2026-09-11T16:00:00Z'), new Date('2026-09-11T08:00:00Z'))).toBe(0);
   });
 });

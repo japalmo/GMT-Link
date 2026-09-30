@@ -40,9 +40,16 @@ export function AvanceSemanas({
   const [planAbierto, setPlanAbierto] = useState(false);
   const [confirmarPlan, setConfirmarPlan] = useState(false);
 
-  const ultimaInformada = semanas.reduce((m, s) => (s.acmReal !== null ? Math.max(m, s.index) : m), -1);
+  const ultimaInformada = semanas.reduce(
+    (m, s) => (s.acmReal !== null ? Math.max(m, s.index) : m),
+    -1,
+  );
 
-  async function guardarPlan(s: AvanceSemanaEditable, campo: CampoPlan, pct: number): Promise<void> {
+  async function guardarPlan(
+    s: AvanceSemanaEditable,
+    campo: CampoPlan,
+    pct: number,
+  ): Promise<void> {
     await editarSemanaAvance(projectId, { code: s.code, [campo]: aFraccion(pct) });
     await onCambio();
   }
@@ -52,7 +59,11 @@ export function AvanceSemanas({
     await onCambio();
   }
 
-  async function sobreescribir(s: AvanceSemanaEditable, campo: CampoReal, pct: number): Promise<void> {
+  async function sobreescribir(
+    s: AvanceSemanaEditable,
+    campo: CampoReal,
+    pct: number,
+  ): Promise<void> {
     const clave = campo === 'parReal' ? 'parRealOverride' : 'acmRealOverride';
     await editarSemanaAvance(projectId, { code: s.code, [clave]: aFraccion(pct) });
     await onCambio();
@@ -74,7 +85,12 @@ export function AvanceSemanas({
 
   return (
     <div className="flex flex-col gap-4">
-      <Corte projectId={projectId} datos={datos} ultimaInformada={ultimaInformada} onCambio={onCambio} />
+      <Corte
+        projectId={projectId}
+        datos={datos}
+        ultimaInformada={ultimaInformada}
+        onCambio={onCambio}
+      />
 
       {puedeEditar && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -113,8 +129,7 @@ export function AvanceSemanas({
               // S-0 es el arranque (todo en cero) y una semana futura no tiene
               // real que sobreescribir: se admite solo hasta la próxima a cargar.
               const realEditable = puedeEditar && s.index >= 1 && s.index <= ultimaInformada + 1;
-              const desviacion =
-                s.acmReal !== null ? (s.acmReal - s.acmPlan) * 100 : null;
+              const desviacion = s.acmReal !== null ? (s.acmReal - s.acmPlan) * 100 : null;
               return (
                 <tr key={s.code} className="border-t border-border/60 align-top">
                   <td className="px-3 py-1.5 font-medium">{s.code}</td>
@@ -196,8 +211,8 @@ export function AvanceSemanas({
             <ModalTitle>¿Editar el plan?</ModalTitle>
             <ModalDescription>
               El plan es la línea base contra la que se mide TODO el informe: la curva S, la
-              desviación de cada semana y el semáforo del tablero. Cambiarlo mueve la referencia
-              del contrato, no el avance de la obra.
+              desviación de cada semana y el semáforo del tablero. Cambiarlo mueve la referencia del
+              contrato, no el avance de la obra.
             </ModalDescription>
           </ModalHeader>
           <p className="text-sm">
@@ -250,7 +265,9 @@ function CeldaReal({
   const conOverride = override !== null;
 
   return (
-    <div className={conOverride ? 'rounded-md bg-amber-500/10 ring-1 ring-amber-500/60' : undefined}>
+    <div
+      className={conOverride ? 'rounded-md bg-amber-500/10 ring-1 ring-amber-500/60' : undefined}
+    >
       <CeldaEditable
         grupo="semanas"
         fila={fila}
@@ -270,7 +287,8 @@ function CeldaReal({
             </span>
           ) : (
             <span className="whitespace-nowrap tabular-nums" title="Lo que sale de las actividades">
-              calc. {formatoPct(aPorcentaje(calculado))} ({formatoDelta((override - calculado) * 100)})
+              calc. {formatoPct(aPorcentaje(calculado))} (
+              {formatoDelta((override - calculado) * 100)})
             </span>
           )}
           {/* Sin calculado no hay a qué volver: quitarla dejaría la semana vacía y
@@ -311,7 +329,11 @@ function CeldaHh({
   const mostrado = valor.toLocaleString('es-CL', { maximumFractionDigits: 1 });
 
   if (!editable) {
-    return <span className="block px-2 py-1 text-right tabular-nums text-muted-foreground">{mostrado}</span>;
+    return (
+      <span className="block px-2 py-1 text-right tabular-nums text-muted-foreground">
+        {mostrado}
+      </span>
+    );
   }
   return (
     <input
@@ -337,7 +359,9 @@ function CeldaHh({
           .catch(() => setError(true));
       }}
       className={`w-full rounded-md border bg-transparent px-2 py-1 text-right tabular-nums outline-none focus:bg-card ${
-        error ? 'border-destructive text-destructive' : 'border-transparent hover:border-border focus:border-primary'
+        error
+          ? 'border-destructive text-destructive'
+          : 'border-transparent hover:border-border focus:border-primary'
       }`}
     />
   );
@@ -413,8 +437,9 @@ function Corte({
       {desfasado && (
         <p className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
           <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Hay real cargado hasta {ultima?.code}, pero el corte sigue en {semanaDelCorte.code}. Actualiza
-          la fecha y el plan al corte, o el tablero comparará el real nuevo contra el plan viejo.
+          Hay real cargado hasta {ultima?.code}, pero el corte sigue en {semanaDelCorte.code}.
+          Actualiza la fecha y el plan al corte, o el tablero comparará el real nuevo contra el plan
+          viejo.
         </p>
       )}
 

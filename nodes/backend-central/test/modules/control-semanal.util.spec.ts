@@ -22,10 +22,46 @@ const CABECERA: CabeceraControl = {
 
 /** Las doce semanas del programa, tal como las publica el informe. */
 const SEMANAS: FilaSemana[] = [
-  { code: 'S-0', index: 0, closeDate: new Date('2026-09-06T00:00:00Z'), hhPlan: 0, parPlan: 0, parReal: 0, acmPlan: 0, acmReal: 0 },
-  { code: 'S-1', index: 1, closeDate: new Date('2026-09-13T00:00:00Z'), hhPlan: 80, parPlan: 0.03460207612456748, parReal: 0.13287197231833908, acmPlan: 0.03460207612456748, acmReal: 0.13287197231833908 },
-  { code: 'S-2', index: 2, closeDate: new Date('2026-09-20T00:00:00Z'), hhPlan: 185.28627450980392, parPlan: 0.08014112219282177, parReal: null, acmPlan: 0.11474319831738924, acmReal: null },
-  { code: 'S-3', index: 3, closeDate: new Date('2026-09-27T00:00:00Z'), hhPlan: 213.87049892420737, parPlan: 0.09250454105718312, parReal: null, acmPlan: 0.20724773937457236, acmReal: null },
+  {
+    code: 'S-0',
+    index: 0,
+    closeDate: new Date('2026-09-06T00:00:00Z'),
+    hhPlan: 0,
+    parPlan: 0,
+    parReal: 0,
+    acmPlan: 0,
+    acmReal: 0,
+  },
+  {
+    code: 'S-1',
+    index: 1,
+    closeDate: new Date('2026-09-13T00:00:00Z'),
+    hhPlan: 80,
+    parPlan: 0.03460207612456748,
+    parReal: 0.13287197231833908,
+    acmPlan: 0.03460207612456748,
+    acmReal: 0.13287197231833908,
+  },
+  {
+    code: 'S-2',
+    index: 2,
+    closeDate: new Date('2026-09-20T00:00:00Z'),
+    hhPlan: 185.28627450980392,
+    parPlan: 0.08014112219282177,
+    parReal: null,
+    acmPlan: 0.11474319831738924,
+    acmReal: null,
+  },
+  {
+    code: 'S-3',
+    index: 3,
+    closeDate: new Date('2026-09-27T00:00:00Z'),
+    hhPlan: 213.87049892420737,
+    parPlan: 0.09250454105718312,
+    parReal: null,
+    acmPlan: 0.20724773937457236,
+    acmReal: null,
+  },
 ];
 
 /** Dos actividades de fases distintas, con su reparto de HH por semana. */

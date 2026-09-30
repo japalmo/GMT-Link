@@ -28,13 +28,7 @@ import { Alert } from '@/components/ui/alert';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states';
 import { Tabs, TabPanel, type TabItem } from '@/components/ui/tabs';
 import { PageContainer } from '@/components/layout/page-container';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Modal,
   ModalContent,
@@ -267,7 +261,9 @@ export default function VistaProyectoPage(): ReactNode {
 
   const handleDeleteProject = async () => {
     if (!project) return;
-    if (!window.confirm(`¿Eliminar el proyecto "${project.name}"? Esta acción no se puede deshacer.`)) {
+    if (
+      !window.confirm(`¿Eliminar el proyecto "${project.name}"? Esta acción no se puede deshacer.`)
+    ) {
       return;
     }
     setDeleting(true);
@@ -326,7 +322,10 @@ export default function VistaProyectoPage(): ReactNode {
   return (
     <PageContainer maxWidth="6xl">
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground" aria-label="Ruta">
+      <nav
+        className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground"
+        aria-label="Ruta"
+      >
         <Link to="/proyectos" className="hover:text-foreground">
           Proyectos
         </Link>
@@ -375,10 +374,7 @@ export default function VistaProyectoPage(): ReactNode {
                   {deleting ? 'Eliminando…' : 'Eliminar'}
                 </Button>
               )}
-              <Link
-                to={backToFaena}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
+              <Link to={backToFaena} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                 <ArrowLeft className="mr-2 size-4" />
                 Volver a la faena
               </Link>
@@ -440,9 +436,7 @@ export default function VistaProyectoPage(): ReactNode {
         {tab === 'avance' && projectType === 'OBRAS_CIVILES' && (
           <AvanceTab projectId={project.id} />
         )}
-        {tab === 'trabajadores' && canManageTeam && (
-          <TrabajadoresTab projectId={project.id} />
-        )}
+        {tab === 'trabajadores' && canManageTeam && <TrabajadoresTab projectId={project.id} />}
         {tab === 'documentacion' && (
           <DocumentacionTab
             projectId={project.id}
@@ -668,16 +662,12 @@ function EquipoDelProyecto({ projectId }: { projectId: string }): ReactNode {
         ) : (
           <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
             {assignments.map((a) => {
-              const name = a.user
-                ? `${a.user.firstName} ${a.user.lastName}`.trim()
-                : a.userId;
+              const name = a.user ? `${a.user.firstName} ${a.user.lastName}`.trim() : a.userId;
               return (
                 <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {a.user?.email ?? '—'}
-                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{a.user?.email ?? '—'}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline">{roleLabel(a.roleKey)}</Badge>
@@ -1139,8 +1129,8 @@ function FasesTab({
               {selectedType && selectedType.procedures.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {selectedType.procedures.length}{' '}
-                  {selectedType.procedures.length === 1 ? 'procedimiento' : 'procedimientos'} en este
-                  tipo.
+                  {selectedType.procedures.length === 1 ? 'procedimiento' : 'procedimientos'} en
+                  este tipo.
                 </p>
               )}
             </div>
@@ -1464,12 +1454,7 @@ function ServiceBlock({
         ) : (
           <div className="flex flex-col gap-3">
             {phases.map((phase) => (
-              <PhaseRow
-                key={phase.id}
-                phase={phase}
-                canManage={canManage}
-                onSaved={loadPhases}
-              />
+              <PhaseRow key={phase.id} phase={phase} canManage={canManage} onSaved={loadPhases} />
             ))}
           </div>
         )}
@@ -1886,7 +1871,13 @@ function PhaseRow({
                 </div>
               ))}
 
-              <Button type="button" variant="outline" size="sm" onClick={addRow} className="self-start">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addRow}
+                className="self-start"
+              >
                 <Plus className="mr-1 size-4" />
                 Agregar variable
               </Button>

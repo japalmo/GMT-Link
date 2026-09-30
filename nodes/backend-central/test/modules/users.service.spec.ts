@@ -101,9 +101,7 @@ function buildPrismaMock(state: PrismaState): {
       findMany: vi.fn(
         (args: { where: { key: { in: string[] } } }): Promise<Array<{ key: string }>> =>
           Promise.resolve(
-            args.where.key.in
-              .filter((k) => state.rolesInCatalog.has(k))
-              .map((key) => ({ key })),
+            args.where.key.in.filter((k) => state.rolesInCatalog.has(k)).map((key) => ({ key })),
           ),
       ),
     },
@@ -148,9 +146,7 @@ function buildPrismaMock(state: PrismaState): {
       ),
     },
     // $transaction ejecuta el callback con un tx que reusa los mismos mocks.
-    $transaction: vi.fn(
-      <T>(cb: (tx: unknown) => Promise<T>): Promise<T> => cb(prismaLike),
-    ),
+    $transaction: vi.fn(<T>(cb: (tx: unknown) => Promise<T>): Promise<T> => cb(prismaLike)),
   };
 
   return {
@@ -280,7 +276,14 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     update?: ReturnType<typeof vi.fn>;
   }): UsersService {
     const prisma = { user: { update: vi.fn(), ...userMock } } as unknown as PrismaService;
-    return new UsersService(prisma, buildFgaMock().fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    return new UsersService(
+      prisma,
+      buildFgaMock().fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
   }
 
   it('revokeSessions incrementa la época de sesión (tokenVersion) del usuario', async () => {
@@ -431,7 +434,9 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     const update = vi.fn();
     const service = serviceWith({ findUnique, update });
 
-    await expect(service.resendInvite('u1', { sendEmail: false })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.resendInvite('u1', { sendEmail: false })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -474,7 +479,9 @@ describe('UsersService — gestión de invitación y sesiones (A3)', () => {
     const update = vi.fn();
     const service = serviceWith({ findUnique, update });
 
-    await expect(service.resendInvite('ghost', { sendEmail: false })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.resendInvite('ghost', { sendEmail: false })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     expect(update).not.toHaveBeenCalled();
   });
 });
@@ -483,13 +490,25 @@ describe('UsersService.create', () => {
   let state: PrismaState;
 
   beforeEach(() => {
-    state = { rolesInCatalog: new Set(ALL_ROLES), emailExists: false, usernameExists: false, failPersist: false };
+    state = {
+      rolesInCatalog: new Set(ALL_ROLES),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
   });
 
   it('crea el usuario, persiste el hash bcrypt de la clave provisoria, escribe acceso FGA y retorna la clave', async () => {
     const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.create(validDto());
 
@@ -527,7 +546,14 @@ describe('UsersService.create', () => {
   it('si trae org_admin, escribe acceso member + admin en FGA', async () => {
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await service.create(validDto({ roleKeys: ['org_admin'] }));
 
@@ -541,7 +567,14 @@ describe('UsersService.create', () => {
   it('NO persiste la clave provisoria en claro (solo su hash bcrypt)', async () => {
     const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.create(validDto());
 
@@ -555,11 +588,18 @@ describe('UsersService.create', () => {
     state.rolesInCatalog = new Set(['operator']); // 'viewer' no está en la BD
     const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
-
-    await expect(service.create(validDto({ roleKeys: ['operator', 'viewer'] }))).rejects.toBeInstanceOf(
-      BadRequestException,
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
     );
+
+    await expect(
+      service.create(validDto({ roleKeys: ['operator', 'viewer'] })),
+    ).rejects.toBeInstanceOf(BadRequestException);
     // No se debe haber persistido nada si la validación falla antes.
     expect(createdRow()).toBeNull();
     expect(fga.writeTuples).not.toHaveBeenCalled();
@@ -569,7 +609,14 @@ describe('UsersService.create', () => {
     state.emailExists = true;
     const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(service.create(validDto())).rejects.toBeInstanceOf(ConflictException);
     expect(createdRow()).toBeNull();
@@ -580,7 +627,14 @@ describe('UsersService.create', () => {
     state.usernameExists = true;
     const { prisma, createdRow } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(service.create(validDto())).rejects.toBeInstanceOf(ConflictException);
     expect(createdRow()).toBeNull();
@@ -591,10 +645,19 @@ describe('UsersService.create', () => {
     const { prisma } = buildPrismaMock(state);
     // Fuerza el path del catch: el create de Prisma revienta con P2002 target username.
     (prisma as unknown as { user: { create: ReturnType<typeof vi.fn> } }).user.create = vi.fn(() =>
-      Promise.reject(Object.assign(new Error('P2002'), { code: 'P2002', meta: { target: ['username'] } })),
+      Promise.reject(
+        Object.assign(new Error('P2002'), { code: 'P2002', meta: { target: ['username'] } }),
+      ),
     );
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(service.create(validDto())).rejects.toBeInstanceOf(ConflictException);
     expect(fga.writeTuples).not.toHaveBeenCalled();
@@ -604,7 +667,14 @@ describe('UsersService.create', () => {
     state.failPersist = true;
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(service.create(validDto())).rejects.toThrow();
     expect(fga.writeTuples).not.toHaveBeenCalled();
@@ -613,7 +683,14 @@ describe('UsersService.create', () => {
   it('compensa borrando el User (rollback Postgres) si falla la escritura FGA', async () => {
     const { prisma, userDelete, membershipDeleteMany } = buildPrismaMock(state);
     const fga = buildFgaMock({ fail: true });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(service.create(validDto())).rejects.toThrow();
     // Rollback: se borran memberships + user del recién creado (solo Postgres, sin Firebase).
@@ -633,7 +710,14 @@ describe('UsersService.importBatch', () => {
     };
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.importBatch([
       validDto({ username: 'ok1', emailInstitucional: 'ok@gmt.cl', roleKeys: ['operator'] }),
@@ -660,13 +744,38 @@ describe('UsersService.importBatch', () => {
     };
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     // Filas CRUDAS (como llegan del CSV): la del medio tiene email inválido.
     const result = await service.importBatch([
-      { firstName: 'Ana', lastName: 'Pérez', username: 'ana', emailInstitucional: 'ok@gmt.cl', roleKeys: ['operator'] },
-      { firstName: 'Mal', lastName: 'Correo', username: 'mal', emailInstitucional: 'no-es-un-email', roleKeys: ['operator'] },
-      { firstName: 'Eva', lastName: 'Soto', username: 'eva', emailInstitucional: 'ok2@gmt.cl', roleKeys: ['operator'] },
+      {
+        firstName: 'Ana',
+        lastName: 'Pérez',
+        username: 'ana',
+        emailInstitucional: 'ok@gmt.cl',
+        roleKeys: ['operator'],
+      },
+      {
+        firstName: 'Mal',
+        lastName: 'Correo',
+        username: 'mal',
+        emailInstitucional: 'no-es-un-email',
+        roleKeys: ['operator'],
+      },
+      {
+        firstName: 'Eva',
+        lastName: 'Soto',
+        username: 'eva',
+        emailInstitucional: 'ok2@gmt.cl',
+        roleKeys: ['operator'],
+      },
     ]);
 
     // Las dos filas buenas se importan; la mala no tumba el lote.
@@ -687,10 +796,23 @@ describe('UsersService.importBatch', () => {
     };
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.importBatch([
-      { firstName: 'Ana', lastName: 'Pérez', username: 'ana', emailInstitucional: 'ok@gmt.cl', roleKeys: ['operator'] },
+      {
+        firstName: 'Ana',
+        lastName: 'Pérez',
+        username: 'ana',
+        emailInstitucional: 'ok@gmt.cl',
+        roleKeys: ['operator'],
+      },
       'fila-corrupta',
     ]);
 
@@ -716,7 +838,14 @@ describe('UsersService — roles dinámicos (§7, matriz RBAC): valida contra Ro
   it('create acepta un rol personalizado (c_xxx) que SÍ existe en la tabla Role', async () => {
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.create(validDto({ roleKeys: ['c_inspector_de_campo'] }));
 
@@ -727,17 +856,31 @@ describe('UsersService — roles dinámicos (§7, matriz RBAC): valida contra Ro
   it('create rechaza (400) un roleKey de forma libre que NO existe en la tabla Role', async () => {
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
-    await expect(
-      service.create(validDto({ roleKeys: ['c_no_existe'] })),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.create(validDto({ roleKeys: ['c_no_existe'] }))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('assignRole acepta un rol personalizado y lo refleja en roleKeys (collectRoleKeys ya no filtra)', async () => {
     const { prisma } = buildPrismaMock(state);
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesStub(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesStub(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.assignRole('u1', 'c_inspector_de_campo');
 
@@ -750,7 +893,12 @@ describe('UsersService — roles dinámicos (§7, matriz RBAC): valida contra Ro
 
 describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   it('asigna un rol custom en scope PROJECT: crea Membership, llama fga.syncRoleAssignment y devuelve la respuesta extendida', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve(null)),
@@ -762,9 +910,8 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
     (prisma as unknown as { project: Record<string, unknown> }).project = {
       findUnique: vi.fn(() => Promise.resolve({ id: 'p1' })),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
 
     const fga = buildFgaMock();
     const syncRoleAssignment = vi.fn(() => Promise.resolve(undefined));
@@ -772,7 +919,14 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
       syncRoleAssignment;
 
     const roles = buildRolesMock({ allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.assignRoleScoped('u1', {
       roleKey: 'c_auditor',
@@ -793,7 +947,12 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('502 FGA_SYNC_FAILED si el sync FGA falla tras crear la Membership: borra la Membership creada (A11)', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
     const membershipDelete = vi.fn(() => Promise.resolve(undefined));
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
@@ -805,15 +964,21 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
     (prisma as unknown as { project: Record<string, unknown> }).project = {
       findUnique: vi.fn(() => Promise.resolve({ id: 'p1' })),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     (fga.fga as unknown as { syncRoleAssignment: unknown }).syncRoleAssignment = vi.fn(() =>
       Promise.reject(new Error('fga caída')),
     );
     const roles = buildRolesMock({ allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(
       service.assignRoleScoped('u1', { roleKey: 'c_auditor', scopeType: 'PROJECT', scopeId: 'p1' }),
@@ -822,14 +987,25 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('400 INVALID_SCOPE_FOR_ROLE si scopeType no está en allowedScopeTypes del rol', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const roles = buildRolesMock({ allowedScopeTypes: ['ORGANIZATION'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(
       service.assignRoleScoped('u1', { roleKey: 'c_auditor', scopeType: 'PROJECT', scopeId: 'p1' }),
@@ -837,25 +1013,45 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('400 INVALID_SCOPE_ID si scopeType=PROJECT y el proyecto no existe', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     (prisma as unknown as { project: Record<string, unknown> }).project = {
       findUnique: vi.fn(() => Promise.resolve(null)),
     };
     const fga = buildFgaMock();
     const roles = buildRolesMock({ allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(
-      service.assignRoleScoped('u1', { roleKey: 'c_auditor', scopeType: 'PROJECT', scopeId: 'no-existe' }),
+      service.assignRoleScoped('u1', {
+        roleKey: 'c_auditor',
+        scopeType: 'PROJECT',
+        scopeId: 'no-existe',
+      }),
     ).rejects.toMatchObject({ status: 400, response: { code: 'INVALID_SCOPE_ID' } });
   });
 
   it('rol isSystem usa fga.syncMembershipToFGA (camino legacy), no syncRoleAssignment', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve(null)),
@@ -867,21 +1063,36 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
     (prisma as unknown as { project: Record<string, unknown> }).project = {
       findUnique: vi.fn(() => Promise.resolve({ id: 'p1' })),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const syncMembershipToFGA = vi.fn(() => Promise.resolve(undefined));
     const syncRoleAssignment = vi.fn(() => Promise.resolve(undefined));
-    (fga.fga as unknown as { syncMembershipToFGA: typeof syncMembershipToFGA }).syncMembershipToFGA =
-      syncMembershipToFGA;
+    (
+      fga.fga as unknown as { syncMembershipToFGA: typeof syncMembershipToFGA }
+    ).syncMembershipToFGA = syncMembershipToFGA;
     (fga.fga as unknown as { syncRoleAssignment: typeof syncRoleAssignment }).syncRoleAssignment =
       syncRoleAssignment;
 
-    const roles = buildRolesMock({ isSystem: true, roleKey: 'operator', allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const roles = buildRolesMock({
+      isSystem: true,
+      roleKey: 'operator',
+      allowedScopeTypes: ['PROJECT'],
+    });
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
-    await service.assignRoleScoped('u1', { roleKey: 'operator', scopeType: 'PROJECT', scopeId: 'p1' });
+    await service.assignRoleScoped('u1', {
+      roleKey: 'operator',
+      scopeType: 'PROJECT',
+      scopeId: 'p1',
+    });
 
     expect(syncMembershipToFGA).toHaveBeenCalledWith(
       { userId: 'u1', roleKey: 'operator', scopeType: 'PROJECT', scopeId: 'p1' },
@@ -891,26 +1102,46 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('idempotencia: 409 si la Membership ya existe para userId+roleKey+scopeType+scopeId', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve({ id: 'existing' })),
       create: vi.fn(),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const roles = buildRolesMock({ allowedScopeTypes: ['ORGANIZATION'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(
-      service.assignRoleScoped('u1', { roleKey: 'c_auditor', scopeType: 'ORGANIZATION', scopeId: 'gmt' }),
+      service.assignRoleScoped('u1', {
+        roleKey: 'c_auditor',
+        scopeType: 'ORGANIZATION',
+        scopeId: 'gmt',
+      }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('removeRoleScoped borra la Membership, llama al sync de delete y devuelve la respuesta extendida', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
     const membershipDelete = vi.fn(() => Promise.resolve(undefined));
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
@@ -918,15 +1149,21 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
       delete: membershipDelete,
       findMany: vi.fn(() => Promise.resolve([])),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const syncRoleAssignment = vi.fn(() => Promise.resolve(undefined));
     (fga.fga as unknown as { syncRoleAssignment: typeof syncRoleAssignment }).syncRoleAssignment =
       syncRoleAssignment;
     const roles = buildRolesMock({ allowedScopeTypes: ['ORGANIZATION'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.removeRoleScoped('u1', {
       roleKey: 'c_auditor',
@@ -943,20 +1180,35 @@ describe('UsersService.assignRoleScoped / removeRoleScoped', () => {
   });
 
   it('removeRoleScoped: 404 si la Membership no existe', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
     (prisma as unknown as { membership: Record<string, unknown> }).membership = {
       findUnique: vi.fn(() => Promise.resolve(null)),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const roles = buildRolesMock({ allowedScopeTypes: ['ORGANIZATION'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await expect(
-      service.removeRoleScoped('u1', { roleKey: 'c_auditor', scopeType: 'ORGANIZATION', scopeId: 'gmt' }),
+      service.removeRoleScoped('u1', {
+        roleKey: 'c_auditor',
+        scopeType: 'ORGANIZATION',
+        scopeId: 'gmt',
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
@@ -969,8 +1221,9 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
   } {
     const syncMembershipToFGA = vi.fn(() => Promise.resolve(undefined));
     const syncRoleAssignment = vi.fn(() => Promise.resolve(undefined));
-    (fga.fga as unknown as { syncMembershipToFGA: typeof syncMembershipToFGA }).syncMembershipToFGA =
-      syncMembershipToFGA;
+    (
+      fga.fga as unknown as { syncMembershipToFGA: typeof syncMembershipToFGA }
+    ).syncMembershipToFGA = syncMembershipToFGA;
     (fga.fga as unknown as { syncRoleAssignment: typeof syncRoleAssignment }).syncRoleAssignment =
       syncRoleAssignment;
     return { syncMembershipToFGA, syncRoleAssignment };
@@ -993,15 +1246,25 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
         Promise.resolve([{ roleKey: 'viewer', scopeType: 'ORGANIZATION', scopeId: 'gmt' }]),
       ),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const spies = withScopedFgaSpies(fga);
     // allowedScopeTypes ['PROJECT'] como el viewer REAL del seed (grants
     // project-level): el gate de allowedScopeTypes NO aplica a roles del sistema.
-    const roles = buildRolesMock({ isSystem: true, roleKey: 'viewer', allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const roles = buildRolesMock({
+      isSystem: true,
+      roleKey: 'viewer',
+      allowedScopeTypes: ['PROJECT'],
+    });
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.assignRoleScoped('u1', {
       roleKey: 'viewer',
@@ -1033,13 +1296,23 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
         Promise.resolve([{ roleKey: 'org_admin', scopeType: 'ORGANIZATION', scopeId: 'gmt' }]),
       ),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const spies = withScopedFgaSpies(fga);
-    const roles = buildRolesMock({ isSystem: true, roleKey: 'org_admin', allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const roles = buildRolesMock({
+      isSystem: true,
+      roleKey: 'org_admin',
+      allowedScopeTypes: ['PROJECT'],
+    });
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await service.assignRoleScoped('u1', {
       roleKey: 'org_admin',
@@ -1063,13 +1336,23 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
       delete: membershipDelete,
       findMany: vi.fn(() => Promise.resolve([])),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const spies = withScopedFgaSpies(fga);
-    const roles = buildRolesMock({ isSystem: true, roleKey: 'viewer', allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const roles = buildRolesMock({
+      isSystem: true,
+      roleKey: 'viewer',
+      allowedScopeTypes: ['PROJECT'],
+    });
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.removeRoleScoped('u1', {
       roleKey: 'viewer',
@@ -1092,13 +1375,23 @@ describe('UsersService.assignRoleScoped/removeRoleScoped — roles del SISTEMA o
       delete: vi.fn(() => Promise.resolve(undefined)),
       findMany: vi.fn(() => Promise.resolve([])),
     };
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({ id: 'u1' }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() => Promise.resolve({ id: 'u1' }));
     const fga = buildFgaMock();
     const spies = withScopedFgaSpies(fga);
-    const roles = buildRolesMock({ isSystem: true, roleKey: 'org_admin', allowedScopeTypes: ['PROJECT'] });
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), roles, buildEmailMock(), buildOvertimeStub());
+    const roles = buildRolesMock({
+      isSystem: true,
+      roleKey: 'org_admin',
+      allowedScopeTypes: ['PROJECT'],
+    });
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      roles,
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     await service.removeRoleScoped('u1', {
       roleKey: 'org_admin',
@@ -1152,7 +1445,14 @@ describe('UsersService.listProjectAdmins — dropdown filtrado por project:manag
     } as unknown as PrismaService;
 
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesMock(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.listProjectAdmins();
 
@@ -1165,7 +1465,9 @@ describe('UsersService.listProjectAdmins — dropdown filtrado por project:manag
       expect.objectContaining({
         where: {
           memberships: {
-            some: { roleKey: { in: ['admin_contrato', 'gerencia_proyectos', 'org_admin', 'admin_ti'] } },
+            some: {
+              roleKey: { in: ['admin_contrato', 'gerencia_proyectos', 'org_admin', 'admin_ti'] },
+            },
           },
         },
       }),
@@ -1184,7 +1486,14 @@ describe('UsersService.listProjectAdmins — dropdown filtrado por project:manag
       user: { findMany: userFindMany },
     } as unknown as PrismaService;
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesMock(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const result = await service.listProjectAdmins();
 
@@ -1195,30 +1504,43 @@ describe('UsersService.listProjectAdmins — dropdown filtrado por project:manag
 
 describe('UsersService — memberships en UserListItem (H13)', () => {
   it('getById expone memberships (roleKey, scopeType, scopeId) para la UI', async () => {
-    const state: PrismaState = { rolesInCatalog: new Set(['operator']), emailExists: false, usernameExists: false, failPersist: false };
+    const state: PrismaState = {
+      rolesInCatalog: new Set(['operator']),
+      emailExists: false,
+      usernameExists: false,
+      failPersist: false,
+    };
     const { prisma } = buildPrismaMock(state);
-    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique = vi.fn(() =>
-      Promise.resolve({
-        id: 'u1',
-        firstName: 'Ana',
-        secondName: null,
-        lastName: 'Pérez',
-        secondLastName: null,
-        email: 'ana@gmt.cl',
-        username: 'ana.perez',
-        emailInstitucional: 'ana@gmt.cl',
-        emailPersonal: null,
-        status: 'ACTIVE',
-        isClientUser: false,
-        createdAt: new Date('2026-06-13T00:00:00.000Z'),
-        memberships: [
-          { roleKey: 'operator', scopeType: 'ORGANIZATION', scopeId: 'gmt' },
-          { roleKey: 'c_auditor', scopeType: 'PROJECT', scopeId: 'p1' },
-        ],
-      }),
-    );
+    (prisma as unknown as { user: { findUnique: ReturnType<typeof vi.fn> } }).user.findUnique =
+      vi.fn(() =>
+        Promise.resolve({
+          id: 'u1',
+          firstName: 'Ana',
+          secondName: null,
+          lastName: 'Pérez',
+          secondLastName: null,
+          email: 'ana@gmt.cl',
+          username: 'ana.perez',
+          emailInstitucional: 'ana@gmt.cl',
+          emailPersonal: null,
+          status: 'ACTIVE',
+          isClientUser: false,
+          createdAt: new Date('2026-06-13T00:00:00.000Z'),
+          memberships: [
+            { roleKey: 'operator', scopeType: 'ORGANIZATION', scopeId: 'gmt' },
+            { roleKey: 'c_auditor', scopeType: 'PROJECT', scopeId: 'p1' },
+          ],
+        }),
+      );
     const fga = buildFgaMock();
-    const service = new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock(), buildOvertimeStub());
+    const service = new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesMock(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
 
     const item = await service.getById('u1');
 
@@ -1273,9 +1595,17 @@ describe('UsersService.list — paginación keyset (createdAt desc, desempate id
       failPersist: false,
     };
     const { prisma } = buildPrismaMock(state);
-    (prisma as unknown as { user: { findMany: ReturnType<typeof vi.fn> } }).user.findMany = userFindMany;
+    (prisma as unknown as { user: { findMany: ReturnType<typeof vi.fn> } }).user.findMany =
+      userFindMany;
     const fga = buildFgaMock();
-    return new UsersService(prisma, fga.fga, buildStorageMock(), buildRolesMock(), buildEmailMock(), buildOvertimeStub());
+    return new UsersService(
+      prisma,
+      fga.fga,
+      buildStorageMock(),
+      buildRolesMock(),
+      buildEmailMock(),
+      buildOvertimeStub(),
+    );
   }
 
   it('devuelve nextCursor=null cuando hay menos de limit+1 filas (orden createdAt desc + id desc, take=31)', async () => {

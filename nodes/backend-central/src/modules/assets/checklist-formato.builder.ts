@@ -194,7 +194,9 @@ export function construirFormato(entrada: EntradaFormato): ChecklistFormatoData 
     const seccionDelFormato = FILAS_DEL_FORMATO[seccion] ?? FILAS_DEL_FORMATO['estado-general'];
     if (!seccionDelFormato?.has(id)) {
       if (fila.valor || fila.observacion) {
-        extras.push(`${fila.etiqueta}: ${[fila.valor, fila.observacion].filter(Boolean).join(' — ')}`);
+        extras.push(
+          `${fila.etiqueta}: ${[fila.valor, fila.observacion].filter(Boolean).join(' — ')}`,
+        );
       }
       continue;
     }

@@ -204,7 +204,11 @@ describe('ProjectsService · edición del avance', () => {
   it('la lectura trae el calculado AL LADO de la sobreescritura', async () => {
     // Con una sobreescritura puesta, la pantalla tiene que poder mostrar cuánto
     // se aparta de lo que dicen las actividades.
-    prisma.project.findUnique.mockResolvedValueOnce({ totalHh: 200, cutoffDate: null, planAtCutoff: null });
+    prisma.project.findUnique.mockResolvedValueOnce({
+      totalHh: 200,
+      cutoffDate: null,
+      planAtCutoff: null,
+    });
     prisma.projectWeek.findMany.mockResolvedValueOnce(
       semanas({ 'S-2': { acm: 0.55 } }).map((w) => ({
         ...w,
@@ -227,7 +231,11 @@ describe('ProjectsService · edición del avance', () => {
   });
 
   it('puedeEditar sale de la misma relación FGA que el guard de los PATCH', async () => {
-    prisma.project.findUnique.mockResolvedValueOnce({ totalHh: 0, cutoffDate: null, planAtCutoff: null });
+    prisma.project.findUnique.mockResolvedValueOnce({
+      totalHh: 0,
+      cutoffDate: null,
+      planAtCutoff: null,
+    });
     prisma.projectWeek.findMany.mockResolvedValueOnce([]);
     fga.check.mockResolvedValueOnce(false);
 
@@ -251,7 +259,12 @@ describe('ProjectsService · edición del avance', () => {
     const arg = prisma.projectDocument.findMany.mock.calls[0]?.[0] as {
       where: { OR?: Array<{ fileUrl: { endsWith: string } }> };
     };
-    expect(arg.where.OR?.map((c) => c.fileUrl.endsWith)).toEqual(['.jpg', '.jpeg', '.png', '.webp']);
+    expect(arg.where.OR?.map((c) => c.fileUrl.endsWith)).toEqual([
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+    ]);
   });
 
   it('no deja quitar la sobreescritura de una semana SIN detalle por actividad', async () => {

@@ -19,10 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import type { AuthUser } from '../../authz/auth-user.types';
 import { PermissionService } from '../../authz/permission.service';
-import {
-  MAX_DOCUMENT_BYTES,
-  validarArchivoDocumento,
-} from '../documents/document-file.util';
+import { MAX_DOCUMENT_BYTES, validarArchivoDocumento } from '../documents/document-file.util';
 import { HrService } from './hr.service';
 import {
   CreateHrDocumentDto,
@@ -338,9 +335,7 @@ export class HrController {
     }
     const claves: string[] =
       clave === 'hr:read' ? ['hr:read', 'hr:manage', 'directory:view:extended'] : ['hr:manage'];
-    const decisiones = await Promise.all(
-      claves.map((k) => this.permissions.can(authUser.id, k)),
-    );
+    const decisiones = await Promise.all(claves.map((k) => this.permissions.can(authUser.id, k)));
     if (!decisiones.some((d) => d.effect === 'allow')) {
       throw new ForbiddenException(
         clave === 'hr:manage'

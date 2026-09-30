@@ -180,7 +180,7 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
       toast.error('Ingresa el nombre de la actividad.');
       return;
     }
-    
+
     // Validate steps
     const mappedSteps = [];
     for (const step of steps) {
@@ -192,7 +192,7 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
         toast.error(`Asigna un responsable al paso "${step.name}".`);
         return;
       }
-      
+
       let dataSpec: TaskDataSpec | undefined;
       if (step.taskProduct === 'time_only') {
         dataSpec = { type: 'NINGUNO', label: 'Solo registro de tiempo' };
@@ -349,7 +349,9 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
                   />
                 </div>
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label htmlFor="mainDueDate">Fecha de Entrega (Auto-calculada según pasos o manual)</Label>
+                  <Label htmlFor="mainDueDate">
+                    Fecha de Entrega (Auto-calculada según pasos o manual)
+                  </Label>
                   <Input
                     id="mainDueDate"
                     type="date"
@@ -376,7 +378,10 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
               ) : (
                 <div className="flex flex-col gap-3">
                   {steps.map((step, idx) => (
-                    <div key={step._key} className="flex flex-col gap-3 p-4 border rounded-md bg-card shadow-sm">
+                    <div
+                      key={step._key}
+                      className="flex flex-col gap-3 p-4 border rounded-md bg-card shadow-sm"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Paso {idx + 1}
@@ -409,7 +414,9 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
                           <Select
                             value={step.assignedToId}
                             aria-label="Responsable del paso"
-                            onChange={(e) => updateStep(step._key, { assignedToId: e.target.value })}
+                            onChange={(e) =>
+                              updateStep(step._key, { assignedToId: e.target.value })
+                            }
                             className="h-8 text-sm"
                           >
                             <option value="">Selecciona usuario...</option>
@@ -455,7 +462,11 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
                           <Select
                             value={step.taskProduct}
                             aria-label="Entregable esperado"
-                            onChange={(e) => updateStep(step._key, { taskProduct: e.target.value as 'time_only' | 'DOCUMENTO' | 'DATO' })}
+                            onChange={(e) =>
+                              updateStep(step._key, {
+                                taskProduct: e.target.value as 'time_only' | 'DOCUMENTO' | 'DATO',
+                              })
+                            }
                             className="h-8 text-sm"
                           >
                             <option value="time_only">Ninguno (solo tiempo)</option>
@@ -493,7 +504,11 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="edit-act-name">Nombre</Label>
-                <Input id="edit-act-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                <Input
+                  id="edit-act-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="edit-act-desc">Descripción</Label>
@@ -552,7 +567,12 @@ export function ActividadesTab({ projectId, services, canCreate }: ActividadesTa
               </div>
             </div>
             <ModalFooter>
-              <Button type="button" variant="ghost" onClick={() => setEditing(null)} disabled={savingEdit}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditing(null)}
+                disabled={savingEdit}
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={savingEdit}>

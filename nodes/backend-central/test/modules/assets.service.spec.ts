@@ -5,7 +5,13 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { AssetStatus, AssetType, DocumentStatus, ScopeType, UsageCycleStatus } from '@prisma/client';
+import {
+  AssetStatus,
+  AssetType,
+  DocumentStatus,
+  ScopeType,
+  UsageCycleStatus,
+} from '@prisma/client';
 import type {
   Asset,
   AssetAccessory,
@@ -513,7 +519,9 @@ describe('AssetsService', () => {
         identifierType: 'NUMERO_SERIE',
       });
 
-      expect(prismaMock.asset.count).toHaveBeenCalledWith({ where: { type: AssetType.MAQUINARIA } });
+      expect(prismaMock.asset.count).toHaveBeenCalledWith({
+        where: { type: AssetType.MAQUINARIA },
+      });
       const createArg = txMock.asset.create.mock.calls[0]?.[0] as {
         data: { code: string; manufacturer: string | null; identifier: string | null };
       };
@@ -553,7 +561,11 @@ describe('AssetsService', () => {
       prismaMock.asset.findFirst.mockResolvedValueOnce(buildAssetRow({ id: 'a-existente' }));
 
       await expect(
-        service.create('u-1', { type: AssetType.EQUIPO, name: 'Otro', code: 'gmt-alb-equip-tdf-004' }),
+        service.create('u-1', {
+          type: AssetType.EQUIPO,
+          name: 'Otro',
+          code: 'gmt-alb-equip-tdf-004',
+        }),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(txMock.asset.create).not.toHaveBeenCalled();
     });
@@ -586,7 +598,12 @@ describe('AssetsService', () => {
       permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
       prismaMock.asset.findMany.mockResolvedValueOnce([
         { ...buildAssetRow({ projectId: 'p-9' }), project: null, assignedTo: null, inUseBy: null },
-        { ...buildAssetRow({ id: 'a-2', projectId: null }), project: null, assignedTo: null, inUseBy: null },
+        {
+          ...buildAssetRow({ id: 'a-2', projectId: null }),
+          project: null,
+          assignedTo: null,
+          inUseBy: null,
+        },
       ]);
 
       const page = await service.listAll('u-admin');
@@ -611,10 +628,7 @@ describe('AssetsService', () => {
       expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            OR: [
-              { projectId: { in: ['p1'] } },
-              { projectId: null },
-            ],
+            OR: [{ projectId: { in: ['p1'] } }, { projectId: null }],
           },
         }),
       );
@@ -633,10 +647,7 @@ describe('AssetsService', () => {
       expect(prismaMock.asset.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
-            OR: [
-              { projectId: { in: ['p-1'] } },
-              { projectId: null },
-            ],
+            OR: [{ projectId: { in: ['p-1'] } }, { projectId: null }],
           },
         }),
       );
@@ -646,9 +657,24 @@ describe('AssetsService', () => {
       permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'none' });
       // Con limit=2 se piden 3 filas; la 3ª es el centinela que indica "hay más".
       prismaMock.asset.findMany.mockResolvedValueOnce([
-        { ...buildAssetRow({ id: 'a-1', code: 'GMT-EQ-0001' }), project: null, assignedTo: null, inUseBy: null },
-        { ...buildAssetRow({ id: 'a-2', code: 'GMT-EQ-0002' }), project: null, assignedTo: null, inUseBy: null },
-        { ...buildAssetRow({ id: 'a-3', code: 'GMT-EQ-0003' }), project: null, assignedTo: null, inUseBy: null },
+        {
+          ...buildAssetRow({ id: 'a-1', code: 'GMT-EQ-0001' }),
+          project: null,
+          assignedTo: null,
+          inUseBy: null,
+        },
+        {
+          ...buildAssetRow({ id: 'a-2', code: 'GMT-EQ-0002' }),
+          project: null,
+          assignedTo: null,
+          inUseBy: null,
+        },
+        {
+          ...buildAssetRow({ id: 'a-3', code: 'GMT-EQ-0003' }),
+          project: null,
+          assignedTo: null,
+          inUseBy: null,
+        },
       ]);
 
       const page = await service.listAll('u-admin', { limit: 2 });
@@ -778,7 +804,9 @@ describe('AssetsService', () => {
 
   describe('remove', () => {
     it('borra el activo (cascada) y limpia pruebas de firma + fotos del storage', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-del', projectId: null }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-del', projectId: null }),
+      );
       prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([{ id: 's-1' }, { id: 's-2' }]);
       prismaMock.usageCycle.findMany.mockResolvedValueOnce([
         { startPhotoKey: 'photos/a.jpg', endPhotoKey: null },
@@ -801,7 +829,9 @@ describe('AssetsService', () => {
     });
 
     it('sin submissions: NO llama a signatureProof.deleteMany, pero igual borra el activo', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-2', projectId: null }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-2', projectId: null }),
+      );
       prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([]);
       prismaMock.usageCycle.findMany.mockResolvedValueOnce([]);
 
@@ -819,7 +849,9 @@ describe('AssetsService', () => {
     });
 
     it('sin permiso de gestión → 403 y NO borra', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-3', projectId: null }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-3', projectId: null }),
+      );
       fgaMock.check.mockResolvedValue(false); // assertCanManageAsset: gate estructural denegado
 
       await expect(service.remove('a-3', 'sin-permiso')).rejects.toBeInstanceOf(ForbiddenException);
@@ -1009,7 +1041,9 @@ describe('AssetsService', () => {
       // sin permisos funcionales (default deny) y fga niega el gate estructural.
       permissionsMock.scopeFilter.mockResolvedValueOnce({ kind: 'projects', ids: [] });
       fgaMock.check.mockResolvedValue(false);
-      await expect(service.resolveByToken('tok', 'ajeno')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.resolveByToken('tok', 'ajeno')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
 
     it('404 si el token no existe', async () => {
@@ -1030,7 +1064,9 @@ describe('AssetsService', () => {
     it('un NO gestor recibe 403 y NO consulta los documentos', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
       fgaMock.check.mockResolvedValue(false); // sin can_manage_assets
-      await expect(service.listDocuments('a-1', 'viewer')).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.listDocuments('a-1', 'viewer')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
       expect(prismaMock.assetDocument.findMany).not.toHaveBeenCalled();
     });
 
@@ -1066,8 +1102,14 @@ describe('AssetsService', () => {
     it('listDocuments resuelve claves a URL fresca y hace passthrough de URLs legadas', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce({ id: 'a-1', projectId: 'p-1' });
       prismaMock.assetDocument.findMany.mockResolvedValueOnce([
-        { ...buildDocRow({ id: 'd-key', fileUrl: 'assets/a-1/documents/uuid-soap.pdf' }), reviewedBy: null },
-        { ...buildDocRow({ id: 'd-legacy', fileUrl: 'http://localhost/cert.pdf' }), reviewedBy: null },
+        {
+          ...buildDocRow({ id: 'd-key', fileUrl: 'assets/a-1/documents/uuid-soap.pdf' }),
+          reviewedBy: null,
+        },
+        {
+          ...buildDocRow({ id: 'd-legacy', fileUrl: 'http://localhost/cert.pdf' }),
+          reviewedBy: null,
+        },
       ]);
 
       const views = await service.listDocuments('a-1', 'mgr');
@@ -1113,7 +1155,9 @@ describe('AssetsService', () => {
 
   describe('remove con proyecto — gate can_manage_assets sobre el proyecto', () => {
     it('gestor del proyecto: borra y consulta el gate con la relación/objeto correctos', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-p', projectId: 'p-1' }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-p', projectId: 'p-1' }),
+      );
       prismaMock.checklistSubmission.findMany.mockResolvedValueOnce([]);
       prismaMock.usageCycle.findMany.mockResolvedValueOnce([]);
 
@@ -1128,7 +1172,9 @@ describe('AssetsService', () => {
     });
 
     it('sin can_manage_assets sobre el proyecto → 403 y NO borra', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ id: 'a-p', projectId: 'p-1' }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ id: 'a-p', projectId: 'p-1' }),
+      );
       fgaMock.check.mockResolvedValue(false);
       await expect(service.remove('a-p', 'ajeno')).rejects.toBeInstanceOf(ForbiddenException);
       expect(txMock.asset.delete).not.toHaveBeenCalled();
@@ -1205,7 +1251,9 @@ describe('AssetsService', () => {
 
   describe('disputa en uso', () => {
     it('takeUse permite tomar un activo disponible', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       // Model A: reportar uso exige asset:use:report (conductor/admin) Y visibilidad.
       permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
       prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce({
@@ -1224,7 +1272,7 @@ describe('AssetsService', () => {
             status: AssetStatus.EN_USO,
             inUseById: 'u-1',
           }),
-        })
+        }),
       );
       expect(updated.inUseById).toBe('u-1');
     });
@@ -1247,7 +1295,9 @@ describe('AssetsService', () => {
     });
 
     it('takeUse rechaza (403) sin el permiso asset:use:report (Model A: el permiso es obligatorio)', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       // Sin el permiso funcional de reporte de uso => 403 inmediato, aunque el
       // usuario pudiera VER el activo (la visibilidad sola ya no habilita tomar).
       permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
@@ -1388,7 +1438,9 @@ describe('AssetsService', () => {
     });
 
     it('inicializa una plantilla de checklist con el default tipado para VEHICULO', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
 
       const res = await service.getChecklistTemplate('a-1', 'u-1');
@@ -1418,7 +1470,7 @@ describe('AssetsService', () => {
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow());
 
       const res = await service.updateChecklistTemplate('a-1', 'u-1', 'Checklist Diario', [
-        { id: '1', label: 'Batería', type: 'YES_NO', required: true }
+        { id: '1', label: 'Batería', type: 'YES_NO', required: true },
       ]);
 
       expect(txMock.checklistTemplate.update).toHaveBeenCalled();
@@ -1426,18 +1478,24 @@ describe('AssetsService', () => {
     });
 
     it('envía un checklist y cambia estado a MANTENIMIENTO ante falla (fallback legacy: bool false, plantilla vacía)', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
-      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow({ status: DocumentStatus.APROBADO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ status: DocumentStatus.APROBADO }),
+      );
 
       const res = await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
-        { itemId: '1', label: 'Freno de Mano', value: false } // falla reportada
+        { itemId: '1', label: 'Freno de Mano', value: false }, // falla reportada
       ]);
 
       expect(txMock.checklistSubmission.create).toHaveBeenCalled();
-      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'a-1' },
-        data: { status: AssetStatus.MANTENIMIENTO }
-      }));
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: { status: AssetStatus.MANTENIMIENTO },
+        }),
+      );
       expect(txMock.assetHistoryEntry.create).toHaveBeenCalled();
       expect(res.userId).toBe('u-1');
     });
@@ -1461,7 +1519,9 @@ describe('AssetsService', () => {
           { id: 'obs_motor', label: 'Observación motor', type: 'TEXTO', required: false },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(estadoTemplate);
 
       const res = await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
@@ -1470,10 +1530,12 @@ describe('AssetsService', () => {
       ]);
 
       expect(txMock.checklistSubmission.create).toHaveBeenCalled();
-      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'a-1' },
-        data: { status: AssetStatus.MANTENIMIENTO },
-      }));
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: { status: AssetStatus.MANTENIMIENTO },
+        }),
+      );
       expect(res.userId).toBe('u-1');
     });
 
@@ -1496,13 +1558,17 @@ describe('AssetsService', () => {
           { id: 'obs_motor', label: 'Observación motor', type: 'TEXTO', required: false },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(estadoTemplate);
 
-      await expect(service.submitChecklist('a-1', 'tpl-1', 'u-1', [
-        { itemId: 'motor', label: 'Motor', value: 'Malo' },
-        { itemId: 'obs_motor', label: 'Observación motor', value: '' },
-      ])).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+          { itemId: 'motor', label: 'Motor', value: 'Malo' },
+          { itemId: 'obs_motor', label: 'Observación motor', value: '' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(txMock.checklistSubmission.create).not.toHaveBeenCalled();
       expect(txMock.asset.update).not.toHaveBeenCalled();
@@ -1515,17 +1581,21 @@ describe('AssetsService', () => {
           { id: 'luces', label: '¿Luces operativas?', type: 'BOOLEAN', required: true },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(booleanTemplate);
 
       await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
         { itemId: 'luces', label: '¿Luces operativas?', value: 'no' },
       ]);
 
-      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'a-1' },
-        data: { status: AssetStatus.MANTENIMIENTO },
-      }));
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: { status: AssetStatus.MANTENIMIENTO },
+        }),
+      );
     });
 
     it('legacy YES_NO=false se normaliza a BOOLEAN y sigue gatillando falla', async () => {
@@ -1537,17 +1607,21 @@ describe('AssetsService', () => {
           { id: 'freno', label: 'Freno de mano', type: 'YES_NO', required: true },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(legacyTemplate);
 
       await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
         { itemId: 'freno', label: 'Freno de mano', value: false },
       ]);
 
-      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'a-1' },
-        data: { status: AssetStatus.MANTENIMIENTO },
-      }));
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: { status: AssetStatus.MANTENIMIENTO },
+        }),
+      );
     });
 
     it('rechaza (400) al actualizar la plantilla con un ítem ESTADO sin opciones', async () => {
@@ -1564,8 +1638,12 @@ describe('AssetsService', () => {
 
     it('permite ejecutar el checklist con el permiso funcional global (admin/gerencia)', async () => {
       permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
-      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(buildTemplateRow({ status: DocumentStatus.APROBADO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
+      prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
+        buildTemplateRow({ status: DocumentStatus.APROBADO }),
+      );
 
       const res = await service.submitChecklist('a-1', 'tpl-1', 'u-admin', [
         { itemId: '1', label: 'Freno', value: true },
@@ -1633,7 +1711,9 @@ describe('AssetsService', () => {
           { id: 'obs_luces', label: 'Observación luces', type: 'TEXTO', required: false },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(boolObsTemplate);
 
       await expect(
@@ -1660,7 +1740,9 @@ describe('AssetsService', () => {
           },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(estadoTemplate);
 
       await expect(
@@ -1679,7 +1761,9 @@ describe('AssetsService', () => {
           { id: 'nota', label: 'Nota de inspección', type: 'TEXTO', required: true },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(requiredTemplate);
 
       await expect(
@@ -1694,7 +1778,9 @@ describe('AssetsService', () => {
     it('FIX2: toTemplateView normaliza ítems legacy (YES_NO→BOOLEAN) al leer la plantilla', async () => {
       // Una plantilla histórica persiste el tipo legacy 'YES_NO'; la vista debe
       // normalizarlo al union nuevo para que la ejecución dibuje el input correcto.
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
         buildTemplateRow({
           items: [
@@ -1706,7 +1792,12 @@ describe('AssetsService', () => {
       const res = await service.getChecklistTemplate('a-1', 'u-1');
 
       expect(res.items).toEqual([
-        expect.objectContaining({ id: 'freno', label: 'Freno de mano', type: 'BOOLEAN', required: true }),
+        expect.objectContaining({
+          id: 'freno',
+          label: 'Freno de mano',
+          type: 'BOOLEAN',
+          required: true,
+        }),
       ]);
     });
 
@@ -1751,7 +1842,15 @@ describe('AssetsService', () => {
           'a-1',
           'u-1',
           'Checklist',
-          [{ id: 'motor', label: 'Motor', type: 'TEXTO', required: false, section: 'sec-fantasma' }],
+          [
+            {
+              id: 'motor',
+              label: 'Motor',
+              type: 'TEXTO',
+              required: false,
+              section: 'sec-fantasma',
+            },
+          ],
           [{ id: 'sec-1', title: 'General' }],
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -1834,7 +1933,9 @@ describe('AssetsService', () => {
           },
         ] as unknown as ChecklistTemplate['items'],
       });
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(svgTemplate);
 
       const res = await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
@@ -1853,26 +1954,30 @@ describe('AssetsService', () => {
     });
 
     it('getChecklistTemplate expone las secciones persistidas', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
         buildTemplateRow({
           items: [
             { id: 'motor', label: 'Motor', type: 'TEXTO', required: false, section: 'sec-1' },
           ] as unknown as ChecklistTemplate['items'],
-          sections: [{ id: 'sec-1', title: 'Mecánica' }] as unknown as ChecklistTemplate['sections'],
+          sections: [
+            { id: 'sec-1', title: 'Mecánica' },
+          ] as unknown as ChecklistTemplate['sections'],
         }),
       );
 
       const res = await service.getChecklistTemplate('a-1', 'u-1');
 
       expect(res.sections).toEqual([{ id: 'sec-1', title: 'Mecánica' }]);
-      expect(res.items).toEqual([
-        expect.objectContaining({ id: 'motor', section: 'sec-1' }),
-      ]);
+      expect(res.items).toEqual([expect.objectContaining({ id: 'motor', section: 'sec-1' })]);
     });
 
     it('genera el PDF de preview del formulario agrupado por secciones', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
         buildTemplateRow({
           items: [
@@ -1994,10 +2099,7 @@ describe('AssetsService', () => {
       );
       expect(result).not.toBeNull();
       expect(result?.summary).toBe('2 observaciones');
-      expect(result?.lines).toEqual([
-        'Puerta delantera: Rayón leve',
-        'Capó: Abolladura',
-      ]);
+      expect(result?.lines).toEqual(['Puerta delantera: Rayón leve', 'Capó: Abolladura']);
     });
 
     it('usa singular y omite partes sin comentario; cae a la key si falta el nombre', () => {
@@ -2096,85 +2198,116 @@ describe('AssetsService', () => {
 
   describe('vehículos y telemetría', () => {
     it('sube un documento de activo con fecha de expiración', async () => {
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ type: AssetType.VEHICULO }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ type: AssetType.VEHICULO }),
+      );
 
-      const res = await service.uploadDocument('a-1', 'u-1', 'SOAP', 'SOAP_PDF', {
-        buffer: Buffer.from('test'),
-        originalname: 'soap.pdf',
-        mimetype: 'application/pdf',
-      }, '2026-12-31T00:00:00.000Z');
+      const res = await service.uploadDocument(
+        'a-1',
+        'u-1',
+        'SOAP',
+        'SOAP_PDF',
+        {
+          buffer: Buffer.from('test'),
+          originalname: 'soap.pdf',
+          mimetype: 'application/pdf',
+        },
+        '2026-12-31T00:00:00.000Z',
+      );
 
-      expect(txMock.assetDocument.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          name: 'SOAP',
-          type: 'SOAP_PDF',
-          expirationDate: new Date('2026-12-31T00:00:00.000Z'),
-          // Se persiste la CLAVE estable, nunca la URL (firmada/efímera con R2).
-          fileUrl: 'assets/a-1/documents/new.pdf',
+      expect(txMock.assetDocument.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: 'SOAP',
+            type: 'SOAP_PDF',
+            expirationDate: new Date('2026-12-31T00:00:00.000Z'),
+            // Se persiste la CLAVE estable, nunca la URL (firmada/efímera con R2).
+            fileUrl: 'assets/a-1/documents/new.pdf',
+          }),
         }),
-      }));
+      );
       expect(res.expirationDate).toBe('2026-12-31T00:00:00.000Z');
     });
 
     it('actualiza telemetría de vehículo y genera alertas de velocidad', async () => {
       // Caso 1: Telemetría normal
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({
-        type: AssetType.VEHICULO,
-        metadata: { odometerKm: 500, speedLimit: 100 }
-      }));
-      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce(buildAssetRow({
-        type: AssetType.VEHICULO,
-        metadata: {
-          odometerKm: 500,
-          speedLimit: 100,
-          location: { latitude: -33.45, longitude: -70.66, updatedAt: '2026-06-16T00:00:00.000Z' },
-          speed: 80
-        }
-      }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({
+          type: AssetType.VEHICULO,
+          metadata: { odometerKm: 500, speedLimit: 100 },
+        }),
+      );
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce(
+        buildAssetRow({
+          type: AssetType.VEHICULO,
+          metadata: {
+            odometerKm: 500,
+            speedLimit: 100,
+            location: {
+              latitude: -33.45,
+              longitude: -70.66,
+              updatedAt: '2026-06-16T00:00:00.000Z',
+            },
+            speed: 80,
+          },
+        }),
+      );
 
       await service.updateTelemetry('a-1', 'u-1', {
         latitude: -33.45,
         longitude: -70.66,
-        speed: 80
+        speed: 80,
       });
 
-      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'a-1' },
-        data: expect.objectContaining({
-          metadata: expect.objectContaining({
-            speed: 80
-          })
-        })
-      }));
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: expect.objectContaining({
+            metadata: expect.objectContaining({
+              speed: 80,
+            }),
+          }),
+        }),
+      );
       expect(txMock.assetHistoryEntry.create).not.toHaveBeenCalled();
 
       // Caso 2: Exceso de velocidad
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({
-        type: AssetType.VEHICULO,
-        metadata: { odometerKm: 500, speedLimit: 100 }
-      }));
-      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce(buildAssetRow({
-        type: AssetType.VEHICULO,
-        metadata: {
-          odometerKm: 500,
-          speedLimit: 100,
-          location: { latitude: -33.45, longitude: -70.66, updatedAt: '2026-06-16T00:00:00.000Z' },
-          speed: 120
-        }
-      }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({
+          type: AssetType.VEHICULO,
+          metadata: { odometerKm: 500, speedLimit: 100 },
+        }),
+      );
+      prismaMock.asset.findUniqueOrThrow.mockResolvedValueOnce(
+        buildAssetRow({
+          type: AssetType.VEHICULO,
+          metadata: {
+            odometerKm: 500,
+            speedLimit: 100,
+            location: {
+              latitude: -33.45,
+              longitude: -70.66,
+              updatedAt: '2026-06-16T00:00:00.000Z',
+            },
+            speed: 120,
+          },
+        }),
+      );
 
       await service.updateTelemetry('a-1', 'u-1', {
         latitude: -33.45,
         longitude: -70.66,
-        speed: 120
+        speed: 120,
       });
 
-      expect(txMock.assetHistoryEntry.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          type: 'ESTADO',
-          description: expect.stringContaining('Alerta: Exceso de velocidad detectado'),
-        })
-      }));
+      expect(txMock.assetHistoryEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'ESTADO',
+            description: expect.stringContaining('Alerta: Exceso de velocidad detectado'),
+          }),
+        }),
+      );
     });
 
     it('valida kilometraje no decreciente en checklists de vehículo', async () => {
@@ -2192,49 +2325,63 @@ describe('AssetsService', () => {
         ] as unknown as ChecklistTemplate['items'],
       });
 
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({
-        type: AssetType.VEHICULO,
-        metadata: { odometerKm: 1000 }
-      }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({
+          type: AssetType.VEHICULO,
+          metadata: { odometerKm: 1000 },
+        }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(odometerTemplate);
 
       // Kilometraje menor que el actual (debe fallar)
-      await expect(service.submitChecklist('a-1', 'tpl-1', 'u-1', [
-        { itemId: 'kilometraje', label: 'Kilometraje Actual', value: 950 }
-      ])).rejects.toThrow(BadRequestException);
+      await expect(
+        service.submitChecklist('a-1', 'tpl-1', 'u-1', [
+          { itemId: 'kilometraje', label: 'Kilometraje Actual', value: 950 },
+        ]),
+      ).rejects.toThrow(BadRequestException);
 
       // Kilometraje mayor o igual (debe pasar y actualizar odómetro)
-      prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({
-        type: AssetType.VEHICULO,
-        metadata: { odometerKm: 1000 }
-      }));
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({
+          type: AssetType.VEHICULO,
+          metadata: { odometerKm: 1000 },
+        }),
+      );
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(odometerTemplate);
 
       await service.submitChecklist('a-1', 'tpl-1', 'u-1', [
-        { itemId: 'kilometraje', label: 'Kilometraje Actual', value: 1050 }
+        { itemId: 'kilometraje', label: 'Kilometraje Actual', value: 1050 },
       ]);
 
-      expect(txMock.asset.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'a-1' },
-        data: {
-          metadata: expect.objectContaining({
-            odometerKm: 1050
-          })
-        }
-      }));
-      expect(txMock.assetHistoryEntry.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({
-          type: 'ESTADO',
-          description: expect.stringContaining('Kilometraje (odómetro) actualizado automáticamente'),
-        })
-      }));
+      expect(txMock.asset.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'a-1' },
+          data: {
+            metadata: expect.objectContaining({
+              odometerKm: 1050,
+            }),
+          },
+        }),
+      );
+      expect(txMock.assetHistoryEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'ESTADO',
+            description: expect.stringContaining(
+              'Kilometraje (odómetro) actualizado automáticamente',
+            ),
+          }),
+        }),
+      );
     });
   });
 
   describe('ciclo de uso', () => {
     describe('startUsageCycle', () => {
       it('con checklist APROBADO deja el activo EN_PREPARACION y el ciclo EN_PREPARACION', async () => {
-        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
         permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' }); // asset:use:report
         // hasApprovedChecklist => plantilla aprobada CON ítems (contestable) => withChecklist = true.
         prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
@@ -2295,7 +2442,9 @@ describe('AssetsService', () => {
       });
 
       it('SIN plantilla deja el activo EN_USO y el ciclo EN_CURSO con confirmedAt seteado', async () => {
-        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
         permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
         // Sin plantilla aprobada => withChecklist = false => pasa directo a EN_USO.
         prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
@@ -2316,20 +2465,28 @@ describe('AssetsService', () => {
       });
 
       it('lanza ConflictException si el reclamo atómico no encuentra el activo libre (count 0)', async () => {
-        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
         permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' });
         prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(null);
         txMock.asset.updateMany.mockResolvedValueOnce({ count: 0 });
 
-        await expect(service.startUsageCycle('a-1', 'u-1')).rejects.toBeInstanceOf(ConflictException);
+        await expect(service.startUsageCycle('a-1', 'u-1')).rejects.toBeInstanceOf(
+          ConflictException,
+        );
         expect(txMock.usageCycle.create).not.toHaveBeenCalled();
       });
 
       it('lanza ForbiddenException sin el permiso asset:use:report (mismo gate que takeUse)', async () => {
-        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
         permissionsMock.can.mockResolvedValueOnce({ effect: 'deny' });
 
-        await expect(service.startUsageCycle('a-1', 'u-x')).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(service.startUsageCycle('a-1', 'u-x')).rejects.toBeInstanceOf(
+          ForbiddenException,
+        );
         expect(permissionsMock.can).toHaveBeenCalledWith('u-x', 'asset:use:report');
         expect(txMock.asset.updateMany).not.toHaveBeenCalled();
       });
@@ -2342,7 +2499,9 @@ describe('AssetsService', () => {
         );
         // submitChecklist: permiso funcional + activo + plantilla aprobada.
         permissionsMock.can.mockResolvedValue({ effect: 'allow' }); // asset:checklist:run:any
-        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
         prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
           buildTemplateRow({ status: DocumentStatus.APROBADO }),
         );
@@ -2372,7 +2531,9 @@ describe('AssetsService', () => {
           buildUsageCycleRow({ status: UsageCycleStatus.EN_PREPARACION, userId: 'u-1' }),
         );
         permissionsMock.can.mockResolvedValue({ effect: 'allow' });
-        prismaMock.asset.findUnique.mockResolvedValueOnce(buildAssetRow({ status: AssetStatus.DISPONIBLE }));
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          buildAssetRow({ status: AssetStatus.DISPONIBLE }),
+        );
         // Plantilla vacía + valor false => submitChecklist detecta falla (fallback legacy).
         prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
           buildTemplateRow({ status: DocumentStatus.APROBADO }),
@@ -2560,7 +2721,10 @@ describe('AssetsService', () => {
         prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
         await expect(
-          service.endUsageCycle('a-1', 'cyc-1', 'u-1', { endKind: 'TRASPASO', handoffToUserId: 'u-x' }),
+          service.endUsageCycle('a-1', 'cyc-1', 'u-1', {
+            endKind: 'TRASPASO',
+            handoffToUserId: 'u-x',
+          }),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(txMock.usageCycle.update).not.toHaveBeenCalled();
       });
@@ -2582,7 +2746,9 @@ describe('AssetsService', () => {
         permissionsMock.scopeFilter.mockResolvedValueOnce(null); // sin asset:read
         fgaMock.check.mockResolvedValueOnce(false); // ni can_view_list del proyecto ajeno
 
-        await expect(service.listUsageCycles('a-1', 'u-x')).rejects.toBeInstanceOf(NotFoundException);
+        await expect(service.listUsageCycles('a-1', 'u-x')).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
         expect(prismaMock.usageCycle.findMany).not.toHaveBeenCalled();
       });
 
@@ -2666,9 +2832,7 @@ describe('AssetsService', () => {
       prismaMock.checklistTemplate.findUnique.mockResolvedValueOnce(
         buildTemplateRow({ assetId: 'a-1', status: DocumentStatus.EN_REVISION }),
       );
-      await expect(service.submitPublicChecklist('tok-a-1', dtoBase)).rejects.toThrow(
-        /aprobadas/i,
-      );
+      await expect(service.submitPublicChecklist('tok-a-1', dtoBase)).rejects.toThrow(/aprobadas/i);
     });
 
     it('guarda con userId null y los datos declarados', async () => {
@@ -2767,7 +2931,13 @@ describe('AssetsService', () => {
           assetId: 'a-1',
           status: DocumentStatus.APROBADO,
           items: [
-            { id: 'frenos', label: 'Frenos', type: 'ESTADO', required: true, config: { options: ['Bueno', 'Malo'] } },
+            {
+              id: 'frenos',
+              label: 'Frenos',
+              type: 'ESTADO',
+              required: true,
+              config: { options: ['Bueno', 'Malo'] },
+            },
           ] as unknown as ChecklistTemplate['items'],
         }),
       );
@@ -2776,5 +2946,4 @@ describe('AssetsService', () => {
       ).rejects.toThrow(/obligatorio/i);
     });
   });
-
 });

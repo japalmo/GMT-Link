@@ -134,10 +134,7 @@ export class DirectoryService {
   }
 
   /** Busca un usuario visible para el solicitante (aplica aislamiento). 404 si no. */
-  private async findVisible(
-    requesterIsClient: boolean,
-    id: string,
-  ): Promise<UserWithMemberships> {
+  private async findVisible(requesterIsClient: boolean, id: string): Promise<UserWithMemberships> {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: { memberships: true, client: true },

@@ -394,7 +394,8 @@ export class OvertimeService {
     const hasMore = rows.length > limit;
     const pageRows = hasMore ? rows.slice(0, limit) : rows;
     const lastRow = pageRows[pageRows.length - 1];
-    const nextCursor = hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
+    const nextCursor =
+      hasMore && lastRow ? encodeKeysetCursor(lastRow.createdAt, lastRow.id) : null;
 
     return { items: pageRows.map(toView), nextCursor };
   }
@@ -456,7 +457,11 @@ export class OvertimeService {
         fecha: (dir) => [{ date: dir }, { id: dir }],
         horas: (dir) => [{ hours: dir }, { date: 'desc' }, { id: 'desc' }],
         estado: (dir) => [{ status: dir }, { date: 'desc' }, { id: 'desc' }],
-        solicitante: (dir) => [{ user: { firstName: dir } }, { user: { lastName: dir } }, { id: 'desc' }],
+        solicitante: (dir) => [
+          { user: { firstName: dir } },
+          { user: { lastName: dir } },
+          { id: 'desc' },
+        ],
       },
       [{ date: 'desc' }, { id: 'desc' }],
     );
@@ -491,7 +496,9 @@ export class OvertimeService {
         where: { projectId: { not: null } },
         distinct: ['projectId'],
         select: {
-          project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } },
+          project: {
+            select: { id: true, name: true, client: { select: { id: true, name: true } } },
+          },
         },
       }),
     ]);
@@ -636,11 +643,7 @@ export class OvertimeService {
    * controller (check de permiso inline); si no es ninguno, 404. El gestor recibe los datos del
    * solicitante.
    */
-  async getById(
-    id: string,
-    requesterId: string,
-    isManager: boolean,
-  ): Promise<OvertimeView> {
+  async getById(id: string, requesterId: string, isManager: boolean): Promise<OvertimeView> {
     const row = await this.prisma.overtimeRequest.findUnique({
       where: { id },
       include: { user: REQUESTER_SELECT, project: { select: { name: true } } },
@@ -742,8 +745,18 @@ function fechaCl(date: Date): string {
 function monthLabelEs(month: string): string {
   const [y, m] = month.split('-');
   const names = [
-    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
   ];
   const idx = Number(m) - 1;
   const name = idx >= 0 && idx < 12 ? names[idx] : m;
@@ -849,7 +862,10 @@ function decodeKeysetCursor(raw: string): { date: Date; id: string } | null {
 }
 
 /** OR de keyset para `listMine` (orden fijo `createdAt desc`). */
-function createdAtKeysetWhere(cursor: { date: Date; id: string }): Prisma.OvertimeRequestWhereInput {
+function createdAtKeysetWhere(cursor: {
+  date: Date;
+  id: string;
+}): Prisma.OvertimeRequestWhereInput {
   return {
     OR: [{ createdAt: { lt: cursor.date } }, { createdAt: cursor.date, id: { lt: cursor.id } }],
   };

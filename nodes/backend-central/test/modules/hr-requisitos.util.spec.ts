@@ -64,8 +64,24 @@ describe('requisitosDe', () => {
     const p = persona({
       id: 'p1',
       documentos: [
-        { id: 'd1', type: 'Cédula', name: 'Carnet', status: 'APROBADO', issuedAt: null, expiresAt: null, noExpiry: true },
-        { id: 'd2', type: 'Licencia', name: 'Licencia', status: 'APROBADO', issuedAt: null, expiresAt: null, noExpiry: false },
+        {
+          id: 'd1',
+          type: 'Cédula',
+          name: 'Carnet',
+          status: 'APROBADO',
+          issuedAt: null,
+          expiresAt: null,
+          noExpiry: true,
+        },
+        {
+          id: 'd2',
+          type: 'Licencia',
+          name: 'Licencia',
+          status: 'APROBADO',
+          issuedAt: null,
+          expiresAt: null,
+          noExpiry: false,
+        },
       ],
     });
     expect(requisitosDe(p, HOY).map((f) => f.vigencia)).toEqual(['SIN_VENCIMIENTO', 'SIN_FECHA']);
@@ -96,7 +112,15 @@ describe('consultaRequisitos', () => {
       },
     ],
     documentos: [
-      { id: 'd1', type: 'Cédula', name: 'Carnet', status: 'APROBADO', issuedAt: null, expiresAt: en(90), noExpiry: false },
+      {
+        id: 'd1',
+        type: 'Cédula',
+        name: 'Carnet',
+        status: 'APROBADO',
+        issuedAt: null,
+        expiresAt: en(90),
+        noExpiry: false,
+      },
     ],
   });
 
@@ -115,7 +139,16 @@ describe('consultaRequisitos', () => {
     const acreditado = persona({
       id: 'p2',
       acreditaciones: [
-        { id: 'a1', ...CAPSTONE, faenaId: null, faenaName: null, status: 'VIGENTE', issuedAt: null, expiresAt: en(60), noExpiry: false },
+        {
+          id: 'a1',
+          ...CAPSTONE,
+          faenaId: null,
+          faenaName: null,
+          status: 'VIGENTE',
+          issuedAt: null,
+          expiresAt: en(60),
+          noExpiry: false,
+        },
       ],
     });
     const r = consultaRequisitos(
@@ -132,7 +165,16 @@ describe('consultaRequisitos', () => {
     const enTramite = persona({
       id: 'p3',
       acreditaciones: [
-        { id: 'a1', ...CAPSTONE, faenaId: 'mb', faenaName: 'MB', status: 'EN_TRAMITE', issuedAt: null, expiresAt: en(60), noExpiry: false },
+        {
+          id: 'a1',
+          ...CAPSTONE,
+          faenaId: 'mb',
+          faenaName: 'MB',
+          status: 'EN_TRAMITE',
+          issuedAt: null,
+          expiresAt: en(60),
+          noExpiry: false,
+        },
       ],
     });
     const r = consultaRequisitos([enTramite], { habilitante: true }, undefined, 'asc', HOY);
@@ -149,7 +191,13 @@ describe('consultaRequisitos', () => {
       id: 'p4',
       examenes: [{ id: 'e1', type: 'Altura', issuedAt: null, expiresAt: null, noExpiry: false }],
     });
-    const r = consultaRequisitos([sinFecha], { desde: '2026-09-01', hasta: '2026-12-31' }, undefined, 'asc', HOY);
+    const r = consultaRequisitos(
+      [sinFecha],
+      { desde: '2026-09-01', hasta: '2026-12-31' },
+      undefined,
+      'asc',
+      HOY,
+    );
     expect(r.filas).toHaveLength(0);
   });
 
@@ -181,7 +229,10 @@ describe('consultaRequisitos', () => {
 });
 
 describe('consultaPersonas', () => {
-  const sinNada = persona({ id: 'p1', turno: { shiftPattern: 'SIETE_POR_SIETE', dayNight: 'DIA', workDays: 7, restDays: 7 } });
+  const sinNada = persona({
+    id: 'p1',
+    turno: { shiftPattern: 'SIETE_POR_SIETE', dayNight: 'DIA', workDays: 7, restDays: 7 },
+  });
   const conVencido = persona({
     id: 'p2',
     firstName: 'Beto',
@@ -189,12 +240,24 @@ describe('consultaPersonas', () => {
   });
 
   it('sin filtros de requisito muestra también a quien no tiene nada cargado', () => {
-    const r = consultaPersonas([sinNada, conVencido], { turno: 'SIETE_POR_SIETE' }, undefined, 'asc', HOY);
+    const r = consultaPersonas(
+      [sinNada, conVencido],
+      { turno: 'SIETE_POR_SIETE' },
+      undefined,
+      'asc',
+      HOY,
+    );
     expect(r.filas.map((f) => f.userId)).toEqual(['p1']);
   });
 
   it('con un filtro de requisito, solo quien tiene al menos uno que cumple', () => {
-    const r = consultaPersonas([sinNada, conVencido], { vigencias: ['VENCIDO'] }, undefined, 'asc', HOY);
+    const r = consultaPersonas(
+      [sinNada, conVencido],
+      { vigencias: ['VENCIDO'] },
+      undefined,
+      'asc',
+      HOY,
+    );
     expect(r.filas.map((f) => f.userId)).toEqual(['p2']);
     expect(r.requisitos).toBe(1);
   });
@@ -205,7 +268,16 @@ describe('construirTablero', () => {
     const p = persona({
       id: 'p1',
       acreditaciones: [
-        { id: 'a1', ...CAPSTONE, faenaId: null, faenaName: null, status: 'VIGENTE', issuedAt: null, expiresAt: null, noExpiry: false },
+        {
+          id: 'a1',
+          ...CAPSTONE,
+          faenaId: null,
+          faenaName: null,
+          status: 'VIGENTE',
+          issuedAt: null,
+          expiresAt: null,
+          noExpiry: false,
+        },
       ],
     });
     const t = construirTablero(

@@ -4,11 +4,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import * as api from '@/lib/api';
 import { errorToMessage } from '@/lib/api';
-import type {
-  TicketFrequency,
-  TicketPeopleAffected,
-  TicketType,
-} from '@/lib/api';
+import type { TicketFrequency, TicketPeopleAffected, TicketType } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -391,7 +387,8 @@ export default function SoporteNuevoPage() {
               <span className="text-sm text-foreground">
                 Confirmo que mi jefatura respalda esta solicitud.
                 <span className="block text-xs text-muted-foreground">
-                  Informática ejecuta prioridades; quién decide la prioridad de tu área es tu jefatura.
+                  Informática ejecuta prioridades; quién decide la prioridad de tu área es tu
+                  jefatura.
                 </span>
               </span>
             </label>

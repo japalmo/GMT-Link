@@ -276,7 +276,7 @@ export function LlenarChecklistPage(): ReactNode {
             </p>
           </div>
           <div className="flex w-full flex-col gap-2">
-            {(
+            {
               <button
                 type="button"
                 onClick={() => void descargar(assetId, token ?? '', listo.id)}
@@ -284,7 +284,7 @@ export function LlenarChecklistPage(): ReactNode {
               >
                 <Download className="size-5" aria-hidden /> Descargar PDF
               </button>
-            )}
+            }
             <button
               type="button"
               onClick={() => navigate('/')}
@@ -327,9 +327,7 @@ export function LlenarChecklistPage(): ReactNode {
 
           {actual?.clase === 'identificacion' && (
             <PasoIdentificacion
-              onEntrar={() =>
-                navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`)
-              }
+              onEntrar={() => navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`)}
               onContinuarSinCuenta={() => setPaso((p) => p + 1)}
             />
           )}

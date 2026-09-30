@@ -55,9 +55,7 @@ export class HseController {
    */
   @Throttle({ default: { limit: 6, ttl: 60_000 } }) // 6/min por IP: endpoint sin auth
   @Post('public/incidents')
-  @UseInterceptors(
-    FilesInterceptor('fotos', MAX_FOTOS, { limits: { fileSize: MAX_FOTO_BYTES } }),
-  )
+  @UseInterceptors(FilesInterceptor('fotos', MAX_FOTOS, { limits: { fileSize: MAX_FOTO_BYTES } }))
   async createPublic(
     @Body() dto: CreateIncidentDto,
     @UploadedFiles() fotos: Express.Multer.File[] | undefined,

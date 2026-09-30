@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { UMBRALES_CLIMA, alertasDe, componerClima, rumbo, type LecturaClima } from '../../src/modules/projects/clima.util';
+import {
+  UMBRALES_CLIMA,
+  alertasDe,
+  componerClima,
+  rumbo,
+  type LecturaClima,
+} from '../../src/modules/projects/clima.util';
 
 /** Un día tranquilo en faena: nada supera umbral. */
 function lectura(over: Partial<LecturaClima> = {}): LecturaClima {
@@ -56,12 +62,20 @@ describe('alertas climáticas de faena', () => {
   });
 
   it('los extremos de temperatura avisan por sensación térmica, no por la real', () => {
-    expect(alertasDe(lectura({ temperature: 30, apparentTemperature: 1 })).find((a) => a.key === 'FRIO')).toBeDefined();
-    expect(alertasDe(lectura({ temperature: 20, apparentTemperature: 35 })).find((a) => a.key === 'CALOR')).toBeDefined();
+    expect(
+      alertasDe(lectura({ temperature: 30, apparentTemperature: 1 })).find((a) => a.key === 'FRIO'),
+    ).toBeDefined();
+    expect(
+      alertasDe(lectura({ temperature: 20, apparentTemperature: 35 })).find(
+        (a) => a.key === 'CALOR',
+      ),
+    ).toBeDefined();
   });
 
   it('varias condiciones malas conviven como alertas separadas', () => {
-    const alertas = alertasDe(lectura({ windSpeed: 58, uvIndex: 12, uvIndexMax: 12, apparentTemperature: 34 }));
+    const alertas = alertasDe(
+      lectura({ windSpeed: 58, uvIndex: 12, uvIndexMax: 12, apparentTemperature: 34 }),
+    );
     expect(alertas.map((a) => a.key).sort()).toEqual(['CALOR', 'UV', 'VIENTO']);
   });
 });

@@ -1,8 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  CHECKLIST_VEHICULO_GMT,
-  SECCIONES_CHECKLIST_VEHICULO,
-} from '@gmt-platform/contracts';
+import { CHECKLIST_VEHICULO_GMT, SECCIONES_CHECKLIST_VEHICULO } from '@gmt-platform/contracts';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { SheetsClientService } from './sheets-client.service';

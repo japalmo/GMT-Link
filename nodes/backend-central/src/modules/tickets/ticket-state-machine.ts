@@ -34,11 +34,26 @@ export interface TransitionRule {
 export const TRANSITIONS: readonly TransitionRule[] = [
   { from: TicketStatus.BORRADOR, to: TicketStatus.ENVIADO, actor: 'REQUESTER' },
   { from: TicketStatus.ENVIADO, to: TicketStatus.EN_TRIAGE, actor: 'IT' },
-  { from: TicketStatus.EN_TRIAGE, to: TicketStatus.REQUIERE_INFO, actor: 'IT', requiresComment: true },
+  {
+    from: TicketStatus.EN_TRIAGE,
+    to: TicketStatus.REQUIERE_INFO,
+    actor: 'IT',
+    requiresComment: true,
+  },
   { from: TicketStatus.REQUIERE_INFO, to: TicketStatus.EN_TRIAGE, actor: 'REQUESTER' },
   { from: TicketStatus.EN_TRIAGE, to: TicketStatus.RECHAZADO, actor: 'IT', requiresComment: true },
-  { from: TicketStatus.EN_TRIAGE, to: TicketStatus.EN_BACKLOG, actor: 'IT', requiresClassification: true },
-  { from: TicketStatus.EN_BACKLOG, to: TicketStatus.EN_LEVANTAMIENTO, actor: 'IT', requiresLaneProyecto: true },
+  {
+    from: TicketStatus.EN_TRIAGE,
+    to: TicketStatus.EN_BACKLOG,
+    actor: 'IT',
+    requiresClassification: true,
+  },
+  {
+    from: TicketStatus.EN_BACKLOG,
+    to: TicketStatus.EN_LEVANTAMIENTO,
+    actor: 'IT',
+    requiresLaneProyecto: true,
+  },
   { from: TicketStatus.EN_LEVANTAMIENTO, to: TicketStatus.EN_DISENO, actor: 'IT' },
   { from: TicketStatus.EN_DISENO, to: TicketStatus.EN_DESARROLLO, actor: 'IT' },
   { from: TicketStatus.EN_DESARROLLO, to: TicketStatus.EN_QA, actor: 'IT' },
@@ -50,10 +65,7 @@ export const TRANSITIONS: readonly TransitionRule[] = [
 ];
 
 /** La regla para un par (from,to), o `undefined` si la transición no existe. */
-export function findTransition(
-  from: TicketStatus,
-  to: TicketStatus,
-): TransitionRule | undefined {
+export function findTransition(from: TicketStatus, to: TicketStatus): TransitionRule | undefined {
   return TRANSITIONS.find((t) => t.from === from && t.to === to);
 }
 

@@ -26,9 +26,7 @@ import type { UsageEndKind } from '@gmt-platform/contracts';
 
 /** Recorta espacios de un valor string (deja intactos los no-string). */
 const trim = (): PropertyDecorator =>
-  Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  );
+  Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value));
 
 export class CreateAssetDto {
   @IsEnum(AssetType, { message: 'El tipo de activo debe ser EQUIPO, VEHICULO o MAQUINARIA' })
@@ -64,7 +62,9 @@ export class CreateAssetDto {
   @IsOptional()
   identifier?: string;
 
-  @IsEnum(AssetIdentifierType, { message: 'El tipo de identificador debe ser PATENTE o NUMERO_SERIE' })
+  @IsEnum(AssetIdentifierType, {
+    message: 'El tipo de identificador debe ser PATENTE o NUMERO_SERIE',
+  })
   @IsOptional()
   identifierType?: AssetIdentifierType;
 
@@ -113,7 +113,9 @@ export class UpdateAssetDto {
   @IsOptional()
   identifier?: string | null;
 
-  @IsEnum(AssetIdentifierType, { message: 'El tipo de identificador debe ser PATENTE o NUMERO_SERIE' })
+  @IsEnum(AssetIdentifierType, {
+    message: 'El tipo de identificador debe ser PATENTE o NUMERO_SERIE',
+  })
   @IsOptional()
   identifierType?: AssetIdentifierType | null;
 

@@ -151,9 +151,8 @@ describe('cableado con el formato', () => {
   it('las licencias llegan al bloque que el PDF reserva', async () => {
     // El util puede estar perfecto y el bloque salir vacío igual si nadie se lo
     // pasa al builder: durante meses `datosConductor` fue `[]` fijo.
-    const { construirFormato } = await import(
-      '../../../src/modules/assets/checklist-formato.builder'
-    );
+    const { construirFormato } =
+      await import('../../../src/modules/assets/checklist-formato.builder');
     const filas = construirDatosConductor({
       licenciaPerfil: { clase: 'B', vence: d('2028-08-14') },
       acreditacionFaena: null,
@@ -175,11 +174,13 @@ describe('cableado con el formato', () => {
   });
 
   it('sin licencias el bloque queda vacío y no revienta', () => {
-    expect(construirDatosConductor({
-      licenciaPerfil: null,
-      acreditacionFaena: null,
-      declarado: null,
-      hoy: HOY,
-    })).toHaveLength(2);
+    expect(
+      construirDatosConductor({
+        licenciaPerfil: null,
+        acreditacionFaena: null,
+        declarado: null,
+        hoy: HOY,
+      }),
+    ).toHaveLength(2);
   });
 });

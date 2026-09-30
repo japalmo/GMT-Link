@@ -272,7 +272,9 @@ export class AssetsController {
         object: `project:${asset.projectId}`,
       });
       if (!canAssign) {
-        throw new ForbiddenException('No tienes permisos para asignar responsables a activos de este proyecto.');
+        throw new ForbiddenException(
+          'No tienes permisos para asignar responsables a activos de este proyecto.',
+        );
       }
     } else {
       const isGlobalAdmin = await this.fga.check({
@@ -446,9 +448,7 @@ export class AssetsController {
       ...(granularidad ? { granularidad: this.parseGranularidad(granularidad) } : {}),
       ...(desde ? { desde: this.parseFecha(desde, 'desde') } : {}),
       ...(hasta ? { hasta: this.parseFecha(hasta, 'hasta') } : {}),
-      ...(ultimaMantencionKm
-        ? { ultimaMantencionKm: this.parseKm(ultimaMantencionKm) }
-        : {}),
+      ...(ultimaMantencionKm ? { ultimaMantencionKm: this.parseKm(ultimaMantencionKm) } : {}),
     });
   }
 
@@ -734,7 +734,9 @@ export class AssetsController {
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
-        throw new ForbiddenException('No tienes permisos para agregar accesorios a activos en este proyecto.');
+        throw new ForbiddenException(
+          'No tienes permisos para agregar accesorios a activos en este proyecto.',
+        );
       }
     } else {
       const isGlobalAdmin = await this.fga.check({
@@ -770,7 +772,9 @@ export class AssetsController {
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
-        throw new ForbiddenException('No tienes permisos para modificar accesorios en este proyecto.');
+        throw new ForbiddenException(
+          'No tienes permisos para modificar accesorios en este proyecto.',
+        );
       }
     } else {
       const isGlobalAdmin = await this.fga.check({
@@ -806,7 +810,9 @@ export class AssetsController {
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
-        throw new ForbiddenException('No tienes permisos para eliminar accesorios en este proyecto.');
+        throw new ForbiddenException(
+          'No tienes permisos para eliminar accesorios en este proyecto.',
+        );
       }
     } else {
       const isGlobalAdmin = await this.fga.check({
@@ -853,7 +859,9 @@ export class AssetsController {
         object: `project:${asset.projectId}`,
       });
       if (!hasProjAccess) {
-        throw new ForbiddenException('No tienes permisos para configurar plantillas en este proyecto.');
+        throw new ForbiddenException(
+          'No tienes permisos para configurar plantillas en este proyecto.',
+        );
       }
     } else {
       const isGlobalAdmin = await this.fga.check({
@@ -862,7 +870,9 @@ export class AssetsController {
         object: 'organization:gmt',
       });
       if (!isGlobalAdmin) {
-        throw new ForbiddenException('No tienes permisos para gestionar plantillas de activos globales.');
+        throw new ForbiddenException(
+          'No tienes permisos para gestionar plantillas de activos globales.',
+        );
       }
     }
 

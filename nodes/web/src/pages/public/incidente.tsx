@@ -12,14 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/branding/brand-logo';
-import {
-  Aviso,
-  BarraPasos,
-  Campo,
-  ENTRADA,
-  Pantalla,
-  Segmentado,
-} from '@/components/form-wizard';
+import { Aviso, BarraPasos, Campo, ENTRADA, Pantalla, Segmentado } from '@/components/form-wizard';
 import { MapaArea, SelectorFecha, SelectorHora } from './incidente-campos';
 import { createHseIncident, errorToMessage, fetchHseIncidentPdf } from '@/lib/api';
 import { prepararFoto } from '@/lib/preparar-foto';
@@ -40,11 +33,26 @@ const PASOS = ['Dónde y cuándo', 'Qué ocurrió', 'Relato', 'Fotos', 'Quién r
 
 /** Las casillas de "Consecuencias" del formato, con su detalle. */
 const CONSECUENCIAS = [
-  { key: 'lesionPersonas', label: 'Lesión a personas', detalle: 'cargoLesionado', pista: 'Cargo del lesionado' },
-  { key: 'danoInfraestructura', label: 'Daño a infraestructura o equipo', detalle: 'danoDetalle', pista: 'Qué se dañó' },
+  {
+    key: 'lesionPersonas',
+    label: 'Lesión a personas',
+    detalle: 'cargoLesionado',
+    pista: 'Cargo del lesionado',
+  },
+  {
+    key: 'danoInfraestructura',
+    label: 'Daño a infraestructura o equipo',
+    detalle: 'danoDetalle',
+    pista: 'Qué se dañó',
+  },
   { key: 'fugaDerrame', label: 'Fuga o derrame', detalle: 'fugaSustancia', pista: 'Sustancia' },
   { key: 'emisionesAire', label: 'Emisiones al aire', detalle: 'emisionGases', pista: 'Gases' },
-  { key: 'instalaciones', label: 'Instalaciones (robos, hurtos)', detalle: 'instalacionesLugar', pista: 'Lugar específico' },
+  {
+    key: 'instalaciones',
+    label: 'Instalaciones (robos, hurtos)',
+    detalle: 'instalacionesLugar',
+    pista: 'Lugar específico',
+  },
   { key: 'cuasiAccidente', label: 'Cuasi accidente', detalle: null, pista: null },
   { key: 'procesoAfectado', label: 'Proceso o área afectado', detalle: null, pista: null },
 ] as const;
@@ -172,9 +180,7 @@ export default function PublicIncidentePage(): ReactNode {
       return null;
     }
     if (paso === 1) {
-      return Object.values(form.marcadas).some(Boolean)
-        ? null
-        : 'Marca al menos una consecuencia.';
+      return Object.values(form.marcadas).some(Boolean) ? null : 'Marca al menos una consecuencia.';
     }
     if (paso === 2) {
       if (form.descripcion.trim().length < 20) {
@@ -268,7 +274,9 @@ export default function PublicIncidentePage(): ReactNode {
       setEnviado({ code: creado.code, publicToken: creado.publicToken });
       void descargar(creado.publicToken, creado.code);
     } catch (err) {
-      setError(errorToMessage(err, 'No se pudo enviar el reporte. Revisa la señal e intenta otra vez.'));
+      setError(
+        errorToMessage(err, 'No se pudo enviar el reporte. Revisa la señal e intenta otra vez.'),
+      );
     } finally {
       setEnviando(false);
     }
@@ -304,8 +312,9 @@ export default function PublicIncidentePage(): ReactNode {
           <div className="flex flex-col gap-2">
             <h1 className="text-[28px] font-semibold tracking-tight">Reporte enviado</h1>
             <p className="text-[15px] text-muted-foreground">
-              Quedó registrado como <span className="font-semibold text-foreground">{enviado.code}</span> y
-              HSE ya puede verlo.
+              Quedó registrado como{' '}
+              <span className="font-semibold text-foreground">{enviado.code}</span> y HSE ya puede
+              verlo.
             </p>
           </div>
           <div className="flex w-full max-w-xs flex-col gap-3">
@@ -355,19 +364,32 @@ export default function PublicIncidentePage(): ReactNode {
       </header>
 
       <main className="flex flex-1 flex-col gap-6 pb-32 pt-7">
-        <div key={paso} className="flex flex-col gap-6 duration-300 animate-in fade-in slide-in-from-right-4 motion-reduce:animate-none">
+        <div
+          key={paso}
+          className="flex flex-col gap-6 duration-300 animate-in fade-in slide-in-from-right-4 motion-reduce:animate-none"
+        >
           <div className="flex flex-col gap-1.5">
             <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-balance">
-              {['¿Dónde y cuándo ocurrió?', '¿Qué consecuencias tuvo?', '¿Qué pasó?', 'Agrega fotos', '¿Quién reporta?'][paso]}
+              {
+                [
+                  '¿Dónde y cuándo ocurrió?',
+                  '¿Qué consecuencias tuvo?',
+                  '¿Qué pasó?',
+                  'Agrega fotos',
+                  '¿Quién reporta?',
+                ][paso]
+              }
             </h1>
             <p className="text-[15px] leading-snug text-muted-foreground">
-              {[
-                'Ubica el incidente para que HSE sepa dónde ir.',
-                'Marca todo lo que aplique. Puedes marcar más de una.',
-                'Cuenta lo que viste, sin suposiciones, y qué se hizo de inmediato.',
-                'La primera foto es la que sale en el reporte.',
-                'Con esto cerramos el reporte y se genera el PDF.',
-              ][paso]}
+              {
+                [
+                  'Ubica el incidente para que HSE sepa dónde ir.',
+                  'Marca todo lo que aplique. Puedes marcar más de una.',
+                  'Cuenta lo que viste, sin suposiciones, y qué se hizo de inmediato.',
+                  'La primera foto es la que sale en el reporte.',
+                  'Con esto cerramos el reporte y se genera el PDF.',
+                ][paso]
+              }
             </p>
           </div>
 
@@ -518,7 +540,9 @@ function PasoConsecuencias({
               <span className="text-[16px] font-medium">{c.label}</span>
               <span
                 className={`flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition ${
-                  activa ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40'
+                  activa
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-muted-foreground/40'
                 }`}
               >
                 {activa && <Check className="size-4" aria-hidden />}
@@ -591,7 +615,12 @@ function PasoRelato({
               <button
                 type="button"
                 aria-label={`Quitar acción ${i + 1}`}
-                onClick={() => set('acciones', form.acciones.filter((_, j) => j !== i))}
+                onClick={() =>
+                  set(
+                    'acciones',
+                    form.acciones.filter((_, j) => j !== i),
+                  )
+                }
                 className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-border text-muted-foreground transition active:scale-[0.96]"
               >
                 <Trash2 className="size-4" aria-hidden />
@@ -627,7 +656,10 @@ function PasoFotos({
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-3 gap-3">
         {fotos.map((f, i) => (
-          <div key={f.preview} className="relative aspect-square overflow-hidden rounded-2xl border border-border">
+          <div
+            key={f.preview}
+            className="relative aspect-square overflow-hidden rounded-2xl border border-border"
+          >
             <img src={f.preview} alt={`Foto ${i + 1}`} className="size-full object-cover" />
             {i === 0 && (
               <span className="absolute inset-x-0 bottom-0 bg-black/60 py-1 text-center text-[11px] font-medium text-white">
@@ -663,7 +695,8 @@ function PasoFotos({
         )}
       </div>
       <p className="text-[13px] text-muted-foreground">
-        Hasta {MAX_FOTOS} fotos. Se achican en tu teléfono antes de subirlas, así que no gastas datos de más.
+        Hasta {MAX_FOTOS} fotos. Se achican en tu teléfono antes de subirlas, así que no gastas
+        datos de más.
       </p>
     </div>
   );

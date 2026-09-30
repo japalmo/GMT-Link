@@ -33,7 +33,6 @@ import {
 } from './dto/documents.dto';
 import type { PersonalDocumentView } from './documents.types';
 
-
 /**
  * Documentos personales (§6-1.5 "Mis documentos").
  *
@@ -88,10 +87,14 @@ export class DocumentsController {
     const status = (Object.values(DocumentStatus) as string[]).includes(rawStatus)
       ? (rawStatus as DocumentStatus)
       : undefined;
-    return this.documentsService.listMineTable(this.requireUserId(authUser), {
-      status,
-      expiring: filters?.expiring === 'true',
-    }, req);
+    return this.documentsService.listMineTable(
+      this.requireUserId(authUser),
+      {
+        status,
+        expiring: filters?.expiring === 'true',
+      },
+      req,
+    );
   }
 
   /**
@@ -141,10 +144,7 @@ export class DocumentsController {
   /** Borra un documento propio (solo el dueño). */
   @Delete('me/:id')
   @HttpCode(204)
-  remove(
-    @CurrentUser() authUser: AuthUser | undefined,
-    @Param('id') id: string,
-  ): Promise<void> {
+  remove(@CurrentUser() authUser: AuthUser | undefined, @Param('id') id: string): Promise<void> {
     return this.documentsService.remove(this.requireUserId(authUser), id);
   }
 

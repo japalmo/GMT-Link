@@ -196,10 +196,7 @@ describe('ProjectsService', () => {
       mock.project.create.mockResolvedValue({ id: 'p1', code: 'FAE-1', clientId: 'c1', kpis: {} });
       mock.membership.create.mockResolvedValue({});
 
-      await service.create(
-        'u1',
-        dto({ startDate: '2026-07-01', endDate: '2026-08-01' }),
-      );
+      await service.create('u1', dto({ startDate: '2026-07-01', endDate: '2026-08-01' }));
 
       const createArgs = mock.project.create.mock.calls[0]?.[0] as {
         data: { startDate: Date | null; endDate: Date | null };
@@ -276,7 +273,8 @@ describe('ProjectsService', () => {
   });
 
   describe('createService', () => {
-    const svcDto = (): CreateServiceDto => ({ serviceTypeId: 'st1' }) as unknown as CreateServiceDto;
+    const svcDto = (): CreateServiceDto =>
+      ({ serviceTypeId: 'st1' }) as unknown as CreateServiceDto;
 
     const serviceType = {
       id: 'st1',

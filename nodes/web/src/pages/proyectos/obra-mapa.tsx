@@ -137,7 +137,11 @@ function vistaSatelitalHtml(p: ObraMapPoint): string {
  * Ficha del cerco. Muestra el área y el estado de la SEMANA que se esté
  * mirando: retroceder en el tablero retrocede también esta ventana.
  */
-function popupHtml(p: ObraMapPoint, pie: string, foto: { url: string; date: string } | null): string {
+function popupHtml(
+  p: ObraMapPoint,
+  pie: string,
+  foto: { url: string; date: string } | null,
+): string {
   const etapa = p.currentStep
     ? `<div style="margin-top:4px">Ahora: <strong>${escapar(p.currentStep)}</strong></div>`
     : '';

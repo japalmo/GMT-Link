@@ -122,42 +122,108 @@ const router = createBrowserRouter([
           // como pestaña (gateada por `canManageRoles` en la página). La ruta
           // `/roles` se conserva para acceso directo: renderiza la misma página
           // en modo standalone.
-          { path: '/usuarios', element: <RequireModule module="usuarios">{lazyRoute(<UsuariosPage />)}</RequireModule> },
+          {
+            path: '/usuarios',
+            element: <RequireModule module="usuarios">{lazyRoute(<UsuariosPage />)}</RequireModule>,
+          },
           { path: '/roles', element: lazyRoute(<RolesPage />) },
           { path: '/perfil', element: lazyRoute(<PerfilPage />) },
           { path: '/perfil/cv', element: lazyRoute(<CvPage />) },
           { path: '/perfil/documentos', element: lazyRoute(<DocumentsPage />) },
-          { path: '/rrhh', element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule> },
-          { path: '/hse', element: <RequireModule module="hse">{lazyRoute(<HsePage />)}</RequireModule> },
-          { path: '/rrhh/:tab', element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule> },
+          {
+            path: '/rrhh',
+            element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule>,
+          },
+          {
+            path: '/hse',
+            element: <RequireModule module="hse">{lazyRoute(<HsePage />)}</RequireModule>,
+          },
+          {
+            path: '/rrhh/:tab',
+            element: <RequireModule module="rrhh">{lazyRoute(<RrhhPage />)}</RequireModule>,
+          },
           // La sección se llamaba Directorio. El enlace viejo sigue sirviendo:
           // hay marcadores y correos apuntando ahí.
           { path: '/directorio', element: <Navigate to="/rrhh" replace /> },
           { path: '/notificaciones', element: lazyRoute(<NotificacionesPage />) },
           { path: '/configuracion', element: lazyRoute(<ConfiguracionPage />) },
-          { path: '/finanzas', element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule> },
-          { path: '/finanzas/:tab', element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule> },
-          { path: '/operaciones', element: <RequireModule module="operaciones">{lazyRoute(<OperacionesPage />)}</RequireModule> },
-          { path: '/operaciones/:tab', element: <RequireModule module="operaciones">{lazyRoute(<OperacionesPage />)}</RequireModule> },
+          {
+            path: '/finanzas',
+            element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule>,
+          },
+          {
+            path: '/finanzas/:tab',
+            element: <RequireModule module="finanzas">{lazyRoute(<FinanzasPage />)}</RequireModule>,
+          },
+          {
+            path: '/operaciones',
+            element: (
+              <RequireModule module="operaciones">{lazyRoute(<OperacionesPage />)}</RequireModule>
+            ),
+          },
+          {
+            path: '/operaciones/:tab',
+            element: (
+              <RequireModule module="operaciones">{lazyRoute(<OperacionesPage />)}</RequireModule>
+            ),
+          },
           // Proyectos: jerarquía A0 (rutas exactas que consumen las páginas reales
           // de la fase siguiente). :clientId / :faenaId / :projectId via useParams.
-          { path: '/proyectos', element: <RequireModule module="proyectos">{lazyRoute(<ProyectosClientesPage />)}</RequireModule> },
-          { path: '/proyectos/cliente/:clientId', element: <RequireModule module="proyectos">{lazyRoute(<ProyectosFaenasPage />)}</RequireModule> },
+          {
+            path: '/proyectos',
+            element: (
+              <RequireModule module="proyectos">
+                {lazyRoute(<ProyectosClientesPage />)}
+              </RequireModule>
+            ),
+          },
+          {
+            path: '/proyectos/cliente/:clientId',
+            element: (
+              <RequireModule module="proyectos">{lazyRoute(<ProyectosFaenasPage />)}</RequireModule>
+            ),
+          },
           {
             path: '/proyectos/cliente/:clientId/faena/:faenaId',
-            element: <RequireModule module="proyectos">{lazyRoute(<ProyectosListaPage />)}</RequireModule>,
+            element: (
+              <RequireModule module="proyectos">{lazyRoute(<ProyectosListaPage />)}</RequireModule>
+            ),
           },
-          { path: '/proyectos/proyecto/:projectId', element: <RequireModule module="proyectos">{lazyRoute(<ProyectoDetallePage />)}</RequireModule> },
-          { path: '/recursos', element: <RequireModule module="recursos">{lazyRoute(<RecursosPage />)}</RequireModule> },
-          { path: '/herramientas', element: <RequireModule module="herramientas">{lazyRoute(<GisToolsPage />)}</RequireModule> },
+          {
+            path: '/proyectos/proyecto/:projectId',
+            element: (
+              <RequireModule module="proyectos">{lazyRoute(<ProyectoDetallePage />)}</RequireModule>
+            ),
+          },
+          {
+            path: '/recursos',
+            element: <RequireModule module="recursos">{lazyRoute(<RecursosPage />)}</RequireModule>,
+          },
+          {
+            path: '/herramientas',
+            element: (
+              <RequireModule module="herramientas">{lazyRoute(<GisToolsPage />)}</RequireModule>
+            ),
+          },
           // Levantar una solicitud a Informática: TODO usuario autenticado. Vive
           // en /tickets para no colgar de ninguna de las dos secciones: la
           // bandeja es una pestaña de Operaciones y /soporte es el panel de TI.
           { path: '/tickets/nuevo', element: lazyRoute(<SoporteNuevoPage />) },
           // Enlace legacy de la bandeja, que ahora es pestaña de Operaciones.
-          { path: '/soporte/mis-tickets', element: <Navigate to="/operaciones/mis-solicitudes" replace /> },
-          { path: '/soporte', element: <RequireModule module="soporte">{lazyRoute(<SoportePage />)}</RequireModule> },
-          { path: '/v-metric', element: <RequireModule module="v-metric">{lazyRoute(<MetricsDashboard />)}</RequireModule> },
+          {
+            path: '/soporte/mis-tickets',
+            element: <Navigate to="/operaciones/mis-solicitudes" replace />,
+          },
+          {
+            path: '/soporte',
+            element: <RequireModule module="soporte">{lazyRoute(<SoportePage />)}</RequireModule>,
+          },
+          {
+            path: '/v-metric',
+            element: (
+              <RequireModule module="v-metric">{lazyRoute(<MetricsDashboard />)}</RequireModule>
+            ),
+          },
           // QA del design system.
           { path: '/design', element: lazyRoute(<DesignDemo />) },
           // Demos aisladas de las primitivas §5 (Etapa 0.8, QA).

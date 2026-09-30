@@ -40,8 +40,18 @@ function act(over: Partial<ObraActivity> & { id: string }): ObraActivity {
 
 describe('ponderación por cantidad × duración', () => {
   it('una partida grande y larga pesa mucho más que una chica y corta', () => {
-    const grande = act({ id: 'dados', quantityTotal: 135, start: d('2026-01-01'), end: d('2026-01-21') });
-    const chica = act({ id: 'faenas', quantityTotal: 3, start: d('2026-01-01'), end: d('2026-01-06') });
+    const grande = act({
+      id: 'dados',
+      quantityTotal: 135,
+      start: d('2026-01-01'),
+      end: d('2026-01-21'),
+    });
+    const chica = act({
+      id: 'faenas',
+      quantityTotal: 3,
+      start: d('2026-01-01'),
+      end: d('2026-01-06'),
+    });
     expect(weightOf(grande)).toBeGreaterThan(weightOf(chica) * 100);
   });
 
@@ -57,10 +67,7 @@ describe('ponderación por cantidad × duración', () => {
   it('la cantidad ejecutada es la SUMA de los reportes, no el último', () => {
     const a = act({
       id: 'z',
-      progress: [
-        rep('2026-01-02', 10),
-        rep('2026-01-03', 15),
-      ],
+      progress: [rep('2026-01-02', 10), rep('2026-01-03', 15)],
     });
     expect(doneOf(a)).toBe(25);
   });
@@ -68,10 +75,7 @@ describe('ponderación por cantidad × duración', () => {
   it('un reporte negativo corrige sin borrar historial', () => {
     const a = act({
       id: 'z',
-      progress: [
-        rep('2026-01-02', 30),
-        rep('2026-01-03', -5),
-      ],
+      progress: [rep('2026-01-02', 30), rep('2026-01-03', -5)],
     });
     expect(doneOf(a)).toBe(25);
   });
@@ -103,7 +107,12 @@ describe('avance real y planificado', () => {
 
   it('adelantado, en línea y leve atraso caen en su tramo', () => {
     const conAvance = (q: number) =>
-      computeObraDashboard('p', 'P', [act({ id: 'a', progress: [rep('2026-01-05', q)] })], d('2026-01-06'));
+      computeObraDashboard(
+        'p',
+        'P',
+        [act({ id: 'a', progress: [rep('2026-01-05', q)] })],
+        d('2026-01-06'),
+      );
     expect(conAvance(60).status).toBe('ADELANTADO');
     expect(conAvance(50).status).toBe('EN_LINEA');
     expect(conAvance(47).status).toBe('LEVE_ATRASO');
@@ -116,8 +125,12 @@ describe('avance real y planificado', () => {
   });
 
   it('antes del inicio el planificado es 0 y después del fin es 100', () => {
-    expect(computeObraDashboard('p', 'P', [act({ id: 'a' })], d('2025-12-01')).plannedProgress).toBe(0);
-    expect(computeObraDashboard('p', 'P', [act({ id: 'a' })], d('2026-06-01')).plannedProgress).toBe(100);
+    expect(
+      computeObraDashboard('p', 'P', [act({ id: 'a' })], d('2025-12-01')).plannedProgress,
+    ).toBe(0);
+    expect(
+      computeObraDashboard('p', 'P', [act({ id: 'a' })], d('2026-06-01')).plannedProgress,
+    ).toBe(100);
   });
 });
 
@@ -125,9 +138,17 @@ describe('fases', () => {
   it('el % de la fase se pondera, no es promedio simple de sus actividades', () => {
     // Grande al 0% y chica al 100%: el promedio simple daría 50%, pero la fase
     // debe quedar cerca de 0 porque la que pesa es la grande.
-    const grande = act({ id: 'g', quantityTotal: 1000, start: d('2026-01-01'), end: d('2026-01-21') });
+    const grande = act({
+      id: 'g',
+      quantityTotal: 1000,
+      start: d('2026-01-01'),
+      end: d('2026-01-21'),
+    });
     const chica = act({
-      id: 'c', quantityTotal: 2, start: d('2026-01-01'), end: d('2026-01-03'),
+      id: 'c',
+      quantityTotal: 2,
+      start: d('2026-01-01'),
+      end: d('2026-01-03'),
       progress: [rep('2026-01-02', 2)],
     });
     const r = computeObraDashboard('p', 'P', [grande, chica], d('2026-01-10'));
@@ -146,8 +167,20 @@ describe('fases', () => {
 
 describe('hitos', () => {
   it('quedan fuera del avance y se ordenan por fecha', () => {
-    const h1 = act({ id: 'h1', name: 'Entrega', isMilestone: true, quantityTotal: null, end: d('2026-03-01') });
-    const h2 = act({ id: 'h2', name: 'Kick-off', isMilestone: true, quantityTotal: null, end: d('2026-01-05') });
+    const h1 = act({
+      id: 'h1',
+      name: 'Entrega',
+      isMilestone: true,
+      quantityTotal: null,
+      end: d('2026-03-01'),
+    });
+    const h2 = act({
+      id: 'h2',
+      name: 'Kick-off',
+      isMilestone: true,
+      quantityTotal: null,
+      end: d('2026-01-05'),
+    });
     const r = computeObraDashboard('p', 'P', [act({ id: 'a' }), h1, h2], d('2026-01-06'));
     expect(r.milestones.map((m) => m.name)).toEqual(['Kick-off', 'Entrega']);
     expect(r.phases.flatMap((f) => f.activities).map((x) => x.id)).toEqual(['a']);
@@ -173,9 +206,12 @@ describe('curvas', () => {
     // Misma actividad, ventana temprana al principio y tardía al final.
     const a = act({
       id: 'a',
-      start: d('2026-01-01'), end: d('2026-01-31'),
-      earlyStart: d('2026-01-01'), earlyFinish: d('2026-01-10'),
-      lateStart: d('2026-01-21'), lateFinish: d('2026-01-31'),
+      start: d('2026-01-01'),
+      end: d('2026-01-31'),
+      earlyStart: d('2026-01-01'),
+      earlyFinish: d('2026-01-10'),
+      lateStart: d('2026-01-21'),
+      lateFinish: d('2026-01-31'),
     });
     const r = computeObraDashboard('p', 'P', [a], d('2026-01-15'));
     const en = (c: { date: string; value: number }[], f: string) =>
@@ -187,7 +223,8 @@ describe('curvas', () => {
   it('la curva real NO se dibuja más allá del último reporte', () => {
     const a = act({
       id: 'a',
-      start: d('2026-01-01'), end: d('2026-03-01'),
+      start: d('2026-01-01'),
+      end: d('2026-03-01'),
       progress: [rep('2026-01-05', 20)],
     });
     const r = computeObraDashboard('p', 'P', [a], d('2026-02-20'));
@@ -204,7 +241,8 @@ describe('curvas', () => {
     const a = act({ id: 'a', start: d('2026-01-01'), end: d('2026-02-01') });
     const r = computeObraDashboard('p', 'P', [a], d('2026-01-15'));
     const vals = r.curves.scheduled.map((p) => p.value);
-    for (let i = 1; i < vals.length; i += 1) expect(vals[i] ?? 0).toBeGreaterThanOrEqual(vals[i - 1] ?? 0);
+    for (let i = 1; i < vals.length; i += 1)
+      expect(vals[i] ?? 0).toBeGreaterThanOrEqual(vals[i - 1] ?? 0);
     expect(vals.at(-1)).toBe(100);
   });
 });
@@ -262,7 +300,12 @@ describe('cercos con etapas (jerarquía padre → hijas)', () => {
   });
 
   it('una partida suelta sigue siendo una línea sin etapas', () => {
-    const r = computeObraDashboard('p', 'P', [act({ id: 'zanja', quantityTotal: 1000 })], d('2026-01-06'));
+    const r = computeObraDashboard(
+      'p',
+      'P',
+      [act({ id: 'zanja', quantityTotal: 1000 })],
+      d('2026-01-06'),
+    );
     const linea = r.phases[0]?.activities[0];
     expect(linea?.steps).toEqual([]);
     expect(linea?.stepsTotal).toBe(1);
@@ -351,8 +394,20 @@ describe('cortes que mezclan unidades', () => {
   it('por sector se cuentan cercos, porque sumar pto + un + paño no significa nada', () => {
     const etapas = (codigo: string, sector: string) => [
       act({ id: `c-${codigo}`, name: `Cerco ${codigo} · ${sector}`, quantityTotal: null }),
-      act({ id: `${codigo}-r`, name: 'Replanteo topográfico', parentId: `c-${codigo}`, quantityTotal: 1, unit: 'pto' }),
-      act({ id: `${codigo}-m`, name: 'Montaje de mallas ACMAFOR', parentId: `c-${codigo}`, quantityTotal: 6, unit: 'paño' }),
+      act({
+        id: `${codigo}-r`,
+        name: 'Replanteo topográfico',
+        parentId: `c-${codigo}`,
+        quantityTotal: 1,
+        unit: 'pto',
+      }),
+      act({
+        id: `${codigo}-m`,
+        name: 'Montaje de mallas ACMAFOR',
+        parentId: `c-${codigo}`,
+        quantityTotal: 6,
+        unit: 'paño',
+      }),
     ];
     const r = computeObraDashboard(
       'p',
@@ -373,7 +428,14 @@ describe('cortes que mezclan unidades', () => {
       'P',
       [
         act({ id: 'c-A-I', name: 'Cerco A-I · PF8', quantityTotal: null }),
-        act({ id: 'e1', name: 'Excavación de dados', parentId: 'c-A-I', quantityTotal: 6, unit: 'un', progress: [rep('2026-01-05', 3)] }),
+        act({
+          id: 'e1',
+          name: 'Excavación de dados',
+          parentId: 'c-A-I',
+          quantityTotal: 6,
+          unit: 'un',
+          progress: [rep('2026-01-05', 3)],
+        }),
       ],
       d('2026-01-06'),
     );
@@ -425,8 +487,8 @@ describe('mapa de la faena', () => {
 
   it('el estado sale del avance: pendiente, en ejecución o terminado', () => {
     const estado = (hechas: number) =>
-      computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, hechas), d('2026-01-06'))
-        .map.points[0]?.status;
+      computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, hechas), d('2026-01-06')).map
+        .points[0]?.status;
     expect(estado(0)).toBe('PENDIENTE');
     expect(estado(1)).toBe('EN_EJECUCION');
     expect(estado(2)).toBe('TERMINADO');
@@ -439,8 +501,18 @@ describe('mapa de la faena', () => {
   });
 
   it('un cerco terminado o sin empezar no declara etapa en curso', () => {
-    const sinEmpezar = computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, 0), d('2026-01-06'));
-    const listo = computeObraDashboard('p', 'P', cercoUbicado('A-I', 'PF8', MB, 2), d('2026-01-06'));
+    const sinEmpezar = computeObraDashboard(
+      'p',
+      'P',
+      cercoUbicado('A-I', 'PF8', MB, 0),
+      d('2026-01-06'),
+    );
+    const listo = computeObraDashboard(
+      'p',
+      'P',
+      cercoUbicado('A-I', 'PF8', MB, 2),
+      d('2026-01-06'),
+    );
     expect(sinEmpezar.map.points[0]?.currentStep).toBeNull();
     expect(listo.map.points[0]?.currentStep).toBeNull();
   });
@@ -460,7 +532,15 @@ describe('mapa de la faena', () => {
     const r = computeObraDashboard(
       'p',
       'P',
-      [act({ id: 'zanja', name: 'Excavación zanja eléctrica', quantityTotal: 1000, lat: MB.lat, lng: MB.lng })],
+      [
+        act({
+          id: 'zanja',
+          name: 'Excavación zanja eléctrica',
+          quantityTotal: 1000,
+          lat: MB.lat,
+          lng: MB.lng,
+        }),
+      ],
       d('2026-01-06'),
     );
     expect(r.map.points).toEqual([]);
