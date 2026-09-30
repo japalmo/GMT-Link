@@ -19,7 +19,10 @@ export function tableSkipTake(req: TableRequest): {
   take: number;
 } {
   const rawSize = Math.trunc(Number(req.pageSize));
-  const pageSize = Math.min(Math.max(Number.isFinite(rawSize) ? rawSize : 10, 1), MAX_TABLE_PAGE_SIZE);
+  const pageSize = Math.min(
+    Math.max(Number.isFinite(rawSize) ? rawSize : 10, 1),
+    MAX_TABLE_PAGE_SIZE,
+  );
   const rawPage = Math.trunc(Number(req.page));
   const page = Math.max(Number.isFinite(rawPage) ? rawPage : 1, 1);
   return { page, pageSize, skip: (page - 1) * pageSize, take: pageSize };
@@ -41,12 +44,10 @@ export function tableOrderBy<O>(
   sortMap: Record<string, (dir: SortDir) => O>,
   defaultOrder: O,
 ): O {
-  const key = req.sortBy;
-  if (key && Object.prototype.hasOwnProperty.call(sortMap, key)) {
-    const factory = sortMap[key];
-    if (factory) return factory(tableSortDir(req));
-  }
-  return defaultOrder;
+  // Map y no `sortMap[key]`: la clave viene del cliente, y sobre un objeto
+  // literal "toString" o "constructor" encontrarían un método heredado.
+  const factory = req.sortBy ? new Map(Object.entries(sortMap)).get(req.sortBy) : undefined;
+  return factory ? factory(tableSortDir(req)) : defaultOrder;
 }
 
 /**
@@ -71,6 +72,11 @@ export function tableAndWhere<W>(...parts: Array<W | undefined>): W | undefined 
 }
 
 /** Empaqueta el resultado en la forma `TablePage<T>` del contrato. */
-export function tablePage<T>(items: T[], total: number, page: number, pageSize: number): TablePage<T> {
+export function tablePage<T>(
+  items: T[],
+  total: number,
+  page: number,
+  pageSize: number,
+): TablePage<T> {
   return { items, total, page, pageSize };
 }

@@ -378,7 +378,10 @@ export function ordenarRequisitos(
     },
     vigencia: porUrgenciaFila,
   };
-  const elegido = (sortBy && cmp[sortBy]) || porUrgenciaFila;
+  // Map y no `cmp[sortBy]`: `sortBy` viene de la URL, y sobre un objeto
+  // literal "toString" o "constructor" devolvían un método heredado que se
+  // usaba como comparador.
+  const elegido = (sortBy && new Map(Object.entries(cmp)).get(sortBy)) || porUrgenciaFila;
   return [...filas].sort((a, b) => signo * elegido(a, b) || porNombre(a, b));
 }
 
@@ -459,7 +462,8 @@ export function consultaPersonas(
     porVencer: (a, b) => a.porVencer - b.porVencer,
     total: (a, b) => a.total - b.total,
   };
-  const elegido = (sortBy && cmp[sortBy]) || porNombre;
+  // Mismo motivo que en `ordenarRequisitos`: la clave viene de la URL.
+  const elegido = (sortBy && new Map(Object.entries(cmp)).get(sortBy)) || porNombre;
   filas.sort((a, b) => signo * elegido(a, b) || porNombre(a, b));
   return { filas, requisitos };
 }

@@ -360,7 +360,10 @@ export class ProjectsService {
     // El proyecto con clave solo abre con el pase de la clave o con una sesión
     // de GMT Link que ya tenga permiso de ver el proyecto.
     if (project?.publicPasswordHash) {
-      const conPase = credencial.pase ? verifyObraPass(credencial.pase, token) : false;
+      // Se verifica siempre, venga o no: uno ausente no pasa la firma. Así la
+      // decisión depende del resultado de la verificación y no de lo que el
+      // cliente eligió mandar.
+      const conPase = verifyObraPass(credencial.pase ?? '', token);
       if (!conPase && !credencial.sesionAutorizada) {
         throw new UnauthorizedException('Este tablero pide clave o iniciar sesión.');
       }

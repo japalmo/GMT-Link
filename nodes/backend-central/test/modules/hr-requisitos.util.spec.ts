@@ -4,6 +4,7 @@ import {
   consultaRequisitos,
   construirTablero,
   habilita,
+  ordenarRequisitos,
   requisitosDe,
   type FuentePersona,
 } from '../../src/modules/hr/requisitos.util';
@@ -313,5 +314,25 @@ describe('construirTablero', () => {
     const t = construirTablero([p], [], [], HOY);
     expect(t.atender.map((a) => a.id)).toEqual(['vencido', 'pronto']);
     expect(t.requisitos.personasConVencidos).toBe(1);
+  });
+});
+
+describe('ordenar por una columna que viene de la URL', () => {
+  it('un nombre que no es columna cae al orden por defecto, no a un método heredado', () => {
+    // `sortBy` llega del cliente. Con `cmp[sortBy]` sobre un objeto literal,
+    // "toString" o "constructor" encontraban un método heredado y lo usaban
+    // como comparador: el orden salía roto o la consulta reventaba.
+    const p = persona({
+      id: 'p1',
+      examenes: [
+        { id: 'e1', type: 'Altura', issuedAt: null, expiresAt: en(-2), noExpiry: false },
+        { id: 'e2', type: 'Psico', issuedAt: null, expiresAt: en(10), noExpiry: false },
+      ],
+    });
+    const filas = requisitosDe(p, HOY);
+    const porDefecto = ordenarRequisitos(filas, undefined, 'asc').map((f) => f.key);
+    for (const raro of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      expect(ordenarRequisitos(filas, raro, 'asc').map((f) => f.key)).toEqual(porDefecto);
+    }
   });
 });
