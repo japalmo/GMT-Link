@@ -44,10 +44,15 @@ export function tableOrderBy<O>(
   sortMap: Record<string, (dir: SortDir) => O>,
   defaultOrder: O,
 ): O {
-  // Map y no `sortMap[key]`: la clave viene del cliente, y sobre un objeto
-  // literal "toString" o "constructor" encontrarían un método heredado.
-  const factory = req.sortBy ? new Map(Object.entries(sortMap)).get(req.sortBy) : undefined;
-  return factory ? factory(tableSortDir(req)) : defaultOrder;
+  // La clave viene del cliente: solo vale si es PROPIA del mapa y es una
+  // función. Sobre un objeto literal, "toString" o "constructor" encontrarían
+  // un método heredado.
+  const key = req.sortBy;
+  if (key && Object.prototype.hasOwnProperty.call(sortMap, key)) {
+    const factory = sortMap[key];
+    if (typeof factory === 'function') return factory(tableSortDir(req));
+  }
+  return defaultOrder;
 }
 
 /**

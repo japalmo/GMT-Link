@@ -355,6 +355,20 @@ interface HrEstadoLike {
   diasRestantes: number | null;
 }
 
+/**
+ * El comparador de la columna pedida, solo si es PROPIO del mapa y es una
+ * función. `sortBy` viene de la URL: sobre un objeto literal, "toString" o
+ * "constructor" devolverían un método heredado.
+ */
+function comparadorPropio<T>(
+  cmp: Record<string, (a: T, b: T) => number>,
+  sortBy: string | undefined,
+): ((a: T, b: T) => number) | undefined {
+  if (!sortBy || !Object.prototype.hasOwnProperty.call(cmp, sortBy)) return undefined;
+  const elegido = cmp[sortBy];
+  return typeof elegido === 'function' ? elegido : undefined;
+}
+
 function porNombre(a: { lastName: string; firstName: string }, b: typeof a): number {
   return a.lastName.localeCompare(b.lastName, 'es') || a.firstName.localeCompare(b.firstName, 'es');
 }
@@ -378,10 +392,7 @@ export function ordenarRequisitos(
     },
     vigencia: porUrgenciaFila,
   };
-  // Map y no `cmp[sortBy]`: `sortBy` viene de la URL, y sobre un objeto
-  // literal "toString" o "constructor" devolvían un método heredado que se
-  // usaba como comparador.
-  const elegido = (sortBy && new Map(Object.entries(cmp)).get(sortBy)) || porUrgenciaFila;
+  const elegido = comparadorPropio(cmp, sortBy) ?? porUrgenciaFila;
   return [...filas].sort((a, b) => signo * elegido(a, b) || porNombre(a, b));
 }
 
@@ -462,8 +473,7 @@ export function consultaPersonas(
     porVencer: (a, b) => a.porVencer - b.porVencer,
     total: (a, b) => a.total - b.total,
   };
-  // Mismo motivo que en `ordenarRequisitos`: la clave viene de la URL.
-  const elegido = (sortBy && new Map(Object.entries(cmp)).get(sortBy)) || porNombre;
+  const elegido = comparadorPropio(cmp, sortBy) ?? porNombre;
   filas.sort((a, b) => signo * elegido(a, b) || porNombre(a, b));
   return { filas, requisitos };
 }
