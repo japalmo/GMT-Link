@@ -435,6 +435,8 @@ export function computeObraDashboard(
         percent: porcentajeDe(acts),
         activities: lineas
           .sort((x, y) => x.desde - y.desde || x.name.localeCompare(y.name, 'es'))
+          // `desde` solo sirve para ordenar: se saca antes de devolver la línea.
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           .map(({ desde: _desde, ...linea }) => linea),
       };
     });

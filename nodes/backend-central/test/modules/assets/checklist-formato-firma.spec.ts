@@ -65,7 +65,7 @@ async function textoDe(bytes: Uint8Array): Promise<string> {
       flujo = Buffer.from(contenido).toString('latin1');
     }
     for (const [, hex] of flujo.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
-      partes.push(Buffer.from(hex, 'hex').toString('latin1'));
+      partes.push(Buffer.from(hex ?? '', 'hex').toString('latin1'));
     }
   }
   return partes.join('\n');

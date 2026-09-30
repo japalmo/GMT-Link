@@ -3,6 +3,7 @@ import {
   claseDeLicencia,
   construirDatosConductor,
 } from '../../../src/modules/assets/checklist-conductor.util';
+import { construirFormato } from '../../../src/modules/assets/checklist-formato.builder';
 
 describe('claseDeLicencia', () => {
   it('lee la clase cuando viene rotulada', () => {
@@ -151,8 +152,6 @@ describe('cableado con el formato', () => {
   it('las licencias llegan al bloque que el PDF reserva', async () => {
     // El util puede estar perfecto y el bloque salir vacío igual si nadie se lo
     // pasa al builder: durante meses `datosConductor` fue `[]` fijo.
-    const { construirFormato } =
-      await import('../../../src/modules/assets/checklist-formato.builder');
     const filas = construirDatosConductor({
       licenciaPerfil: { clase: 'B', vence: d('2028-08-14') },
       acreditacionFaena: null,

@@ -33,6 +33,7 @@ import { formatSvgAnswerValue } from '../../src/modules/assets/checklist-pdf.uti
 function buildUserRow(overrides: Partial<User> = {}): User {
   return {
     id: 'u-1',
+    isFieldWorker: false,
     firstName: 'Juan',
     secondName: null,
     lastName: 'Pérez',
@@ -155,6 +156,11 @@ function buildTemplateRow(overrides: Partial<ChecklistTemplate> = {}): Checklist
 function buildSubmissionRow(overrides: Partial<ChecklistSubmission> = {}): ChecklistSubmission {
   return {
     id: 'sub-1',
+    declaredName: null,
+    declaredEmail: null,
+    declaredLicenseClass: null,
+    declaredLicenseExpiry: null,
+    declaredInternalExpiry: null,
     assetId: 'a-1',
     templateId: 'tpl-1',
     userId: 'u-1',

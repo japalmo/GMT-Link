@@ -14,13 +14,16 @@ import {
 } from '../../src/modules/documents/documents.service';
 import type { GamificationService } from '../../src/modules/gamification/gamification.service';
 
-const gamificationMock = { awardPoints: vi.fn(() => Promise.resolve()) } as unknown as GamificationService;
+const gamificationMock = {
+  awardPoints: vi.fn(() => Promise.resolve()),
+} as unknown as GamificationService;
 
 /** Construye una fila PersonalDocument completa con overrides. */
 function buildRow(overrides: Partial<PersonalDocument> = {}): PersonalDocument {
   const now = new Date('2026-06-14T00:00:00.000Z');
   return {
     id: 'doc-1',
+    noExpiry: false,
     userId: 'u1',
     type: 'carnet',
     name: 'Carnet de conducir',
@@ -46,7 +49,10 @@ interface PrismaParts {
   delete: ReturnType<typeof vi.fn>;
 }
 
-function buildPrisma(parts: Partial<PrismaParts> = {}): { prisma: PrismaService; parts: PrismaParts } {
+function buildPrisma(parts: Partial<PrismaParts> = {}): {
+  prisma: PrismaService;
+  parts: PrismaParts;
+} {
   const resolved: PrismaParts = {
     create: parts.create ?? vi.fn(),
     findMany: parts.findMany ?? vi.fn(() => Promise.resolve([])),
@@ -71,15 +77,25 @@ function buildFga(): {
   return { fga: { check } as unknown as FgaService, check };
 }
 
-function buildStorage(): { storage: StorageService; save: ReturnType<typeof vi.fn>; del: ReturnType<typeof vi.fn> } {
+function buildStorage(): {
+  storage: StorageService;
+  save: ReturnType<typeof vi.fn>;
+  del: ReturnType<typeof vi.fn>;
+} {
   const save = vi.fn(() =>
-    Promise.resolve({ key: 'documents/new.pdf', url: 'http://localhost:3001/files/documents/new.pdf' }),
+    Promise.resolve({
+      key: 'documents/new.pdf',
+      url: 'http://localhost:3001/files/documents/new.pdf',
+    }),
   );
   const del = vi.fn(() => Promise.resolve(undefined));
   return { storage: { save, delete: del } as unknown as StorageService, save, del };
 }
 
-function buildNotifications(): { notifications: NotificationsService; create: ReturnType<typeof vi.fn> } {
+function buildNotifications(): {
+  notifications: NotificationsService;
+  create: ReturnType<typeof vi.fn>;
+} {
   const create = vi.fn(() => Promise.resolve(undefined));
   return { notifications: { create } as unknown as NotificationsService, create };
 }
@@ -106,14 +122,24 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, id: 'doc-new' })),
     );
     const { prisma } = buildPrisma({ create });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     const view = await service.create('u1', { type: 'carnet', name: 'Carnet' }, FILE);
 
     expect(storageBits.save).toHaveBeenCalledTimes(1);
     expect(storageBits.save.mock.calls[0]?.[0]).toMatchObject({ folder: 'documents' });
     expect(create).toHaveBeenCalledTimes(1);
-    const data = create.mock.calls[0]?.[0]?.data as { userId: string; status: DocumentStatus; fileUrl: string };
+    const data = create.mock.calls[0]?.[0]?.data as {
+      userId: string;
+      status: DocumentStatus;
+      fileUrl: string;
+    };
     expect(data.userId).toBe('u1');
     expect(data.status).toBe(DocumentStatus.EN_REVISION);
     // Fase 1B: se persiste la CLAVE del storage, no la URL (con R2 sería una
@@ -134,7 +160,13 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...current, ...args.data })),
     );
     const { prisma } = buildPrisma({ findFirst, update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await service.addVersion('u1', 'doc-1', FILE);
 
@@ -156,7 +188,13 @@ describe('DocumentsService', () => {
   it('addVersion sobre un documento ajeno o inexistente lanza 404', async () => {
     const findFirst = vi.fn(() => Promise.resolve(null));
     const { prisma } = buildPrisma({ findFirst });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await expect(service.addVersion('u1', 'ajeno', FILE)).rejects.toBeInstanceOf(NotFoundException);
     expect(storageBits.save).not.toHaveBeenCalled();
@@ -169,7 +207,13 @@ describe('DocumentsService', () => {
       }) => Promise<PersonalDocument[]>
     >(() => Promise.resolve([]));
     const { prisma } = buildPrisma({ findMany });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await service.listMine('u1', { expiring: true });
 
@@ -185,11 +229,20 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await service.approve('admin-id', 'doc-1');
 
-    const data = update.mock.calls[0]?.[0]?.data as { status: DocumentStatus; reviewedById: string };
+    const data = update.mock.calls[0]?.[0]?.data as {
+      status: DocumentStatus;
+      reviewedById: string;
+    };
     expect(data.status).toBe(DocumentStatus.APROBADO);
     expect(data.reviewedById).toBe('admin-id');
   });
@@ -199,7 +252,13 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, userId: 'owner-1', name: 'Carnet' })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await service.approve('admin-id', 'doc-1');
 
@@ -219,7 +278,13 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, userId: 'owner-1', name: 'Carnet' })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await service.reject('admin-id', 'doc-1', 'ilegible');
 
@@ -234,7 +299,13 @@ describe('DocumentsService', () => {
       Promise.resolve(buildRow({ ...args.data, userId: 'same-user' })),
     );
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
     await service.approve('same-user', 'doc-1');
 
@@ -245,9 +316,17 @@ describe('DocumentsService', () => {
     const notFound = Object.assign(new Error('not found'), { code: 'P2025' });
     const update = vi.fn(() => Promise.reject(notFound));
     const { prisma } = buildPrisma({ update });
-    const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+    const service = new DocumentsService(
+      prisma,
+      storageBits.storage,
+      notifBits.notifications,
+      gamificationMock,
+      fgaBits.fga,
+    );
 
-    await expect(service.approve('admin-id', 'no-existe')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.approve('admin-id', 'no-existe')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     expect(notifBits.create).not.toHaveBeenCalled();
   });
 
@@ -256,7 +335,13 @@ describe('DocumentsService', () => {
 
     function buildService(findUnique: ReturnType<typeof vi.fn>): DocumentsService {
       const { prisma } = buildPrisma({ findUnique });
-      return new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+      return new DocumentsService(
+        prisma,
+        storageBits.storage,
+        notifBits.notifications,
+        gamificationMock,
+        fgaBits.fga,
+      );
     }
 
     it('404 si el documento no existe', async () => {
@@ -266,7 +351,9 @@ describe('DocumentsService', () => {
 
     it('dueño con CLAVE y backend local → URL del FilesController', async () => {
       const service = buildService(
-        vi.fn(() => Promise.resolve({ userId: 'u1', fileUrl: 'documents/new.pdf', previousFileUrl: null })),
+        vi.fn(() =>
+          Promise.resolve({ userId: 'u1', fileUrl: 'documents/new.pdf', previousFileUrl: null }),
+        ),
       );
 
       const result = await service.getFileUrl('u1', 'doc-1');
@@ -295,7 +382,11 @@ describe('DocumentsService', () => {
     it('previous=true entrega la versión anterior fresca; 404 si no hay', async () => {
       const service = buildService(
         vi.fn(() =>
-          Promise.resolve({ userId: 'u1', fileUrl: 'documents/new.pdf', previousFileUrl: 'documents/old.pdf' }),
+          Promise.resolve({
+            userId: 'u1',
+            fileUrl: 'documents/new.pdf',
+            previousFileUrl: 'documents/old.pdf',
+          }),
         ),
       );
 
@@ -303,7 +394,9 @@ describe('DocumentsService', () => {
       expect(result).toEqual({ url: `${baseUrl}/files/documents/old.pdf` });
 
       const sinPrevia = buildService(
-        vi.fn(() => Promise.resolve({ userId: 'u1', fileUrl: 'documents/new.pdf', previousFileUrl: null })),
+        vi.fn(() =>
+          Promise.resolve({ userId: 'u1', fileUrl: 'documents/new.pdf', previousFileUrl: null }),
+        ),
       );
       await expect(sinPrevia.getFileUrl('u1', 'doc-1', { previous: true })).rejects.toBeInstanceOf(
         NotFoundException,
@@ -313,10 +406,18 @@ describe('DocumentsService', () => {
     it('ajeno SIN permisos → 404 (no distingue inexistente de ajeno)', async () => {
       fgaBits.check.mockResolvedValue(false);
       const service = buildService(
-        vi.fn(() => Promise.resolve({ userId: 'owner-1', fileUrl: 'documents/new.pdf', previousFileUrl: null })),
+        vi.fn(() =>
+          Promise.resolve({
+            userId: 'owner-1',
+            fileUrl: 'documents/new.pdf',
+            previousFileUrl: null,
+          }),
+        ),
       );
 
-      await expect(service.getFileUrl('intruso', 'doc-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getFileUrl('intruso', 'doc-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
       // Se consultaron ambas relaciones sobre la organización.
       const relations = fgaBits.check.mock.calls.map(
         (c) => (c[0] as { relation: string; object: string }).relation,
@@ -334,7 +435,13 @@ describe('DocumentsService', () => {
         Promise.resolve(input.relation === 'can_review_documents'),
       );
       const service = buildService(
-        vi.fn(() => Promise.resolve({ userId: 'owner-1', fileUrl: 'documents/new.pdf', previousFileUrl: null })),
+        vi.fn(() =>
+          Promise.resolve({
+            userId: 'owner-1',
+            fileUrl: 'documents/new.pdf',
+            previousFileUrl: null,
+          }),
+        ),
       );
 
       const result = await service.getFileUrl('revisor', 'doc-1');
@@ -346,7 +453,13 @@ describe('DocumentsService', () => {
         Promise.resolve(input.relation === 'can_manage_users'),
       );
       const service = buildService(
-        vi.fn(() => Promise.resolve({ userId: 'owner-1', fileUrl: 'documents/new.pdf', previousFileUrl: null })),
+        vi.fn(() =>
+          Promise.resolve({
+            userId: 'owner-1',
+            fileUrl: 'documents/new.pdf',
+            previousFileUrl: null,
+          }),
+        ),
       );
 
       const result = await service.getFileUrl('gestor', 'doc-1');
@@ -364,7 +477,13 @@ describe('DocumentsService', () => {
           Promise.resolve({ userId: 'u1', fileUrl: 'documents/new.pdf', previousFileUrl: null }),
         ),
       });
-      const service = new DocumentsService(prisma, r2, notifBits.notifications, gamificationMock, fgaBits.fga);
+      const service = new DocumentsService(
+        prisma,
+        r2,
+        notifBits.notifications,
+        gamificationMock,
+        fgaBits.fga,
+      );
 
       const result = await service.getFileUrl('u1', 'doc-1');
 
@@ -384,7 +503,13 @@ describe('DocumentsService', () => {
         ),
       );
       const { prisma } = buildPrisma({ findFirst });
-      const service = new DocumentsService(prisma, storageBits.storage, notifBits.notifications, gamificationMock, fgaBits.fga);
+      const service = new DocumentsService(
+        prisma,
+        storageBits.storage,
+        notifBits.notifications,
+        gamificationMock,
+        fgaBits.fga,
+      );
 
       await service.remove('u1', 'doc-1');
 

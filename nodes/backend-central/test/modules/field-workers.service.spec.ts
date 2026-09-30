@@ -74,7 +74,7 @@ describe('FieldWorkersService', () => {
     const data = mock.user.create.mock.calls[0]?.[0].data as Record<string, string>;
     // `.invalid` está reservado por la RFC 2606 para direcciones que nunca
     // resuelven: ningún correo puede terminar en la casilla de una persona real.
-    expect(data.email.endsWith('@trabajador.invalid')).toBe(true);
+    expect(data.email?.endsWith('@trabajador.invalid')).toBe(true);
   });
 
   it('saca tildes y espacios del nombre de usuario', async () => {

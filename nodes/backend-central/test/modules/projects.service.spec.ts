@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { ScopeType } from '@prisma/client';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import type { StorageService } from '../../src/common/storage/storage.service';
 import type { FgaService } from '../../src/fga/fga.service';
 import { ProjectsService } from '../../src/modules/projects/projects.service';
 import type { ClimaService } from '../../src/modules/projects/clima.service';
@@ -111,6 +112,7 @@ describe('ProjectsService', () => {
       prisma,
       fga as unknown as FgaService,
       clima as unknown as ClimaService,
+      {} as unknown as StorageService,
     );
   });
 
