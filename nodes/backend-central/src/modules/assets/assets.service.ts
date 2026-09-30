@@ -3115,6 +3115,7 @@ export class AssetsService {
         fecha: submission.createdAt,
         conductor: submittedByName,
         origen: submission.externalSource,
+        sinVerificar: origenDelEnvio(submission) === 'SIN_VERIFICAR',
         patente: submission.asset.identifier,
         items: templateItems as never,
         answers: answers as never,

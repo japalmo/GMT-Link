@@ -2,7 +2,15 @@ import { CHECKLIST_VEHICULO_GMT } from '@gmt-platform/contracts';
 
 import { isFailure } from './checklist.schema';
 import { formatSvgAnswerValue } from './checklist-pdf.util';
-import type { ChecklistFormatoData, DatoCabecera, FilaFormato } from './checklist-formato-pdf.util';
+import {
+  FILAS_CONDUCTOR,
+  FILAS_EMERGENCIA,
+  FILAS_GENERAL,
+  type ChecklistFormatoData,
+  type DatoCabecera,
+  type DocumentoFormato,
+  type FilaFormato,
+} from './checklist-formato-pdf.util';
 
 /**
  * Arma los datos del PDF con formato real a partir de un checklist enviado.
@@ -58,6 +66,8 @@ export interface EntradaFormato {
   datosConductor?: readonly DatoCabecera[];
   /** `'SHEETS'` cuando el checklist vino de la planilla, `null` si se hizo acá. */
   origen: string | null;
+  /** Lo llenó alguien sin cuenta desde el QR: el nombre es el que escribió. */
+  sinVerificar?: boolean;
   patente: string | null;
   items: readonly ItemPlantilla[];
   answers: readonly RespuestaGuardada[];
@@ -71,9 +81,16 @@ function fechaCorta(d: Date | null): string {
   return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()}`;
 }
 
-function fechaHora(d: Date): string {
+/** Fecha como la escribe la planilla del formato: dd/mm/aaaa. */
+function fechaPlanilla(d: Date): string {
   const p = (n: number): string => String(n).padStart(2, '0');
-  return `${fechaCorta(d)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+/** Número tal cual, sin separador de miles: el formato muestra "25792". */
+function numeroPlano(valor: unknown): string {
+  if (valor === null || valor === undefined || valor === '') return '';
+  return String(valor);
 }
 
 /** Valor legible de una respuesta. */
@@ -89,12 +106,19 @@ function textoValor(valor: unknown): string {
  * La clave se busca DENTRO del tipo y del nombre porque el tipo lo escribe
  * quien sube el documento y no está normalizado.
  */
-const DOCS_CABECERA: ReadonlyArray<{ etiqueta: string; claves: readonly string[] }> = [
-  { etiqueta: 'Permiso de circulación:', claves: ['circulacion', 'circulación', 'permiso'] },
-  { etiqueta: 'Revisión técnica:', claves: ['revision', 'revisión', 'tecnica', 'técnica'] },
-  { etiqueta: 'Seguro:', claves: ['soap', 'seguro'] },
-  { etiqueta: 'Extintor:', claves: ['extintor'] },
-];
+const DOCS_CABECERA = {
+  permiso: ['circulacion', 'circulación', 'permiso'],
+  revision: ['revision', 'revisión', 'tecnica', 'técnica'],
+  seguro: ['soap', 'seguro'],
+  extintor: ['extintor'],
+} as const;
+
+/** Filas que el formato impreso tiene, por sección. */
+const FILAS_DEL_FORMATO: Record<string, ReadonlySet<string>> = {
+  'estado-general': new Set(FILAS_GENERAL),
+  'equipos-emergencia': new Set(FILAS_EMERGENCIA),
+  'condiciones-conductor': new Set(FILAS_CONDUCTOR),
+};
 
 function buscarDocumento(
   documentos: readonly DocumentoVencimiento[],
@@ -129,8 +153,10 @@ export function construirFormato(entrada: EntradaFormato): ChecklistFormatoData 
 
   const respuestaDe = (id: string): unknown => porItem.get(id)?.value;
 
-  const kilometraje = textoValor(respuestaDe('kilometraje'));
-  const proxMant = textoValor(respuestaDe('proxMant'));
+  const kilometraje = numeroPlano(respuestaDe('kilometraje'));
+  const proxMant = numeroPlano(respuestaDe('proxMant'));
+  // Respuestas sin fila en el formato impreso: van a observaciones generales.
+  const extras: string[] = [];
   const observaciones = textoValor(respuestaDe('observaciones'));
   const carroceria = formatSvgAnswerValue(respuestaDe('Carrsvg'))?.lines ?? [];
 
@@ -153,6 +179,7 @@ export function construirFormato(entrada: EntradaFormato): ChecklistFormatoData 
         : undefined;
 
     const fila: FilaFormato = {
+      id,
       etiqueta: etiquetaDeActivo.get(id) ?? canonico.label,
       valor: textoValor(valor),
       ...(comentario ? { observacion: comentario } : {}),
@@ -162,41 +189,69 @@ export function construirFormato(entrada: EntradaFormato): ChecklistFormatoData 
           : false,
     };
 
+    // Un ítem que el formato impreso no trae (el AdBlue se agregó después) no
+    // tiene fila donde ir: si se respondió, se lleva a observaciones generales.
+    const seccionDelFormato = FILAS_DEL_FORMATO[seccion] ?? FILAS_DEL_FORMATO['estado-general'];
+    if (!seccionDelFormato?.has(id)) {
+      if (fila.valor || fila.observacion) {
+        extras.push(`${fila.etiqueta}: ${[fila.valor, fila.observacion].filter(Boolean).join(' — ')}`);
+      }
+      continue;
+    }
+
     if (seccion === 'equipos-emergencia') equiposEmergencia.push(fila);
     else if (seccion === 'condiciones-conductor') condicionesConductor.push(fila);
     else estadoGeneral.push(fila);
   }
 
-  const datosVehiculo: DatoCabecera[] = [
-    { etiqueta: 'Patente:', valor: entrada.patente ?? 'Sin patente' },
-    { etiqueta: 'Kilometraje:', valor: kilometraje || 'Sin dato' },
-  ];
-  if (proxMant) datosVehiculo.push({ etiqueta: 'Próxima mantención:', valor: proxMant });
-  for (const d of DOCS_CABECERA) {
-    const doc = buscarDocumento(entrada.documentos, d.claves);
-    datosVehiculo.push({
-      etiqueta: d.etiqueta,
-      valor: doc ? 'Sí' : 'No registrado',
-      ...(doc?.expirationDate ? { vencimiento: fechaCorta(doc.expirationDate) } : {}),
-    });
+  // Respuestas a ítems que ni siquiera están en la plantilla canónica (una
+  // plantilla hecha a mano, por ejemplo). Tampoco se pierden.
+  const canonicos = new Set(CHECKLIST_VEHICULO_GMT.map((c) => c.id));
+  for (const item of entrada.items) {
+    const id = item.id === undefined || item.id === null ? '' : String(item.id);
+    if (!id || canonicos.has(id) || item.type === 'FIRMA' || id.startsWith('obs_')) continue;
+    const valor = textoValor(respuestaDe(id));
+    if (valor) extras.push(`${etiquetaDeActivo.get(id) ?? id}: ${valor}`);
+  }
+
+  const documento = (claves: readonly string[]): DocumentoFormato => {
+    const doc = buscarDocumento(entrada.documentos, claves);
+    if (!doc) return { presente: false };
+    return doc.expirationDate
+      ? { presente: true, vencimiento: fechaCorta(doc.expirationDate) }
+      : { presente: true };
+  };
+
+  const avisos: string[] = [];
+  if (entrada.origen === 'SHEETS') {
+    avisos.push(
+      'Importado desde la planilla de checklists: el conductor es el nombre que traía ese registro, no una firma hecha en GMT Link.',
+    );
+  } else if (entrada.sinVerificar) {
+    avisos.push(
+      'Llenado sin cuenta en GMT Link (sin verificar): el nombre y los datos del conductor son los que declaró quien lo llenó.',
+    );
   }
 
   return {
     proyecto: entrada.proyecto ?? 'Global / sin proyecto',
-    fecha: fechaHora(entrada.fecha),
+    fecha: fechaPlanilla(entrada.fecha),
     conductor: entrada.conductor ?? 'Sin registrar',
-    ...(entrada.origen === 'SHEETS'
-      ? {
-          origenExterno:
-            'Importado desde la planilla de checklists. El conductor es el nombre que traía ese ' +
-            'registro y no una firma hecha en GMT Link.',
-        }
-      : {}),
     datosConductor: entrada.datosConductor ?? [],
-    datosVehiculo,
+    vehiculo: {
+      patente: entrada.patente ?? 'Sin patente',
+      kilometraje,
+      proxMant,
+      permiso: documento(DOCS_CABECERA.permiso),
+      revision: documento(DOCS_CABECERA.revision),
+      seguro: documento(DOCS_CABECERA.seguro),
+      extintor: documento(DOCS_CABECERA.extintor),
+    },
     estadoGeneral,
     equiposEmergencia,
     condicionesConductor,
+    extras,
+    avisos,
     carroceria,
     observaciones,
   };

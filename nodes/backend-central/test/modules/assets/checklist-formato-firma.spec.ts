@@ -22,11 +22,19 @@ const PNG_1X1 = Buffer.from(
 function datos(cambios: Partial<ChecklistFormatoData> = {}): ChecklistFormatoData {
   return {
     proyecto: 'Mantos Blancos',
-    fecha: '14-05-2026 09:34',
+    fecha: '14/05/2026',
     conductor: 'Yerko Jara',
     datosConductor: [],
-    datosVehiculo: [{ etiqueta: 'Patente:', valor: 'SKRF88' }],
-    estadoGeneral: [{ etiqueta: 'Frenos', valor: 'Bueno' }],
+    vehiculo: {
+      patente: 'SKRF88',
+      kilometraje: '',
+      proxMant: '',
+      permiso: { presente: false },
+      revision: { presente: false },
+      seguro: { presente: false },
+      extintor: { presente: false },
+    },
+    estadoGeneral: [{ id: 'sistemaFrenos', etiqueta: 'Frenos', valor: 'Bueno' }],
     equiposEmergencia: [],
     condicionesConductor: [],
     carroceria: [],
@@ -68,20 +76,15 @@ describe('firma en el PDF del formato', () => {
     const conFirma = await composeChecklistFormatoPdf(datos({ firmaPng: PNG_1X1 }));
     const sinFirma = await composeChecklistFormatoPdf(datos());
 
-    const doc = await PDFDocument.load(conFirma);
-    // Un PNG incrustado aparece como XObject de imagen en el documento.
-    const tieneImagen = doc.context
-      .enumerateIndirectObjects()
-      .some(([, obj]) => String(obj).includes('/Image'));
-    expect(tieneImagen).toBe(true);
-
-    // Y sin firma NO debe haber ninguna imagen: si la hubiera, estaríamos
-    // dibujando algo que nadie trazó.
-    const docSin = await PDFDocument.load(sinFirma);
-    const tieneImagenSin = docSin.context
-      .enumerateIndirectObjects()
-      .some(([, obj]) => String(obj).includes('/Image'));
-    expect(tieneImagenSin).toBe(false);
+    // El formato ya trae sus propias imágenes (logo y camioneta, cada una con
+    // su máscara de transparencia). La firma tiene que SUMAR imágenes; sin
+    // firma el documento debe tener solo las del formato.
+    const imagenes = async (bytes: Uint8Array): Promise<number> =>
+      (await PDFDocument.load(bytes)).context
+        .enumerateIndirectObjects()
+        .filter(([, obj]) => String(obj).includes('/Subtype /Image')).length;
+    expect(await imagenes(conFirma)).toBeGreaterThan(await imagenes(sinFirma));
+    expect(await imagenes(sinFirma)).toBe(4);
   });
 
   it('el documento dice que falta la firma en vez de dejar el recuadro vacío', async () => {
@@ -89,9 +92,9 @@ describe('firma en el PDF del formato', () => {
     expect(texto).toContain('Sin firma registrada');
   });
 
-  it('siempre rotula la sección de firma', async () => {
+  it('con firma no escribe ningún aviso en el recuadro', async () => {
     const texto = await textoDe(await composeChecklistFormatoPdf(datos({ firmaPng: PNG_1X1 })));
-    expect(texto).toContain('FIRMA');
+    expect(texto).not.toContain('Sin firma');
   });
 
   it('un PNG corrupto no impide emitir el documento', async () => {
