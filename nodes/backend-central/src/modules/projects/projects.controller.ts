@@ -81,17 +81,21 @@ export class ProjectsController {
 
   /**
    * Obtiene todos los departamentos disponibles (para formularios).
+   * Exige sesión: antes respondía a cualquiera. Ninguna página pública lo usa.
    */
   @Get('departments')
-  listDepartments() {
+  listDepartments(@CurrentUser() authUser: AuthUser | undefined) {
+    this.requireUserId(authUser);
     return this.projects.listDepartments();
   }
 
   /**
    * Obtiene todos los clientes disponibles (para formularios).
+   * Exige sesión: antes respondía a cualquiera. Ninguna página pública lo usa.
    */
   @Get('clients')
-  listClients() {
+  listClients(@CurrentUser() authUser: AuthUser | undefined) {
+    this.requireUserId(authUser);
     return this.projects.listClients();
   }
 
