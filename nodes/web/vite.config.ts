@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Las variables VITE_* viven en el `.env` de la raíz del monorepo (compartido
   // con la API), no en nodes/web. Apuntamos `envDir` ahí para que import.meta.env
-  // resuelva VITE_API_URL y VITE_FIREBASE_* (§ tarea 0.5/0.7).
+  // resuelva VITE_API_URL.
   envDir: path.resolve(__dirname, '../..'),
   resolve: {
     alias: {

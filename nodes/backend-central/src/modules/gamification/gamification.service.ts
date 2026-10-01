@@ -73,7 +73,9 @@ export class GamificationService {
       ]);
 
       // Evaluar logros en background (no bloquea la respuesta)
-      void this.checkAndUnlockAchievements(userId);
+      void this.checkAndUnlockAchievements(userId).catch((e: unknown) =>
+        this.logger.warn(`No se pudieron evaluar los logros de ${userId}: ${String(e)}`),
+      );
     } catch (err) {
       // Gamificación es best-effort: no debe romper el flujo principal
       this.logger.error(`Error al otorgar ${points} pts (${action}) a ${userId}:`, err);

@@ -3221,7 +3221,11 @@ export class AssetsService {
 
   // Gamificación hook — se llama después de submitChecklist exitoso
   private awardChecklistPoints(userId: string): void {
-    void this.gamification.awardPoints(userId, 'RUN_CHECKLIST');
+    void this.gamification
+      .awardPoints(userId, 'RUN_CHECKLIST')
+      .catch((e: unknown) =>
+        this.logger.warn(`No se pudieron otorgar los puntos de RUN_CHECKLIST: ${String(e)}`),
+      );
   }
 
   async listChecklistSubmissions(

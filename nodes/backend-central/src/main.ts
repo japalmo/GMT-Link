@@ -8,12 +8,14 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
-import { validateAuthJwtSecret } from './common/env';
+import { validateAuthJwtSecret, validateStorageConfig } from './common/env';
 import { configureExpress } from './common/express-config';
 
 async function bootstrap(): Promise<void> {
   // Fail-fast: aborta el arranque si AUTH_JWT_SECRET falta o es débil.
   validateAuthJwtSecret();
+  // Fail-fast: en producción, aborta si R2 está incompleto (no cae al storage local).
+  validateStorageConfig();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // Sube el límite del body JSON por sobre el default (~100 KB) para acomodar una
   // plantilla de checklist con un diagrama SVG embebido (el schema tope el SVG en

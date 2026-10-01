@@ -106,21 +106,25 @@ export class OtpService {
       throw new BadRequestException('El código OTP ha expirado.');
     }
 
-    // El código CORRECTO se acepta ANTES del gate de intentos: el dueño legítimo del
-    // código nunca queda bloqueado por intentos fallidos ajenos (p. ej. un atacante
-    // que quemó los 5 intentos del OTP activo de la víctima). El lockout solo frena
-    // el adivinado (códigos incorrectos), no al que ya tiene el correcto.
+    // El tope de intentos se revisa ANTES de comparar el código. Si se aceptara un
+    // código correcto con los intentos agotados, el tope no frenaría nada: un
+    // atacante con muchas IPs seguiría probando las 10^6 combinaciones dentro de la
+    // vigencia y tomaría la cuenta (p. ej. vía reset-password). Al llegar al tope el
+    // OTP se consume para inutilizarlo; el dueño legítimo pide un código nuevo.
+    if (record.attempts >= OTP_MAX_ATTEMPTS) {
+      await this.prisma.otpCode.update({
+        where: { id: record.id },
+        data: { consumedAt: new Date() },
+      });
+      throw new BadRequestException('Demasiados intentos fallidos. Solicita un nuevo código.');
+    }
+
     if (hashesEqual(record.codeHash, hashOtp(code))) {
       await this.prisma.otpCode.update({
         where: { id: record.id },
         data: { consumedAt: new Date() },
       });
       return true;
-    }
-
-    // Código incorrecto: recién aquí aplica el lockout de fuerza bruta.
-    if (record.attempts >= OTP_MAX_ATTEMPTS) {
-      throw new BadRequestException('Demasiados intentos fallidos. Solicita un nuevo código.');
     }
 
     await this.prisma.otpCode.update({

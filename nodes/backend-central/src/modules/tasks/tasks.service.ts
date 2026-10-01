@@ -192,7 +192,11 @@ export class TasksService {
     });
 
     // Gamificación: puntos por crear tarea (best-effort)
-    void this.gamification.awardPoints(userId, 'CREATE_TASK');
+    void this.gamification
+      .awardPoints(userId, 'CREATE_TASK')
+      .catch((e: unknown) =>
+        this.logger.warn(`No se pudieron otorgar los puntos de CREATE_TASK: ${String(e)}`),
+      );
 
     return this.applyPriorityEscalation([task])[0];
   }
@@ -582,7 +586,11 @@ export class TasksService {
 
       // Gamificación: otorgar puntos al asignado por completar tarea (best-effort)
       if (task.assignedToId) {
-        void this.gamification.awardPoints(task.assignedToId, 'COMPLETE_TASK');
+        void this.gamification
+          .awardPoints(task.assignedToId, 'COMPLETE_TASK')
+          .catch((e: unknown) =>
+            this.logger.warn(`No se pudieron otorgar los puntos de COMPLETE_TASK: ${String(e)}`),
+          );
       }
 
       return this.applyPriorityEscalation([updatedTask])[0]!;

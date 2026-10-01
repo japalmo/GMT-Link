@@ -32,7 +32,7 @@ import { CompleteFirstLoginDto } from './dto/complete-first-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { hashPassword, verifyPassword } from '../common/password';
+import { DUMMY_BCRYPT_HASH, hashPassword, verifyPassword } from '../common/password';
 import { signToken } from '../common/jwt';
 import { Throttle } from '@nestjs/throttler';
 import './auth-request.types';
@@ -171,17 +171,23 @@ export class AuthController {
         lockedUntil: true,
       },
     });
-    // Se valida la clave PRIMERO. El lockout (#67) solo debe frenar intentos
-    // ERRÓNEOS: quien conoce su clave entra siempre, aunque la cuenta esté bloqueada
-    // (así un DoS dirigido por bloqueo no deja afuera al dueño legítimo). Un atacante
-    // con clave inválida sí queda sujeto al gate de lockout, abajo.
-    const ok = user?.passwordHash ? await verifyPassword(body.password, user.passwordHash) : false;
-    if (!user || !ok) {
-      // Credenciales inválidas. Cuenta existente: si ya está bloqueada -> 429; si no,
-      // se cuenta el intento (y se bloquea al llegar al tope). Username inexistente:
-      // nada que contar, solo el 401 genérico anti-enumeración (defensa: throttle IP).
+    // El bloqueo (#67) se revisa ANTES de validar la clave y aplica también a la
+    // clave correcta. Si la clave correcta entrara durante el bloqueo, el bloqueo no
+    // frenaría nada: el atacante seguiría probando y la acertada lo dejaría pasar
+    // igual. El freno a un DoS por bloqueo es su duración acotada (LOCKOUT_MS): el
+    // dueño legítimo espera esos minutos o recupera su clave.
+    if (user) {
+      this.assertNotLockedOut(user.lockedUntil);
+    }
+    // Siempre se ejecuta bcrypt, también si el usuario no existe o no tiene clave
+    // (contra un hash ficticio): así el tiempo de respuesta no delata qué usernames
+    // existen.
+    const ok = await verifyPassword(body.password, user?.passwordHash ?? DUMMY_BCRYPT_HASH);
+    if (!user || !user.passwordHash || !ok) {
+      // Credenciales inválidas. Cuenta existente: se cuenta el intento (y se bloquea
+      // al llegar al tope). Username inexistente: nada que contar, solo el 401
+      // genérico anti-enumeración (defensa adicional: throttle por IP).
       if (user) {
-        this.assertNotLockedOut(user.lockedUntil);
         await this.registerFailedLogin(user.id);
       }
       throw new UnauthorizedException('Usuario o contraseña incorrectos.');
@@ -331,7 +337,11 @@ export class AuthController {
       // de "suspendida tras uso" en la gestión de usuarios).
       data: { passwordHash, status: 'ACTIVE', firstLoginAt: new Date() },
     });
-    void this.gamification.awardPoints(authUser.id, 'FIRST_LOGIN');
+    void this.gamification
+      .awardPoints(authUser.id, 'FIRST_LOGIN')
+      .catch((e: unknown) =>
+        this.logger.warn(`No se pudieron otorgar los puntos de FIRST_LOGIN: ${String(e)}`),
+      );
     return { status: 'ACTIVE' };
   }
 

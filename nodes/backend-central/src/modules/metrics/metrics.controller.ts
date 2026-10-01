@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Logger, Param, Patch, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Logger, Param, Patch, Post, Put, Query, Req, Res, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { MetricsService } from './metrics.service';
 import { CurrentUser } from '../../auth/current-user.decorator';
@@ -435,12 +435,6 @@ export class MetricsController {
        customFilename: filename,
      });
 
-     // Ejecutar procesamiento/simulación de cola en segundo plano (asíncrono)
-     setTimeout(() => {
-       this.logger.log(`[Background Worker] Procesando archivo pesado: ${filename}`);
-       // Aquí iría el traslado a R2/S3.
-     }, 1000);
-
      // n5: token de un solo uso — se invalida tras completar la subida para
      // impedir re-subidas que reemplacen el contenido bajo el hash ya declarado.
      this.service.invalidateToken(token);
@@ -474,6 +468,21 @@ export class MetricsController {
     // un usuario autenticado de OTRO proyecto adivinando un filename UUID-prefijado
     // queda documentado y pendiente para una iteración futura, ver plan §1.2).
     this.requireUser(user);
+    // Express entrega el parámetro ya decodificado: `..%2Fdocuments%2Fx` llega como
+    // `../documents/x` y la clave saldría de `metrics/` hacia otras carpetas
+    // (documentos, CV, boletas). Solo se acepta un nombre plano, idéntico a como lo
+    // guarda el storage tras sanitizarlo.
+    // TODO: control de acceso por proyecto (hoy cualquier usuario con sesión que
+    // conozca el nombre puede bajar el archivo; ver el comentario de arriba).
+    if (
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('..') ||
+      filename.includes('\0') ||
+      sanitizeFilename(filename) !== filename
+    ) {
+      throw new BadRequestException('Nombre de archivo inválido.');
+    }
     const buffer = await this.storage.read(`metrics/${filename}`);
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(filename)}"`);

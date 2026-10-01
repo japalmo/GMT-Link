@@ -2,7 +2,7 @@
 # En Railway: setear RAILWAY_DOCKERFILE_PATH=nodes/backend-central/Dockerfile (root dir = raíz del repo).
 FROM node:22-slim
 
-# Prisma necesita openssl; ca-certificates para llamadas TLS salientes (Firebase/NVIDIA).
+# Prisma necesita openssl; ca-certificates para llamadas TLS salientes (R2, NVIDIA, correo).
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
