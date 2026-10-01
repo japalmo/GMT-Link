@@ -188,9 +188,9 @@ describe('OtpService', () => {
       };
       prismaMock.otpCode.findFirst.mockResolvedValue(row);
 
-      await expect(
-        service.verify('user@gmt.cl', OTP_PURPOSES.RESET_PASSWORD, code),
-      ).resolves.toBe(true);
+      await expect(service.verify('user@gmt.cl', OTP_PURPOSES.RESET_PASSWORD, code)).resolves.toBe(
+        true,
+      );
     });
 
     it('incrementa intentos si el código es incorrecto', async () => {
