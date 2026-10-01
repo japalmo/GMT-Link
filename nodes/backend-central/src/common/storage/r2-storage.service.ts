@@ -33,8 +33,8 @@ interface R2Env {
  * `StorageModule`, si se usa `R2StorageService` (durable) o el `LocalStorageService`
  * (efímero, dev). Sin R2 configurado, todo el sistema se comporta como antes.
  */
-export function isR2Configured(): boolean {
-  return readR2Env(process.env) !== null;
+export function isR2Configured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return readR2Env(env) !== null;
 }
 
 /** Lee y valida las env de R2; devuelve `null` si falta alguna (→ cae a local). */

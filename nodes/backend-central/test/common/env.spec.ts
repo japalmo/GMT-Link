@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { validateAuthJwtSecret } from '../../src/common/env';
+import { validateAuthJwtSecret, validateStorageConfig } from '../../src/common/env';
 
 /**
  * validateAuthJwtSecret debe abortar el arranque cuando AUTH_JWT_SECRET
@@ -48,5 +48,43 @@ describe('validateAuthJwtSecret', () => {
     // 34 bytes crudos, pero recortando espacios quedan 30 bytes útiles (< 32).
     process.env.AUTH_JWT_SECRET = '  ' + 'a'.repeat(30) + '  ';
     expect(() => validateAuthJwtSecret()).toThrow(/32/);
+  });
+});
+
+/**
+ * validateStorageConfig: en producción, sin las 5 variables R2_*, el storage
+ * caería en silencio al disco local (efímero) y montaría `/files` sin sesión.
+ * El arranque debe abortar; en desarrollo no cambia nada.
+ */
+describe('validateStorageConfig', () => {
+  const R2_COMPLETO = {
+    R2_ACCOUNT_ID: 'cuenta',
+    R2_ACCESS_KEY_ID: 'clave',
+    R2_SECRET_ACCESS_KEY: 'secreto',
+    R2_BUCKET: 'bucket',
+    R2_ENDPOINT: 'https://cuenta.r2.cloudflarestorage.com',
+  };
+
+  it('en producción sin R2 lanza con un mensaje claro', () => {
+    expect(() => validateStorageConfig({ NODE_ENV: 'production' })).toThrow(
+      'R2_* incompleto: producción no puede usar storage local ni exponer /files',
+    );
+  });
+
+  it('en producción con una sola variable R2_* faltante también lanza', () => {
+    const incompleto: Record<string, string> = { ...R2_COMPLETO };
+    delete incompleto.R2_ENDPOINT;
+    expect(() => validateStorageConfig({ NODE_ENV: 'production', ...incompleto })).toThrow(
+      /R2_\* incompleto/,
+    );
+  });
+
+  it('en producción con R2 completo no lanza', () => {
+    expect(() => validateStorageConfig({ NODE_ENV: 'production', ...R2_COMPLETO })).not.toThrow();
+  });
+
+  it('en desarrollo o sin NODE_ENV no exige R2', () => {
+    expect(() => validateStorageConfig({ NODE_ENV: 'development' })).not.toThrow();
+    expect(() => validateStorageConfig({})).not.toThrow();
   });
 });
