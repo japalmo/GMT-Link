@@ -337,7 +337,11 @@ export class AuthController {
       // de "suspendida tras uso" en la gestión de usuarios).
       data: { passwordHash, status: 'ACTIVE', firstLoginAt: new Date() },
     });
-    void this.gamification.awardPoints(authUser.id, 'FIRST_LOGIN');
+    void this.gamification
+      .awardPoints(authUser.id, 'FIRST_LOGIN')
+      .catch((e: unknown) =>
+        this.logger.warn(`No se pudieron otorgar los puntos de FIRST_LOGIN: ${String(e)}`),
+      );
     return { status: 'ACTIVE' };
   }
 

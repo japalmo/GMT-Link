@@ -195,7 +195,11 @@ export class DocumentsService {
     });
 
     // Gamificación: otorgar puntos por subir documento (best-effort)
-    void this.gamification.awardPoints(userId, 'UPLOAD_DOC');
+    void this.gamification
+      .awardPoints(userId, 'UPLOAD_DOC')
+      .catch((e: unknown) =>
+        this.logger.warn(`No se pudieron otorgar los puntos de UPLOAD_DOC: ${String(e)}`),
+      );
 
     return this.toView(row);
   }

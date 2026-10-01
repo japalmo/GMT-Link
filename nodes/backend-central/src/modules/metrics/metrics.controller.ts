@@ -435,12 +435,6 @@ export class MetricsController {
        customFilename: filename,
      });
 
-     // Ejecutar procesamiento/simulación de cola en segundo plano (asíncrono)
-     setTimeout(() => {
-       this.logger.log(`[Background Worker] Procesando archivo pesado: ${filename}`);
-       // Aquí iría el traslado a R2/S3.
-     }, 1000);
-
      // n5: token de un solo uso — se invalida tras completar la subida para
      // impedir re-subidas que reemplacen el contenido bajo el hash ya declarado.
      this.service.invalidateToken(token);

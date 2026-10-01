@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type {
@@ -50,6 +51,8 @@ const DIPLOMAS_FOLDER = 'diplomas';
  */
 @Injectable()
 export class CvService {
+  private readonly logger = new Logger(CvService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -86,7 +89,11 @@ export class CvService {
         data: { summary: dto.summary === '' ? null : dto.summary },
       });
       // Gamificación: otorgar puntos por completar CV (best-effort, idempotente por PointsLog)
-      void this.gamification.awardPoints(userId, 'COMPLETE_CV');
+      void this.gamification
+        .awardPoints(userId, 'COMPLETE_CV')
+        .catch((e: unknown) =>
+          this.logger.warn(`No se pudieron otorgar los puntos de COMPLETE_CV: ${String(e)}`),
+        );
     }
     return this.getMe(userId);
   }

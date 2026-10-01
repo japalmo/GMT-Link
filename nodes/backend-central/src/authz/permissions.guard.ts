@@ -15,8 +15,11 @@ import type { PermissionMetadata } from './require-permission.decorator';
  * Guard global de autorización (§3.1).
  * Toda decisión de permiso se resuelve en OpenFGA vía `FgaService.check`:
  * PROHIBIDO consultar roles directamente aquí o en cualquier handler.
- * Sin metadata de `@RequirePermission` la ruta se considera pública
- * para este guard (la autenticación es responsabilidad de la Etapa 0.5).
+ * Sin metadata de `@RequirePermission` este guard deja pasar la ruta: la sesión
+ * la resuelve `SessionMiddleware` (JWT propio) y cada handler sin
+ * `@RequirePermission` debe exigirla por su cuenta (p. ej. `requireUserId`) o
+ * hacer su chequeo inline con `PermissionService`. Una ruta que no hace ninguna
+ * de las dos cosas queda pública.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
