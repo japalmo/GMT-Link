@@ -139,23 +139,58 @@ describe('OtpService', () => {
       ).rejects.toThrow('Demasiados intentos fallidos. Solicita un nuevo código.');
     });
 
-    it('acepta el código CORRECTO aunque los intentos estén agotados (el dueño no queda bloqueado por fallos ajenos)', async () => {
+    it('rechaza el código CORRECTO cuando los intentos están agotados (fuerza bruta)', async () => {
+      // Tras 5 intentos fallidos el OTP muere: si el tope no frenara también al
+      // código correcto, un atacante con muchas IPs podría seguir probando las 10^6
+      // combinaciones dentro de los 5 minutos de vigencia y tomar la cuenta.
       const code = '123456';
       const row: OtpRow = {
         id: 'otp-1',
         codeHash: hashOtp(code),
         expiresAt: new Date(Date.now() + 10_000),
-        attempts: 5, // ya en el tope: un atacante quemó los intentos del OTP de la víctima
+        attempts: 5,
       };
       prismaMock.otpCode.findFirst.mockResolvedValue(row);
 
-      const ok = await service.verify('user@gmt.cl', OTP_PURPOSES.CHANGE_EMAIL, code);
+      await expect(
+        service.verify('user@gmt.cl', OTP_PURPOSES.RESET_PASSWORD, code),
+      ).rejects.toThrow('Demasiados intentos fallidos. Solicita un nuevo código.');
+    });
 
-      expect(ok).toBe(true);
+    it('al llegar al tope deja el OTP consumido para que no se pueda volver a usar', async () => {
+      const code = '123456';
+      const row: OtpRow = {
+        id: 'otp-1',
+        codeHash: hashOtp(code),
+        expiresAt: new Date(Date.now() + 10_000),
+        attempts: 5,
+      };
+      prismaMock.otpCode.findFirst.mockResolvedValue(row);
+
+      await expect(
+        service.verify('user@gmt.cl', OTP_PURPOSES.RESET_PASSWORD, code),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaMock.otpCode.update).toHaveBeenCalledWith({
         where: { id: 'otp-1' },
-        data: expect.objectContaining({ consumedAt: expect.any(Date) }),
+        data: { consumedAt: expect.any(Date) },
       });
+      // Nunca se cuenta como aceptado ni se incrementan más intentos.
+      expect(prismaMock.otpCode.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('acepta el código correcto dentro del tope (último intento disponible)', async () => {
+      const code = '123456';
+      const row: OtpRow = {
+        id: 'otp-1',
+        codeHash: hashOtp(code),
+        expiresAt: new Date(Date.now() + 10_000),
+        attempts: 4,
+      };
+      prismaMock.otpCode.findFirst.mockResolvedValue(row);
+
+      await expect(
+        service.verify('user@gmt.cl', OTP_PURPOSES.RESET_PASSWORD, code),
+      ).resolves.toBe(true);
     });
 
     it('incrementa intentos si el código es incorrecto', async () => {
