@@ -327,7 +327,10 @@ export function LlenarChecklistPage(): ReactNode {
 
           {actual?.clase === 'identificacion' && (
             <PasoIdentificacion
-              onEntrar={() => navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`)}
+              // El login vuelve al destino que trae en `state.from` (ver
+              // PublicRoute); un `?redirect=` en la URL se ignoraba y el
+              // conductor terminaba en el inicio en vez de en su checklist.
+              onEntrar={() => navigate('/login', { state: { from: location } })}
               onContinuarSinCuenta={() => setPaso((p) => p + 1)}
             />
           )}
