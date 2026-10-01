@@ -19,11 +19,11 @@
     "format:check:all": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,css,yml,yaml}\""
   },
   "devDependencies": {
-    "@eslint/js": "^9.18.0",
-    "eslint": "^9.18.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
     "eslint-config-prettier": "^10.0.1",
-    "prettier": "^3.4.2",
-    "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0"
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "typescript-eslint": "^8.70.1"
   }
 }
