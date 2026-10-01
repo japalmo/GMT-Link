@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { HttpException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from '../../src/auth/auth.controller';
-import { hashPassword } from '../../src/common/password';
+import { hashPassword, verifyPassword } from '../../src/common/password';
+
+// `verifyPassword` sigue haciendo su trabajo real; el spy solo deja ver si se
+// llamó (un usuario inexistente también debe pasar por bcrypt).
+vi.mock('../../src/common/password', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../src/common/password')>();
+  return { ...real, verifyPassword: vi.fn(real.verifyPassword) };
+});
 
 beforeAll(() => { process.env.AUTH_JWT_SECRET = 'test-secret-para-vitest-32bytes-min'; });
 
@@ -82,7 +89,7 @@ describe('AuthController.login', () => {
 });
 
 describe('AuthController.login · lockout por cuenta (#67)', () => {
-  it('cuenta bloqueada pero clave CORRECTA → ingresa igual y limpia el bloqueo (no DoS al dueño)', async () => {
+  it('cuenta bloqueada + clave CORRECTA → mismo 429 por bloqueo (si no, el bloqueo no frena la fuerza bruta)', async () => {
     const hash = await hashPassword('Secreta123');
     const future = new Date(Date.now() + 10 * 60_000);
     const { ctrl, update } = makeController({
@@ -92,7 +99,25 @@ describe('AuthController.login · lockout por cuenta (#67)', () => {
       failedLoginAttempts: 0,
       lockedUntil: future,
     });
-    // El lockout solo frena intentos ERRÓNEOS: quien sabe su clave entra igual.
+    const err = await ctrl.login({ username: 'jperez', password: 'Secreta123' }).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(429);
+    // Mismo rechazo que con clave incorrecta: no se emite token ni se limpia el bloqueo.
+    const errMala = await ctrl.login({ username: 'jperez', password: 'mala' }).catch((e) => e);
+    expect((err as HttpException).message).toBe((errMala as HttpException).message);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('cuenta con bloqueo VENCIDO + clave correcta → ingresa y limpia el bloqueo', async () => {
+    const hash = await hashPassword('Secreta123');
+    const past = new Date(Date.now() - 60_000);
+    const { ctrl, update } = makeController({
+      id: 'u1',
+      passwordHash: hash,
+      status: 'ACTIVE',
+      failedLoginAttempts: 0,
+      lockedUntil: past,
+    });
     const res = await ctrl.login({ username: 'jperez', password: 'Secreta123' });
     expect(typeof res.token).toBe('string');
     expect(update).toHaveBeenCalledWith({
@@ -159,6 +184,25 @@ describe('AuthController.login · lockout por cuenta (#67)', () => {
       ctrl.login({ username: 'nadie', password: 'x' }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('username inexistente → igual ejecuta bcrypt (sin diferencia de tiempo que delate usernames)', async () => {
+    vi.mocked(verifyPassword).mockClear();
+    const { ctrl } = makeController(null);
+    await expect(
+      ctrl.login({ username: 'nadie', password: 'x' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(verifyPassword).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(verifyPassword).mock.calls[0]?.[0]).toBe('x');
+  });
+
+  it('usuario sin clave definida → también ejecuta bcrypt y responde 401', async () => {
+    vi.mocked(verifyPassword).mockClear();
+    const { ctrl } = makeController({ id: 'u1', passwordHash: null, status: 'ACTIVE' });
+    await expect(
+      ctrl.login({ username: 'jperez', password: 'x' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(verifyPassword).toHaveBeenCalledTimes(1);
   });
 
   it('ingreso correcto con intentos previos → limpia contador y bloqueo', async () => {
