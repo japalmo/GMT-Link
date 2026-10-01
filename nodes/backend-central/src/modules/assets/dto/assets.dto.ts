@@ -294,6 +294,30 @@ export class SubmitPublicChecklistDto {
   declaredInternalExpiry?: string;
 }
 
+/** Body de `POST /assets/public/:token/usage`: registrar uso sin cuenta. */
+export class RegisterPublicUseDto {
+  @trim()
+  @IsString()
+  @IsNotEmpty({ message: 'Necesitamos tu nombre para el registro' })
+  @MaxLength(120)
+  declaredName!: string;
+
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(500, { message: 'El comentario no puede superar los 500 caracteres' })
+  comment?: string;
+}
+
+/** Body de `POST /assets/public/:token/usage/end`: terminar un uso sin cuenta. */
+export class EndPublicUseDto {
+  @IsOptional()
+  @trim()
+  @IsString()
+  @MaxLength(500, { message: 'El comentario no puede superar los 500 caracteres' })
+  comment?: string;
+}
+
 /** Body de `POST /assets/:id/checklist/sign-options`: pide la firma del contenido. */
 export class PrepareChecklistSignatureDto {
   @IsString()

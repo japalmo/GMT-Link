@@ -48,6 +48,8 @@ import {
   UpdateAssetStatusDto,
   SubmitTelemetryDto,
   SubmitPublicChecklistDto,
+  RegisterPublicUseDto,
+  EndPublicUseDto,
 } from './dto/assets.dto';
 import { composeTemplatePreviewPdf } from './checklist-pdf.util';
 import { composeChecklistFormatoPdf } from './checklist-formato-pdf.util';
@@ -66,6 +68,7 @@ import {
   AssetPublicResolved,
   AssetPublicDocument,
   AssetPublicLastChecklist,
+  AssetPublicActiveUse,
   AssetAccessoryView,
   ChecklistTemplateView,
   ChecklistSubmissionView,
@@ -90,6 +93,22 @@ const NON_OPERATIONAL_STATUSES: AssetStatus[] = [
   AssetStatus.DEFECTUOSO,
   AssetStatus.NO_DISPONIBLE,
 ];
+
+/**
+ * Estados en que el activo NO se puede reclamar: los no operativos más los de un
+ * uso vigente. Va en el WHERE de cada reclamo atómico además de `inUseById: null`,
+ * porque un uso registrado SIN cuenta (ficha pública) deja `inUseById` en null:
+ * sin este filtro, alguien con cuenta podría "tomar" un equipo que otra persona
+ * tiene en la mano.
+ */
+const UNCLAIMABLE_STATUSES: AssetStatus[] = [
+  ...NON_OPERATIONAL_STATUSES,
+  AssetStatus.EN_PREPARACION,
+  AssetStatus.EN_USO,
+];
+
+/** Tipos de activo que ofrecen "Registrar uso" en la ficha pública. */
+const PUBLIC_USE_TYPES: AssetType[] = [AssetType.EQUIPO];
 
 /** Foto opcional (recogida/entrega) de un ciclo de uso, ya leída del multipart. */
 export interface UsageCyclePhotoInput {
@@ -1106,7 +1125,7 @@ export class AssetsService {
       // Toma ATÓMICA: la condición inUseById:null va en el mismo UPDATE para que dos
       // tomas concurrentes no ganen ambas (TOCTOU en la "disputa en uso").
       const claimed = await tx.asset.updateMany({
-        where: { id, inUseById: null },
+        where: { id, inUseById: null, status: { notIn: UNCLAIMABLE_STATUSES } },
         data: {
           inUseById: userId,
           inUseSince: new Date(),
@@ -1226,6 +1245,8 @@ export class AssetsService {
       assetId: row.assetId,
       userId: row.userId,
       user: person(row.user),
+      declaredName: row.declaredName,
+      declaredComment: row.declaredComment,
       status: row.status,
       startedAt: row.startedAt.toISOString(),
       confirmedAt: row.confirmedAt ? row.confirmedAt.toISOString() : null,
@@ -1346,7 +1367,7 @@ export class AssetsService {
         where: {
           id: assetId,
           inUseById: null,
-          status: { notIn: NON_OPERATIONAL_STATUSES },
+          status: { notIn: UNCLAIMABLE_STATUSES },
         },
         data: {
           inUseById: userId,
@@ -1867,6 +1888,12 @@ export class AssetsService {
           include: { template: { select: { name: true } } },
         },
         checklistTemplate: { select: { items: true } },
+        usageCycles: {
+          where: { status: { in: [UsageCycleStatus.EN_PREPARACION, UsageCycleStatus.EN_CURSO] } },
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+          select: { startedAt: true, userId: true },
+        },
       },
     });
     if (!asset) {
@@ -1903,6 +1930,11 @@ export class AssetsService {
     const templateItemCount = Array.isArray(templateItems) ? templateItems.length : 0;
     const canFillChecklist = asset.type === AssetType.VEHICULO || templateItemCount > 0;
 
+    const openCycle = asset.usageCycles[0];
+    const activeUse: AssetPublicActiveUse | null = openCycle
+      ? { since: openCycle.startedAt.toISOString(), unverified: openCycle.userId === null }
+      : null;
+
     return {
       code: asset.code,
       type: asset.type,
@@ -1915,7 +1947,120 @@ export class AssetsService {
       documents,
       lastChecklist,
       canFillChecklist,
+      canRegisterUse: PUBLIC_USE_TYPES.includes(asset.type),
+      activeUse,
     };
+  }
+
+  /**
+   * Registrar uso SIN cuenta desde la ficha pública (QR).
+   *
+   * Es el mismo ciclo de uso de la app, pero sin usuario: queda a nombre de lo
+   * que la persona declaró y marcado como no verificado. Nace EN_CURSO, sin
+   * checklist inicial: el checklist sin cuenta es un formulario aparte.
+   *
+   * La credencial es el token opaco de la ficha. Solo aplica a los tipos de
+   * `PUBLIC_USE_TYPES` (hoy, equipos); el resto responde 404, igual que un token
+   * inexistente, para no ofrecer una operación que la ficha no muestra.
+   */
+  async registerPublicUse(token: string, dto: RegisterPublicUseDto): Promise<AssetPublicView> {
+    const asset = await this.prisma.asset.findUnique({ where: { publicToken: token } });
+    if (!asset || !PUBLIC_USE_TYPES.includes(asset.type)) {
+      throw new NotFoundException('Ficha técnica no encontrada.');
+    }
+    if (NON_OPERATIONAL_STATUSES.includes(asset.status)) {
+      throw new BadRequestException('El equipo no está disponible para su uso.');
+    }
+
+    const now = new Date();
+    const comment = dto.comment?.trim() || null;
+    await this.prisma.$transaction(async (tx) => {
+      // Reclamo ATÓMICO, igual que el de la app: si dos personas escanean a la
+      // vez, solo una gana. `inUseById` queda en null (no hay usuario); lo que
+      // marca el uso es el estado EN_USO, que los demás reclamos respetan.
+      const claimed = await tx.asset.updateMany({
+        where: { id: asset.id, inUseById: null, status: { notIn: UNCLAIMABLE_STATUSES } },
+        data: { inUseSince: now, status: AssetStatus.EN_USO },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException('El equipo ya está en uso.');
+      }
+      await tx.usageCycle.create({
+        data: {
+          assetId: asset.id,
+          userId: null,
+          declaredName: dto.declaredName,
+          declaredComment: comment,
+          status: UsageCycleStatus.EN_CURSO,
+          startedAt: now,
+          confirmedAt: now,
+        },
+      });
+      // El historial nombra a quien declaró y dice que no estaba identificado:
+      // atribuirlo sin más sería inventar autoría.
+      await this.createHistoryEntry(
+        tx,
+        asset.id,
+        'CICLO',
+        `Registró uso sin cuenta: ${dto.declaredName} (no verificado).${comment ? ` Comentario: ${comment}` : ''}`,
+      );
+    });
+
+    return this.getPublicByToken(token);
+  }
+
+  /**
+   * Terminar, desde la ficha pública, un uso que se registró SIN cuenta.
+   *
+   * Solo cierra usos sin usuario: el de alguien con cuenta se termina desde la
+   * app, donde se sabe quién lo hace. Si el equipo cayó mientras tanto a un
+   * estado no operativo, se respeta y solo se libera (mismo criterio que
+   * `endUsageCycle`).
+   */
+  async endPublicUse(token: string, dto: EndPublicUseDto): Promise<AssetPublicView> {
+    const asset = await this.prisma.asset.findUnique({ where: { publicToken: token } });
+    if (!asset || !PUBLIC_USE_TYPES.includes(asset.type)) {
+      throw new NotFoundException('Ficha técnica no encontrada.');
+    }
+    const cycle = await this.prisma.usageCycle.findFirst({
+      where: { assetId: asset.id, userId: null, status: UsageCycleStatus.EN_CURSO },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!cycle) {
+      throw new ConflictException('El equipo no tiene un uso sin cuenta que terminar.');
+    }
+
+    const comment = dto.comment?.trim() || null;
+    await this.prisma.$transaction(async (tx) => {
+      // Cierre ATÓMICO del ciclo: si dos personas tocan "Terminar uso" a la vez,
+      // solo una lo cierra; la otra recibe el 409.
+      const closed = await tx.usageCycle.updateMany({
+        where: { id: cycle.id, status: UsageCycleStatus.EN_CURSO },
+        data: { status: UsageCycleStatus.CERRADO, endedAt: new Date(), endText: comment },
+      });
+      if (closed.count === 0) {
+        throw new ConflictException('El uso ya fue terminado.');
+      }
+      const keepStatus = NON_OPERATIONAL_STATUSES.includes(asset.status);
+      await tx.asset.update({
+        where: { id: asset.id },
+        data: {
+          inUseById: null,
+          inUseSince: null,
+          ...(keepStatus ? {} : { status: AssetStatus.DISPONIBLE }),
+        },
+      });
+      await this.createHistoryEntry(
+        tx,
+        asset.id,
+        'CICLO',
+        `Terminó el uso sin cuenta de ${cycle.declaredName ?? 'una persona sin cuenta'}; ${
+          keepStatus ? `el equipo queda en ${asset.status}` : 'equipo disponible'
+        }.${comment ? ` Comentario: ${comment}` : ''}`,
+      );
+    });
+
+    return this.getPublicByToken(token);
   }
 
   /**

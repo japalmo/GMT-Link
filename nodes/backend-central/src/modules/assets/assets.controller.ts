@@ -51,6 +51,8 @@ import {
   ReviewChecklistTemplateDto,
   SubmitChecklistDto,
   SubmitPublicChecklistDto,
+  RegisterPublicUseDto,
+  EndPublicUseDto,
   PrepareChecklistSignatureDto,
   SubmitTelemetryDto,
   ConfirmUsageCycleDto,
@@ -627,6 +629,37 @@ export class AssetsController {
     @Body() dto: SubmitPublicChecklistDto,
   ): Promise<ChecklistSubmissionView> {
     return this.assets.submitPublicChecklist(token, dto);
+  }
+
+  /**
+   * Registrar uso SIN sesión desde la ficha pública (QR). Solo equipos.
+   *
+   * La credencial es el token opaco de la ficha, como en el checklist sin
+   * cuenta. Queda a nombre de lo que la persona declaró y marcado como no
+   * verificado. Límite bajo por IP: registrar uso es un acto puntual.
+   */
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  @Post('public/:token/usage')
+  @HttpCode(200)
+  registerPublicUse(
+    @Param('token') token: string,
+    @Body() dto: RegisterPublicUseDto,
+  ): Promise<AssetPublicView> {
+    return this.assets.registerPublicUse(token, dto);
+  }
+
+  /**
+   * Terminar SIN sesión un uso que se registró sin cuenta. El uso de alguien
+   * con cuenta no se puede terminar desde acá (se termina en la app).
+   */
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  @Post('public/:token/usage/end')
+  @HttpCode(200)
+  endPublicUse(
+    @Param('token') token: string,
+    @Body() dto: EndPublicUseDto,
+  ): Promise<AssetPublicView> {
+    return this.assets.endPublicUse(token, dto);
   }
 
   /**

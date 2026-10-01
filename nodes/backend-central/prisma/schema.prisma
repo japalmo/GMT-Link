@@ -1268,9 +1268,18 @@ model UsageCycle {
   id                    String               @id @default(cuid())
   assetId               String
   asset                 Asset                @relation("AssetUsageCycles", fields: [assetId], references: [id], onDelete: Cascade)
-  // Usuario actual (quién reportó el uso / lo tiene en uso).
-  userId                String
-  user                  User                 @relation("UsageCycleUser", fields: [userId], references: [id])
+  // Usuario actual (quién reportó el uso / lo tiene en uso). Null cuando el uso
+  // se registró SIN cuenta desde la ficha pública (QR): ahí lo que hay es el
+  // nombre que la persona declaró, que nadie verificó.
+  userId                String?
+  user                  User?                @relation("UsageCycleUser", fields: [userId], references: [id], onDelete: Restrict)
+  // Uso registrado sin cuenta desde la ficha pública. Mismo criterio que los
+  // `declared*` de ChecklistSubmission: lo DECLARÓ la persona, no se verificó,
+  // y por eso va aparte de `userId`. Un ciclo es "sin verificar" cuando
+  // `userId` es null; no se guarda una columna de estado redundante.
+  declaredName          String?
+  // Comentario opcional al registrar el uso (ej. "medición en poza R3").
+  declaredComment       String?
   status                UsageCycleStatus     @default(EN_PREPARACION)
   startedAt             DateTime             @default(now()) // cuando reportó uso
   confirmedAt           DateTime? // cuando pasó a EN_CURSO (checklist firmado / o inmediato sin plantilla)

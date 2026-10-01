@@ -18,6 +18,7 @@ export type {
   AssetPublicView,
   AssetPublicDocument,
   AssetPublicLastChecklist,
+  AssetPublicActiveUse,
   ChecklistItemType,
   ChecklistItemConfig,
   ChecklistSvgPart,

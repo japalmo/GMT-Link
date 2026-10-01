@@ -23,6 +23,7 @@ import {
   USAGE_END_KIND_LABELS,
   USAGE_STATUS_LABELS,
   formatCycleDuration,
+  cycleActorName,
   personName,
 } from './usage-cycle-shared';
 
@@ -102,7 +103,7 @@ export function UsageHistory({ cycles, loading = false, error = null, onRetry }:
               onClick={() => setSelected(cycle)}
               tabIndex={0}
               role="button"
-              aria-label={`Ver detalle del ciclo de uso de ${personName(cycle.user)}`}
+              aria-label={`Ver detalle del ciclo de uso de ${cycleActorName(cycle)}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -110,7 +111,7 @@ export function UsageHistory({ cycles, loading = false, error = null, onRetry }:
                 }
               }}
             >
-              <TableCell className="font-medium text-foreground">{personName(cycle.user)}</TableCell>
+              <TableCell className="font-medium text-foreground">{cycleActorName(cycle)}</TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">
                 {formatDateTime(cycle.startedAt)}
               </TableCell>
@@ -157,7 +158,7 @@ function CycleDetail({ cycle }: { cycle: UsageCycleView }): ReactNode {
           Ciclo de uso
           <StatusBadge status={cycle.status} />
         </ModalTitle>
-        <ModalDescription>{personName(cycle.user)}</ModalDescription>
+        <ModalDescription>{cycleActorName(cycle)}</ModalDescription>
       </ModalHeader>
 
       <div className="flex flex-col gap-4">
@@ -198,6 +199,23 @@ function CycleDetail({ cycle }: { cycle: UsageCycleView }): ReactNode {
                 <ArrowRightLeft className="size-4 text-primary" aria-hidden />
                 Traspaso a {personName(cycle.handoffTo)}
               </p>
+            )}
+          </div>
+        )}
+
+        {/* Uso registrado sin cuenta desde la ficha pública: el nombre lo declaró
+            la persona y nadie lo verificó. Al cerrar desde la ficha, su
+            comentario queda en `endText` (sin forma de cierre). */}
+        {!cycle.userId && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+            <p className="mb-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+              Registrado sin cuenta (no verificado)
+            </p>
+            {cycle.declaredComment && (
+              <p className="text-foreground">Al iniciar: {cycle.declaredComment}</p>
+            )}
+            {!cycle.endKind && cycle.endText && (
+              <p className="text-foreground">Al terminar: {cycle.endText}</p>
             )}
           </div>
         )}

@@ -1,6 +1,7 @@
 import type {
   UsageCyclePerson,
   UsageCycleStatus,
+  UsageCycleView,
   UsageEndKind,
 } from '@/types/assets';
 
@@ -26,6 +27,17 @@ export function personName(
 ): string {
   if (!person) return fallback;
   return `${person.firstName} ${person.lastName}`.trim() || fallback;
+}
+
+/**
+ * Quién tiene (o tuvo) el uso de un ciclo. Con cuenta, su nombre; sin cuenta
+ * (registrado desde la ficha pública), el nombre que declaró, marcado como no
+ * verificado para no presentarlo como alguien identificado.
+ */
+export function cycleActorName(cycle: Pick<UsageCycleView, 'user' | 'declaredName'>): string {
+  if (cycle.user) return personName(cycle.user);
+  if (cycle.declaredName) return `${cycle.declaredName} (sin cuenta)`;
+  return personName(null);
 }
 
 /**

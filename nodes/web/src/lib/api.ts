@@ -168,6 +168,8 @@ import type {
   ReviewChecklistTemplateInput,
   SubmitChecklistInput,
   SubmitPublicChecklistInput,
+  RegisterPublicUseInput,
+  EndPublicUseInput,
   ChecklistSignatureInput,
   UsageCycleView,
   UsageCycleResult,
@@ -3405,6 +3407,31 @@ export function deleteService(projectId: string, serviceId: string): Promise<{ o
  */
 export function getPublicAsset(token: string): Promise<AssetPublicView> {
   return request<AssetPublicView>(`/assets/public/${encodeURIComponent(token)}`);
+}
+
+/**
+ * `POST /assets/public/:token/usage` — registrar uso SIN sesión desde la ficha
+ * pública (solo equipos). Devuelve la ficha ya actualizada.
+ */
+export function registerPublicAssetUse(
+  token: string,
+  dto: RegisterPublicUseInput,
+): Promise<AssetPublicView> {
+  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(token)}/usage`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+/**
+ * `POST /assets/public/:token/usage/end` — terminar SIN sesión un uso que se
+ * registró sin cuenta. Devuelve la ficha ya actualizada.
+ */
+export function endPublicAssetUse(token: string, dto: EndPublicUseInput): Promise<AssetPublicView> {
+  return request<AssetPublicView>(`/assets/public/${encodeURIComponent(token)}/usage/end`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
 }
 
 /**

@@ -864,9 +864,14 @@ export interface UsageCyclePerson {
 export interface UsageCycleView {
   id: string;
   assetId: string;
-  userId: string;
+  /** Null cuando el uso se registró sin cuenta desde la ficha pública (QR). */
+  userId: string | null;
   /** Usuario actual (quién reportó / tiene el uso). */
   user: UsageCyclePerson | null;
+  /** Nombre que declaró quien registró el uso sin cuenta (no verificado). */
+  declaredName: string | null;
+  /** Comentario opcional que dejó quien registró el uso sin cuenta. */
+  declaredComment: string | null;
   status: UsageCycleStatus;
   /** Cuando reportó uso. */
   startedAt: string;
@@ -1051,6 +1056,39 @@ export interface AssetPublicView {
    * conductor a un formulario vacío.
    */
   canFillChecklist: boolean;
+  /**
+   * `true` cuando la ficha ofrece "Registrar uso" (hoy, solo los equipos). Con
+   * sesión lleva al flujo normal de la app; sin sesión abre el formulario corto
+   * de nombre + comentario.
+   */
+  canRegisterUse: boolean;
+  /** Uso vigente del activo, o null si nadie lo tiene en uso. */
+  activeUse: AssetPublicActiveUse | null;
+}
+
+/**
+ * Uso vigente visto desde la ficha pública. SIN nombres: la ficha es pública y
+ * no expone personas (GAP3). Solo dice desde cuándo y si se registró sin cuenta.
+ */
+export interface AssetPublicActiveUse {
+  /** Inicio del uso (ISO). */
+  since: string;
+  /**
+   * `true` si se registró sin cuenta. Solo esos usos se pueden terminar desde la
+   * ficha pública; el de un usuario con cuenta se termina desde la app.
+   */
+  unverified: boolean;
+}
+
+/** Body de `POST /assets/public/:token/usage`: registrar uso sin cuenta. */
+export interface RegisterPublicUseInput {
+  declaredName: string;
+  comment?: string;
+}
+
+/** Body de `POST /assets/public/:token/usage/end`: terminar un uso sin cuenta. */
+export interface EndPublicUseInput {
+  comment?: string;
 }
 
 // ============ Dashboard de producción (avance de proyecto) ============

@@ -197,6 +197,8 @@ function buildUsageCycleRow(overrides: Record<string, unknown> = {}): Record<str
     endLongitude: null,
     endText: null,
     handoffToUserId: null,
+    declaredName: null,
+    declaredComment: null,
     createdAt: now,
     updatedAt: now,
     user: { id: 'u-1', firstName: 'Juan', lastName: 'Pérez' },
@@ -262,6 +264,7 @@ interface MockPrisma {
   usageCycle: {
     create: MockFunction;
     findUnique: MockFunction;
+    findFirst: MockFunction;
     findMany: MockFunction;
     update: MockFunction;
     findUniqueOrThrow: MockFunction;
@@ -391,6 +394,7 @@ describe('AssetsService', () => {
       usageCycle: {
         create: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
         findUnique: vi.fn(),
+        findFirst: vi.fn(() => Promise.resolve(null)),
         findMany: vi.fn(() => Promise.resolve([])),
         update: vi.fn((args) => Promise.resolve(buildUsageCycleRow(args.data))),
         findUniqueOrThrow: vi.fn(() => Promise.resolve(buildUsageCycleRow())),
@@ -966,6 +970,7 @@ describe('AssetsService', () => {
         documents: [],
         checklistSubmissions: [],
         checklistTemplate: null,
+        usageCycles: [],
         ...over,
       };
     }
@@ -1010,6 +1015,239 @@ describe('AssetsService', () => {
     it('token inexistente → 404', async () => {
       prismaMock.asset.findUnique.mockResolvedValueOnce(null);
       await expect(service.getPublicByToken('tok-x')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('uso sin cuenta desde la ficha pública (Registrar uso)', () => {
+    function publicRow(over: Record<string, unknown> = {}) {
+      return {
+        id: 'a-1',
+        code: 'GMT-EQ-0001',
+        type: AssetType.EQUIPO,
+        name: 'Estación total',
+        description: null,
+        manufacturer: null,
+        vehicleSubtype: null,
+        status: AssetStatus.DISPONIBLE,
+        inUseById: null,
+        project: null,
+        documents: [],
+        checklistSubmissions: [],
+        checklistTemplate: null,
+        usageCycles: [],
+        ...over,
+      };
+    }
+
+    describe('getPublicByToken', () => {
+      it('solo los equipos ofrecen "Registrar uso"', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(publicRow({ type: AssetType.EQUIPO }));
+        expect((await service.getPublicByToken('tok')).canRegisterUse).toBe(true);
+
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({ type: AssetType.MAQUINARIA }),
+        );
+        expect((await service.getPublicByToken('tok')).canRegisterUse).toBe(false);
+
+        prismaMock.asset.findUnique.mockResolvedValueOnce(publicRow({ type: AssetType.VEHICULO }));
+        expect((await service.getPublicByToken('tok')).canRegisterUse).toBe(false);
+      });
+
+      it('expone el uso vigente SIN nombres, y si se registró sin cuenta', async () => {
+        const since = new Date('2026-10-01T10:30:00.000Z');
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({
+            status: AssetStatus.EN_USO,
+            usageCycles: [{ startedAt: since, userId: null }],
+          }),
+        );
+        const res = await service.getPublicByToken('tok');
+        expect(res.activeUse).toEqual({ since: since.toISOString(), unverified: true });
+        // La ficha es pública: no debe filtrar a la persona (GAP3).
+        expect(JSON.stringify(res)).not.toContain('declaredName');
+      });
+
+      it('un uso de alguien CON cuenta no se marca como sin verificar', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({ usageCycles: [{ startedAt: new Date(), userId: 'u-1' }] }),
+        );
+        const res = await service.getPublicByToken('tok');
+        expect(res.activeUse?.unverified).toBe(false);
+      });
+
+      it('sin uso vigente, activeUse es null', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(publicRow());
+        expect((await service.getPublicByToken('tok')).activeUse).toBeNull();
+      });
+    });
+
+    describe('registerPublicUse', () => {
+      it('reclama el equipo de forma atómica y abre un ciclo EN_CURSO a nombre de lo declarado', async () => {
+        prismaMock.asset.findUnique
+          .mockResolvedValueOnce(publicRow()) // carga del activo
+          .mockResolvedValueOnce(publicRow({ status: AssetStatus.EN_USO })); // ficha de respuesta
+
+        await service.registerPublicUse('tok', {
+          declaredName: 'Pedro Soto',
+          comment: '  medición en poza R3  ',
+        });
+
+        // El reclamo NO asigna usuario y exige que el equipo no esté ya en uso.
+        const claim = txMock.asset.updateMany.mock.calls[0]?.[0] as {
+          where: { inUseById: null; status: { notIn: string[] } };
+          data: Record<string, unknown>;
+        };
+        expect(claim.where.inUseById).toBeNull();
+        expect(claim.where.status.notIn).toEqual(
+          expect.arrayContaining([AssetStatus.EN_USO, AssetStatus.EN_PREPARACION]),
+        );
+        expect(claim.data.status).toBe(AssetStatus.EN_USO);
+        expect(claim.data).not.toHaveProperty('inUseById');
+
+        expect(txMock.usageCycle.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              userId: null,
+              declaredName: 'Pedro Soto',
+              declaredComment: 'medición en poza R3',
+              status: UsageCycleStatus.EN_CURSO,
+            }),
+          }),
+        );
+        // El historial dice que no estaba identificado.
+        expect(txMock.assetHistoryEntry.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              description: expect.stringContaining('no verificado'),
+              actorId: null,
+            }),
+          }),
+        );
+      });
+
+      it('si otra persona lo reclamó primero → 409 y no crea ciclo', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(publicRow());
+        txMock.asset.updateMany.mockResolvedValueOnce({ count: 0 });
+
+        await expect(
+          service.registerPublicUse('tok', { declaredName: 'Pedro Soto' }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(txMock.usageCycle.create).not.toHaveBeenCalled();
+      });
+
+      it('un activo que no es equipo → 404 (la ficha no ofrece la acción)', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({ type: AssetType.MAQUINARIA }),
+        );
+        await expect(
+          service.registerPublicUse('tok', { declaredName: 'Pedro Soto' }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(txMock.asset.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('un equipo en mantenimiento no se puede poner en uso', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({ status: AssetStatus.MANTENIMIENTO }),
+        );
+        await expect(
+          service.registerPublicUse('tok', { declaredName: 'Pedro Soto' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+    });
+
+    describe('endPublicUse', () => {
+      it('cierra el uso sin cuenta y deja el equipo DISPONIBLE', async () => {
+        prismaMock.asset.findUnique
+          .mockResolvedValueOnce(publicRow({ status: AssetStatus.EN_USO }))
+          .mockResolvedValueOnce(publicRow());
+        prismaMock.usageCycle.findFirst.mockResolvedValueOnce(
+          buildUsageCycleRow({
+            userId: null,
+            declaredName: 'Pedro Soto',
+            status: UsageCycleStatus.EN_CURSO,
+          }),
+        );
+
+        await service.endPublicUse('tok', { comment: 'quedó en bodega' });
+
+        // Solo busca usos SIN usuario: el de alguien con cuenta se termina en la app.
+        expect(prismaMock.usageCycle.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ userId: null, status: UsageCycleStatus.EN_CURSO }),
+          }),
+        );
+        expect(txMock.usageCycle.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'cyc-1', status: UsageCycleStatus.EN_CURSO },
+            data: expect.objectContaining({
+              status: UsageCycleStatus.CERRADO,
+              endText: 'quedó en bodega',
+            }),
+          }),
+        );
+        expect(txMock.asset.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: AssetStatus.DISPONIBLE, inUseSince: null }),
+          }),
+        );
+      });
+
+      it('sin un uso sin cuenta vigente → 409', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({ status: AssetStatus.EN_USO }),
+        );
+        prismaMock.usageCycle.findFirst.mockResolvedValueOnce(null);
+        await expect(service.endPublicUse('tok', {})).rejects.toBeInstanceOf(ConflictException);
+        expect(txMock.asset.update).not.toHaveBeenCalled();
+      });
+
+      it('si dos personas lo terminan a la vez, la segunda recibe 409 y no toca el equipo', async () => {
+        prismaMock.asset.findUnique.mockResolvedValueOnce(
+          publicRow({ status: AssetStatus.EN_USO }),
+        );
+        prismaMock.usageCycle.findFirst.mockResolvedValueOnce(
+          buildUsageCycleRow({ userId: null, status: UsageCycleStatus.EN_CURSO }),
+        );
+        txMock.usageCycle.updateMany.mockResolvedValueOnce({ count: 0 });
+
+        await expect(service.endPublicUse('tok', {})).rejects.toBeInstanceOf(ConflictException);
+        expect(txMock.asset.update).not.toHaveBeenCalled();
+      });
+
+      it('si el equipo cayó a mantenimiento, se libera pero NO vuelve a DISPONIBLE', async () => {
+        prismaMock.asset.findUnique
+          .mockResolvedValueOnce(publicRow({ status: AssetStatus.MANTENIMIENTO }))
+          .mockResolvedValueOnce(publicRow({ status: AssetStatus.MANTENIMIENTO }));
+        prismaMock.usageCycle.findFirst.mockResolvedValueOnce(
+          buildUsageCycleRow({ userId: null, status: UsageCycleStatus.EN_CURSO }),
+        );
+
+        await service.endPublicUse('tok', {});
+
+        const updateArg = txMock.asset.update.mock.calls[0]?.[0] as {
+          data: Record<string, unknown>;
+        };
+        expect(updateArg.data).not.toHaveProperty('status');
+        expect(updateArg.data.inUseById).toBeNull();
+      });
+    });
+
+    it('un equipo en uso SIN cuenta no lo puede "tomar" alguien con cuenta (takeUse)', async () => {
+      prismaMock.asset.findUnique.mockResolvedValueOnce(
+        buildAssetRow({ status: AssetStatus.EN_USO, inUseById: null }),
+      );
+      permissionsMock.can.mockResolvedValueOnce({ effect: 'allow' }); // asset:use:report
+      txMock.asset.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.takeUse('a-1', 'u-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(txMock.asset.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            inUseById: null,
+            status: { notIn: expect.arrayContaining([AssetStatus.EN_USO]) },
+          }),
+        }),
+      );
     });
   });
 
@@ -1270,10 +1508,17 @@ describe('AssetsService', () => {
       });
 
       const updated = await service.takeUse('a-1', 'u-1');
-      // Toma ATÓMICA: updateMany con la condición inUseById:null en el mismo statement.
+      // Toma ATÓMICA: updateMany con la condición inUseById:null en el mismo statement,
+      // y sin estado de uso vigente (un uso sin cuenta deja inUseById en null).
       expect(txMock.asset.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'a-1', inUseById: null },
+          where: {
+            id: 'a-1',
+            inUseById: null,
+            status: {
+              notIn: expect.arrayContaining([AssetStatus.EN_USO, AssetStatus.EN_PREPARACION]),
+            },
+          },
           data: expect.objectContaining({
             status: AssetStatus.EN_USO,
             inUseById: 'u-1',

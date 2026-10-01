@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime } from '@/lib/format';
 import type { UsageCycleView } from '@/types/assets';
-import { formatDuration, personName } from './usage-cycle-shared';
+import { cycleActorName, formatDuration } from './usage-cycle-shared';
 
 export interface UsageCycleTimerCardProps {
   /** Ciclo activo del activo (EN_PREPARACION o EN_CURSO). */
@@ -68,7 +68,7 @@ export function UsageCycleTimerCard({
                 </Badge>
                 <span className="flex items-center gap-1 text-sm font-medium text-foreground">
                   <UserRound className="size-3.5 text-muted-foreground" aria-hidden />
-                  {personName(cycle.user)}
+                  {cycleActorName(cycle)}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
