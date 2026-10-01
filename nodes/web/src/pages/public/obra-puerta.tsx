@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { KeyRound, LogIn } from 'lucide-react';
 import { errorToMessage, unlockPublicObraDashboard } from '@/lib/api';
 
@@ -49,6 +49,7 @@ export function PuertaClave({
   token: string;
   onAbierto: () => void;
 }): ReactNode {
+  const location = useLocation();
   const [password, setPassword] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,8 +116,12 @@ export function PuertaClave({
 
         <div className="mt-5 border-t border-white/15 pt-4">
           <p className="text-xs text-white/60">¿Trabajas en GMT?</p>
+          {/* El login vuelve al destino que trae en `state.from` (ver
+              PublicRoute); un `?redirect=` en la URL se ignoraba y se
+              terminaba en el inicio en vez de en este tablero. */}
           <Link
-            to={`/login?redirect=${encodeURIComponent(window.location.pathname)}`}
+            to="/login"
+            state={{ from: location }}
             className="mt-2 flex items-center justify-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm transition-colors hover:bg-white/10"
           >
             <LogIn className="size-4" aria-hidden />
