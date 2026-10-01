@@ -493,6 +493,11 @@ model Membership {
   createdAt DateTime  @default(now())
 
   @@unique([userId, roleKey, scopeType, scopeId])
+  // El único índice compuesto empieza por userId: las búsquedas por rol
+  // (resync de FGA al editar un rol) y por scope (usuarios de un proyecto) hacían
+  // un barrido completo de la tabla.
+  @@index([roleKey])
+  @@index([scopeType, scopeId])
 }
 
 enum ScopeType {
